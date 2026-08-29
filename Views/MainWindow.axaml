@@ -1,0 +1,222 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ShopHoa.ViewModels"
+        x:Class="ShopHoa.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="SHOP HOA"
+        Width="1500"
+        Height="900"
+        MinWidth="1100"
+        MinHeight="700">
+
+  <Window.Styles>
+    <Style Selector="TextBlock.page-title">
+      <Setter Property="FontSize" Value="26"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="0,0,0,16"/>
+    </Style>
+
+    <Style Selector="Button.menu">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="18,12"/>
+      <Setter Property="FontSize" Value="15"/>
+    </Style>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="Padding" Value="20"/>
+      <Setter Property="Margin" Value="0,0,14,14"/>
+    </Style>
+
+    <Style Selector="DataGrid">
+      <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="58,*" Background="#F4F6F8">
+
+    <!-- THANH MENU -->
+    <Border Grid.Row="0" Background="#0878E8">
+      <Grid ColumnDefinitions="Auto,*">
+        <TextBlock Text="🌸 SHOP HOA"
+                   Foreground="White"
+                   FontSize="19"
+                   FontWeight="Bold"
+                   VerticalAlignment="Center"
+                   Margin="20,0,24,0"/>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button Classes="menu" Content="Tổng quan" Command="{Binding ChonMenuCommand}" CommandParameter="Tổng quan"/>
+          <Button Classes="menu" Content="Hàng hóa" Command="{Binding ChonMenuCommand}" CommandParameter="Hàng hóa"/>
+          <Button Classes="menu" Content="Mua hàng" Command="{Binding ChonMenuCommand}" CommandParameter="Mua hàng"/>
+          <Button Classes="menu" Content="Đơn hàng" Command="{Binding ChonMenuCommand}" CommandParameter="Đơn hàng"/>
+          <Button Classes="menu" Content="Khách hàng" Command="{Binding ChonMenuCommand}" CommandParameter="Khách hàng"/>
+          <Button Classes="menu" Content="Sổ quỹ" Command="{Binding ChonMenuCommand}" CommandParameter="Sổ quỹ"/>
+          <Button Classes="menu" Content="Báo cáo" Command="{Binding ChonMenuCommand}" CommandParameter="Báo cáo"/>
+          <Button Margin="20,0,0,0" Content="🛒 Bán hàng" Padding="20,11" FontWeight="SemiBold"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- NỘI DUNG -->
+    <Grid Grid.Row="1" Margin="22">
+
+      <!-- TỔNG QUAN -->
+      <ScrollViewer IsVisible="{Binding SelectedMenu, Converter={x:Static StringConverters.IsNullOrEmpty}}">
+        <StackPanel>
+          <TextBlock Classes="page-title" Text="Tổng quan"/>
+          <WrapPanel>
+            <Border Classes="card" Width="280">
+              <StackPanel>
+                <TextBlock Text="Hàng hóa" FontSize="14"/>
+                <TextBlock Text="{Binding SanPhams.Count}" FontSize="32" FontWeight="Bold" Margin="0,8"/>
+                <TextBlock Text="Sản phẩm đang kinh doanh" Foreground="#667085"/>
+              </StackPanel>
+            </Border>
+            <Border Classes="card" Width="280">
+              <StackPanel>
+                <TextBlock Text="Khách hàng" FontSize="14"/>
+                <TextBlock Text="{Binding KhachHangs.Count}" FontSize="32" FontWeight="Bold" Margin="0,8"/>
+                <TextBlock Text="Khách hàng trong hệ thống" Foreground="#667085"/>
+              </StackPanel>
+            </Border>
+            <Border Classes="card" Width="280">
+              <StackPanel>
+                <TextBlock Text="Hóa đơn" FontSize="14"/>
+                <TextBlock Text="{Binding HoaDons.Count}" FontSize="32" FontWeight="Bold" Margin="0,8"/>
+                <TextBlock Text="500 hóa đơn gần nhất" Foreground="#667085"/>
+              </StackPanel>
+            </Border>
+            <Border Classes="card" Width="280">
+              <StackPanel>
+                <TextBlock Text="Nhà cung cấp" FontSize="14"/>
+                <TextBlock Text="{Binding NhaCungCaps.Count}" FontSize="32" FontWeight="Bold" Margin="0,8"/>
+                <TextBlock Text="Nhà cung cấp đang hoạt động" Foreground="#667085"/>
+              </StackPanel>
+            </Border>
+          </WrapPanel>
+          <Border Classes="card" Margin="0,10,0,0">
+            <StackPanel>
+              <TextBlock Text="Trạng thái" FontWeight="SemiBold" FontSize="17"/>
+              <TextBlock Text="{Binding StatusMessage}" Margin="0,8,0,0"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- HÀNG HÓA -->
+      <Grid IsVisible="{Binding SelectedMenu, Converter={x:Static StringConverters.IsNullOrEmpty}}">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+      </Grid>
+
+      <!-- DÙNG TAB ĐỂ KHỞI ĐỘNG NHANH: sau khi chạy ổn sẽ tách thành View riêng -->
+      <TabControl Grid.RowSpan="2" Margin="0"
+                  SelectedIndex="0"
+                  IsVisible="True">
+        <TabItem Header="Hàng hóa">
+          <Grid RowDefinitions="Auto,*" Margin="0,14,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBox Watermark="🔍 Tìm mã hàng, tên hàng, mã vạch..."
+                       Text="{Binding ProductSearch}"
+                       Margin="0,0,10,10"/>
+              <Button Grid.Column="1" Content="Tìm kiếm"
+                      Command="{Binding SearchProductsCommand}"
+                      Margin="0,0,0,10"/>
+            </Grid>
+            <DataGrid Grid.Row="1" ItemsSource="{Binding SanPhams}" AutoGenerateColumns="False"
+                      IsReadOnly="True">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Mã hàng" Binding="{Binding MaSanPham}" Width="170"/>
+                <DataGridTextColumn Header="Tên hàng" Binding="{Binding TenSanPham}" Width="*"/>
+                <DataGridTextColumn Header="Giá bán" Binding="{Binding GiaBan, StringFormat=\{0:N0\}}" Width="120"/>
+                <DataGridTextColumn Header="Giá vốn" Binding="{Binding GiaVon, StringFormat=\{0:N0\}}" Width="120"/>
+                <DataGridTextColumn Header="Tồn kho" Binding="{Binding TonKho, StringFormat=\{0:N3\}}" Width="110"/>
+                <DataGridTextColumn Header="ĐVT" Binding="{Binding DonViTinh}" Width="100"/>
+                <DataGridTextColumn Header="Nhóm" Binding="{Binding NhomSanPham}" Width="160"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+        </TabItem>
+
+        <TabItem Header="Khách hàng">
+          <Grid RowDefinitions="Auto,*" Margin="0,14,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBox Watermark="🔍 Tìm mã, tên hoặc số điện thoại..."
+                       Text="{Binding CustomerSearch}"
+                       Margin="0,0,10,10"/>
+              <Button Grid.Column="1" Content="Tìm kiếm"
+                      Command="{Binding SearchCustomersCommand}"
+                      Margin="0,0,0,10"/>
+            </Grid>
+            <DataGrid Grid.Row="1" ItemsSource="{Binding KhachHangs}" AutoGenerateColumns="False"
+                      IsReadOnly="True">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Mã KH" Binding="{Binding MaKhachHang}" Width="130"/>
+                <DataGridTextColumn Header="Tên khách hàng" Binding="{Binding TenKhachHang}" Width="*"/>
+                <DataGridTextColumn Header="Điện thoại" Binding="{Binding SoDienThoai}" Width="150"/>
+                <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="220"/>
+                <DataGridTextColumn Header="Địa chỉ" Binding="{Binding DiaChi}" Width="260"/>
+                <DataGridTextColumn Header="Nhóm" Binding="{Binding NhomKhachHang}" Width="140"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+        </TabItem>
+
+        <TabItem Header="Đơn hàng">
+          <Grid RowDefinitions="Auto,*" Margin="0,14,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBox Watermark="🔍 Theo mã hóa đơn hoặc tên khách hàng..."
+                       Text="{Binding InvoiceSearch}"
+                       Margin="0,0,10,10"/>
+              <Button Grid.Column="1" Content="+ Hóa đơn"
+                      Command="{Binding SearchInvoicesCommand}"
+                      Margin="0,0,0,10"/>
+            </Grid>
+            <DataGrid Grid.Row="1" ItemsSource="{Binding HoaDons}" AutoGenerateColumns="False"
+                      IsReadOnly="True">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Mã hóa đơn" Binding="{Binding MaHoaDon}" Width="150"/>
+                <DataGridTextColumn Header="Thời gian" Binding="{Binding ThoiGianBan, StringFormat=\{0:dd/MM/yyyy HH:mm\}}" Width="160"/>
+                <DataGridTextColumn Header="Khách hàng" Binding="{Binding TenKhachHang}" Width="*"/>
+                <DataGridTextColumn Header="Khách cần trả" Binding="{Binding KhachCanTra, StringFormat=\{0:N0\}}" Width="140"/>
+                <DataGridTextColumn Header="Đã thanh toán" Binding="{Binding KhachDaThanhToan, StringFormat=\{0:N0\}}" Width="140"/>
+                <DataGridTextColumn Header="Còn nợ" Binding="{Binding ConNo, StringFormat=\{0:N0\}}" Width="120"/>
+                <DataGridTextColumn Header="Trạng thái" Binding="{Binding TrangThaiThanhToan}" Width="150"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+        </TabItem>
+
+        <TabItem Header="Nhà cung cấp">
+          <Grid RowDefinitions="Auto,*" Margin="0,14,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBox Watermark="🔍 Tìm mã, tên hoặc số điện thoại..."
+                       Text="{Binding SupplierSearch}"
+                       Margin="0,0,10,10"/>
+              <Button Grid.Column="1" Content="Tìm kiếm"
+                      Command="{Binding SearchSuppliersCommand}"
+                      Margin="0,0,0,10"/>
+            </Grid>
+            <DataGrid Grid.Row="1" ItemsSource="{Binding NhaCungCaps}" AutoGenerateColumns="False"
+                      IsReadOnly="True">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Mã NCC" Binding="{Binding MaNhaCungCap}" Width="140"/>
+                <DataGridTextColumn Header="Nhà cung cấp" Binding="{Binding TenNhaCungCap}" Width="*"/>
+                <DataGridTextColumn Header="Điện thoại" Binding="{Binding SoDienThoai}" Width="150"/>
+                <DataGridTextColumn Header="Địa chỉ" Binding="{Binding DiaChi}" Width="280"/>
+                <DataGridTextColumn Header="Còn nợ" Binding="{Binding ConNo, StringFormat=\{0:N0\}}" Width="140"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+        </TabItem>
+      </TabControl>
+    </Grid>
+  </Grid>
+</Window>
