@@ -1,0 +1,15 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ShopHoa.Views.ConfirmationWindow"
+        Width="420"
+        Height="210"
+        Title="Xác nhận"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="26" Spacing="18">
+    <TextBlock x:Name="MessageTextBlock" TextWrapping="Wrap" FontSize="15" Foreground="#263B35"/>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+      <Button Content="Hủy" Padding="18,9" Click="CancelButton_OnClick"/>
+      <Button Content="Xóa" Background="#C0392B" Foreground="White" Padding="18,9" Click="ConfirmButton_OnClick"/>
+    </StackPanel>
+  </StackPanel>
+</Window>

@@ -96,10 +96,7 @@ public partial class DatabaseSettingsViewModel : ObservableObject
         {
             var config = GetConfig();
 
-            var tempService = new DatabaseConfigService();
-
-            // Lưu tạm cấu hình hiện tại để DatabaseService dùng.
-            tempService.Save(config);
+            _configService.Save(config);
 
             var databaseService = new DatabaseService();
 

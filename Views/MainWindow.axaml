@@ -1,55 +1,469 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:ShopHoa.ViewModels"
+        xmlns:models="using:ShopHoa.Models"
         x:Class="ShopHoa.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="SHOP HOA"
         Width="1500"
         Height="900"
+        WindowState="Maximized"
         MinWidth="1100"
         MinHeight="700">
 
   <Window.Styles>
+    <Style Selector="TextBox">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+    <Style Selector="TextBox:pointerover">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="TextBox:focus">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="BorderBrush" Value="#087F6E"/>
+    </Style>
+
+    <Style Selector="TextBox:pointerover:focus">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="TextBox /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="TextBox /template/ ScrollViewer#PART_ContentHost">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+    </Style>
+
+    <Style Selector="TextBox:pointerover /template/ ScrollViewer#PART_ContentHost">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+    </Style>
+
+    <Style Selector="TextBox:focus /template/ ScrollViewer#PART_ContentHost">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+    </Style>
+
     <Style Selector="TextBlock.page-title">
-      <Setter Property="FontSize" Value="26"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Margin" Value="0,0,0,16"/>
+      <Setter Property="FontSize" Value="28"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="#163F38"/>
+      <Setter Property="Margin" Value="0,0,0,6"/>
     </Style>
 
     <Style Selector="Button.menu">
       <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Foreground" Value="#EAF4FF"/>
       <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Padding" Value="18,12"/>
-      <Setter Property="FontSize" Value="15"/>
+      <Setter Property="Padding" Value="14,8"/>
+      <Setter Property="Margin" Value="0,4"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="CornerRadius" Value="9"/>
+    </Style>
+
+    <Style Selector="Button.menu:pointerover">
+      <Setter Property="Background" Value="#FFFFFF1F"/>
+      <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+
+    <Style Selector="Button.menu:pressed">
+      <Setter Property="Background" Value="#FFFFFF30"/>
+      <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+
+    <Style Selector="Button.salesButton">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="Foreground" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#39A99A"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="16,12"/>
+      <Setter Property="Margin" Value="12,18,12,0"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="CornerRadius" Value="9"/>
+    </Style>
+
+    <Style Selector="Button.salesButton:pointerover">
+      <Setter Property="Background" Value="#075C50"/>
+      <Setter Property="BorderBrush" Value="#52BCAF"/>
+    </Style>
+
+    <Style Selector="Button.salesButton:pressed">
+      <Setter Property="Background" Value="#06483E"/>
+      <Setter Property="BorderBrush" Value="#39A99A"/>
     </Style>
 
     <Style Selector="Border.card">
       <Setter Property="Background" Value="White"/>
-      <Setter Property="CornerRadius" Value="10"/>
-      <Setter Property="Padding" Value="20"/>
-      <Setter Property="Margin" Value="0,0,14,14"/>
+      <Setter Property="CornerRadius" Value="14"/>
+      <Setter Property="Padding" Value="22"/>
+      <Setter Property="Margin" Value="0,0,16,16"/>
+      <Setter Property="BoxShadow" Value="0 4 16 #120A352E"/>
     </Style>
 
     <Style Selector="DataGrid">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#E2ECE8"/>
       <Setter Property="GridLinesVisibility" Value="Horizontal"/>
       <Setter Property="BorderThickness" Value="1"/>
     </Style>
+
+    <Style Selector="DataGridColumnHeader">
+      <Setter Property="Background" Value="#E5F2EE"/>
+      <Setter Property="Foreground" Value="#164B40"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Padding" Value="10,8"/>
+    </Style>
+
+    <Style Selector="TabItem">
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="#61736E"/>
+      <Setter Property="Padding" Value="14,10"/>
+    </Style>
+
+    <Style Selector="TabItem:selected">
+      <Setter Property="Foreground" Value="#087F6E"/>
+    </Style>
+
+    <Style Selector="TabControl /template/ ItemsPresenter#PART_ItemsPresenter">
+      <Setter Property="IsVisible" Value="False"/>
+    </Style>
+
+    <Style Selector="Button.filter">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#344B45"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="18"/>
+      <Setter Property="Padding" Value="15,8"/>
+      <Setter Property="Margin" Value="0,0,8,0"/>
+    </Style>
+
+    <Style Selector="Button.filter:selected">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+
+    <Style Selector="Button.filter:pointerover">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#344B45"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="Button.filter:pressed">
+      <Setter Property="Background" Value="#A9DED2"/>
+      <Setter Property="Foreground" Value="#06483E"/>
+      <Setter Property="BorderBrush" Value="#087F6E"/>
+    </Style>
+
+    <Style Selector="Button.filter:selected:pointerover">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="Button.filter /template/ Border#PART_ButtonRoot">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="Button.filter:pointerover /template/ Border#PART_ButtonRoot">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="Button.filter:selected /template/ Border#PART_ButtonRoot">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="Button.filter:selected:pointerover /template/ Border#PART_ButtonRoot">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="Button.filter /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#344B45"/>
+    </Style>
+
+    <Style Selector="Button.filter:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#344B45"/>
+    </Style>
+
+    <Style Selector="Button.filter:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White"/>
+    </Style>
+
+    <Style Selector="Button.filter:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White"/>
+    </Style>
+
+    <Style Selector="Border.product-card">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#E1EAE6"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="Margin" Value="0,0,14,14"/>
+      <Setter Property="Padding" Value="8"/>
+    </Style>
+
+    <Style Selector="Button.card-action">
+      <Setter Property="Background" Value="#E8F5F1"/>
+      <Setter Property="Foreground" Value="#087F6E"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="Margin" Value="0,8,6,0"/>
+    </Style>
+
+    <Style Selector="Button.card-action:pointerover">
+      <Setter Property="Background" Value="#E8F5F1"/>
+      <Setter Property="Foreground" Value="#087F6E"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-action">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#344B45"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding" Value="14,9"/>
+      <Setter Property="Margin" Value="8,0,0,10"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-action:pointerover">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#344B45"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-action:pressed">
+      <Setter Property="Background" Value="#BDE5DA"/>
+      <Setter Property="Foreground" Value="#06483E"/>
+      <Setter Property="BorderBrush" Value="#087F6E"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-action:focus">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#344B45"/>
+      <Setter Property="BorderBrush" Value="#087F6E"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-action:pointerover:focus">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#344B45"/>
+      <Setter Property="BorderBrush" Value="#087F6E"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-action /template/ Border#PART_ButtonRoot">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-action:pointerover /template/ Border#PART_ButtonRoot">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-action:pressed /template/ Border#PART_ButtonRoot">
+      <Setter Property="Background" Value="#BDE5DA"/>
+      <Setter Property="BorderBrush" Value="#087F6E"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-action /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#344B45"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#344B45"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-primary">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding" Value="14,9"/>
+      <Setter Property="Margin" Value="8,0,0,10"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-primary:pointerover">
+      <Setter Property="Background" Value="#056B5D"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-primary:focus">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-primary:pressed">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-primary:disabled">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Opacity" Value="1"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-primary:pointerover:focus">
+      <Setter Property="Background" Value="#056B5D"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-primary:pointerover /template/ Border#PART_ButtonRoot">
+      <Setter Property="Background" Value="#056B5D"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-primary:focus /template/ Border#PART_ButtonRoot">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-primary:pressed /template/ Border#PART_ButtonRoot">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-primary:disabled /template/ Border#PART_ButtonRoot">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Opacity" Value="1"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="9"/>
+      <Setter Property="Padding" Value="12,9"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput:focus">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="BorderBrush" Value="#087F6E"/>
+      <Setter Property="BorderThickness" Value="1.5"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput:pointerover">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput:pointerover:focus">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="BorderThickness" Value="1.5"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#087F6E"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput:pointerover:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput /template/ ScrollViewer#PART_ContentHost">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput:focus /template/ ScrollViewer#PART_ContentHost">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput:pointerover /template/ ScrollViewer#PART_ContentHost">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#263B35"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput /template/ TextPresenter#PART_TextPresenter">
+      <Setter Property="TextElement.Foreground" Value="#263B35"/>
+      <Setter Property="CaretBrush" Value="#087F6E"/>
+    </Style>
+
+    <Style Selector="TextBox.searchInput:focus /template/ TextPresenter#PART_TextPresenter">
+      <Setter Property="TextElement.Foreground" Value="#263B35"/>
+      <Setter Property="CaretBrush" Value="#087F6E"/>
+    </Style>
   </Window.Styles>
 
-  <Grid RowDefinitions="58,*" Background="#F4F6F8">
-
-    <!-- THANH MENU -->
-    <Border Grid.Row="0" Background="#0878E8">
-      <Grid ColumnDefinitions="Auto,*">
+  <Grid ColumnDefinitions="220,*" Background="#F4F7F6">
+    <Border Grid.Column="0" Padding="16,0">
+      <Border.Background>
+        <ImageBrush Source="avares://ShopHoa/Assets/anh_menu.png" Stretch="UniformToFill"/>
+      </Border.Background>
+      <Grid RowDefinitions="Auto,*,Auto">
         <TextBlock Text="🌸 SHOP HOA"
                    Foreground="White"
-                   FontSize="19"
+                   FontSize="20"
                    FontWeight="Bold"
                    VerticalAlignment="Center"
-                   Margin="20,0,24,0"/>
+                   Margin="8,28,8,30"/>
 
-        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <StackPanel Grid.Row="1" Orientation="Vertical">
           <Button Classes="menu" Content="Tổng quan" Command="{Binding ChonMenuCommand}" CommandParameter="Tổng quan"/>
           <Button Classes="menu" Content="Hàng hóa" Command="{Binding ChonMenuCommand}" CommandParameter="Hàng hóa"/>
           <Button Classes="menu" Content="Mua hàng" Command="{Binding ChonMenuCommand}" CommandParameter="Mua hàng"/>
@@ -57,16 +471,29 @@
           <Button Classes="menu" Content="Khách hàng" Command="{Binding ChonMenuCommand}" CommandParameter="Khách hàng"/>
           <Button Classes="menu" Content="Sổ quỹ" Command="{Binding ChonMenuCommand}" CommandParameter="Sổ quỹ"/>
           <Button Classes="menu" Content="Báo cáo" Command="{Binding ChonMenuCommand}" CommandParameter="Báo cáo"/>
-          <Button Margin="20,0,0,0" Content="🛒 Bán hàng" Padding="20,11" FontWeight="SemiBold"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2">
+          <Button Classes="salesButton" Content="🛒  Bán hàng" VerticalAlignment="Center"/>
+          <Border Background="#087F6E" Opacity="0.9" CornerRadius="10" Padding="10" Margin="0,14,0,14">
+            <Grid ColumnDefinitions="Auto,*">
+              <Border Width="34" Height="34" Background="#D8F0E9" CornerRadius="17">
+                <TextBlock Text="A" Foreground="#087F6E" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+              <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="admin" Foreground="White" FontWeight="SemiBold"/>
+                <TextBlock Text="Quản trị viên" Foreground="#D8F0E9" FontSize="11"/>
+              </StackPanel>
+            </Grid>
+          </Border>
         </StackPanel>
       </Grid>
     </Border>
 
-    <!-- NỘI DUNG -->
-    <Grid Grid.Row="1" Margin="22">
+          <Grid Grid.Column="1" Margin="34,28">
 
       <!-- TỔNG QUAN -->
-      <ScrollViewer IsVisible="{Binding SelectedMenu, Converter={x:Static StringConverters.IsNullOrEmpty}}">
+      <ScrollViewer IsVisible="{Binding IsTongQuanSelected}">
         <StackPanel>
           <TextBlock Classes="page-title" Text="Tổng quan"/>
           <WrapPanel>
@@ -108,40 +535,108 @@
         </StackPanel>
       </ScrollViewer>
 
-      <!-- HÀNG HÓA -->
-      <Grid IsVisible="{Binding SelectedMenu, Converter={x:Static StringConverters.IsNullOrEmpty}}">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto"/>
-          <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-      </Grid>
-
-      <!-- DÙNG TAB ĐỂ KHỞI ĐỘNG NHANH: sau khi chạy ổn sẽ tách thành View riêng -->
       <TabControl Grid.RowSpan="2" Margin="0"
-                  SelectedIndex="0"
-                  IsVisible="True">
+                  SelectedIndex="{Binding SelectedDataTabIndex}"
+                  IsVisible="{Binding IsDataSectionSelected}">
         <TabItem Header="Hàng hóa">
-          <Grid RowDefinitions="Auto,*" Margin="0,14,0,0">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBox Watermark="🔍 Tìm mã hàng, tên hàng, mã vạch..."
+          <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,14,0,0">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+              <TextBox Classes="searchInput" Watermark="🔍 Tìm mã hàng, tên hàng, mã vạch..."
                        Text="{Binding ProductSearch}"
                        Margin="0,0,10,10"/>
-              <Button Grid.Column="1" Content="Tìm kiếm"
+                    <Button Grid.Column="1" Classes="toolbar-action" Content="Tìm kiếm"
                       Command="{Binding SearchProductsCommand}"
                       Margin="0,0,0,10"/>
+                    <Button Grid.Column="2" Classes="toolbar-action" Content="⚱  Bộ lọc"
+                      Command="{Binding LocSanPhamCommand}" CommandParameter=""/>
+                    <Button Grid.Column="3" Classes="toolbar-action" Content="↕  Sắp xếp"
+                      Command="{Binding SapXepSanPhamCommand}"/>
+                    <Button Grid.Column="4" Classes="toolbar-primary" Content="＋  Thêm mới"
+                      Command="{Binding ThemSanPhamCommand}"
+                      IsEnabled="True"
+                      Opacity="1">
+                      <Button.Template>
+                        <ControlTemplate>
+                          <Border Background="{TemplateBinding Background}"
+                                  BorderBrush="{TemplateBinding BorderBrush}"
+                                  BorderThickness="{TemplateBinding BorderThickness}"
+                              CornerRadius="{TemplateBinding CornerRadius}"
+                              Padding="{TemplateBinding Padding}"
+                              HorizontalAlignment="{TemplateBinding HorizontalAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalAlignment}">
+                            <ContentPresenter Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                          </Border>
+                        </ControlTemplate>
+                      </Button.Template>
+                    </Button>
             </Grid>
-            <DataGrid Grid.Row="1" ItemsSource="{Binding SanPhams}" AutoGenerateColumns="False"
-                      IsReadOnly="True">
-              <DataGrid.Columns>
-                <DataGridTextColumn Header="Mã hàng" Binding="{Binding MaSanPham}" Width="170"/>
-                <DataGridTextColumn Header="Tên hàng" Binding="{Binding TenSanPham}" Width="*"/>
-                <DataGridTextColumn Header="Giá bán" Binding="{Binding GiaBan, StringFormat=\{0:N0\}}" Width="120"/>
-                <DataGridTextColumn Header="Giá vốn" Binding="{Binding GiaVon, StringFormat=\{0:N0\}}" Width="120"/>
-                <DataGridTextColumn Header="Tồn kho" Binding="{Binding TonKho, StringFormat=\{0:N3\}}" Width="110"/>
-                <DataGridTextColumn Header="ĐVT" Binding="{Binding DonViTinh}" Width="100"/>
-                <DataGridTextColumn Header="Nhóm" Binding="{Binding NhomSanPham}" Width="160"/>
-              </DataGrid.Columns>
-            </DataGrid>
+            <WrapPanel Grid.Row="1" Margin="0,2,0,12">
+                    <Button Classes="filter" Content="Tất cả"
+                      Command="{Binding LocSanPhamCommand}" CommandParameter=""/>
+                    <Button Classes="filter" Content="Hoa tươi"
+                      Command="{Binding LocSanPhamCommand}" CommandParameter="Hoa tươi"/>
+                    <Button Classes="filter" Content="Bó hoa"
+                      Command="{Binding LocSanPhamCommand}" CommandParameter="Bó hoa"/>
+                    <Button Classes="filter" Content="Hoa chậu"
+                      Command="{Binding LocSanPhamCommand}" CommandParameter="Hoa chậu"/>
+                    <Button Classes="filter" Content="Phụ kiện"
+                      Command="{Binding LocSanPhamCommand}" CommandParameter="Phụ kiện"/>
+                    <Button Classes="filter" Content="Thiệp"
+                      Command="{Binding LocSanPhamCommand}" CommandParameter="Thiệp"/>
+                    <Button Classes="filter" Content="Quà tặng"
+                      Command="{Binding LocSanPhamCommand}" CommandParameter="Quà tặng"/>
+            </WrapPanel>
+            <TextBlock Grid.Row="2" Text="{Binding StatusMessage}" Foreground="#667085" Margin="0,0,0,10"/>
+            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+              <ItemsControl ItemsSource="{Binding SanPhams}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="models:SanPham">
+                    <Border Classes="product-card" Width="230">
+                      <StackPanel>
+                        <Border Height="142" CornerRadius="8" ClipToBounds="True">
+                          <Grid>
+                            <Image Source="avares://ShopHoa/Assets/anh_menu.png" Stretch="UniformToFill"/>
+                            <Image Source="{Binding HinhAnhBitmap}" Stretch="UniformToFill"/>
+                            <Ellipse Width="10" Height="10" Fill="#2BA84A" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0"/>
+                            <Button Content="📷 Đổi ảnh" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                              Classes="card-action"
+                              Command="{Binding $parent[Window].DataContext.CapNhatHinhAnhCommand}"
+                              CommandParameter="{Binding}"/>
+                          </Grid>
+                        </Border>
+                        <TextBlock Text="{Binding TenSanPham}" Foreground="#263B35" FontWeight="SemiBold" FontSize="14" Margin="4,10,4,0" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding MaSanPham}" Foreground="#7A8B85" FontSize="12" Margin="4,3,4,0"/>
+                        <TextBlock Text="{Binding LoaiHang}" Foreground="#7A8B85" FontSize="12" Margin="4,2,4,0"/>
+                        <TextBlock Text="{Binding GiaBan, StringFormat=\{0:N0\}}" Foreground="#087F6E" FontWeight="Bold" FontSize="15" Margin="4,8,4,0"/>
+                        <TextBlock Text="{Binding NhomHangBaCap, StringFormat=Nhóm: \{0\}}" Foreground="#52645E" FontSize="12" Margin="4,4,4,0" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding TonKhoExcel, StringFormat=Tồn kho: \{0:N0\}}" Foreground="#52645E" FontSize="12" Margin="4,3,4,0"/>
+                        <TextBlock Text="{Binding KhachDat, StringFormat=Khách đặt: \{0:N0\}}" Foreground="#52645E" FontSize="12" Margin="4,2,4,0"/>
+                        <TextBlock Text="{Binding DonViTinh, StringFormat=ĐVT: \{0\}}" Foreground="#52645E" FontSize="12" Margin="4,2,4,0"/>
+                        <TextBlock Text="{Binding NgayTao, StringFormat=Tạo: \{0:dd/MM/yyyy HH:mm\}}" Foreground="#52645E" FontSize="12" Margin="4,2,4,0"/>
+                        <TextBlock Text="{Binding DuKienHetHang, StringFormat=Hết hàng: \{0\}}" Foreground="#52645E" FontSize="12" Margin="4,2,4,0"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Classes="card-action" Content="Sửa"
+                              Command="{Binding $parent[Window].DataContext.SuaSanPhamCommand}"
+                              CommandParameter="{Binding}"/>
+                            <Button Classes="card-action" Content="Xóa" Foreground="#D64545" Background="#FFF0F0"
+                              Command="{Binding $parent[Window].DataContext.XoaSanPhamCommand}"
+                              CommandParameter="{Binding}"/>
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
           </Grid>
         </TabItem>
 
@@ -151,7 +646,7 @@
               <TextBox Watermark="🔍 Tìm mã, tên hoặc số điện thoại..."
                        Text="{Binding CustomerSearch}"
                        Margin="0,0,10,10"/>
-              <Button Grid.Column="1" Content="Tìm kiếm"
+                    <Button Grid.Column="1" Classes="toolbar-action" Content="Tìm kiếm"
                       Command="{Binding SearchCustomersCommand}"
                       Margin="0,0,0,10"/>
             </Grid>
@@ -175,7 +670,7 @@
               <TextBox Watermark="🔍 Theo mã hóa đơn hoặc tên khách hàng..."
                        Text="{Binding InvoiceSearch}"
                        Margin="0,0,10,10"/>
-              <Button Grid.Column="1" Content="+ Hóa đơn"
+                    <Button Grid.Column="1" Classes="toolbar-primary" Content="+ Hóa đơn"
                       Command="{Binding SearchInvoicesCommand}"
                       Margin="0,0,0,10"/>
             </Grid>
@@ -200,7 +695,7 @@
               <TextBox Watermark="🔍 Tìm mã, tên hoặc số điện thoại..."
                        Text="{Binding SupplierSearch}"
                        Margin="0,0,10,10"/>
-              <Button Grid.Column="1" Content="Tìm kiếm"
+                    <Button Grid.Column="1" Classes="toolbar-action" Content="Tìm kiếm"
                       Command="{Binding SearchSuppliersCommand}"
                       Margin="0,0,0,10"/>
             </Grid>

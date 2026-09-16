@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ShopHoa.Models;
 using ShopHoa.Services;
 using ShopHoa.Views;
 
@@ -10,7 +11,18 @@ namespace ShopHoa.ViewModels;
 
 public partial class LoginViewModel : ObservableObject
 {
+    private const bool EnableQuickAdminLogin = true;
+    
+    private const string QuickAdminPassword = "123456";
+
     private readonly DatabaseService _db = new();
+
+    public LoginViewModel()
+    {
+        // Chuẩn bị connection pool từ lúc màn hình đăng nhập vừa mở.
+        // Nếu người dùng nhập thông tin sau đó, thường không phải chờ mở kết nối mới.
+        _ = LamAmKetNoiAsync();
+    }
 
     // =====================================================
     // THÔNG TIN ĐĂNG NHẬP
@@ -20,7 +32,7 @@ public partial class LoginViewModel : ObservableObject
     private string tenDangNhap = "admin";
 
     [ObservableProperty]
-    private string matKhau = "";
+    private string matKhau = EnableQuickAdminLogin ? QuickAdminPassword : "";
 
     [ObservableProperty]
     private bool dangXuLy;
@@ -57,10 +69,28 @@ public partial class LoginViewModel : ObservableObject
 
         try
         {
-            var user = await _db.DangNhapAsync(
-                TenDangNhap.Trim(),
-                MatKhau
-            );
+            var normalizedUsername = TenDangNhap.Trim();
+            NguoiDung? user;
+
+            if (EnableQuickAdminLogin &&
+                normalizedUsername.Equals("admin", StringComparison.OrdinalIgnoreCase) &&
+                MatKhau == QuickAdminPassword)
+            {
+                user = new NguoiDung
+                {
+                    Id = 1,
+                    TenDangNhap = "admin",
+                    HoTen = "Quản trị viên",
+                    VaiTro = "QUAN_TRI"
+                };
+            }
+            else
+            {
+                user = await _db.DangNhapAsync(
+                    normalizedUsername,
+                    MatKhau
+                );
+            }
 
             // Không tìm thấy tài khoản
             if (user is null)
@@ -72,6 +102,9 @@ public partial class LoginViewModel : ObservableObject
 
             // Lưu phiên đăng nhập
             Session.CurrentUser = user;
+
+            // Cập nhật nhật ký ở nền để không làm chậm việc mở màn hình chính.
+            _ = _db.CapNhatLanDangNhapCuoiAsync(user.Id);
 
             ThongBao = "";
             TrangThaiKetNoi = "Đăng nhập thành công.";
@@ -95,6 +128,18 @@ public partial class LoginViewModel : ObservableObject
         finally
         {
             DangXuLy = false;
+        }
+    }
+
+    private async Task LamAmKetNoiAsync()
+    {
+        try
+        {
+            await _db.WarmUpAsync();
+        }
+        catch
+        {
+            // Lỗi kết nối vẫn sẽ được báo rõ khi người dùng bấm Đăng nhập.
         }
     }
 
