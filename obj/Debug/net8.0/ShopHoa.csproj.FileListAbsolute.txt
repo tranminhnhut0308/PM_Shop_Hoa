@@ -1293,3 +1293,11 @@ d:\ShopHoa\obj\Debug\net8.0\refint\ShopHoa.dll
 d:\ShopHoa\obj\Debug\net8.0\ShopHoa.pdb
 D:\ShopHoa\obj\Debug\net8.0\ShopHoa.genruntimeconfig.cache
 D:\ShopHoa\obj\Debug\net8.0\ref\ShopHoa.dll
+D:\ShopHoa\bin\Debug\net8.0\ClosedXML.dll
+D:\ShopHoa\bin\Debug\net8.0\ClosedXML.Parser.dll
+D:\ShopHoa\bin\Debug\net8.0\DocumentFormat.OpenXml.dll
+D:\ShopHoa\bin\Debug\net8.0\DocumentFormat.OpenXml.Framework.dll
+D:\ShopHoa\bin\Debug\net8.0\ExcelNumberFormat.dll
+D:\ShopHoa\bin\Debug\net8.0\RBush.dll
+D:\ShopHoa\bin\Debug\net8.0\SixLabors.Fonts.dll
+D:\ShopHoa\bin\Debug\net8.0\System.IO.Packaging.dll

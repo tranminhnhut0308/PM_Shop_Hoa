@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+using ClosedXML.Excel;
 using Dapper;
 using MySqlConnector;
 using ShopHoa.Models;
@@ -339,8 +342,13 @@ public sealed class DatabaseService
                 thuong_hieu_id,
                 gia_ban,
                 gia_von,
+                ton_kho_excel,
                 ton_toi_thieu,
                 ton_toi_da,
+                khach_dat,
+                du_kien_het_hang,
+                loai_hang_excel,
+                nhom_hang_3_cap_excel,
                 vi_tri_kho,
                 mo_ta,
                 ghi_chu,
@@ -357,8 +365,13 @@ public sealed class DatabaseService
                 @ThuongHieuId,
                 @GiaBan,
                 @GiaVon,
+                @TonKhoExcel,
                 @TonToiThieu,
                 @TonToiDa,
+                @KhachDat,
+                @DuKienHetHang,
+                @LoaiHang,
+                @NhomHangBaCap,
                 @ViTriKho,
                 @MoTa,
                 @GhiChu,
@@ -386,8 +399,13 @@ public sealed class DatabaseService
                     thuong_hieu_id = @ThuongHieuId,
                     gia_ban = @GiaBan,
                     gia_von = @GiaVon,
+                    ton_kho_excel = @TonKhoExcel,
                     ton_toi_thieu = @TonToiThieu,
                     ton_toi_da = @TonToiDa,
+                    khach_dat = @KhachDat,
+                    du_kien_het_hang = @DuKienHetHang,
+                    loai_hang_excel = @LoaiHang,
+                    nhom_hang_3_cap_excel = @NhomHangBaCap,
                     vi_tri_kho = @ViTriKho,
                     mo_ta = @MoTa,
                     ghi_chu = @GhiChu,
@@ -406,6 +424,343 @@ public sealed class DatabaseService
         await connection.ExecuteAsync(
             "DELETE FROM san_pham WHERE id = @Id;",
             new { Id = productId });
+    }
+
+    public async Task<int> ImportSanPhamTuFileAsync(string filePath)
+        => await ImportSanPhamTuFileAsync(filePath, null);
+
+    public async Task<int> ImportSanPhamTuFileAsync(string filePath, IReadOnlyCollection<SanPham>? productsOverride)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
+
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException("Không tìm thấy file danh sách hàng hóa.", filePath);
+
+        var products = productsOverride ?? ParseProductsFromFile(filePath);
+
+        if (products.Count == 0)
+            return 0;
+
+        const string sql = """
+            INSERT INTO san_pham
+            (
+                ma_san_pham,
+                ma_vach,
+                ten_san_pham,
+                gia_ban,
+                gia_von,
+                ton_toi_thieu,
+                ton_toi_da,
+                khach_dat,
+                vi_tri_kho,
+                mo_ta,
+                ghi_chu,
+                co_ban_truc_tiep,
+                trang_thai
+            )
+            VALUES
+            (
+                @MaSanPham,
+                @MaVach,
+                @TenSanPham,
+                @GiaBan,
+                @GiaVon,
+                @TonToiThieu,
+                @TonToiDa,
+                @KhachDat,
+                @ViTriKho,
+                @MoTa,
+                @GhiChu,
+                @DuocBanTrucTiep,
+                @DangKinhDoanh
+            );
+            """;
+
+        await using var connection = await OpenAsync();
+
+        var importedCount = 0;
+        foreach (var product in products)
+        {
+            await connection.ExecuteAsync(sql, product);
+            importedCount++;
+        }
+
+        return importedCount;
+    }
+
+    public List<SanPham> ParseProductsFromFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
+
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException("Không tìm thấy file danh sách hàng hóa.", filePath);
+
+        var rows = ReadProductRowsFromFile(filePath);
+        return rows
+            .Select(MapRowToProduct)
+            .Where(product => !string.IsNullOrWhiteSpace(product.TenSanPham))
+            .ToList();
+    }
+
+    private static List<Dictionary<string, string>> ReadProductRowsFromFile(string filePath)
+    {
+        var extension = Path.GetExtension(filePath).Trim().ToLowerInvariant();
+
+        if (extension == ".csv")
+            return ReadCsvProductRows(filePath);
+
+        if (extension is ".xlsx" or ".xls")
+            return ReadExcelProductRows(filePath);
+
+        throw new NotSupportedException("File không được hỗ trợ. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV.");
+    }
+
+    private static List<Dictionary<string, string>> ReadExcelProductRows(string filePath)
+    {
+        using var workbook = new XLWorkbook(filePath);
+        var worksheet = workbook.Worksheets.FirstOrDefault() ??
+            throw new InvalidOperationException("File Excel không chứa sheet dữ liệu hợp lệ.");
+
+        var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+        if (lastRow < 2)
+            return [];
+
+        var headers = new List<string>();
+        var firstRow = worksheet.Row(1);
+        foreach (var cell in firstRow.Cells())
+            headers.Add(cell.GetString().Trim());
+
+        var result = new List<Dictionary<string, string>>();
+
+        for (var rowNumber = 2; rowNumber <= lastRow; rowNumber++)
+        {
+            var row = worksheet.Row(rowNumber);
+            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var hasAnyValue = false;
+
+            for (var index = 0; index < headers.Count; index++)
+            {
+                var header = headers[index];
+                var value = row.Cell(index + 1).GetString().Trim();
+
+                if (!string.IsNullOrWhiteSpace(header) || !string.IsNullOrWhiteSpace(value))
+                    hasAnyValue = true;
+
+                if (!string.IsNullOrWhiteSpace(header))
+                    values[header] = value;
+            }
+
+            if (hasAnyValue)
+                result.Add(values);
+        }
+
+        return result;
+    }
+
+    private static List<Dictionary<string, string>> ReadCsvProductRows(string filePath)
+    {
+        var lines = File.ReadAllLines(filePath);
+        if (lines.Length < 2)
+            return [];
+
+        var headers = ParseCsvLine(lines[0]);
+        var result = new List<Dictionary<string, string>>();
+
+        for (var index = 1; index < lines.Length; index++)
+        {
+            var line = lines[index];
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            var cells = ParseCsvLine(line);
+            var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var hasAnyValue = false;
+
+            for (var i = 0; i < headers.Count; i++)
+            {
+                var header = headers[i];
+                var value = i < cells.Count ? cells[i].Trim() : string.Empty;
+
+                if (!string.IsNullOrWhiteSpace(header) || !string.IsNullOrWhiteSpace(value))
+                    hasAnyValue = true;
+
+                if (!string.IsNullOrWhiteSpace(header))
+                    row[header] = value;
+            }
+
+            if (hasAnyValue)
+                result.Add(row);
+        }
+
+        return result;
+    }
+
+    private static List<string> ParseCsvLine(string line)
+    {
+        var result = new List<string>();
+        var current = new StringBuilder();
+        var inQuotes = false;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            var character = line[i];
+
+            if (character == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    current.Append('"');
+                    i++;
+                }
+                else
+                {
+                    inQuotes = !inQuotes;
+                }
+            }
+            else if (character == ',' && !inQuotes)
+            {
+                result.Add(current.ToString());
+                current.Clear();
+            }
+            else
+            {
+                current.Append(character);
+            }
+        }
+
+        result.Add(current.ToString());
+        return result;
+    }
+
+    private static SanPham MapRowToProduct(Dictionary<string, string> rawRow)
+    {
+        var normalizedRow = rawRow
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Key))
+            .ToDictionary(
+                entry => NormalizeHeader(entry.Key),
+                entry => entry.Value ?? string.Empty,
+                StringComparer.OrdinalIgnoreCase);
+
+        var maSanPham = GetFirstString(normalizedRow, "mahang", "masanpham", "mach", "macode") ?? GenerateProductCode();
+        var tenSanPham = GetFirstString(normalizedRow, "tenhang", "tensanpham", "ten", "name", "sanpham", "san_pham")
+            ?? GetAnyNonEmptyValue(normalizedRow, "mahang", "masanpham", "mavach", "giaban", "giavon");
+
+        var product = new SanPham
+        {
+            MaSanPham = maSanPham,
+            MaVach = GetFirstString(normalizedRow, "mavach", "barcode", "ma_vach"),
+            TenSanPham = tenSanPham ?? maSanPham,
+            GiaBan = ParseDecimal(GetFirstString(normalizedRow, "giaban", "giabanhang", "price", "dongia"), 0m),
+            GiaVon = ParseDecimal(GetFirstString(normalizedRow, "giavon", "giavonhang", "cost"), 0m),
+            TonKhoExcel = ParseDecimal(GetFirstString(normalizedRow, "tonkho", "tonkhoexcel", "soluongton"), 0m),
+            TonToiThieu = ParseDecimal(GetFirstString(normalizedRow, "tontoithieu", "tonthieunhat", "tonthieu"), 0m),
+            TonToiDa = ParseDecimal(GetFirstString(normalizedRow, "tontoida", "tonlonnhat", "tonmax"), 0m),
+            KhachDat = ParseDecimal(GetFirstString(normalizedRow, "khdat", "khachdat", "soluongdat"), 0m),
+            DuKienHetHang = GetFirstString(normalizedRow, "dukienhethang", "du_kien_het_hang", "het_hang"),
+            DonViTinh = GetFirstString(normalizedRow, "dvt", "donvitinh", "don_vi_tinh"),
+            LoaiHang = GetFirstString(normalizedRow, "loaihang", "loaihangexcel", "loai"),
+            NhomHangBaCap = GetFirstString(normalizedRow, "nhomhang3cap", "nhomhang3capexcel", "nhomhang"),
+            ViTriKho = GetFirstString(normalizedRow, "vitri", "vitrikho", "vitri_kho"),
+            DangKinhDoanh = ParseBoolean(GetFirstString(normalizedRow, "dangkinhdoanh", "trangthai", "status"), true),
+            DuocBanTrucTiep = ParseBoolean(GetFirstString(normalizedRow, "duocbanchirectiep", "duocbantructiep", "bantructiep"), true),
+            MoTa = GetFirstString(normalizedRow, "mota", "mo_ta"),
+            GhiChu = GetFirstString(normalizedRow, "ghichu", "ghi_chu")
+        };
+
+        return product;
+    }
+
+    private static string? GetFirstString(IReadOnlyDictionary<string, string> row, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (row.TryGetValue(NormalizeHeader(key), out var value) && !string.IsNullOrWhiteSpace(value))
+                return value.Trim();
+        }
+
+        return null;
+    }
+
+    private static string? GetAnyNonEmptyValue(IReadOnlyDictionary<string, string> row, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            var normalizedKey = NormalizeHeader(key);
+            if (row.TryGetValue(normalizedKey, out var value) && !string.IsNullOrWhiteSpace(value))
+                return value.Trim();
+        }
+
+        foreach (var value in row.Values)
+        {
+            var trimmed = value.Trim();
+            if (!string.IsNullOrWhiteSpace(trimmed))
+                return trimmed;
+        }
+
+        return null;
+    }
+
+    private static decimal ParseDecimal(string? value, decimal defaultValue)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return defaultValue;
+
+        var normalized = value.Replace(".", "")
+            .Replace(",", ".")
+            .Replace(" ", string.Empty);
+
+        if (decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
+            return parsed;
+
+        return defaultValue;
+    }
+
+    private static bool ParseBoolean(string? value, bool defaultValue)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return defaultValue;
+
+        var normalized = value.Trim();
+        if (bool.TryParse(normalized, out var result))
+            return result;
+
+        return normalized is "1" or "yes" or "y" or "co" or "đúng" ? true : defaultValue;
+    }
+
+    private static string NormalizeHeader(string value)
+    {
+        var normalized = value
+            .Replace("\uFEFF", string.Empty)
+            .Normalize(NormalizationForm.FormD);
+
+        var builder = new StringBuilder();
+
+        foreach (var character in normalized)
+        {
+            var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(character);
+            if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+                builder.Append(char.ToLowerInvariant(character));
+        }
+
+        return builder
+            .ToString()
+            .Replace("_", string.Empty)
+            .Replace("-", string.Empty)
+            .Replace(" ", string.Empty)
+            .Replace(".", string.Empty)
+            .Replace("/", string.Empty);
+    }
+
+    private static string GenerateProductCode()
+    {
+        return $"SP-{DateTime.Now:yyyyMMdd-HHmmssfff}";
+    }
+
+    private static string GenerateCustomerCode()
+    {
+        return $"KH{DateTime.Now:yyyyMMddHHmmssfff}";
     }
 
     public async Task<IReadOnlyList<KhachHang>> GetKhachHangAsync(
@@ -443,6 +798,307 @@ public sealed class DatabaseService
                     Search = search ?? ""
                 })
         ).AsList();
+    }
+
+    public async Task<int> ImportKhachHangTuFileAsync(string filePath)
+        => await ImportKhachHangTuFileAsync(filePath, null);
+
+    public async Task<int> ImportKhachHangTuFileAsync(string filePath, IReadOnlyCollection<KhachHang>? customersOverride)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
+
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException("Không tìm thấy file danh sách khách hàng.", filePath);
+
+        var customers = customersOverride ?? ParseKhachHangFromFile(filePath);
+
+        if (customers.Count == 0)
+            return 0;
+
+        const string sql = """
+            INSERT INTO khach_hang
+            (
+                ma_khach_hang,
+                ten_khach_hang,
+                loai_khach_hang,
+                so_dien_thoai,
+                ngay_sinh,
+                gioi_tinh,
+                email,
+                facebook,
+                dia_chi,
+                phuong_xa,
+                quan_huyen,
+                tinh_thanh,
+                nhom_khach_hang_id,
+                ma_so_thue,
+                ten_nguoi_mua_hoa_don,
+                ten_cong_ty,
+                dia_chi_xuat_hoa_don,
+                ghi_chu,
+                trang_thai,
+                ngay_tao,
+                ngay_cap_nhat
+            )
+            VALUES
+            (
+                @MaKhachHang,
+                @TenKhachHang,
+                @LoaiKhachHang,
+                @SoDienThoai,
+                @NgaySinh,
+                @GioiTinh,
+                @Email,
+                @Facebook,
+                @DiaChi,
+                @PhuongXa,
+                @QuanHuyen,
+                @TinhThanh,
+                NULL,
+                @MaSoThue,
+                @TenNguoiMuaHoaDon,
+                @TenCongTy,
+                @DiaChiXuatHoaDon,
+                @GhiChu,
+                @TrangThai,
+                NOW(),
+                NOW()
+            );
+            """;
+
+        await using var connection = await OpenAsync();
+
+        var importedCount = 0;
+        foreach (var customer in customers)
+        {
+            if (string.IsNullOrWhiteSpace(customer.TenKhachHang))
+                continue;
+
+            var normalizedCustomer = customer;
+            if (string.IsNullOrWhiteSpace(normalizedCustomer.MaKhachHang))
+                normalizedCustomer.MaKhachHang = GenerateCustomerCode();
+
+            normalizedCustomer.LoaiKhachHang = string.IsNullOrWhiteSpace(normalizedCustomer.LoaiKhachHang)
+                ? "CA_NHAN"
+                : normalizedCustomer.LoaiKhachHang;
+
+            normalizedCustomer.TrangThai = true;
+
+            try
+            {
+                await connection.ExecuteAsync(sql, normalizedCustomer);
+                importedCount++;
+            }
+            catch (MySqlException ex) when (ex.Number == 1062)
+            {
+                // Ignore a duplicate customer code and continue importing the other rows.
+            }
+        }
+
+        return importedCount;
+    }
+
+    public List<KhachHang> ParseKhachHangFromFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
+
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException("Không tìm thấy file danh sách khách hàng.", filePath);
+
+        var rows = ReadCustomerRowsFromFile(filePath);
+        return rows
+            .Select(MapRowToKhachHang)
+            .Where(customer => !string.IsNullOrWhiteSpace(customer.TenKhachHang) || !string.IsNullOrWhiteSpace(customer.MaKhachHang))
+            .ToList();
+    }
+
+    private static List<Dictionary<string, string>> ReadCustomerRowsFromFile(string filePath)
+    {
+        var extension = Path.GetExtension(filePath).Trim().ToLowerInvariant();
+
+        if (extension == ".csv")
+            return ReadCsvRows(filePath);
+
+        if (extension is ".xlsx" or ".xls")
+            return ReadExcelRows(filePath);
+
+        throw new NotSupportedException("File không được hỗ trợ. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV.");
+    }
+
+    private static List<Dictionary<string, string>> ReadExcelRows(string filePath)
+    {
+        using var workbook = new XLWorkbook(filePath);
+        var worksheet = workbook.Worksheets.FirstOrDefault() ??
+            throw new InvalidOperationException("File Excel không chứa sheet dữ liệu hợp lệ.");
+
+        var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+        if (lastRow == 0)
+            return [];
+
+        var headerRowNumber = FindCustomerHeaderRow(worksheet, lastRow);
+        if (headerRowNumber == 0)
+            throw new InvalidOperationException("Không tìm thấy dòng tiêu đề khách hàng trong file.");
+
+        var firstHeaderColumn = worksheet.Row(headerRowNumber).FirstCellUsed()?.Address.ColumnNumber ?? 1;
+        var lastHeaderColumn = worksheet.Row(headerRowNumber).LastCellUsed()?.Address.ColumnNumber ?? 0;
+        if (lastHeaderColumn < firstHeaderColumn)
+            return [];
+
+        var headers = new List<string>();
+        for (var column = firstHeaderColumn; column <= lastHeaderColumn; column++)
+            headers.Add(worksheet.Cell(headerRowNumber, column).GetString().Trim());
+
+        var result = new List<Dictionary<string, string>>();
+
+        for (var rowNumber = headerRowNumber + 1; rowNumber <= lastRow; rowNumber++)
+        {
+            var row = worksheet.Row(rowNumber);
+            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var hasAnyValue = false;
+
+            for (var index = 0; index < headers.Count; index++)
+            {
+                var header = headers[index];
+                var value = row.Cell(firstHeaderColumn + index).GetFormattedString().Trim();
+
+                if (!string.IsNullOrWhiteSpace(header) || !string.IsNullOrWhiteSpace(value))
+                    hasAnyValue = true;
+
+                if (!string.IsNullOrWhiteSpace(header))
+                    values[header] = value;
+            }
+
+            if (hasAnyValue)
+                result.Add(values);
+        }
+
+        return result;
+    }
+
+    private static int FindCustomerHeaderRow(IXLWorksheet worksheet, int lastRow)
+    {
+        for (var rowNumber = 1; rowNumber <= Math.Min(lastRow, 30); rowNumber++)
+        {
+            var values = worksheet.Row(rowNumber).CellsUsed()
+                .Select(cell => NormalizeHeaderKey(cell.GetString()))
+                .ToList();
+
+            var hasCode = values.Any(value => value is "ma_khach_hang" or "ma_kh");
+            var hasName = values.Any(value => value is "ten_khach_hang" or "ten_kh" or "ten");
+
+            if (hasCode || hasName)
+                return rowNumber;
+        }
+
+        return 0;
+    }
+
+    private static List<Dictionary<string, string>> ReadCsvRows(string filePath)
+    {
+        var rows = new List<Dictionary<string, string>>();
+        var lines = File.ReadAllLines(filePath);
+
+        if (lines.Length < 2)
+            return rows;
+
+        var headers = lines[0].Split(',');
+        for (var i = 1; i < lines.Length; i++)
+        {
+            var values = lines[i].Split(',');
+            if (values.Length == 0)
+                continue;
+
+            var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (var j = 0; j < headers.Length; j++)
+            {
+                if (j < values.Length)
+                    row[headers[j].Trim()] = values[j].Trim();
+            }
+
+            if (row.Count > 0)
+                rows.Add(row);
+        }
+
+        return rows;
+    }
+
+    private static string NormalizeHeaderKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalized = value.Trim().Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder();
+        foreach (var character in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
+                continue;
+
+            if (char.IsLetterOrDigit(character) || character == '_')
+                builder.Append(char.ToLowerInvariant(character));
+            else if (char.IsWhiteSpace(character) || character == '-' || character == '/' || character == '.')
+                builder.Append('_');
+        }
+
+        return builder.ToString().Replace("__", "_").Trim('_');
+    }
+
+    private static string? GetCellValue(Dictionary<string, string> row, params string[] candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            var normalized = NormalizeHeaderKey(candidate);
+            foreach (var key in row.Keys)
+            {
+                if (NormalizeHeaderKey(key) == normalized)
+                    return row[key].Trim();
+            }
+        }
+
+        return null;
+    }
+
+    private static KhachHang MapRowToKhachHang(Dictionary<string, string> row)
+    {
+        var customer = new KhachHang
+        {
+            MaKhachHang = GetCellValue(row, "ma_khach_hang", "mã khách hàng", "ma khach hang", "customer code", "customer_code") ?? string.Empty,
+            TenKhachHang = GetCellValue(row, "ten_khach_hang", "tên khách hàng", "ten khach hang", "customer name", "name") ?? string.Empty,
+            LoaiKhachHang = GetCellValue(row, "loai_khach_hang", "loại khách hàng", "loai khach hang", "customer type") ?? "CA_NHAN",
+            SoDienThoai = GetCellValue(row, "so_dien_thoai", "số điện thoại", "dien thoai", "phone", "sdt"),
+            Email = GetCellValue(row, "email"),
+            Facebook = GetCellValue(row, "facebook"),
+            DiaChi = GetCellValue(row, "dia_chi", "địa chỉ", "dia chi", "address"),
+            PhuongXa = GetCellValue(row, "phuong_xa", "phường/xã", "phuong xa", "ward"),
+            QuanHuyen = GetCellValue(row, "quan_huyen", "quận/huyện", "quan huyen", "district"),
+            TinhThanh = GetCellValue(row, "tinh_thanh", "tỉnh/thành", "tinh thanh", "province"),
+            NhomKhachHang = GetCellValue(row, "nhom_khach_hang", "nhóm khách hàng", "nhom khach hang", "group"),
+            MaSoThue = GetCellValue(row, "ma_so_thue", "mã số thuế", "ma so thue", "tax code"),
+            TenNguoiMuaHoaDon = GetCellValue(row, "ten_nguoi_mua_hoa_don", "tên người mua hóa đơn", "nguoi mua hoa don"),
+            TenCongTy = GetCellValue(row, "ten_cong_ty", "tên công ty", "cong ty"),
+            DiaChiXuatHoaDon = GetCellValue(row, "dia_chi_xuat_hoa_don", "địa chỉ xuất hóa đơn", "dia chi xuat hoa don"),
+            GhiChu = GetCellValue(row, "ghi_chu", "ghi chú", "note")
+        };
+
+        if (!string.IsNullOrWhiteSpace(GetCellValue(row, "ngay_sinh", "ngày sinh", "birthday", "dob")))
+        {
+            var value = GetCellValue(row, "ngay_sinh", "ngày sinh", "birthday", "dob");
+            if (DateTime.TryParse(value, out var parsedDate))
+                customer.NgaySinh = parsedDate;
+        }
+
+        if (!string.IsNullOrWhiteSpace(GetCellValue(row, "gioi_tinh", "giới tính", "gender", "sex")))
+            customer.GioiTinh = GetCellValue(row, "gioi_tinh", "giới tính", "gender", "sex");
+
+        if (string.IsNullOrWhiteSpace(customer.MaKhachHang))
+            customer.MaKhachHang = GenerateCustomerCode();
+
+        if (string.IsNullOrWhiteSpace(customer.LoaiKhachHang))
+            customer.LoaiKhachHang = "CA_NHAN";
+
+        return customer;
     }
 
     public async Task<IReadOnlyList<HoaDon>> GetHoaDonAsync(
@@ -483,6 +1139,157 @@ public sealed class DatabaseService
                     Search = search ?? ""
                 })
         ).AsList();
+    }
+
+    public async Task<HoaDonBanHangReceipt> TaoHoaDonBanHangAsync(
+        IReadOnlyCollection<SaleCartItem> items,
+        KhachHang? customer,
+        decimal discount)
+    {
+        if (items.Count == 0)
+            throw new InvalidOperationException("Giỏ hàng đang trống.");
+
+        var now = DateTime.Now;
+        var invoiceCode = $"HD{now:yyyyMMddHHmmssfff}";
+        var total = items.Sum(item => item.ThanhTien);
+        var safeDiscount = Math.Clamp(discount, 0, total);
+        var amountDue = total - safeDiscount;
+        var branchId = Session.CurrentUser?.ChiNhanhId ?? 1;
+        var userId = Session.CurrentUser?.Id;
+
+        await using var connection = await OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            const string invoiceSql = """
+                INSERT INTO hoa_don_ban_hang
+                (
+                    ma_hoa_don,
+                    chi_nhanh_id,
+                    khach_hang_id,
+                    nguoi_ban_id,
+                    thoi_gian_ban,
+                    tong_tien_hang,
+                    giam_gia,
+                    khach_can_tra,
+                    khach_da_thanh_toan,
+                    con_no,
+                    trang_thai_thanh_toan,
+                    trang_thai_hoa_don,
+                    ngay_tao,
+                    ngay_cap_nhat
+                )
+                VALUES
+                (
+                    @MaHoaDon,
+                    @ChiNhanhId,
+                    @KhachHangId,
+                    @NguoiBanId,
+                    @ThoiGianBan,
+                    @TongTienHang,
+                    @GiamGia,
+                    @KhachCanTra,
+                    @KhachDaThanhToan,
+                    @ConNo,
+                    'DA_THANH_TOAN',
+                    'HOAN_THANH',
+                    @ThoiGianBan,
+                    @ThoiGianBan
+                );
+                SELECT LAST_INSERT_ID();
+                """;
+
+            var invoiceId = await connection.ExecuteScalarAsync<uint>(
+                invoiceSql,
+                new
+                {
+                    MaHoaDon = invoiceCode,
+                    ChiNhanhId = branchId,
+                    KhachHangId = customer?.Id,
+                    NguoiBanId = userId,
+                    ThoiGianBan = now,
+                    TongTienHang = total,
+                    GiamGia = safeDiscount,
+                    KhachCanTra = amountDue,
+                    KhachDaThanhToan = amountDue,
+                    ConNo = 0m
+                },
+                transaction);
+
+            const string detailSql = """
+                INSERT INTO chi_tiet_hoa_don_ban_hang
+                (
+                    hoa_don_id,
+                    san_pham_id,
+                    ma_san_pham,
+                    ten_san_pham,
+                    don_vi_tinh,
+                    so_luong,
+                    don_gia,
+                    thanh_tien,
+                    gia_von
+                )
+                VALUES
+                (
+                    @HoaDonId,
+                    @SanPhamId,
+                    @MaSanPham,
+                    @TenSanPham,
+                    @DonViTinh,
+                    @SoLuong,
+                    @DonGia,
+                    @ThanhTien,
+                    @GiaVon
+                );
+                """;
+
+            foreach (var item in items)
+            {
+                await connection.ExecuteAsync(
+                    detailSql,
+                    new
+                    {
+                        HoaDonId = invoiceId,
+                        SanPhamId = item.SanPham.Id,
+                        MaSanPham = item.SanPham.MaSanPham,
+                        TenSanPham = item.SanPham.TenSanPham,
+                        DonViTinh = item.SanPham.DonViTinh,
+                        item.SoLuong,
+                        DonGia = item.SanPham.GiaBan,
+                        item.ThanhTien,
+                        GiaVon = item.SanPham.GiaVon
+                    },
+                    transaction);
+            }
+
+            await transaction.CommitAsync();
+
+            return new HoaDonBanHangReceipt
+            {
+                MaHoaDon = invoiceCode,
+                ThoiGianBan = now,
+                TenKhachHang = customer?.TenKhachHang ?? "Khách lẻ",
+                TenNhanVien = Session.CurrentUser?.HoTen ?? "",
+                TongTienHang = total,
+                GiamGia = safeDiscount,
+                KhachCanTra = amountDue,
+                KhachDaThanhToan = amountDue,
+                ConNo = 0,
+                Items = items.Select(item => new HoaDonBanHangReceiptItem
+                {
+                    TenSanPham = item.SanPham.TenSanPham,
+                    SoLuong = item.SoLuong,
+                    DonGia = item.SanPham.GiaBan,
+                    ThanhTien = item.ThanhTien
+                }).ToList()
+            };
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<NhaCungCap>> GetNhaCungCapAsync(

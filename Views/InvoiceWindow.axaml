@@ -1,0 +1,87 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="using:ShopHoa.Models"
+        x:Class="ShopHoa.Views.InvoiceWindow"
+        x:DataType="models:HoaDonBanHangReceipt"
+        Title="Hóa đơn bán hàng"
+        Width="620"
+        Height="760"
+        MinWidth="520"
+        MinHeight="600"
+        Background="#FFFFFF">
+  <Window.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="#263B35"/>
+    </Style>
+    <Style Selector="Button.toolbar-primary">
+      <Setter Property="Background" Value="#087F6E"/>
+      <Setter Property="Foreground" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#087F6E"/>
+      <Setter Property="Padding" Value="14,8"/>
+    </Style>
+    <Style Selector="Button.toolbar-primary:pointerover">
+      <Setter Property="Background" Value="#056B5D"/>
+      <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+  </Window.Styles>
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="28" Spacing="10">
+      <TextBlock Text="CỬA HÀNG HOA" HorizontalAlignment="Center" FontSize="18" FontWeight="Bold" Foreground="#163F38"/>
+      <TextBlock Text="HÓA ĐƠN BÁN HÀNG" HorizontalAlignment="Center" FontSize="22" FontWeight="Bold" Foreground="#163F38"/>
+      <TextBlock Text="{Binding MaHoaDon, StringFormat=Mã hóa đơn: {0}}" HorizontalAlignment="Center" Foreground="#61736E"/>
+      <TextBlock Text="{Binding ThoiGianBan, StringFormat=Ngày bán: {0:dd/MM/yyyy HH:mm}}" HorizontalAlignment="Center" Foreground="#61736E"/>
+
+      <Border BorderBrush="#D8E5E0" BorderThickness="0,0,0,1" Margin="0,8,0,4"/>
+      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+        <TextBlock Text="Khách hàng:" FontWeight="SemiBold" Foreground="#61736E"/>
+        <TextBlock Grid.Column="1" Text="{Binding TenKhachHang}" Foreground="#263B35"/>
+        <TextBlock Grid.Row="1" Text="Nhân viên:" FontWeight="SemiBold" Foreground="#61736E"/>
+        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TenNhanVien}" Foreground="#263B35"/>
+      </Grid>
+
+      <Grid ColumnDefinitions="*,70,110,130" Margin="0,12,0,0">
+        <TextBlock Text="Sản phẩm" FontWeight="Bold" Foreground="#163F38"/>
+        <TextBlock Grid.Column="1" Text="SL" FontWeight="Bold" HorizontalAlignment="Right" Foreground="#163F38"/>
+        <TextBlock Grid.Column="2" Text="Đơn giá" FontWeight="Bold" HorizontalAlignment="Right" Foreground="#163F38"/>
+        <TextBlock Grid.Column="3" Text="Thành tiền" FontWeight="Bold" HorizontalAlignment="Right" Foreground="#163F38"/>
+      </Grid>
+
+      <ItemsControl ItemsSource="{Binding Items}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="models:HoaDonBanHangReceiptItem">
+            <Grid ColumnDefinitions="*,70,110,130" Margin="0,6">
+              <TextBlock Text="{Binding TenSanPham}" TextWrapping="Wrap" Foreground="#263B35"/>
+              <TextBlock Grid.Column="1" Text="{Binding SoLuong, StringFormat={}{0:N0}}" HorizontalAlignment="Right" Foreground="#263B35"/>
+              <TextBlock Grid.Column="2" Text="{Binding DonGia, StringFormat={}{0:N0}}" HorizontalAlignment="Right" Foreground="#263B35"/>
+              <TextBlock Grid.Column="3" Text="{Binding ThanhTien, StringFormat={}{0:N0}}" HorizontalAlignment="Right" Foreground="#263B35"/>
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border BorderBrush="#D8E5E0" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,10,0,0">
+        <StackPanel Spacing="6">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Tổng tiền hàng" Foreground="#61736E"/>
+            <TextBlock Grid.Column="1" Text="{Binding TongTienHang, StringFormat={}{0:N0} đ}" Foreground="#263B35"/>
+          </Grid>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Giảm giá" Foreground="#61736E"/>
+            <TextBlock Grid.Column="1" Text="{Binding GiamGia, StringFormat=- {0:N0} đ}" Foreground="#D64545"/>
+          </Grid>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Tổng thanh toán" FontSize="17" FontWeight="Bold" Foreground="#163F38"/>
+            <TextBlock Grid.Column="1" Text="{Binding KhachCanTra, StringFormat={}{0:N0} đ}" FontSize="17" FontWeight="Bold" Foreground="#087F6E"/>
+          </Grid>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Khách đã thanh toán" Foreground="#61736E"/>
+            <TextBlock Grid.Column="1" Text="{Binding KhachDaThanhToan, StringFormat={}{0:N0} đ}" Foreground="#263B35"/>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <TextBlock Text="Cảm ơn quý khách!" HorizontalAlignment="Center" FontStyle="Italic" Foreground="#61736E" Margin="0,18,0,8"/>
+      <Button Content="Đóng" HorizontalAlignment="Center" Classes="toolbar-primary" Click="CloseButton_OnClick" Padding="28,10"/>
+    </StackPanel>
+  </ScrollViewer>
+</Window>

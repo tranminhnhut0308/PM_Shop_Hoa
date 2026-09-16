@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ShopHoa.Views.ProductEditorWindow"
         Width="620"
-        Height="760"
+        Height="820"
         MinWidth="560"
         Title="Sản phẩm"
         WindowStartupLocation="CenterOwner"
@@ -112,22 +112,21 @@
       <TextBlock Text="Nhập thông tin để tạo sản phẩm mới trong kho hàng."
                  Foreground="#6B7D77" FontSize="13" Margin="0,0,0,20"/>
 
-      <TextBlock Classes="label" Text="Mã sản phẩm *"/>
-      <TextBox x:Name="MaSanPhamTextBox" Watermark="Ví dụ: SP001"/>
+      <TextBlock Classes="label" Text="Mã sản phẩm"/>
+      <Border Background="#E8F5F1" BorderBrush="#B8DCD2" BorderThickness="1" CornerRadius="7" Padding="10,9" Margin="0,5,0,14">
+        <TextBlock x:Name="MaSanPhamTextBlock" Foreground="#087F6E" FontWeight="SemiBold"/>
+      </Border>
 
       <TextBlock Classes="label" Text="Tên sản phẩm *"/>
       <TextBox x:Name="TenSanPhamTextBox" Watermark="Tên hoa hoặc phụ kiện"/>
 
-      <TextBlock Classes="label" Text="Mã vạch"/>
-      <TextBox x:Name="MaVachTextBox"/>
-
       <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
         <StackPanel>
-          <TextBlock Classes="label" Text="Nhóm sản phẩm"/>
+          <TextBlock Classes="label" Text="Nhóm hàng"/>
           <ComboBox x:Name="NhomSanPhamComboBox" PlaceholderText="Chọn nhóm hàng"/>
         </StackPanel>
         <StackPanel Grid.Column="1">
-          <TextBlock Classes="label" Text="Đơn vị tính"/>
+          <TextBlock Classes="label" Text="ĐVT"/>
           <ComboBox x:Name="DonViTinhComboBox" PlaceholderText="Chọn đơn vị"/>
         </StackPanel>
       </Grid>
@@ -145,6 +144,17 @@
 
       <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
         <StackPanel>
+          <TextBlock Classes="label" Text="Tồn kho"/>
+          <TextBox x:Name="TonKhoTextBox" Text="0"/>
+        </StackPanel>
+        <StackPanel Grid.Column="1">
+          <TextBlock Classes="label" Text="KH đặt"/>
+          <TextBox x:Name="KhachDatTextBox" Text="0"/>
+        </StackPanel>
+      </Grid>
+
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+        <StackPanel>
           <TextBlock Classes="label" Text="Tồn tối thiểu"/>
           <TextBox x:Name="TonToiThieuTextBox" Text="0"/>
         </StackPanel>
@@ -157,11 +167,14 @@
       <TextBlock Classes="label" Text="Vị trí kho"/>
       <TextBox x:Name="ViTriKhoTextBox" Watermark="Ví dụ: Kệ A1"/>
 
-      <TextBlock Classes="label" Text="Mô tả"/>
-      <TextBox x:Name="MoTaTextBox" AcceptsReturn="True" Height="64" TextWrapping="Wrap" Watermark="Mô tả sản phẩm"/>
+      <TextBlock Classes="label" Text="Loại hàng"/>
+      <TextBox x:Name="LoaiHangTextBox" Watermark="Ví dụ: Hoa tươi"/>
 
-      <TextBlock Classes="label" Text="Ghi chú"/>
-      <TextBox x:Name="GhiChuTextBox" AcceptsReturn="True" Height="64" TextWrapping="Wrap" Watermark="Ghi chú nội bộ"/>
+      <TextBlock Classes="label" Text="Nhóm hàng (3 cấp)"/>
+      <TextBox x:Name="NhomHangBaCapTextBox" Watermark="Ví dụ: Hoa / Hoa cắt cành"/>
+
+      <TextBlock Classes="label" Text="Dự kiến hết hàng"/>
+      <TextBox x:Name="DuKienHetHangTextBox" Watermark="Ví dụ: 15 ngày"/>
 
       <StackPanel Orientation="Horizontal" Spacing="28" Margin="0,0,0,18">
         <CheckBox x:Name="DuocBanTrucTiepCheckBox" Content="Được bán trực tiếp" IsChecked="True"/>
