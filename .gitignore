@@ -1,18 +1,14 @@
-.vs/
-.vscode/
-
+# .NET build
 bin/
 obj/
 
+# Visual Studio Code
+.vscode/
+
+# User files
 *.user
 *.suo
-*.userosscache
-*.sln.docstates
 
-*.log
-
-*.nupkg
-packages/
-
-Thumbs.db
+# OS
 .DS_Store
+Thumbs.db
