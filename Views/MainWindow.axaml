@@ -581,7 +581,7 @@
         <StackPanel Grid.Row="1" Orientation="Vertical">
           <Button Classes="menu" Content="Tổng quan" Command="{Binding ChonMenuCommand}" CommandParameter="Tổng quan"/>
           <Button Classes="menu" Content="Hàng hóa" Command="{Binding ChonMenuCommand}" CommandParameter="Hàng hóa"/>
-          <Button Classes="menu" Content="Mua hàng" Command="{Binding ChonMenuCommand}" CommandParameter="Mua hàng"/>
+          <Button Classes="menu" Content="Nhập hàng" Command="{Binding ChonMenuCommand}" CommandParameter="Mua hàng"/>
           <Button Classes="menu" Content="Nhà cung cấp" Command="{Binding ChonMenuCommand}" CommandParameter="Nhà cung cấp"/>
           <Button Classes="menu" Content="Đơn hàng" Command="{Binding ChonMenuCommand}" CommandParameter="Đơn hàng"/>
           <Button Classes="menu" Content="Khách hàng" Command="{Binding ChonMenuCommand}" CommandParameter="Khách hàng"/>
@@ -1517,7 +1517,7 @@
           </Grid>
         </TabItem>
 
-        <TabItem Header="Mua hàng">
+        <TabItem Header="Nhập hàng">
           <Grid RowDefinitions="Auto,Auto,*" Margin="0,14,0,0" RowSpacing="14">
             <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
               <TextBlock Text="Phiếu nhập hàng" FontSize="25" FontWeight="Bold" Foreground="#163F38" VerticalAlignment="Center"/>

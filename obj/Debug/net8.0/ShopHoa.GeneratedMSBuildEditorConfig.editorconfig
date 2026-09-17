@@ -45,6 +45,9 @@ build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 [d:/ShopHoa/Views/NhaCungCapEditorWindow.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
+[d:/ShopHoa/Views/NhapGiaBanWindow.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
 [d:/ShopHoa/Views/ProductEditorWindow.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
