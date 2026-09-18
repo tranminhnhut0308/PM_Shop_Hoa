@@ -1214,6 +1214,7 @@ D:\ShopHoa\bin\catalog-hover\runtimes\osx\native\libSkiaSharp.dylib
 D:\ShopHoa\bin\catalog-hover\runtimes\win-arm64\native\libSkiaSharp.dll
 D:\ShopHoa\bin\catalog-hover\runtimes\win-x64\native\libSkiaSharp.dll
 D:\ShopHoa\bin\catalog-hover\runtimes\win-x86\native\libSkiaSharp.dll
+<<<<<<< HEAD
 D:\ShopHoa\bin\Debug\net8.0\ShopHoa.exe
 D:\ShopHoa\bin\Debug\net8.0\ShopHoa.deps.json
 D:\ShopHoa\bin\Debug\net8.0\ShopHoa.runtimeconfig.json
@@ -1299,5 +1300,7 @@ D:\ShopHoa\obj\Debug\net8.0\ShopHoa.csproj.Up2Date
 D:\ShopHoa\obj\Debug\net8.0\ShopHoa.dll
 D:\ShopHoa\obj\Debug\net8.0\refint\ShopHoa.dll
 D:\ShopHoa\obj\Debug\net8.0\ShopHoa.pdb
+=======
+>>>>>>> cc59ef9 (đã)
 D:\ShopHoa\obj\Debug\net8.0\ShopHoa.genruntimeconfig.cache
 D:\ShopHoa\obj\Debug\net8.0\ref\ShopHoa.dll

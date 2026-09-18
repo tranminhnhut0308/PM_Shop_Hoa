@@ -48,9 +48,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private decimal saleDiscountAmount;
     [ObservableProperty] private string saleDiscountMode = "Số tiền";
     [ObservableProperty] private KhachHang? selectedKhachHang;
-    [ObservableProperty] private NhaCungCap? selectedNhaCungCap;
     [ObservableProperty] private KhachHang? selectedSaleCustomer;
-    [ObservableProperty] private string ngaySinhText = "";
 
     partial void OnSelectedKhachHangChanged(KhachHang? value)
     {
@@ -64,7 +62,40 @@ public partial class MainWindowViewModel : ObservableObject
 
         _ = SuaNhaCungCapAsync(value);
     }
+    [RelayCommand]
+    private void QuayLaiDanhSachNhaCungCap()
+    {
+        SelectedNhaCungCap = null;
+        IsNhaCungCapEditorVisible = false;
+        StatusMessage = "Đã quay lại danh sách nhà cung cấp";
+    }
+    [RelayCommand]
+    private void ThemMoiNhaCungCap()
+    {
+        SelectedNhaCungCap = new NhaCungCap
+        {
+            MaNhaCungCap = "",
+            TenNhaCungCap = "",
+            SoDienThoai = "",
+            Email = "",
+            DiaChi = "",
+            KhuVuc = "",
+            PhuongXa = "",
+            MaSoThue = "",
+            CanCuocCongDan = "",
+            NhomNhaCungCap = "Nhà cung cấp",
+            CongTy = "",
+            GhiChu = "",
+            TrangThai = "Đang hoạt động",
+            TongMua = 0,
+            ConNo = 0,
+            NguoiTao = "",
+            NgayTao = DateTime.Now
+        };
 
+        IsNhaCungCapEditorVisible = true;
+        StatusMessage = "Đang tạo nhà cung cấp mới";
+    }
     [RelayCommand]
     private void ChonKhachHangBan(KhachHang? customer)
     {
@@ -298,24 +329,24 @@ public partial class MainWindowViewModel : ObservableObject
             return;
 
         Func<Task>? load = menu switch
-{
-    "Tổng quan" => LoadOverviewAsync,
-    "Khách hàng" => LoadCustomersAsync,
-    "Đơn hàng" => LoadInvoicesAsync,
-    "Mua hàng" => LoadSuppliersAsync,
-    "Nhà cung cấp" => LoadSuppliersAsync,
-    _ => null
-};
+        {
+            "Tổng quan" => LoadOverviewAsync,
+            "Khách hàng" => LoadCustomersAsync,
+            "Đơn hàng" => LoadInvoicesAsync,
+            "Mua hàng" => LoadSuppliersAsync,
+            "Nhà cung cấp" => LoadSuppliersAsync,
+            _ => null
+        };
 
         var loaded = menu switch
-{
-    "Tổng quan" => _overviewLoaded,
-    "Khách hàng" => _customersLoaded,
-    "Đơn hàng" => _invoicesLoaded,
-    "Mua hàng" => _suppliersLoaded,
-    "Nhà cung cấp" => _suppliersLoaded,
-    _ => true
-};
+        {
+            "Tổng quan" => _overviewLoaded,
+            "Khách hàng" => _customersLoaded,
+            "Đơn hàng" => _invoicesLoaded,
+            "Mua hàng" => _suppliersLoaded,
+            "Nhà cung cấp" => _suppliersLoaded,
+            _ => true
+        };
 
         if (loaded || load is null)
             return;
@@ -339,9 +370,9 @@ public partial class MainWindowViewModel : ObservableObject
                 case "Mua hàng":
                     _suppliersLoaded = true;
                     break;
-                    case "Nhà cung cấp":
-        _suppliersLoaded = true;
-        break;
+                case "Nhà cung cấp":
+                    _suppliersLoaded = true;
+                    break;
             }
 
             StatusMessage = $"Đã tải {menu.ToLowerInvariant()}";
@@ -1060,20 +1091,19 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     partial void OnSelectedMenuChanged(string value)
-{
-    SelectedDataTabIndex = value switch
     {
-        "Khách hàng" => 1,
-        "Đơn hàng" => 2,
-        "Mua hàng" => 3,
-        "Nhà cung cấp" => 4,
-        _ => 0
-    };
+        SelectedDataTabIndex = value switch
+        {
+            "Khách hàng" => 1,
+            "Đơn hàng" => 2,
+            "Mua hàng" => 3,
+            _ => 0
+        };
 
-    OnPropertyChanged(nameof(IsTongQuanSelected));
-    OnPropertyChanged(nameof(IsDataSectionSelected));
+        OnPropertyChanged(nameof(IsTongQuanSelected));
+        OnPropertyChanged(nameof(IsDataSectionSelected));
 
-    _ = LoadSelectedSectionAsync(value);
+        _ = LoadSelectedSectionAsync(value);
     }
 
     public bool IsTongQuanSelected => SelectedMenu == "Tổng quan";

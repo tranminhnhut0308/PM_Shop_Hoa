@@ -904,7 +904,12 @@ public sealed class DatabaseService
 
         const string sql = """
         UPDATE khach_hang
+<<<<<<< HEAD
         SET ten_khach_hang = @TenKhachHang,
+=======
+        SET ma_khach_hang = @MaKhachHang,
+            ten_khach_hang = @TenKhachHang,
+>>>>>>> cc59ef9 (đã)
             loai_khach_hang = @LoaiKhachHang,
             so_dien_thoai = @SoDienThoai,
             ngay_sinh = @NgaySinh,
