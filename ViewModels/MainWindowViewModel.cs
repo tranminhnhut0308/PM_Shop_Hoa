@@ -48,7 +48,18 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private decimal saleDiscountAmount;
     [ObservableProperty] private string saleDiscountMode = "Số tiền";
     [ObservableProperty] private KhachHang? selectedKhachHang;
+    [ObservableProperty]
+        private NhaCungCap? selectedNhaCungCap;
+
+        [ObservableProperty]
+        private bool isNhaCungCapEditorVisible;
     [ObservableProperty] private KhachHang? selectedSaleCustomer;
+    [ObservableProperty] private string ngaySinhText = "";
+
+    partial void OnSelectedKhachHangChanged(KhachHang? value)
+    {
+         IsNhaCungCapEditorVisible = value is not null;
+    }
 
     public async Task SearchSaleCustomersAsync(string search)
     {
@@ -67,7 +78,40 @@ public partial class MainWindowViewModel : ObservableObject
             StatusMessage = "Không thể tìm khách hàng bán hàng: " + ex.Message;
         }
     }
+    [RelayCommand]
+private void QuayLaiDanhSachNhaCungCap()
+{
+    SelectedNhaCungCap = null;
+    IsNhaCungCapEditorVisible = false;
+    StatusMessage = "Đã quay lại danh sách nhà cung cấp";
+}
+[RelayCommand]
+private void ThemMoiNhaCungCap()
+{
+    SelectedNhaCungCap = new NhaCungCap
+    {
+        MaNhaCungCap = "",
+        TenNhaCungCap = "",
+        SoDienThoai = "",
+        Email = "",
+        DiaChi = "",
+        KhuVuc = "",
+        PhuongXa = "",
+        MaSoThue = "",
+        CanCuocCongDan = "",
+        NhomNhaCungCap = "Nhà cung cấp",
+        CongTy = "",
+        GhiChu = "",
+        TrangThai = "Đang hoạt động",
+        TongMua = 0,
+        ConNo = 0,
+        NguoiTao = "",
+        NgayTao = DateTime.Now
+    };
 
+    IsNhaCungCapEditorVisible = true;
+    StatusMessage = "Đang tạo nhà cung cấp mới";
+}
     [RelayCommand]
     private void ChonKhachHangBan(KhachHang? customer)
     {
@@ -177,33 +221,73 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void XoaKhachHang()
+    private async Task XoaKhachHangAsync()
     {
         if (SelectedKhachHang is null)
             return;
 
-        var name = SelectedKhachHang.TenKhachHang;
-        KhachHangs.Remove(SelectedKhachHang);
-        SelectedKhachHang = null;
-        StatusMessage = $"Đã xóa khách hàng {name}";
+        var customer = SelectedKhachHang;
+        var confirmed = await ShowConfirmationAsync(
+            "Xóa khách hàng",
+            $"Bạn có chắc muốn xóa khách hàng \"{customer.TenKhachHang}\" không? Khách hàng sẽ không còn hiển thị trong danh sách.");
+
+        if (!confirmed)
+            return;
+
+        try
+        {
+            await _db.XoaKhachHangAsync(customer.Id);
+            KhachHangs.Remove(customer);
+            SaleCustomerSuggestions.Remove(customer);
+
+            if (SelectedSaleCustomer?.Id == customer.Id)
+                ChonKhachLe();
+
+            SelectedKhachHang = null;
+            StatusMessage = $"Đã xóa khách hàng {customer.TenKhachHang}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể xóa khách hàng: " + ex.Message;
+        }
     }
 
     [RelayCommand]
-    private void ChinhSuaKhachHang()
+    private async Task LuuKhachHangAsync()
     {
         if (SelectedKhachHang is null)
             return;
 
-        StatusMessage = $"Đang chỉnh sửa khách hàng: {SelectedKhachHang.TenKhachHang}";
-    }
-
-    [RelayCommand]
-    private void NgungHoatDongKhachHang()
-    {
-        if (SelectedKhachHang is null)
+        var customer = SelectedKhachHang;
+        if (string.IsNullOrWhiteSpace(customer.MaKhachHang) || string.IsNullOrWhiteSpace(customer.TenKhachHang))
+        {
+            StatusMessage = "Mã và tên khách hàng không được để trống.";
             return;
+        }
 
-        StatusMessage = $"Khách hàng {SelectedKhachHang.TenKhachHang} đã ngừng hoạt động";
+        if (string.IsNullOrWhiteSpace(NgaySinhText))
+        {
+            customer.NgaySinh = null;
+        }
+        else if (DateTime.TryParse(NgaySinhText, out var birthday))
+        {
+            customer.NgaySinh = birthday;
+        }
+        else
+        {
+            StatusMessage = "Ngày sinh không hợp lệ. Vui lòng nhập theo định dạng dd/MM/yyyy.";
+            return;
+        }
+
+        try
+        {
+            await _db.CapNhatKhachHangAsync(customer);
+            StatusMessage = $"Đã lưu thông tin khách hàng {customer.TenKhachHang}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể lưu thông tin khách hàng: " + ex.Message;
+        }
     }
 
     private bool _isInitialized;
@@ -250,22 +334,24 @@ public partial class MainWindowViewModel : ObservableObject
             return;
 
         Func<Task>? load = menu switch
-        {
-            "Tổng quan" => LoadOverviewAsync,
-            "Khách hàng" => LoadCustomersAsync,
-            "Đơn hàng" => LoadInvoicesAsync,
-            "Mua hàng" => LoadSuppliersAsync,
-            _ => null
-        };
+{
+    "Tổng quan" => LoadOverviewAsync,
+    "Khách hàng" => LoadCustomersAsync,
+    "Đơn hàng" => LoadInvoicesAsync,
+    "Mua hàng" => LoadSuppliersAsync,
+    "Nhà cung cấp" => LoadSuppliersAsync,
+    _ => null
+};
 
         var loaded = menu switch
-        {
-            "Tổng quan" => _overviewLoaded,
-            "Khách hàng" => _customersLoaded,
-            "Đơn hàng" => _invoicesLoaded,
-            "Mua hàng" => _suppliersLoaded,
-            _ => true
-        };
+{
+    "Tổng quan" => _overviewLoaded,
+    "Khách hàng" => _customersLoaded,
+    "Đơn hàng" => _invoicesLoaded,
+    "Mua hàng" => _suppliersLoaded,
+    "Nhà cung cấp" => _suppliersLoaded,
+    _ => true
+};
 
         if (loaded || load is null)
             return;
@@ -289,6 +375,9 @@ public partial class MainWindowViewModel : ObservableObject
                 case "Mua hàng":
                     _suppliersLoaded = true;
                     break;
+                    case "Nhà cung cấp":
+        _suppliersLoaded = true;
+        break;
             }
 
             StatusMessage = $"Đã tải {menu.ToLowerInvariant()}";
@@ -877,18 +966,26 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     partial void OnSelectedMenuChanged(string value)
+{
+    SelectedDataTabIndex = value switch
     {
-        SelectedDataTabIndex = value switch
-        {
-            "Khách hàng" => 1,
-            "Đơn hàng" => 2,
-            "Mua hàng" => 3,
-            _ => 0
-        };
+        "Khách hàng" => 1,
+        "Đơn hàng" => 2,
+        "Mua hàng" => 3,
+        "Nhà cung cấp" => 4,
+        _ => 0
+    };
 
-        OnPropertyChanged(nameof(IsTongQuanSelected));
-        OnPropertyChanged(nameof(IsDataSectionSelected));
-        _ = LoadSelectedSectionAsync(value);
+    if (value != "Nhà cung cấp")
+    {
+        SelectedNhaCungCap = null;
+        IsNhaCungCapEditorVisible = false;
+    }
+
+    OnPropertyChanged(nameof(IsTongQuanSelected));
+    OnPropertyChanged(nameof(IsDataSectionSelected));
+
+    _ = LoadSelectedSectionAsync(value);
     }
 
     public bool IsTongQuanSelected => SelectedMenu == "Tổng quan";

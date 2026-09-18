@@ -773,10 +773,22 @@ public sealed class DatabaseService
             kh.id AS Id,
             kh.ma_khach_hang AS MaKhachHang,
             kh.ten_khach_hang AS TenKhachHang,
+            kh.loai_khach_hang AS LoaiKhachHang,
             kh.so_dien_thoai AS SoDienThoai,
+            kh.ngay_sinh AS NgaySinh,
+            kh.gioi_tinh AS GioiTinh,
             kh.email AS Email,
+            kh.facebook AS Facebook,
             kh.dia_chi AS DiaChi,
+            kh.phuong_xa AS PhuongXa,
+            kh.quan_huyen AS QuanHuyen,
+            kh.tinh_thanh AS TinhThanh,
             nkh.ten_nhom AS NhomKhachHang
+            ,kh.ma_so_thue AS MaSoThue
+            ,kh.ten_nguoi_mua_hoa_don AS TenNguoiMuaHoaDon
+            ,kh.ten_cong_ty AS TenCongTy
+            ,kh.dia_chi_xuat_hoa_don AS DiaChiXuatHoaDon
+            ,kh.ghi_chu AS GhiChu
         FROM khach_hang kh
         LEFT JOIN nhom_khach_hang nkh
             ON nkh.id = kh.nhom_khach_hang_id
@@ -798,6 +810,51 @@ public sealed class DatabaseService
                     Search = search ?? ""
                 })
         ).AsList();
+    }
+
+    public async Task XoaKhachHangAsync(uint customerId)
+    {
+        await using var connection = await OpenAsync();
+
+        // Giữ lại lịch sử hóa đơn/công nợ; danh sách khách hàng chỉ hiển thị bản ghi còn hoạt động.
+        var affectedRows = await connection.ExecuteAsync(
+            "UPDATE khach_hang SET trang_thai = 0, ngay_cap_nhat = NOW() WHERE id = @Id AND trang_thai = 1;",
+            new { Id = customerId });
+
+        if (affectedRows == 0)
+            throw new InvalidOperationException("Khách hàng không tồn tại hoặc đã bị xóa.");
+    }
+
+    public async Task CapNhatKhachHangAsync(KhachHang customer)
+    {
+        await using var connection = await OpenAsync();
+
+        const string sql = """
+        UPDATE khach_hang
+        SET ma_khach_hang = @MaKhachHang,
+            ten_khach_hang = @TenKhachHang,
+            loai_khach_hang = @LoaiKhachHang,
+            so_dien_thoai = @SoDienThoai,
+            ngay_sinh = @NgaySinh,
+            gioi_tinh = @GioiTinh,
+            email = @Email,
+            facebook = @Facebook,
+            dia_chi = @DiaChi,
+            phuong_xa = @PhuongXa,
+            quan_huyen = @QuanHuyen,
+            tinh_thanh = @TinhThanh,
+            ma_so_thue = @MaSoThue,
+            ten_nguoi_mua_hoa_don = @TenNguoiMuaHoaDon,
+            ten_cong_ty = @TenCongTy,
+            dia_chi_xuat_hoa_don = @DiaChiXuatHoaDon,
+            ghi_chu = @GhiChu,
+            ngay_cap_nhat = NOW()
+        WHERE id = @Id AND trang_thai = 1;
+        """;
+
+        var affectedRows = await connection.ExecuteAsync(sql, customer);
+        if (affectedRows == 0)
+            throw new InvalidOperationException("Khách hàng không tồn tại hoặc đã bị xóa.");
     }
 
     public async Task<int> ImportKhachHangTuFileAsync(string filePath)

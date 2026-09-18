@@ -1,8 +1,8 @@
+using System.Globalization;
 using Avalonia.Controls;
 using ShopHoa.ViewModels;
 
 namespace ShopHoa.Views;
-using System.Globalization;
 
 public partial class MainWindow : Window
 {
@@ -67,20 +67,33 @@ public partial class MainWindow : Window
             return;
 
         var text = textBox.Text ?? string.Empty;
+
         if (string.IsNullOrWhiteSpace(text))
             return;
 
-        var normalized = text.Replace(".", string.Empty).Replace(",", string.Empty);
-        if (!decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount))
+        var normalized = text
+            .Replace(".", string.Empty)
+            .Replace(",", string.Empty);
+
+        if (!decimal.TryParse(
+                normalized,
+                NumberStyles.Number,
+                CultureInfo.InvariantCulture,
+                out var amount))
             return;
 
-        var formatted = amount.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+        var formatted = amount.ToString(
+            "N0",
+            CultureInfo.GetCultureInfo("vi-VN"));
+
         if (formatted == text)
             return;
 
         _formattingDiscount = true;
+
         textBox.Text = formatted;
         textBox.CaretIndex = formatted.Length;
+
         _formattingDiscount = false;
     }
 
@@ -93,7 +106,9 @@ public partial class MainWindow : Window
         viewModel.CustomerSearch = text;
 
         if (viewModel.SearchCustomersCommand.CanExecute(text))
+        {
             _ = viewModel.SearchCustomersCommand.ExecuteAsync(text);
+        }
     }
 
     private void OnCustomerSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -101,6 +116,7 @@ public partial class MainWindow : Window
         if (DataContext is not MainWindowViewModel viewModel)
             return;
 
-        viewModel.SelectedKhachHang = (sender as ListBox)?.SelectedItem as ShopHoa.Models.KhachHang;
+        viewModel.SelectedKhachHang =
+            (sender as ListBox)?.SelectedItem as ShopHoa.Models.KhachHang;
     }
 }
