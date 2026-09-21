@@ -14,49 +14,315 @@
 
     <Window.Styles>
 
+        <!-- ========================================================= -->
+        <!-- TEXT -->
+        <!-- ========================================================= -->
+
         <Style Selector="TextBlock">
             <Setter Property="Foreground" Value="#172033"/>
         </Style>
 
+
+        <!-- ========================================================= -->
+        <!-- TEXTBOX - NORMAL -->
+        <!-- ========================================================= -->
+
         <Style Selector="TextBox.input">
+
             <Setter Property="Background" Value="#FFFFFF"/>
             <Setter Property="Foreground" Value="#172033"/>
+            <Setter Property="CaretBrush" Value="#172033"/>
+
             <Setter Property="BorderBrush" Value="#D0D5DD"/>
             <Setter Property="BorderThickness" Value="1"/>
+
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Padding" Value="12"/>
             <Setter Property="MinHeight" Value="46"/>
             <Setter Property="CornerRadius" Value="8"/>
+
         </Style>
+
+
+        <!-- ========================================================= -->
+        <!-- TEXTBOX - FOCUS -->
+        <!-- ========================================================= -->
 
         <Style Selector="TextBox.input:focus">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#172033"/>
+            <Setter Property="CaretBrush" Value="#172033"/>
+
             <Setter Property="BorderBrush" Value="#0878E8"/>
             <Setter Property="BorderThickness" Value="2"/>
+
         </Style>
 
+
+        <!-- ========================================================= -->
+        <!-- TEXTBOX - HOVER -->
+        <!-- ========================================================= -->
+
+        <Style Selector="TextBox.input:pointerover">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#172033"/>
+            <Setter Property="CaretBrush" Value="#172033"/>
+
+            <Setter Property="BorderBrush" Value="#D0D5DD"/>
+
+        </Style>
+
+
+        <!-- ========================================================= -->
+        <!-- TEXTBOX - HOVER + FOCUS -->
+        <!-- ========================================================= -->
+
+        <Style Selector="TextBox.input:pointerover:focus">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#172033"/>
+            <Setter Property="CaretBrush" Value="#172033"/>
+
+            <Setter Property="BorderBrush" Value="#0878E8"/>
+            <Setter Property="BorderThickness" Value="2"/>
+
+        </Style>
+
+
+        <!-- ========================================================= -->
+        <!-- TEXTBOX TEMPLATE - ÉP NỀN TRẮNG -->
+        <!-- ========================================================= -->
+
+        <Style Selector="TextBox.input /template/ Border#PART_BorderElement">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#D0D5DD"/>
+
+        </Style>
+
+
+        <Style Selector="TextBox.input:focus /template/ Border#PART_BorderElement">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#0878E8"/>
+
+        </Style>
+
+
+        <Style Selector="TextBox.input:pointerover /template/ Border#PART_BorderElement">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#D0D5DD"/>
+
+        </Style>
+
+
+        <Style Selector="TextBox.input:pointerover:focus /template/ Border#PART_BorderElement">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#0878E8"/>
+
+        </Style>
+
+
+        <!-- ========================================================= -->
+        <!-- BUTTON PRIMARY -->
+        <!-- ========================================================= -->
+
         <Style Selector="Button.primary">
+
             <Setter Property="Background" Value="#0878E8"/>
             <Setter Property="Foreground" Value="#FFFFFF"/>
+
+            <Setter Property="BorderBrush" Value="#0878E8"/>
+            <Setter Property="BorderThickness" Value="0"/>
+
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="FontWeight" Value="Bold"/>
+
             <Setter Property="MinHeight" Value="46"/>
             <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="18,10"/>
+
         </Style>
 
+
+        <!-- PRIMARY HOVER -->
+
+        <Style Selector="Button.primary:pointerover">
+
+            <Setter Property="Background" Value="#0878E8"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#0878E8"/>
+
+        </Style>
+
+
+        <!-- PRIMARY PRESSED -->
+
+        <Style Selector="Button.primary:pressed">
+
+            <Setter Property="Background" Value="#0667C7"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#0667C7"/>
+
+        </Style>
+
+
+        <!-- PRIMARY TEMPLATE -->
+
+        <Style Selector="Button.primary /template/ ContentPresenter#PART_ContentPresenter">
+
+            <Setter Property="Background" Value="#0878E8"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+
+        </Style>
+
+
+        <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+
+            <Setter Property="Background" Value="#0878E8"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+
+        </Style>
+
+
+        <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+
+            <Setter Property="Background" Value="#0667C7"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+
+        </Style>
+
+
+        <!-- ========================================================= -->
+        <!-- BUTTON SECONDARY -->
+        <!-- ========================================================= -->
+
         <Style Selector="Button.secondary">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#344054"/>
+
+            <Setter Property="BorderBrush" Value="#D0D5DD"/>
+            <Setter Property="BorderThickness" Value="1"/>
+
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="MinHeight" Value="46"/>
+
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="18,10"/>
+
+        </Style>
+
+
+        <!-- SECONDARY HOVER -->
+
+        <Style Selector="Button.secondary:pointerover">
+
             <Setter Property="Background" Value="#FFFFFF"/>
             <Setter Property="Foreground" Value="#344054"/>
             <Setter Property="BorderBrush" Value="#D0D5DD"/>
+
+        </Style>
+
+
+        <!-- SECONDARY PRESSED -->
+
+        <Style Selector="Button.secondary:pressed">
+
+            <Setter Property="Background" Value="#F8FAFC"/>
+            <Setter Property="Foreground" Value="#344054"/>
+            <Setter Property="BorderBrush" Value="#D0D5DD"/>
+
+        </Style>
+
+
+        <!-- SECONDARY TEMPLATE -->
+
+        <Style Selector="Button.secondary /template/ ContentPresenter#PART_ContentPresenter">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#344054"/>
+
+        </Style>
+
+
+        <Style Selector="Button.secondary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#344054"/>
+
+        </Style>
+
+
+        <Style Selector="Button.secondary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+
+            <Setter Property="Background" Value="#F8FAFC"/>
+            <Setter Property="Foreground" Value="#344054"/>
+
+        </Style>
+
+
+        <!-- ========================================================= -->
+        <!-- COMBOBOX -->
+        <!-- ========================================================= -->
+
+        <Style Selector="ComboBox">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#172033"/>
+
+            <Setter Property="BorderBrush" Value="#D0D5DD"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontSize" Value="14"/>
+
             <Setter Property="MinHeight" Value="46"/>
             <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="18,10"/>
+
+        </Style>
+
+
+        <Style Selector="ComboBox:pointerover">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#172033"/>
+            <Setter Property="BorderBrush" Value="#D0D5DD"/>
+
+        </Style>
+
+
+        <Style Selector="ComboBox:focus">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#172033"/>
+            <Setter Property="BorderBrush" Value="#0878E8"/>
+
+        </Style>
+
+
+        <Style Selector="ComboBoxItem">
+
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#172033"/>
+
+        </Style>
+
+
+        <Style Selector="ComboBoxItem:pointerover">
+
+            <Setter Property="Background" Value="#EAF4FF"/>
+            <Setter Property="Foreground" Value="#172033"/>
+
         </Style>
 
     </Window.Styles>
 
+
+    <!-- ========================================================= -->
+    <!-- MAIN CARD -->
+    <!-- ========================================================= -->
 
     <Border Margin="18"
             Background="#FFFFFF"
@@ -72,7 +338,10 @@
             </Grid.RowDefinitions>
 
 
+            <!-- ================================================= -->
             <!-- HEADER -->
+            <!-- ================================================= -->
+
             <StackPanel Grid.Row="0">
 
                 <StackPanel Orientation="Horizontal">
@@ -88,6 +357,7 @@
                                    VerticalAlignment="Center"/>
 
                     </Border>
+
 
                     <StackPanel Margin="14,0,0,0"
                                 VerticalAlignment="Center">
@@ -105,6 +375,7 @@
 
                 </StackPanel>
 
+
                 <Border Height="1"
                         Background="#EAECF0"
                         Margin="0,24,0,20"/>
@@ -112,13 +383,18 @@
             </StackPanel>
 
 
+            <!-- ================================================= -->
             <!-- FORM -->
+            <!-- ================================================= -->
+
             <ScrollViewer Grid.Row="1"
                           VerticalScrollBarVisibility="Auto">
 
                 <StackPanel Spacing="8">
 
+
                     <!-- SERVER -->
+
                     <TextBlock Text="Máy chủ"
                                FontWeight="SemiBold"
                                FontSize="13"
@@ -126,10 +402,14 @@
 
                     <TextBox Classes="input"
                              Text="{Binding Server}"
+                             Background="#FFFFFF"
+                             Foreground="#172033"
+                             CaretBrush="#172033"
                              Watermark="Ví dụ: 192.168.1.100 hoặc domain"/>
 
 
                     <!-- PORT -->
+
                     <TextBlock Text="Cổng"
                                FontWeight="SemiBold"
                                FontSize="13"
@@ -137,10 +417,14 @@
 
                     <TextBox Classes="input"
                              Text="{Binding Port}"
+                             Background="#FFFFFF"
+                             Foreground="#172033"
+                             CaretBrush="#172033"
                              Watermark="3306"/>
 
 
                     <!-- DATABASE -->
+
                     <TextBlock Text="Tên Database"
                                FontWeight="SemiBold"
                                FontSize="13"
@@ -148,10 +432,14 @@
 
                     <TextBox Classes="input"
                              Text="{Binding Database}"
+                             Background="#FFFFFF"
+                             Foreground="#172033"
+                             CaretBrush="#172033"
                              Watermark="hoa_shop"/>
 
 
                     <!-- USER -->
+
                     <TextBlock Text="Tài khoản Database"
                                FontWeight="SemiBold"
                                FontSize="13"
@@ -159,10 +447,14 @@
 
                     <TextBox Classes="input"
                              Text="{Binding User}"
+                             Background="#FFFFFF"
+                             Foreground="#172033"
+                             CaretBrush="#172033"
                              Watermark="Tên tài khoản MariaDB"/>
 
 
                     <!-- PASSWORD -->
+
                     <TextBlock Text="Mật khẩu Database"
                                FontWeight="SemiBold"
                                FontSize="13"
@@ -171,10 +463,14 @@
                     <TextBox Classes="input"
                              Text="{Binding Password}"
                              PasswordChar="●"
+                             Background="#FFFFFF"
+                             Foreground="#172033"
+                             CaretBrush="#172033"
                              Watermark="Mật khẩu MariaDB"/>
 
 
                     <!-- SSL -->
+
                     <TextBlock Text="SSL Mode"
                                FontWeight="SemiBold"
                                FontSize="13"
@@ -185,15 +481,14 @@
                               MinHeight="46">
 
                         <ComboBoxItem Content="None"/>
-
                         <ComboBoxItem Content="Preferred"/>
-
                         <ComboBoxItem Content="Required"/>
 
                     </ComboBox>
 
 
                     <!-- STATUS -->
+
                     <Border Background="#F8FAFC"
                             CornerRadius="8"
                             Padding="14"
@@ -211,7 +506,10 @@
             </ScrollViewer>
 
 
+            <!-- ================================================= -->
             <!-- BUTTONS -->
+            <!-- ================================================= -->
+
             <Grid Grid.Row="2"
                   Margin="0,22,0,0">
 
@@ -222,6 +520,8 @@
                 </Grid.ColumnDefinitions>
 
 
+                <!-- ĐÓNG -->
+
                 <Button Grid.Column="0"
                         Classes="secondary"
                         Content="ĐÓNG"
@@ -230,12 +530,16 @@
                         HorizontalAlignment="Left"/>
 
 
+                <!-- KIỂM TRA -->
+
                 <Button Grid.Column="1"
                         Classes="secondary"
                         Content="🔌  KIỂM TRA KẾT NỐI"
                         Command="{Binding KiemTraKetNoiCommand}"
                         Margin="10,0,10,0"/>
 
+
+                <!-- LƯU -->
 
                 <Button Grid.Column="2"
                         Classes="primary"

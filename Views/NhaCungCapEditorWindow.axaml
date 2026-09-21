@@ -1,0 +1,372 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:ShopHoa.Views"
+        x:Class="ShopHoa.Views.NhaCungCapEditorWindow"
+        x:DataType="views:NhaCungCapEditorWindow"
+        Width="720"
+        Height="760"
+        MinWidth="650"
+        MinHeight="700"
+        WindowStartupLocation="CenterOwner"
+        Title="Nhà cung cấp">
+
+    <Window.Styles>
+
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#52645E"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+
+        <Style Selector="TextBox.input">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#263B35"/>
+            <Setter Property="BorderBrush" Value="#D8E5E0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+
+        <!-- Khi bấm vào ô nhập: nền vẫn trắng, có viền xanh và con trỏ rõ ràng -->
+        <Style Selector="TextBox.input:focus">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#263B35"/>
+            <Setter Property="BorderBrush" Value="#087F6E"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="CaretBrush" Value="#087F6E"/>
+        </Style>
+
+        <!-- Giữ nguyên màu ô nhập khi rê chuột -->
+        <Style Selector="TextBox.input:pointerover">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#263B35"/>
+            <Setter Property="BorderBrush" Value="#D8E5E0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <!-- Fluent Theme: ô nền thật nằm trong Border của template -->
+        <!-- Giữ nguyên màu khi rê chuột -->
+        <Style Selector="TextBox.input:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#D8E5E0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <!-- Fluent Theme: khi focus vẫn nền trắng, nhưng có viền xanh để biết ô đang nhập -->
+        <Style Selector="TextBox.input:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#087F6E"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
+
+        <!-- Ô Mã NCC khi chỉnh sửa: luôn giữ trạng thái khóa -->
+        <Style Selector="TextBox.input[IsReadOnly=True]">
+            <Setter Property="Background" Value="#E8EFEC"/>
+            <Setter Property="Foreground" Value="#6B7280"/>
+            <Setter Property="BorderBrush" Value="#C8D8D2"/>
+            <Setter Property="CaretBrush" Value="Transparent"/>
+        </Style>
+
+        <Style Selector="TextBox.input[IsReadOnly=True]:pointerover">
+            <Setter Property="Background" Value="#E8EFEC"/>
+            <Setter Property="Foreground" Value="#6B7280"/>
+            <Setter Property="BorderBrush" Value="#C8D8D2"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CaretBrush" Value="Transparent"/>
+        </Style>
+
+        <!-- Mã NCC là mã hệ thống: không cho focus để tránh hiểu nhầm là có thể sửa -->
+        <Style Selector="TextBox.input[IsReadOnly=True]:focus">
+            <Setter Property="Background" Value="#E8EFEC"/>
+            <Setter Property="Foreground" Value="#6B7280"/>
+            <Setter Property="BorderBrush" Value="#C8D8D2"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CaretBrush" Value="Transparent"/>
+        </Style>
+
+        <Style Selector="TextBox.input[IsReadOnly=True]:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="#E8EFEC"/>
+            <Setter Property="BorderBrush" Value="#C8D8D2"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="#087F6E"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="20,10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <Style Selector="Button.primary:pointerover">
+            <Setter Property="Background" Value="#087F6E"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <Style Selector="Button.secondary">
+            <Setter Property="Background" Value="#F1F5F3"/>
+            <Setter Property="Foreground" Value="#344B45"/>
+            <Setter Property="BorderBrush" Value="#D8E5E0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="20,10"/>
+        </Style>
+
+        <Style Selector="Button.secondary:pointerover">
+            <Setter Property="Background" Value="#F1F5F3"/>
+            <Setter Property="Foreground" Value="#344B45"/>
+            <Setter Property="BorderBrush" Value="#D8E5E0"/>
+        </Style>
+
+        <Style Selector="Button.danger">
+            <Setter Property="Background" Value="#FFF0F0"/>
+            <Setter Property="Foreground" Value="#D64545"/>
+            <Setter Property="BorderBrush" Value="#F1B7B1"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="15,10"/>
+        </Style>
+
+        <Style Selector="Button.danger:pointerover">
+            <Setter Property="Background" Value="#FFF0F0"/>
+            <Setter Property="Foreground" Value="#D64545"/>
+            <Setter Property="BorderBrush" Value="#F1B7B1"/>
+        </Style>
+
+    </Window.Styles>
+
+    <Border Background="#F7FAF9"
+            Padding="28">
+
+        <Grid RowDefinitions="Auto,*,Auto"
+              RowSpacing="18">
+
+            <!-- HEADER -->
+            <Grid ColumnDefinitions="*,Auto">
+
+                <StackPanel>
+                    <TextBlock Text="{Binding TieuDe}"
+                               FontSize="25"
+                               FontWeight="Bold"
+                               Foreground="#163F38"/>
+
+                    <TextBlock Text="Thông tin nhà cung cấp"
+                               FontSize="13"
+                               Foreground="#61736E"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <Border Grid.Column="1"
+                        Width="48"
+                        Height="48"
+                        CornerRadius="24"
+                        Background="#DFF5F0">
+                    <TextBlock Text="🏢"
+                               FontSize="22"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                </Border>
+
+            </Grid>
+
+            <!-- FORM -->
+            <ScrollViewer Grid.Row="1"
+                          VerticalScrollBarVisibility="Auto">
+
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                      ColumnDefinitions="*,*"
+                      ColumnSpacing="16"
+                      RowSpacing="14">
+
+                    <!-- Mã + Tên -->
+                    <StackPanel Grid.Row="0"
+                                Grid.Column="0">
+                        <TextBlock Classes="label"
+                                   Text="Mã nhà cung cấp *"/>
+
+                        <TextBox Classes="input"
+                                 Text="{Binding Supplier.MaNhaCungCap, Mode=OneWay}"
+                                 IsReadOnly="True"
+                                 Watermark="Tự động phát sinh"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0"
+                                Grid.Column="1">
+                        <TextBlock Classes="label"
+                                   Text="Tên nhà cung cấp *"/>
+
+                        <TextBox Classes="input"
+                                 Text="{Binding Supplier.TenNhaCungCap, Mode=TwoWay}"
+                                 Watermark="Nhập tên nhà cung cấp"/>
+                    </StackPanel>
+
+                    <!-- Điện thoại + Email -->
+                    <StackPanel Grid.Row="1"
+                                Grid.Column="0">
+                        <TextBlock Classes="label"
+                                   Text="Số điện thoại"/>
+
+                        <TextBox Classes="input"
+                                 Text="{Binding Supplier.SoDienThoai, Mode=TwoWay}"
+                                 Watermark="Nhập số điện thoại"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1"
+                                Grid.Column="1">
+                        <TextBlock Classes="label"
+                                   Text="Email"/>
+
+                        <TextBox Classes="input"
+                                 Text="{Binding Supplier.Email, Mode=TwoWay}"
+                                 Watermark="example@email.com"/>
+                    </StackPanel>
+
+                    <!-- Người liên hệ + MST -->
+                    <StackPanel Grid.Row="2"
+                                Grid.Column="0">
+                        <TextBlock Classes="label"
+                                   Text="Người liên hệ"/>
+
+                        <TextBox Classes="input"
+                                 Text="{Binding Supplier.NguoiLienHe, Mode=TwoWay}"
+                                 Watermark="Tên người liên hệ"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="2"
+                                Grid.Column="1">
+                        <TextBlock Classes="label"
+                                   Text="Mã số thuế"/>
+
+                        <TextBox Classes="input"
+                                 Text="{Binding Supplier.MaSoThue, Mode=TwoWay}"
+                                 Watermark="Nhập mã số thuế"/>
+                    </StackPanel>
+
+                    <!-- Tỉnh thành + Quận huyện -->
+                    <StackPanel Grid.Row="3"
+                                Grid.Column="0">
+                        <TextBlock Classes="label"
+                                   Text="Tỉnh / Thành phố"/>
+
+                        <TextBox Classes="input"
+                                 Text="{Binding Supplier.TinhThanh, Mode=TwoWay}"
+                                 Watermark="Tỉnh / Thành phố"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="3"
+                                Grid.Column="1">
+                        <TextBlock Classes="label"
+                                   Text="Quận / Huyện"/>
+
+                        <TextBox Classes="input"
+                                 Text="{Binding Supplier.QuanHuyen, Mode=TwoWay}"
+                                 Watermark="Quận / Huyện"/>
+                    </StackPanel>
+
+                    <!-- Phường xã + Địa chỉ -->
+                    <StackPanel Grid.Row="4"
+                                Grid.Column="0">
+                        <TextBlock Classes="label"
+                                   Text="Phường / Xã"/>
+
+                        <TextBox Classes="input"
+                                 Text="{Binding Supplier.PhuongXa, Mode=TwoWay}"
+                                 Watermark="Phường / Xã"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="4"
+                                Grid.Column="1">
+                        <TextBlock Classes="label"
+                                   Text="Địa chỉ"/>
+
+                        <TextBox Classes="input"
+                                 Text="{Binding Supplier.DiaChi, Mode=TwoWay}"
+                                 Watermark="Số nhà, đường..."/>
+                    </StackPanel>
+
+                    <!-- Ghi chú -->
+                    <StackPanel Grid.Row="5"
+                                Grid.ColumnSpan="2">
+                        <TextBlock Classes="label"
+                                   Text="Ghi chú"/>
+
+                        <TextBox Classes="input"
+                                 Text="{Binding Supplier.GhiChu, Mode=TwoWay}"
+                                 Watermark="Ghi chú về nhà cung cấp"
+                                 Height="90"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalContentAlignment="Top"/>
+                    </StackPanel>
+
+                    <!-- Trạng thái -->
+                    <Border Grid.Row="6"
+                            Grid.ColumnSpan="2"
+                            Background="White"
+                            BorderBrush="#D8E5E0"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="14">
+
+                        <Grid ColumnDefinitions="*,Auto">
+
+                            <StackPanel>
+                                <TextBlock Text="Trạng thái"
+                                           FontWeight="SemiBold"
+                                           Foreground="#263B35"/>
+
+                                <TextBlock Text="{Binding Supplier.TrangThaiHienThi}"
+                                           FontSize="12"
+                                           Foreground="#61736E"
+                                           Margin="0,3,0,0"/>
+                            </StackPanel>
+
+                            <CheckBox Grid.Column="1"
+                                      Content="Đang hoạt động"
+                                      IsChecked="{Binding Supplier.TrangThai, Mode=TwoWay}"
+                                      VerticalAlignment="Center"/>
+
+                        </Grid>
+
+                    </Border>
+
+                </Grid>
+
+            </ScrollViewer>
+
+            <!-- BUTTON -->
+            <Grid Grid.Row="2"
+                  ColumnDefinitions="Auto,*,Auto,Auto"
+                  ColumnSpacing="10">
+
+                <Button Classes="danger"
+                        Content="🗑 Xóa"
+                        IsVisible="{Binding IsEditMode}"
+                        Click="OnDeleteClicked"/>
+
+                <TextBlock Grid.Column="1"
+                           Text="{Binding LoiMessage}"
+                           Foreground="#D64545"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap"/>
+
+                <Button Grid.Column="2"
+                        Classes="secondary"
+                        Content="Hủy"
+                        Click="OnCancelClicked"/>
+
+                <Button Grid.Column="3"
+                        Classes="primary"
+                        Content="💾 Lưu"
+                        Click="OnSaveClicked"/>
+
+            </Grid>
+
+        </Grid>
+
+    </Border>
+
+</Window>

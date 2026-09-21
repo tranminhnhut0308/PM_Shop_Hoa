@@ -20,8 +20,8 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _suppliersLoaded;
     private bool _overviewLoaded;
 
-    [ObservableProperty] private string selectedMenu = "Hàng hóa";
-    [ObservableProperty] private int selectedDataTabIndex;
+    [ObservableProperty] private string selectedMenu = "Tổng quan";
+    [ObservableProperty] private int selectedDataTabIndex = 0;
     [ObservableProperty] private string statusMessage = "Sẵn sàng";
     [ObservableProperty] private string productSearch = "";
     [ObservableProperty] private string customerSearch = "";
@@ -48,70 +48,23 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private decimal saleDiscountAmount;
     [ObservableProperty] private string saleDiscountMode = "Số tiền";
     [ObservableProperty] private KhachHang? selectedKhachHang;
-    [ObservableProperty]
-        private NhaCungCap? selectedNhaCungCap;
-
-        [ObservableProperty]
-        private bool isNhaCungCapEditorVisible;
+    [ObservableProperty] private NhaCungCap? selectedNhaCungCap;
     [ObservableProperty] private KhachHang? selectedSaleCustomer;
     [ObservableProperty] private string ngaySinhText = "";
 
     partial void OnSelectedKhachHangChanged(KhachHang? value)
     {
-         IsNhaCungCapEditorVisible = value is not null;
+        NgaySinhText = value?.NgaySinh?.ToString("dd/MM/yyyy") ?? "";
     }
 
-    public async Task SearchSaleCustomersAsync(string search)
+    partial void OnSelectedNhaCungCapChanged(NhaCungCap? value)
     {
-        try
-        {
-            SaleCustomerSuggestions.Clear();
+        if (value is null)
+            return;
 
-            if (string.IsNullOrWhiteSpace(search))
-                return;
-
-            foreach (var customer in await _db.GetKhachHangAsync(search.Trim()))
-                SaleCustomerSuggestions.Add(customer);
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = "Không thể tìm khách hàng bán hàng: " + ex.Message;
-        }
+        _ = SuaNhaCungCapAsync(value);
     }
-    [RelayCommand]
-private void QuayLaiDanhSachNhaCungCap()
-{
-    SelectedNhaCungCap = null;
-    IsNhaCungCapEditorVisible = false;
-    StatusMessage = "Đã quay lại danh sách nhà cung cấp";
-}
-[RelayCommand]
-private void ThemMoiNhaCungCap()
-{
-    SelectedNhaCungCap = new NhaCungCap
-    {
-        MaNhaCungCap = "",
-        TenNhaCungCap = "",
-        SoDienThoai = "",
-        Email = "",
-        DiaChi = "",
-        KhuVuc = "",
-        PhuongXa = "",
-        MaSoThue = "",
-        CanCuocCongDan = "",
-        NhomNhaCungCap = "Nhà cung cấp",
-        CongTy = "",
-        GhiChu = "",
-        TrangThai = "Đang hoạt động",
-        TongMua = 0,
-        ConNo = 0,
-        NguoiTao = "",
-        NgayTao = DateTime.Now
-    };
 
-    IsNhaCungCapEditorVisible = true;
-    StatusMessage = "Đang tạo nhà cung cấp mới";
-}
     [RelayCommand]
     private void ChonKhachHangBan(KhachHang? customer)
     {
@@ -153,15 +106,26 @@ private void ThemMoiNhaCungCap()
     }
 
     [RelayCommand]
-    private void ThemMoiKhachHang()
+    private async Task ThemMoiKhachHangAsync()
     {
-        SelectedKhachHang = new KhachHang
+        try
         {
-            MaKhachHang = "",
-            TenKhachHang = "",
-            NhomKhachHang = "Cá nhân"
-        };
-        StatusMessage = "Đang tạo khách hàng mới";
+            var maKhachHangMoi = await _db.TaoMaKhachHangMoiAsync();
+
+            SelectedKhachHang = new KhachHang
+            {
+                MaKhachHang = maKhachHangMoi,
+                TenKhachHang = "",
+                NhomKhachHang = "Cá nhân"
+            };
+
+            NgaySinhText = "";
+            StatusMessage = $"Đang tạo khách hàng mới - mã {maKhachHangMoi}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể tạo mã khách hàng tự động: " + ex.Message;
+        }
     }
 
     [RelayCommand]
@@ -769,6 +733,27 @@ private void ThemMoiNhaCungCap()
                 existing.TenSanPham.Equals(trimmedTenSanPham, StringComparison.OrdinalIgnoreCase)));
     }
 
+    public async Task SearchSaleCustomersAsync(string text)
+    {
+        try
+        {
+            SaleCustomerSuggestions.Clear();
+
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+
+            var customers = await _db.GetKhachHangAsync(text.Trim());
+
+            foreach (var customer in customers)
+                SaleCustomerSuggestions.Add(customer);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage =
+                "Không thể tìm khách hàng: " + ex.Message;
+        }
+    }
+
     [RelayCommand]
     private async Task SearchCustomersAsync()
     {
@@ -810,6 +795,115 @@ private void ThemMoiNhaCungCap()
             StatusMessage = $"Tìm thấy {NhaCungCaps.Count} nhà cung cấp";
         }
         catch (Exception ex) { StatusMessage = ex.Message; }
+    }
+
+    [RelayCommand]
+    private async Task ThemNhaCungCapAsync()
+    {
+        if (OwnerWindow is null)
+            return;
+
+        // Mã NCC do hệ thống tự phát sinh từ database, người dùng không nhập.
+        var generatedCode = await _db.TaoMaNhaCungCapMoiAsync();
+        var newSupplier = new NhaCungCap
+        {
+            MaNhaCungCap = generatedCode,
+            TenNhaCungCap = string.Empty,
+            TrangThai = true
+        };
+
+        var editor = new NhaCungCapEditorWindow(newSupplier);
+        var saved = await editor.ShowDialog<bool>(OwnerWindow);
+
+        if (!saved)
+            return;
+
+        try
+        {
+            editor.Supplier.Id = await _db.ThemNhaCungCapAsync(editor.Supplier);
+            NhaCungCaps.Add(editor.Supplier);
+            _suppliersLoaded = true;
+
+            StatusMessage =
+                $"Đã thêm nhà cung cấp {editor.Supplier.TenNhaCungCap}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage =
+                "Không thể thêm nhà cung cấp: " + ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task SuaNhaCungCapAsync(NhaCungCap? supplier)
+    {
+        if (supplier is null || OwnerWindow is null)
+            return;
+
+        var editor = new NhaCungCapEditorWindow(supplier);
+        var saved = await editor.ShowDialog<bool>(OwnerWindow);
+
+        SelectedNhaCungCap = null;
+
+        if (!saved)
+            return;
+
+        try
+        {
+            await _db.CapNhatNhaCungCapAsync(editor.Supplier);
+
+            var index = NhaCungCaps.IndexOf(supplier);
+
+            if (index >= 0)
+                NhaCungCaps[index] = editor.Supplier;
+
+            StatusMessage =
+                $"Đã cập nhật nhà cung cấp {editor.Supplier.TenNhaCungCap}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage =
+                "Không thể cập nhật nhà cung cấp: " + ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task XoaNhaCungCapAsync(NhaCungCap? supplier)
+    {
+        if (supplier is null)
+            return;
+
+        if (supplier.Id == 0)
+        {
+            StatusMessage =
+                "Nhà cung cấp này chưa có ID trong database.";
+
+            return;
+        }
+
+        var confirmed = await ShowConfirmationAsync(
+            "Xóa nhà cung cấp",
+            $"Bạn có chắc muốn xóa nhà cung cấp " +
+            $"\"{supplier.TenNhaCungCap}\" không?");
+
+        if (!confirmed)
+            return;
+
+        try
+        {
+            await _db.XoaNhaCungCapAsync(supplier.Id);
+
+            NhaCungCaps.Remove(supplier);
+            SelectedNhaCungCap = null;
+
+            StatusMessage =
+                $"Đã xóa nhà cung cấp {supplier.TenNhaCungCap}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage =
+                "Không thể xóa nhà cung cấp: " + ex.Message;
+        }
     }
 
     [RelayCommand]
@@ -975,12 +1069,6 @@ private void ThemMoiNhaCungCap()
         "Nhà cung cấp" => 4,
         _ => 0
     };
-
-    if (value != "Nhà cung cấp")
-    {
-        SelectedNhaCungCap = null;
-        IsNhaCungCapEditorVisible = false;
-    }
 
     OnPropertyChanged(nameof(IsTongQuanSelected));
     OnPropertyChanged(nameof(IsDataSectionSelected));

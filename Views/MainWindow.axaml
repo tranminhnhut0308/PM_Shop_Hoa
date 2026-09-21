@@ -21,6 +21,7 @@
     <Style Selector="TextBox">
       <Setter Property="Background" Value="White"/>
       <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="CaretBrush" Value="#263B35"/>
       <Setter Property="BorderBrush" Value="#D8E5E0"/>
       <Setter Property="BorderThickness" Value="1"/>
     </Style>
@@ -523,6 +524,45 @@
       <Setter Property="TextElement.Foreground" Value="#263B35"/>
       <Setter Property="CaretBrush" Value="#087F6E"/>
     </Style>
+  
+
+    <!-- NÚT XANH: DÙ RÊ CHUỘT / FOCUS / NHẤN CŨNG KHÔNG ĐỔI MÀU -->
+    <Style Selector="Button.toolbar-primary">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="#087F6E"
+                  BorderBrush="Transparent"
+                  BorderThickness="0"
+                  CornerRadius="8"
+                  Padding="14,9">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              TextElement.Foreground="White"/>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+
+    <Style Selector="Button.salesButton">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="#0A8C78"
+                  BorderBrush="#7AE3D3"
+                  BorderThickness="1.4"
+                  CornerRadius="12"
+                  Padding="18,14">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              TextElement.Foreground="White"/>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+
   </Window.Styles>
 
   <Grid ColumnDefinitions="220,*" Background="#F4F7F6">
@@ -901,93 +941,329 @@
       <TabControl Grid.RowSpan="2" Margin="0"
                   SelectedIndex="{Binding SelectedDataTabIndex}"
                   IsVisible="{Binding IsDataSectionSelected}">
+        <!-- TAB HÀNG HÓA - GIAO DIỆN DẠNG DANH SÁCH GIỐNG ẢNH MẪU -->
         <TabItem Header="Hàng hóa">
-          <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,14,0,0">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
-              <TextBox Classes="searchInput" Watermark="🔍 Tìm mã hàng, tên hàng, mã vạch..."
+          <Grid Margin="0,0,0,0" RowDefinitions="Auto,Auto,*">
+
+            <!-- THANH CÔNG CỤ -->
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto"
+                  ColumnSpacing="8"
+                  Margin="0,0,0,10">
+
+              <TextBox Classes="searchInput"
+                       Watermark="⌕  Theo mã, tên hàng"
                        Text="{Binding ProductSearch, Mode=TwoWay}"
-                       Margin="0,0,10,10"/>
-                    <Button Grid.Column="1" Classes="toolbar-action" Content="Tìm kiếm"
-                      Command="{Binding SearchProductsCommand}"
-                      CommandParameter="{Binding ProductSearch}"
-                      Margin="0,0,0,10"/>
-                    <Button Grid.Column="2" Classes="toolbar-action" Content="⚱  Bộ lọc"
-                      Command="{Binding LocSanPhamCommand}" CommandParameter=""/>
-                    <Button Grid.Column="3" Classes="toolbar-action" Content="↕  Sắp xếp"
-                      Command="{Binding SapXepSanPhamCommand}"/>
-                    <Button Grid.Column="4" Classes="toolbar-primary" Content="＋  Thêm mới"
+                       Height="38"
+                       VerticalContentAlignment="Center"
+                       Padding="12,7"
+                       Margin="0"
+                       />
+
+              <Button Grid.Column="1"
+                      Classes="toolbar-primary"
+                      Content="＋  Tạo mới"
                       Command="{Binding ThemSanPhamCommand}"
-                      IsEnabled="True"
-                      Opacity="1">
-                      <Button.Template>
-                        <ControlTemplate>
-                          <Border Background="{TemplateBinding Background}"
-                                  BorderBrush="{TemplateBinding BorderBrush}"
-                                  BorderThickness="{TemplateBinding BorderThickness}"
-                              CornerRadius="{TemplateBinding CornerRadius}"
-                              Padding="{TemplateBinding Padding}"
-                              HorizontalAlignment="{TemplateBinding HorizontalAlignment}"
-                              VerticalAlignment="{TemplateBinding VerticalAlignment}">
-                            <ContentPresenter Content="{TemplateBinding Content}"
-                                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
-                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
-                          </Border>
-                        </ControlTemplate>
-                      </Button.Template>
-                    </Button>
-                    <Button Grid.Column="5" Classes="toolbar-action" Content="📁 Nhập file"
+                      Margin="0"
+                      Height="38"/>
+
+              <Button Grid.Column="2"
+                      Classes="toolbar-action"
+                      Content="⇩  Import file"
                       Command="{Binding ThemSanPhamTuFileCommand}"
-                      Margin="0,0,0,10"/>
+                      Margin="0"
+                      Height="38"/>
+
+              <Button Grid.Column="3"
+                      Classes="toolbar-action"
+                      Content="⇧  Xuất file"
+                      Margin="0"
+                      Height="38"
+                      Padding="14,7"
+                      Click="OnExportProductsClick"/>
+
+              <Button Grid.Column="4"
+                      Classes="toolbar-action"
+                      Content="☷"
+                      ToolTip.Tip="Kiểu hiển thị"
+                      Margin="0"
+                      Padding="12,7"
+                      Height="38"/>
+
+              <Button Grid.Column="5"
+                      Classes="toolbar-action"
+                      Content="⚙"
+                      ToolTip.Tip="Cài đặt"
+                      Margin="0"
+                      Padding="12,7"
+                      Height="38"/>
+
+              <Button Grid.Column="6"
+                      Classes="toolbar-action"
+                      Content="?"
+                      ToolTip.Tip="Trợ giúp"
+                      Margin="0"
+                      Padding="12,7"
+                      Height="38"/>
             </Grid>
-            <TextBlock Grid.Row="1" Text="{Binding StatusMessage}" Foreground="#667085" Margin="0,0,0,10"/>
-            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-              <ItemsControl ItemsSource="{Binding SanPhams}">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <WrapPanel Orientation="Horizontal"/>
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="models:SanPham">
-                    <Border Classes="product-card" Width="230">
-                      <StackPanel>
-                        <Border Height="142" CornerRadius="8" ClipToBounds="True">
-                          <Grid>
-                            <Image Source="avares://ShopHoa/Assets/anh_menu.png" Stretch="UniformToFill"/>
-                            <Image Source="{Binding HinhAnhBitmap}" Stretch="UniformToFill"/>
-                            <Ellipse Width="10" Height="10" Fill="#2BA84A" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0"/>
-                            <Button Content="📷 Đổi ảnh" HorizontalAlignment="Left" VerticalAlignment="Bottom"
-                              Classes="card-action"
-                              Command="{Binding ElementName=RootWindow, Path=DataContext.CapNhatHinhAnhCommand}"
-                              CommandParameter="{Binding}"/>
+
+            <!-- DÒNG TRẠNG THÁI -->
+            <Grid Grid.Row="1"
+                  ColumnDefinitions="*,Auto"
+                  Margin="0,0,0,8">
+
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <TextBlock Text="Danh sách hàng hóa"
+                           Foreground="#344054"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="•"
+                           Foreground="#98A2B3"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding SanPhams.Count, StringFormat={}{0} sản phẩm}"
+                           Foreground="#667085"
+                           FontSize="13"
+                           VerticalAlignment="Center"/>
+              </StackPanel>
+
+              <TextBlock Grid.Column="1"
+                         Text="{Binding StatusMessage}"
+                         Foreground="#667085"
+                         FontSize="12"
+                         VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis"/>
+            </Grid>
+
+            <!-- BẢNG HÀNG HÓA -->
+            <Border Grid.Row="2"
+                    Background="White"
+                    BorderBrush="#D9E2EC"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    ClipToBounds="True">
+
+              <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                            VerticalScrollBarVisibility="Auto">
+
+                <Grid MinWidth="1450"
+                      RowDefinitions="Auto,*">
+
+                  <!-- HEADER -->
+                  <Border Grid.Row="0"
+                          Background="#E7F1FB"
+                          BorderBrush="#D7E3EF"
+                          BorderThickness="0,0,0,1"
+                          Padding="8,0">
+
+                    <Grid ColumnDefinitions="34,34,42,150,260,120,120,120,120,120,170,130"
+                          Height="42">
+
+                      <CheckBox VerticalAlignment="Center"
+                                HorizontalAlignment="Center"/>
+
+                      <TextBlock Grid.Column="1"
+                                 Text="☆"
+                                 FontSize="21"
+                                 Foreground="#667085"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center"/>
+
+                      <TextBlock Grid.Column="2"
+                                 Text=""
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center"/>
+
+                      <TextBlock Grid.Column="3"
+                                 Text="Mã hàng"
+                                 FontWeight="SemiBold"
+                                 Foreground="#344054"
+                                 VerticalAlignment="Center"/>
+
+                      <TextBlock Grid.Column="4"
+                                 Text="Tên hàng"
+                                 FontWeight="SemiBold"
+                                 Foreground="#344054"
+                                 VerticalAlignment="Center"/>
+
+                      <TextBlock Grid.Column="5"
+                                 Text="Giá bán"
+                                 FontWeight="SemiBold"
+                                 Foreground="#344054"
+                                 HorizontalAlignment="Right"
+                                 Margin="0,0,10,0"
+                                 VerticalAlignment="Center"/>
+
+                      <TextBlock Grid.Column="6"
+                                 Text="Giá vốn"
+                                 FontWeight="SemiBold"
+                                 Foreground="#344054"
+                                 HorizontalAlignment="Right"
+                                 Margin="0,0,10,0"
+                                 VerticalAlignment="Center"/>
+
+                      <TextBlock Grid.Column="7"
+                                 Text="Tồn kho"
+                                 FontWeight="SemiBold"
+                                 Foreground="#344054"
+                                 HorizontalAlignment="Right"
+                                 Margin="0,0,10,0"
+                                 VerticalAlignment="Center"/>
+
+                      <TextBlock Grid.Column="8"
+                                 Text="Khách đặt"
+                                 FontWeight="SemiBold"
+                                 Foreground="#344054"
+                                 HorizontalAlignment="Right"
+                                 Margin="0,0,10,0"
+                                 VerticalAlignment="Center"/>
+
+                      <TextBlock Grid.Column="9"
+                                 Text="Đơn vị tính"
+                                 FontWeight="SemiBold"
+                                 Foreground="#344054"
+                                 VerticalAlignment="Center"/>
+
+                      <TextBlock Grid.Column="10"
+                                 Text="Thời gian tạo"
+                                 FontWeight="SemiBold"
+                                 Foreground="#344054"
+                                 VerticalAlignment="Center"/>
+
+                      <TextBlock Grid.Column="11"
+                                 Text="Dự kiến hết hàng"
+                                 FontWeight="SemiBold"
+                                 Foreground="#344054"
+                                 VerticalAlignment="Center"/>
+                    </Grid>
+                  </Border>
+
+                  <!-- DANH SÁCH -->
+                  <ItemsControl Grid.Row="1"
+                                ItemsSource="{Binding SanPhams}">
+
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="models:SanPham">
+
+                        <Border Background="White"
+                                BorderBrush="#E4E7EC"
+                                BorderThickness="0,0,0,1"
+                                Padding="8,0">
+
+                          <Grid ColumnDefinitions="34,34,42,150,260,120,120,120,120,120,170,130"
+                                Height="56">
+
+                            <!-- CHỌN -->
+                            <CheckBox HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"/>
+
+                            <!-- YÊU THÍCH -->
+                            <TextBlock Grid.Column="1"
+                                       Text="☆"
+                                       FontSize="21"
+                                       Foreground="#8B98A7"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+
+                            <!-- ẢNH -->
+                            <Border Grid.Column="2"
+                                    Width="30"
+                                    Height="30"
+                                    CornerRadius="5"
+                                    Background="#EAF3FF"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+
+                              <Image Source="{Binding HinhAnhBitmap}"
+                                     Stretch="Uniform"
+                                     Width="22"
+                                     Height="22"/>
+                            </Border>
+
+                            <!-- MÃ HÀNG -->
+                            <TextBlock Grid.Column="3"
+                                       Text="{Binding MaSanPham}"
+                                       Foreground="#344054"
+                                       FontSize="13"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+
+                            <!-- TÊN HÀNG -->
+                            <TextBlock Grid.Column="4"
+                                       Text="{Binding TenSanPham}"
+                                       Foreground="#344054"
+                                       FontSize="13"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="NoWrap"
+                                       TextTrimming="CharacterEllipsis"/>
+
+                            <!-- GIÁ BÁN -->
+                            <TextBlock Grid.Column="5"
+                                       Text="{Binding GiaBan, StringFormat={}{0:N0}}"
+                                       Foreground="#344054"
+                                       FontSize="13"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,10,0"
+                                       VerticalAlignment="Center"/>
+
+                            <!-- GIÁ VỐN -->
+                            <TextBlock Grid.Column="6"
+                                       Text="{Binding GiaVon, StringFormat={}{0:N0}}"
+                                       Foreground="#344054"
+                                       FontSize="13"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,10,0"
+                                       VerticalAlignment="Center"/>
+
+                            <!-- TỒN KHO -->
+                            <TextBlock Grid.Column="7"
+                                       Text="{Binding TonKhoExcel, StringFormat={}{0:N0}}"
+                                       Foreground="#344054"
+                                       FontSize="13"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,10,0"
+                                       VerticalAlignment="Center"/>
+
+                            <!-- KHÁCH ĐẶT -->
+                            <TextBlock Grid.Column="8"
+                                       Text="{Binding KhachDat, StringFormat={}{0:N0}}"
+                                       Foreground="#344054"
+                                       FontSize="13"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,10,0"
+                                       VerticalAlignment="Center"/>
+
+                            <!-- ĐVT -->
+                            <TextBlock Grid.Column="9"
+                                       Text="{Binding DonViTinh}"
+                                       Foreground="#667085"
+                                       FontSize="13"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+
+                            <!-- THỜI GIAN TẠO -->
+                            <TextBlock Grid.Column="10"
+                                       Text="{Binding NgayTao, StringFormat={}{0:dd/MM/yyyy HH:mm}}"
+                                       Foreground="#667085"
+                                       FontSize="13"
+                                       VerticalAlignment="Center"/>
+
+                            <!-- DỰ KIẾN HẾT HÀNG -->
+                            <TextBlock Grid.Column="11"
+                                       Text="{Binding DuKienHetHang}"
+                                       Foreground="#344054"
+                                       FontSize="13"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
                           </Grid>
+
                         </Border>
-                        <TextBlock Text="{Binding TenSanPham}" Foreground="#263B35" FontWeight="SemiBold" FontSize="14" Margin="4,10,4,0" TextWrapping="Wrap"/>
-                        <TextBlock Text="{Binding MaSanPham}" Foreground="#7A8B85" FontSize="12" Margin="4,3,4,0"/>
-                        <TextBlock Text="{Binding LoaiHang}" Foreground="#7A8B85" FontSize="12" Margin="4,2,4,0"/>
-                        <TextBlock Text="{Binding GiaBan, StringFormat=\{0:N0\}}" Foreground="#087F6E" FontWeight="Bold" FontSize="15" Margin="4,8,4,0"/>
-                        <TextBlock Text="{Binding NhomHangBaCap, StringFormat=Nhóm: \{0\}}" Foreground="#52645E" FontSize="12" Margin="4,4,4,0" TextWrapping="Wrap"/>
-                        <TextBlock Text="{Binding TonKhoExcel, StringFormat=Tồn kho: \{0:N0\}}" Foreground="#52645E" FontSize="12" Margin="4,3,4,0"/>
-                        <TextBlock Text="{Binding KhachDat, StringFormat=Khách đặt: \{0:N0\}}" Foreground="#52645E" FontSize="12" Margin="4,2,4,0"/>
-                        <TextBlock Text="{Binding DonViTinh, StringFormat=ĐVT: \{0\}}" Foreground="#52645E" FontSize="12" Margin="4,2,4,0"/>
-                        <TextBlock Text="{Binding NgayTao, StringFormat=Tạo: \{0:dd/MM/yyyy HH:mm\}}" Foreground="#52645E" FontSize="12" Margin="4,2,4,0"/>
-                        <TextBlock Text="{Binding DuKienHetHang, StringFormat=Hết hàng: \{0\}}" Foreground="#52645E" FontSize="12" Margin="4,2,4,0"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button Classes="card-action" Content="Sửa"
-                              Command="{Binding ElementName=RootWindow, Path=DataContext.SuaSanPhamCommand}"
-                              CommandParameter="{Binding}"/>
-                            <Button Classes="card-action danger" Content="Xóa"
-                              Command="{Binding ElementName=RootWindow, Path=DataContext.XoaSanPhamCommand}"
-                              CommandParameter="{Binding}"/>
-                        </StackPanel>
-                      </StackPanel>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </ScrollViewer>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                </Grid>
+              </ScrollViewer>
+            </Border>
           </Grid>
         </TabItem>
 
@@ -1100,10 +1376,16 @@
                   <Grid Grid.Row="2" ColumnDefinitions="*,*,*" Margin="0,8,0,0">
                     <StackPanel>
                       <TextBlock Text="Mã khách hàng" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.MaKhachHang}" Margin="0,6,0,0"/>
+                      <TextBox Text="{Binding SelectedKhachHang.MaKhachHang}"
+                               IsReadOnly="True"
+                               Background="#F1F5F3"
+                               Foreground="#6B7280"
+                               BorderBrush="#D8E5E0"
+                               BorderThickness="1"
+                               Margin="0,6,0,0"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Margin="14,0,14,0">
-                      <TextBlock Text="Tên khách hàng" Foreground="#61736E" FontSize="12"/>
+                      <TextBlock Text="Tên khách hàng *" Foreground="#61736E" FontSize="12"/>
                       <TextBox Text="{Binding SelectedKhachHang.TenKhachHang}" Margin="0,6,0,0"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2">
@@ -1295,82 +1577,212 @@
 
         <!-- TAB NHÀ CUNG CẤP -->
         <TabItem Header="Nhà cung cấp">
-          <Grid Margin="0,14,0,0" RowDefinitions="Auto,Auto,*" RowSpacing="14">
-            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+          <Grid Margin="0,14,0,0"
+                RowDefinitions="Auto,Auto,*"
+                RowSpacing="14">
+
+            <!-- HEADER -->
+            <Grid ColumnDefinitions="*,Auto"
+                  VerticalAlignment="Center">
+
               <StackPanel>
-    <TextBlock Text="Nhà cung cấp"
-               FontSize="26"
-               FontWeight="Bold"
-               Foreground="#163F38"/>
+                <TextBlock Text="Nhà cung cấp"
+                           FontSize="26"
+                           FontWeight="Bold"
+                           Foreground="#163F38"/>
 
-    <TextBlock Text="Quản lý danh sách nhà cung cấp"
-               Foreground="#61736E"
-               FontSize="13"
-               Margin="0,4,0,0"/>
-</StackPanel>
+                <TextBlock Text="Quản lý danh sách nhà cung cấp"
+                           Foreground="#61736E"
+                           FontSize="13"
+                           Margin="0,4,0,0"/>
+              </StackPanel>
 
-<Button Grid.Column="1"
-        Classes="toolbar-primary"
-        Content="＋  Thêm nhà cung cấp"
-        Margin="0"
-        IsEnabled="True"
-        Opacity="1">
-  <Button.Template>
-    <ControlTemplate>
-      <Border Background="{TemplateBinding Background}"
-              BorderBrush="{TemplateBinding BorderBrush}"
-              BorderThickness="{TemplateBinding BorderThickness}"
-              CornerRadius="{TemplateBinding CornerRadius}"
-              Padding="{TemplateBinding Padding}"
-              HorizontalAlignment="{TemplateBinding HorizontalAlignment}"
-              VerticalAlignment="{TemplateBinding VerticalAlignment}">
-        <ContentPresenter Content="{TemplateBinding Content}"
-                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
-                          TextElement.Foreground="{TemplateBinding Foreground}"/>
-      </Border>
-    </ControlTemplate>
-  </Button.Template>
-</Button>
+              <!-- THÊM NHÀ CUNG CẤP -->
+              <Button Grid.Column="1"
+                      Classes="toolbar-primary"
+                      Content="＋  Thêm nhà cung cấp"
+                      Margin="0"
+                      Command="{Binding ThemNhaCungCapCommand}"/>
             </Grid>
 
-            <Border Grid.Row="1" Background="White" BorderBrush="#E2ECE8" BorderThickness="1" CornerRadius="12" Padding="12">
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                <TextBox Classes="searchInput" Watermark="🔍  Tìm mã, tên hoặc số điện thoại..." Text="{Binding SupplierSearch, Mode=TwoWay}" Padding="12,9"/>
-                <Button Grid.Column="1" Classes="toolbar-action" Content="🔍  Tìm kiếm" Command="{Binding SearchSuppliersCommand}" Margin="0"/>
+            <!-- TÌM KIẾM -->
+            <Border Grid.Row="1"
+                    Background="White"
+                    BorderBrush="#E2ECE8"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="12">
+
+              <Grid ColumnDefinitions="*,Auto"
+                    ColumnSpacing="10">
+
+                <TextBox Classes="searchInput"
+                         Watermark="🔍  Tìm mã, tên, số điện thoại hoặc email..."
+                         Text="{Binding SupplierSearch, Mode=TwoWay}"
+                         Padding="12,9"/>
+
+                <Button Grid.Column="1"
+                        Classes="toolbar-action"
+                        Content="🔍  Tìm kiếm"
+                        Command="{Binding SearchSuppliersCommand}"
+                        Margin="0"/>
               </Grid>
             </Border>
 
-            <Border Grid.Row="2" Background="White" BorderBrush="#E2ECE8" BorderThickness="1" CornerRadius="12" ClipToBounds="True">
+            <!-- DANH SÁCH -->
+            <Border Grid.Row="2"
+                    Background="White"
+                    BorderBrush="#E2ECE8"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    ClipToBounds="True">
+
               <Grid RowDefinitions="Auto,*">
-                <Border Background="#F7FAF9" BorderBrush="#E2ECE8" BorderThickness="0,0,0,1" Padding="16,13">
-                  <Grid ColumnDefinitions="150,*,200,*,160">
-                    <TextBlock Text="MÃ NCC" FontWeight="SemiBold" Foreground="#164B40" FontSize="12"/>
-                    <TextBlock Grid.Column="1" Text="TÊN NHÀ CUNG CẤP" FontWeight="SemiBold" Foreground="#164B40" FontSize="12"/>
-                    <TextBlock Grid.Column="2" Text="ĐIỆN THOẠI" FontWeight="SemiBold" Foreground="#164B40" FontSize="12"/>
-                    <TextBlock Grid.Column="3" Text="ĐỊA CHỈ" FontWeight="SemiBold" Foreground="#164B40" FontSize="12"/>
-                    <TextBlock Grid.Column="4" Text="CÒN NỢ" FontWeight="SemiBold" Foreground="#164B40" FontSize="12"/>
+
+                <!-- HEADER BẢNG -->
+                <Border Background="#F7FAF9"
+                        BorderBrush="#E2ECE8"
+                        BorderThickness="0,0,0,1"
+                        Padding="16,13">
+
+                  <Grid ColumnDefinitions="130,*,170,*,150,Auto"
+                        ColumnSpacing="10">
+
+                    <TextBlock Text="MÃ NCC"
+                               FontWeight="SemiBold"
+                               Foreground="#164B40"
+                               FontSize="12"/>
+
+                    <TextBlock Grid.Column="1"
+                               Text="TÊN NHÀ CUNG CẤP"
+                               FontWeight="SemiBold"
+                               Foreground="#164B40"
+                               FontSize="12"/>
+
+                    <TextBlock Grid.Column="2"
+                               Text="ĐIỆN THOẠI"
+                               FontWeight="SemiBold"
+                               Foreground="#164B40"
+                               FontSize="12"/>
+
+                    <TextBlock Grid.Column="3"
+                               Text="ĐỊA CHỈ"
+                               FontWeight="SemiBold"
+                               Foreground="#164B40"
+                               FontSize="12"/>
+
+                    <TextBlock Grid.Column="4"
+                               Text="CÒN NỢ"
+                               FontWeight="SemiBold"
+                               Foreground="#164B40"
+                               FontSize="12"/>
+
+                    <TextBlock Grid.Column="5"
+                               Text="THAO TÁC"
+                               FontWeight="SemiBold"
+                               Foreground="#164B40"
+                               FontSize="12"/>
                   </Grid>
                 </Border>
 
-                <ListBox Grid.Row="1" ItemsSource="{Binding NhaCungCaps}" SelectedItem="{Binding SelectedNhaCungCap, Mode=TwoWay}" Background="Transparent" BorderThickness="0">
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding NhaCungCaps}"
+                         Background="Transparent"
+                         BorderThickness="0">
+
                   <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="models:NhaCungCap">
-                      <Border BorderBrush="#EEF2F0" BorderThickness="0,0,0,1" Padding="16,14">
-                        <Grid ColumnDefinitions="150,*,200,*,160">
-                          <TextBlock Text="{Binding MaNhaCungCap}" Foreground="#263B35" VerticalAlignment="Center"/>
-                          <TextBlock Grid.Column="1" Text="{Binding TenNhaCungCap}" Foreground="#263B35" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                          <TextBlock Grid.Column="2" Text="{Binding SoDienThoai}" Foreground="#52645E" VerticalAlignment="Center"/>
-                          <TextBlock Grid.Column="3" Text="{Binding DiaChi}" Foreground="#52645E" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                          <TextBlock Grid.Column="4" Text="{Binding ConNo, StringFormat=\{0:N0\} đ}" Foreground="#D97706" FontWeight="SemiBold" VerticalAlignment="Center"/>
+
+                      <Border BorderBrush="#EEF2F0"
+                              BorderThickness="0,0,0,1"
+                              Padding="16,12">
+
+                        <Grid ColumnDefinitions="130,*,170,*,150,Auto"
+                              ColumnSpacing="10">
+
+                          <!-- MÃ -->
+                          <TextBlock Text="{Binding MaNhaCungCap}"
+                                     Foreground="#263B35"
+                                     VerticalAlignment="Center"/>
+
+                          <!-- TÊN -->
+                          <TextBlock Grid.Column="1"
+                                     Text="{Binding TenNhaCungCap}"
+                                     Foreground="#263B35"
+                                     FontWeight="SemiBold"
+                                     VerticalAlignment="Center"/>
+
+                          <!-- ĐIỆN THOẠI -->
+                          <TextBlock Grid.Column="2"
+                                     Text="{Binding SoDienThoai}"
+                                     Foreground="#52645E"
+                                     VerticalAlignment="Center"/>
+
+                          <!-- ĐỊA CHỈ -->
+                          <TextBlock Grid.Column="3"
+                                     Text="{Binding DiaChi}"
+                                     Foreground="#52645E"
+                                     TextTrimming="CharacterEllipsis"
+                                     VerticalAlignment="Center"/>
+
+                          <!-- CÒN NỢ -->
+                          <TextBlock Grid.Column="4"
+                                     Text="{Binding ConNo, StringFormat=\{0:N0\} đ}"
+                                     Foreground="#D97706"
+                                     FontWeight="SemiBold"
+                                     VerticalAlignment="Center"/>
+
+                          <!-- THAO TÁC -->
+                          <StackPanel Grid.Column="5"
+                                      Orientation="Horizontal"
+                                      Spacing="6"
+                                      VerticalAlignment="Center">
+
+                            <!-- SỬA -->
+                            <Button Content="✏"
+                                    Width="34"
+                                    Height="34"
+                                    Padding="0"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center"
+                                    FontSize="15"
+                                    Background="#EAF6F2"
+                                    Foreground="#087F6E"
+                                    BorderBrush="#CFE6DF"
+                                    BorderThickness="1"
+                                    CornerRadius="7"
+                                    ToolTip.Tip="Sửa nhà cung cấp"
+                                    Command="{Binding ElementName=RootWindow, Path=DataContext.SuaNhaCungCapCommand}"
+                                    CommandParameter="{Binding}"/>
+
+                            <!-- XÓA -->
+                            <Button Content="🗑"
+                                    Width="34"
+                                    Height="34"
+                                    Padding="0"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center"
+                                    FontSize="15"
+                                    Background="#FFF1F0"
+                                    Foreground="#D64545"
+                                    BorderBrush="#F1B7B1"
+                                    BorderThickness="1"
+                                    CornerRadius="7"
+                                    ToolTip.Tip="Xóa nhà cung cấp"
+                                    Command="{Binding ElementName=RootWindow, Path=DataContext.XoaNhaCungCapCommand}"
+                                    CommandParameter="{Binding}"/>
+                          </StackPanel>
+
                         </Grid>
                       </Border>
+
                     </DataTemplate>
                   </ListBox.ItemTemplate>
                 </ListBox>
+
               </Grid>
             </Border>
+
           </Grid>
         </TabItem>
       </TabControl>

@@ -185,106 +185,154 @@ public sealed class DatabaseService
         }
     }
 
-    public async Task<IReadOnlyList<SanPham>> GetSanPhamAsync(
-        string? search = null)
+    public async Task<IReadOnlyList<SanPham>> GetSanPhamAsync(string? search = null)
     {
         await using var connection = await OpenAsync();
 
-        const string sql = """
-        SELECT
-            sp.id AS Id,
-            sp.ma_san_pham AS MaSanPham,
-            sp.ma_vach AS MaVach,
-            COALESCE(NULLIF(TRIM(sp.ten_san_pham), ''), sp.ma_san_pham) AS TenSanPham,
-            sp.nhom_san_pham_id AS NhomSanPhamId,
-            sp.don_vi_tinh_id AS DonViTinhId,
-            sp.thuong_hieu_id AS ThuongHieuId,
-            sp.gia_ban AS GiaBan,
-            sp.gia_von AS GiaVon,
-            COALESCE(tk.so_luong_ton, 0) AS TonKho,
-            COALESCE(sp.ton_kho_excel, COALESCE(tk.so_luong_ton, 0)) AS TonKhoExcel,
-            sp.ton_toi_thieu AS TonToiThieu,
-            sp.ton_toi_da AS TonToiDa,
-            COALESCE(sp.khach_dat, 0) AS KhachDat,
-            sp.ngay_tao AS NgayTao,
-            sp.du_kien_het_hang AS DuKienHetHang,
-            dvt.ten_don_vi AS DonViTinh,
-            nsp.ten_nhom AS NhomSanPham,
-            sp.loai_hang_excel AS LoaiHang,
-            sp.nhom_hang_3_cap_excel AS NhomHangBaCap,
-            sp.vi_tri_kho AS ViTriKho,
-            sp.dang_kinh_doanh AS DangKinhDoanh,
-            sp.co_ban_truc_tiep AS DuocBanTrucTiep,
-            sp.trang_thai AS DangKinhDoanh,
-            sp.mo_ta AS MoTa,
-            sp.ghi_chu AS GhiChu,
-            sp.hinh_anh AS HinhAnh
-        FROM san_pham sp
-        LEFT JOIN ton_kho tk
-            ON tk.san_pham_id = sp.id
-        LEFT JOIN don_vi_tinh dvt
-            ON dvt.id = sp.don_vi_tinh_id
-        LEFT JOIN nhom_san_pham nsp
-            ON nsp.id = sp.nhom_san_pham_id
-                WHERE (
-                @Search = ''
-                OR sp.ma_san_pham LIKE CONCAT('%', @Search, '%')
-                OR sp.ma_vach LIKE CONCAT('%', @Search, '%')
-                OR sp.ten_san_pham LIKE CONCAT('%', @Search, '%')
-              )
-        ORDER BY sp.ten_san_pham;
-        """;
+        var keyword = (search ?? string.Empty).Trim();
+        var hasSearch = !string.IsNullOrWhiteSpace(keyword);
+        var limit = hasSearch ? 200 : 30;
+
+        // Tách 2 trường hợp để MySQL tối ưu tốt hơn:
+        // - Không tìm kiếm: dùng ORDER BY + LIMIT 30, không có điều kiện OR @Search = ''.
+        // - Có tìm kiếm: tìm trực tiếp trong DB và chỉ trả tối đa 200 dòng.
+        string sql = hasSearch
+            ? """
+              SELECT
+                  sp.id AS Id,
+                  sp.ma_san_pham AS MaSanPham,
+                  sp.ma_vach AS MaVach,
+                  COALESCE(NULLIF(TRIM(sp.ten_san_pham), ''), sp.ma_san_pham) AS TenSanPham,
+                  sp.nhom_san_pham_id AS NhomSanPhamId,
+                  sp.don_vi_tinh_id AS DonViTinhId,
+                  sp.thuong_hieu_id AS ThuongHieuId,
+                  sp.gia_ban AS GiaBan,
+                  sp.gia_von AS GiaVon,
+                  COALESCE(tk.so_luong_ton, 0) AS TonKho,
+                  COALESCE(sp.ton_kho_excel, COALESCE(tk.so_luong_ton, 0)) AS TonKhoExcel,
+                  sp.ton_toi_thieu AS TonToiThieu,
+                  sp.ton_toi_da AS TonToiDa,
+                  COALESCE(sp.khach_dat, 0) AS KhachDat,
+                  sp.ngay_tao AS NgayTao,
+                  sp.du_kien_het_hang AS DuKienHetHang,
+                  dvt.ten_don_vi AS DonViTinh,
+                  nsp.ten_nhom AS NhomSanPham,
+                  sp.loai_hang_excel AS LoaiHang,
+                  sp.nhom_hang_3_cap_excel AS NhomHangBaCap,
+                  sp.vi_tri_kho AS ViTriKho,
+                  sp.dang_kinh_doanh AS DuocBanTrucTiep,
+                  sp.trang_thai AS DangKinhDoanh,
+                  sp.mo_ta AS MoTa,
+                  sp.ghi_chu AS GhiChu,
+                  sp.hinh_anh AS HinhAnh
+              FROM san_pham sp
+              LEFT JOIN ton_kho tk ON tk.san_pham_id = sp.id
+              LEFT JOIN don_vi_tinh dvt ON dvt.id = sp.don_vi_tinh_id
+              LEFT JOIN nhom_san_pham nsp ON nsp.id = sp.nhom_san_pham_id
+              WHERE (
+                    sp.ma_san_pham LIKE CONCAT(@Search, '%')
+                    OR sp.ma_vach LIKE CONCAT(@Search, '%')
+                    OR sp.ten_san_pham LIKE CONCAT('%', @Search, '%')
+                )
+              ORDER BY
+                  CASE
+                      WHEN sp.ma_san_pham = @Search THEN 0
+                      WHEN sp.ma_vach = @Search THEN 1
+                      ELSE 2
+                  END,
+                  sp.ten_san_pham
+              LIMIT @Limit;
+              """
+            : """
+              SELECT
+                  sp.id AS Id,
+                  sp.ma_san_pham AS MaSanPham,
+                  sp.ma_vach AS MaVach,
+                  COALESCE(NULLIF(TRIM(sp.ten_san_pham), ''), sp.ma_san_pham) AS TenSanPham,
+                  sp.nhom_san_pham_id AS NhomSanPhamId,
+                  sp.don_vi_tinh_id AS DonViTinhId,
+                  sp.thuong_hieu_id AS ThuongHieuId,
+                  sp.gia_ban AS GiaBan,
+                  sp.gia_von AS GiaVon,
+                  COALESCE(tk.so_luong_ton, 0) AS TonKho,
+                  COALESCE(sp.ton_kho_excel, COALESCE(tk.so_luong_ton, 0)) AS TonKhoExcel,
+                  sp.ton_toi_thieu AS TonToiThieu,
+                  sp.ton_toi_da AS TonToiDa,
+                  COALESCE(sp.khach_dat, 0) AS KhachDat,
+                  sp.ngay_tao AS NgayTao,
+                  sp.du_kien_het_hang AS DuKienHetHang,
+                  dvt.ten_don_vi AS DonViTinh,
+                  nsp.ten_nhom AS NhomSanPham,
+                  sp.loai_hang_excel AS LoaiHang,
+                  sp.nhom_hang_3_cap_excel AS NhomHangBaCap,
+                  sp.vi_tri_kho AS ViTriKho,
+                  sp.dang_kinh_doanh AS DuocBanTrucTiep,
+                  sp.trang_thai AS DangKinhDoanh,
+                  sp.mo_ta AS MoTa,
+                  sp.ghi_chu AS GhiChu,
+                  sp.hinh_anh AS HinhAnh
+              FROM san_pham sp
+              LEFT JOIN ton_kho tk ON tk.san_pham_id = sp.id
+              LEFT JOIN don_vi_tinh dvt ON dvt.id = sp.don_vi_tinh_id
+              LEFT JOIN nhom_san_pham nsp ON nsp.id = sp.nhom_san_pham_id
+              ORDER BY sp.ten_san_pham, sp.id
+              LIMIT @Limit;
+              """;
 
         var parameters = new
         {
-            Search = search ?? ""
+            Search = keyword,
+            Limit = limit
         };
 
         var products = (
             await connection.QueryAsync<SanPham>(sql, parameters)
         ).AsList();
 
+        // Chỉ dùng bảng import cũ khi bảng san_pham không có dữ liệu.
         if (products.Count > 0)
-        {
             return products;
-        }
 
         const string importSql = """
-        SELECT
-            `Mã hàng` AS MaSanPham,
-            `Mã vạch` AS MaVach,
-            COALESCE(`Tên hàng`, `Mã hàng`) AS TenSanPham,
-            COALESCE(`Giá bán`, 0) AS GiaBan,
-            COALESCE(`Giá vốn`, 0) AS GiaVon,
-            COALESCE(`Tồn kho`, 0) AS TonKho,
-            COALESCE(`Tồn kho`, 0) AS TonKhoExcel,
-            COALESCE(`Tồn nhỏ nhất`, 0) AS TonToiThieu,
-            COALESCE(`Tồn lớn nhất`, 0) AS TonToiDa,
-            COALESCE(`KH đặt`, 0) AS KhachDat,
-            `Thời gian tạo` AS NgayTao,
-            `Dự kiến hết hàng` AS DuKienHetHang,
-            `ĐVT` AS DonViTinh,
-            `Nhóm hàng(3 Cấp)` AS NhomSanPham,
-            `Loại hàng` AS LoaiHang,
-            `Nhóm hàng(3 Cấp)` AS NhomHangBaCap,
-            `Vị trí` AS ViTriKho,
-            COALESCE(`Đang kinh doanh`, 1) AS DangKinhDoanh,
-            COALESCE(`Được bán trực tiếp`, 1) AS DuocBanTrucTiep
-        FROM import_san_pham_excel
-        WHERE COALESCE(`Đang kinh doanh`, 1) = 1
-          AND (
-                @Search = ''
-                OR `Mã hàng` LIKE CONCAT('%', @Search, '%')
-                OR `Mã vạch` LIKE CONCAT('%', @Search, '%')
-                OR `Tên hàng` LIKE CONCAT('%', @Search, '%')
+            SELECT
+                `Mã hàng` AS MaSanPham,
+                `Mã vạch` AS MaVach,
+                COALESCE(`Tên hàng`, `Mã hàng`) AS TenSanPham,
+                COALESCE(`Giá bán`, 0) AS GiaBan,
+                COALESCE(`Giá vốn`, 0) AS GiaVon,
+                COALESCE(`Tồn kho`, 0) AS TonKho,
+                COALESCE(`Tồn kho`, 0) AS TonKhoExcel,
+                COALESCE(`Tồn nhỏ nhất`, 0) AS TonToiThieu,
+                COALESCE(`Tồn lớn nhất`, 0) AS TonToiDa,
+                COALESCE(`KH đặt`, 0) AS KhachDat,
+                `Thời gian tạo` AS NgayTao,
+                `Dự kiến hết hàng` AS DuKienHetHang,
+                `ĐVT` AS DonViTinh,
+                `Nhóm hàng(3 Cấp)` AS NhomSanPham,
+                `Loại hàng` AS LoaiHang,
+                `Nhóm hàng(3 Cấp)` AS NhomHangBaCap,
+                `Vị trí` AS ViTriKho,
+                COALESCE(`Đang kinh doanh`, 1) AS DangKinhDoanh,
+                COALESCE(`Được bán trực tiếp`, 1) AS DuocBanTrucTiep
+            FROM import_san_pham_excel
+            WHERE COALESCE(`Đang kinh doanh`, 1) = 1
+              AND (
+                  @Search = ''
+                  OR `Mã hàng` LIKE CONCAT(@Search, '%')
+                  OR `Mã vạch` LIKE CONCAT(@Search, '%')
+                  OR `Tên hàng` LIKE CONCAT('%', @Search, '%')
               )
-        ORDER BY `Tên hàng`;
-        """;
+            ORDER BY `Tên hàng`
+            LIMIT @Limit;
+            """;
 
         try
         {
             return (
-                await connection.QueryAsync<SanPham>(importSql, parameters)
+                await connection.QueryAsync<SanPham>(
+                    importSql,
+                    parameters
+                )
             ).AsList();
         }
         catch (MySqlException ex) when (ex.Number == 1146)
@@ -763,6 +811,31 @@ public sealed class DatabaseService
         return $"KH{DateTime.Now:yyyyMMddHHmmssfff}";
     }
 
+    /// <summary>
+    /// Sinh mã khách hàng tuần tự theo dạng KH0000001.
+    /// Chỉ xét các mã KH + số để không bị ảnh hưởng bởi mã cũ khác định dạng.
+    /// </summary>
+    public async Task<string> TaoMaKhachHangMoiAsync()
+    {
+        await using var connection = await OpenAsync();
+
+        const string sql = """
+        SELECT COALESCE(
+            MAX(CAST(SUBSTRING(ma_khach_hang, 3) AS UNSIGNED)),
+            0
+        ) + 1
+        FROM khach_hang
+        WHERE ma_khach_hang REGEXP '^KH[0-9]{1,7}$';
+        """;
+
+        var nextNumber = await connection.ExecuteScalarAsync<long>(sql);
+
+        if (nextNumber > 9_999_999)
+            throw new InvalidOperationException("Đã vượt giới hạn mã khách hàng tự động KH9999999.");
+
+        return $"KH{nextNumber:D7}";
+    }
+
     public async Task<IReadOnlyList<KhachHang>> GetKhachHangAsync(
         string? search = null)
     {
@@ -831,8 +904,7 @@ public sealed class DatabaseService
 
         const string sql = """
         UPDATE khach_hang
-        SET ma_khach_hang = @MaKhachHang,
-            ten_khach_hang = @TenKhachHang,
+        SET ten_khach_hang = @TenKhachHang,
             loai_khach_hang = @LoaiKhachHang,
             so_dien_thoai = @SoDienThoai,
             ngay_sinh = @NgaySinh,
@@ -1360,7 +1432,16 @@ public sealed class DatabaseService
             ncc.ma_nha_cung_cap AS MaNhaCungCap,
             ncc.ten_nha_cung_cap AS TenNhaCungCap,
             ncc.so_dien_thoai AS SoDienThoai,
+            ncc.email AS Email,
             ncc.dia_chi AS DiaChi,
+            ncc.phuong_xa AS PhuongXa,
+            ncc.quan_huyen AS QuanHuyen,
+            ncc.tinh_thanh AS TinhThanh,
+            ncc.ma_so_thue AS MaSoThue,
+            ncc.nguoi_lien_he AS NguoiLienHe,
+            ncc.ghi_chu AS GhiChu,
+            ncc.trang_thai AS TrangThai,
+            ncc.ngay_tao AS NgayTao,
             COALESCE(v.con_no, 0) AS ConNo
         FROM nha_cung_cap ncc
         LEFT JOIN vw_cong_no_nha_cung_cap v
@@ -1371,6 +1452,7 @@ public sealed class DatabaseService
                 OR ncc.ma_nha_cung_cap LIKE CONCAT('%', @Search, '%')
                 OR ncc.ten_nha_cung_cap LIKE CONCAT('%', @Search, '%')
                 OR ncc.so_dien_thoai LIKE CONCAT('%', @Search, '%')
+                OR ncc.email LIKE CONCAT('%', @Search, '%')
               )
         ORDER BY ncc.ten_nha_cung_cap;
         """;
@@ -1383,5 +1465,214 @@ public sealed class DatabaseService
                     Search = search ?? ""
                 })
         ).AsList();
+    }
+
+    /// <summary>
+    /// Sinh mã nhà cung cấp tuần tự theo dạng NCC0000001.
+    /// Chỉ dùng các mã NCC + số tối đa 7 chữ số để không bị ảnh hưởng
+    /// bởi các mã cũ dạng timestamp.
+    /// </summary>
+    public async Task<string> TaoMaNhaCungCapMoiAsync()
+    {
+        await using var connection = await OpenAsync();
+
+        const string sql = """
+        SELECT COALESCE(
+            MAX(CAST(SUBSTRING(ma_nha_cung_cap, 4) AS UNSIGNED)),
+            0
+        ) + 1
+        FROM nha_cung_cap
+        WHERE ma_nha_cung_cap REGEXP '^NCC[0-9]{1,7}$';
+        """;
+
+        var nextNumber = await connection.ExecuteScalarAsync<long>(sql);
+
+        if (nextNumber > 9_999_999)
+            throw new InvalidOperationException("Đã vượt giới hạn mã nhà cung cấp tự động NCC9999999.");
+
+        return $"NCC{nextNumber:D7}";
+    }
+
+    public async Task<uint> ThemNhaCungCapAsync(NhaCungCap supplier)
+    {
+        await using var connection = await OpenAsync();
+
+        const string sql = """
+        INSERT INTO nha_cung_cap
+        (
+            ma_nha_cung_cap,
+            ten_nha_cung_cap,
+            so_dien_thoai,
+            email,
+            dia_chi,
+            phuong_xa,
+            quan_huyen,
+            tinh_thanh,
+            ma_so_thue,
+            nguoi_lien_he,
+            ghi_chu,
+            chi_nhanh_id,
+            trang_thai,
+            ngay_tao,
+            ngay_cap_nhat
+        )
+        VALUES
+        (
+            @MaNhaCungCap,
+            @TenNhaCungCap,
+            @SoDienThoai,
+            @Email,
+            @DiaChi,
+            @PhuongXa,
+            @QuanHuyen,
+            @TinhThanh,
+            @MaSoThue,
+            @NguoiLienHe,
+            @GhiChu,
+            @ChiNhanhId,
+            1,
+            NOW(),
+            NOW()
+        );
+        SELECT LAST_INSERT_ID();
+        """;
+
+        return await connection.ExecuteScalarAsync<uint>(
+            sql,
+            new
+            {
+                supplier.MaNhaCungCap,
+                supplier.TenNhaCungCap,
+                supplier.SoDienThoai,
+                supplier.Email,
+                supplier.DiaChi,
+                supplier.PhuongXa,
+                supplier.QuanHuyen,
+                supplier.TinhThanh,
+                supplier.MaSoThue,
+                supplier.NguoiLienHe,
+                supplier.GhiChu,
+                ChiNhanhId = Session.CurrentUser?.ChiNhanhId
+            });
+    }
+
+    public async Task CapNhatNhaCungCapAsync(NhaCungCap supplier)
+    {
+        await using var connection = await OpenAsync();
+
+        const string sql = """
+        UPDATE nha_cung_cap
+        SET ten_nha_cung_cap = @TenNhaCungCap,
+            so_dien_thoai = @SoDienThoai,
+            email = @Email,
+            dia_chi = @DiaChi,
+            phuong_xa = @PhuongXa,
+            quan_huyen = @QuanHuyen,
+            tinh_thanh = @TinhThanh,
+            ma_so_thue = @MaSoThue,
+            nguoi_lien_he = @NguoiLienHe,
+            ghi_chu = @GhiChu,
+            ngay_cap_nhat = NOW()
+        WHERE id = @Id AND trang_thai = 1;
+        """;
+
+        var affectedRows = await connection.ExecuteAsync(sql, supplier);
+        if (affectedRows == 0)
+            throw new InvalidOperationException("Nhà cung cấp không tồn tại hoặc đã bị xóa.");
+    }
+
+    public async Task XoaNhaCungCapAsync(uint supplierId)
+    {
+        await using var connection = await OpenAsync();
+
+        var affectedRows = await connection.ExecuteAsync(
+            "UPDATE nha_cung_cap SET trang_thai = 0, ngay_cap_nhat = NOW() WHERE id = @Id AND trang_thai = 1;",
+            new { Id = supplierId });
+
+        if (affectedRows == 0)
+            throw new InvalidOperationException("Nhà cung cấp không tồn tại hoặc đã bị xóa.");
+    }
+
+    public async Task<int> ImportNhaCungCapTuFileAsync(string filePath)
+        => await ImportNhaCungCapTuFileAsync(filePath, null);
+
+    public async Task<int> ImportNhaCungCapTuFileAsync(string filePath, IReadOnlyCollection<NhaCungCap>? suppliersOverride)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
+
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException("Không tìm thấy file danh sách nhà cung cấp.", filePath);
+
+        var suppliers = suppliersOverride ?? ParseNhaCungCapFromFile(filePath);
+        if (suppliers.Count == 0)
+            return 0;
+
+        var importedCount = 0;
+        foreach (var supplier in suppliers)
+        {
+            if (string.IsNullOrWhiteSpace(supplier.TenNhaCungCap))
+                continue;
+
+            if (string.IsNullOrWhiteSpace(supplier.MaNhaCungCap))
+                supplier.MaNhaCungCap = GenerateSupplierCode();
+
+            try
+            {
+                await ThemNhaCungCapAsync(supplier);
+                importedCount++;
+            }
+            catch (MySqlException ex) when (ex.Number == 1062)
+            {
+                // Bỏ qua mã nhà cung cấp trùng và tiếp tục các dòng còn lại.
+            }
+        }
+
+        return importedCount;
+    }
+
+    public List<NhaCungCap> ParseNhaCungCapFromFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
+
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException("Không tìm thấy file danh sách nhà cung cấp.", filePath);
+
+        var rows = ReadCustomerRowsFromFile(filePath);
+        return rows
+            .Select(MapRowToNhaCungCap)
+            .Where(supplier =>
+                !string.IsNullOrWhiteSpace(supplier.TenNhaCungCap) ||
+                !string.IsNullOrWhiteSpace(supplier.MaNhaCungCap))
+            .ToList();
+    }
+
+    private static NhaCungCap MapRowToNhaCungCap(Dictionary<string, string> row)
+    {
+        var supplier = new NhaCungCap
+        {
+            MaNhaCungCap = GetCellValue(row, "ma_nha_cung_cap", "mã nhà cung cấp", "ma ncc", "supplier code") ?? string.Empty,
+            TenNhaCungCap = GetCellValue(row, "ten_nha_cung_cap", "tên nhà cung cấp", "ten ncc", "supplier name", "name") ?? string.Empty,
+            SoDienThoai = GetCellValue(row, "so_dien_thoai", "số điện thoại", "dien thoai", "phone", "sdt"),
+            Email = GetCellValue(row, "email"),
+            DiaChi = GetCellValue(row, "dia_chi", "địa chỉ", "dia chi", "address"),
+            PhuongXa = GetCellValue(row, "phuong_xa", "phường/xã", "phuong xa", "ward"),
+            QuanHuyen = GetCellValue(row, "quan_huyen", "quận/huyện", "quan huyen", "district"),
+            TinhThanh = GetCellValue(row, "tinh_thanh", "tỉnh/thành", "tinh thanh", "province"),
+            MaSoThue = GetCellValue(row, "ma_so_thue", "mã số thuế", "ma so thue", "tax code"),
+            NguoiLienHe = GetCellValue(row, "nguoi_lien_he", "người liên hệ", "lien he", "contact"),
+            GhiChu = GetCellValue(row, "ghi_chu", "ghi chú", "note"),
+            TrangThai = true
+        };
+
+        if (string.IsNullOrWhiteSpace(supplier.MaNhaCungCap))
+            supplier.MaNhaCungCap = GenerateSupplierCode();
+
+        return supplier;
+    }
+    private static string GenerateSupplierCode()
+    {
+        return $"NCC{DateTime.Now:yyyyMMddHHmmssfff}";
     }
 }

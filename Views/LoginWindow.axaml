@@ -311,36 +311,100 @@
         <!-- ===================================================== -->
         <!-- EXIT BUTTON -->
         <!-- ===================================================== -->
+        <!-- ===================================================== -->
+<!-- EXIT / SETTINGS BUTTON -->
+<!-- ===================================================== -->
 
-        <Style Selector="Button.exitButton">
+<Style Selector="Button.exitButton">
 
-            <Setter Property="Background"
-                    Value="Transparent"/>
+    <Setter Property="Background"
+            Value="Transparent"/>
 
-            <Setter Property="Foreground"
-                    Value="#667085"/>
+    <Setter Property="Foreground"
+            Value="#667085"/>
 
-            <Setter Property="FontSize"
-                    Value="13"/>
+    <Setter Property="FontSize"
+            Value="13"/>
 
-            <Setter Property="Padding"
-                    Value="8,4"/>
+    <Setter Property="FontWeight"
+            Value="SemiBold"/>
 
-            <Setter Property="BorderThickness"
-                    Value="0"/>
+    <Setter Property="Padding"
+            Value="8,5"/>
 
-        </Style>
+    <Setter Property="BorderThickness"
+            Value="0"/>
+
+    <Setter Property="CornerRadius"
+            Value="6"/>
+
+</Style>
 
 
-        <Style Selector="Button.exitButton:pointerover">
+<!-- HOVER -->
 
-            <Setter Property="Background"
-                    Value="#F1F8F6"/>
+<Style Selector="Button.exitButton:pointerover">
 
-            <Setter Property="Foreground"
-                    Value="#087F6E"/>
+    <Setter Property="Background"
+            Value="#F1F8F6"/>
 
-        </Style>
+    <Setter Property="Foreground"
+            Value="#087F6E"/>
+
+</Style>
+
+
+<!-- PRESSED -->
+
+<Style Selector="Button.exitButton:pressed">
+
+    <Setter Property="Background"
+            Value="#E2F2EE"/>
+
+    <Setter Property="Foreground"
+            Value="#05594E"/>
+
+</Style>
+
+
+<!-- TEMPLATE BÊN TRONG -->
+
+<Style Selector="Button.exitButton /template/ ContentPresenter#PART_ContentPresenter">
+
+    <Setter Property="Background"
+            Value="Transparent"/>
+
+    <Setter Property="Foreground"
+            Value="#667085"/>
+
+</Style>
+
+
+<!-- TEMPLATE KHI HOVER -->
+
+<Style Selector="Button.exitButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+
+    <Setter Property="Background"
+            Value="#F1F8F6"/>
+
+    <Setter Property="Foreground"
+            Value="#087F6E"/>
+
+</Style>
+
+
+<!-- TEMPLATE KHI NHẤN -->
+
+<Style Selector="Button.exitButton:pressed /template/ ContentPresenter#PART_ContentPresenter">
+
+    <Setter Property="Background"
+            Value="#E2F2EE"/>
+
+    <Setter Property="Foreground"
+            Value="#05594E"/>
+
+</Style>
+       
 
 
         <!-- ===================================================== -->
@@ -620,29 +684,43 @@
 
                         <Grid Grid.Row="2">
 
+    <Grid.ColumnDefinitions>
 
-                            <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
 
-                                <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
 
-                                <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="Auto"/>
 
-                            </Grid.ColumnDefinitions>
-
-
-                            <TextBlock Text="SHOP HOA  •  Quản lý cửa hàng"
-                                       Foreground="#98A2B3"
-                                       FontSize="10"
-                                       VerticalAlignment="Center"/>
+    </Grid.ColumnDefinitions>
 
 
-                            <Button Grid.Column="1"
-                                    Classes="exitButton"
-                                    Content="Thoát"
-                                    Command="{Binding ThoatCommand}"
-                                    CommandParameter="{Binding $parent[Window]}"/>
+    <!-- THÔNG TIN -->
 
-                        </Grid>
+    <TextBlock Text="SHOP HOA  •  Quản lý cửa hàng"
+               Foreground="#98A2B3"
+               FontSize="10"
+               VerticalAlignment="Center"/>
+
+
+    <!-- CÀI ĐẶT DATABASE -->
+
+    <Button Grid.Column="1"
+            Classes="exitButton"
+            Content="⚙  Cài đặt"
+            Click="OnDatabaseSettingsClick"
+            Margin="0,0,12,0"/>
+
+
+    <!-- THOÁT -->
+
+    <Button Grid.Column="2"
+            Classes="exitButton"
+            Content="Thoát"
+            Command="{Binding ThoatCommand}"
+            CommandParameter="{Binding $parent[Window]}"/>
+
+</Grid>
 
                     </Grid>
 

@@ -24,23 +24,29 @@ build_property.ProjectDir = D:\ShopHoa\
 build_property.EnableComHosting = 
 build_property.EnableGeneratedComInterfaceComImportInterop = 
 
-[D:/ShopHoa/App.axaml]
+[d:/ShopHoa/App.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
-[D:/ShopHoa/Views/ConfirmationWindow.axaml]
+[d:/ShopHoa/Views/ConfirmationWindow.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
-[D:/ShopHoa/Views/DatabaseSettingsWindow.axaml]
+[d:/ShopHoa/Views/DatabaseSettingsWindow.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
-[D:/ShopHoa/Views/InvoiceWindow.axaml]
+[d:/ShopHoa/Views/InvoiceWindow.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
-[D:/ShopHoa/Views/LoginWindow.axaml]
+[d:/ShopHoa/Views/LoginWindow.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
-[D:/ShopHoa/Views/MainWindow.axaml]
+[d:/ShopHoa/Views/MainWindow.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
 
-[D:/ShopHoa/Views/ProductEditorWindow.axaml]
+[d:/ShopHoa/Views/NhaCungCapEditorWindow.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[d:/ShopHoa/Views/ProductEditorWindow.axaml]
+build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
+
+[d:/ShopHoa/Views/SettingsPasswordWindow.axaml]
 build_metadata.AdditionalFiles.SourceItemGroup = AvaloniaXaml
