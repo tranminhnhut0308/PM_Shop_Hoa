@@ -1,11 +1,8 @@
-<<<<<<< HEAD
-=======
 using System;
 using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
->>>>>>> 08456af (Them chuc nang nhap gia ban)
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -128,10 +125,6 @@ public partial class MainWindow : Window
         viewModel.SelectedKhachHang =
             (sender as ListBox)?.SelectedItem as ShopHoa.Models.KhachHang;
     }
-<<<<<<< HEAD
-}
-=======
-
 
     // ============================================================
     // XUẤT DANH SÁCH HÀNG HÓA
@@ -463,4 +456,3 @@ public partial class MainWindow : Window
         await window.ShowDialog(this);
     }
 }
->>>>>>> 08456af (Them chuc nang nhap gia ban)
