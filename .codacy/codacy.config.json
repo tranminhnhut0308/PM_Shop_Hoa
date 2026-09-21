@@ -8,10 +8,14 @@
     "repositoryName": null,
     "createdAt": "2026-09-16T13:17:54.497Z",
 <<<<<<< HEAD
+<<<<<<< HEAD
     "updatedAt": "2026-09-20T07:02:22.119Z",
 =======
     "updatedAt": "2026-09-16T13:17:54.497Z",
 >>>>>>> cc59ef9 (đã)
+=======
+    "updatedAt": "2026-09-20T07:02:22.119Z",
+>>>>>>> 08456af (Them chuc nang nhap gia ban)
     "languages": [
       "CSharp",
       "JSON",
@@ -4733,9 +4737,13 @@
       ]
     }
 <<<<<<< HEAD
+<<<<<<< HEAD
   ]
 =======
   ],
   "exclude": []
 >>>>>>> cc59ef9 (đã)
+=======
+  ]
+>>>>>>> 08456af (Them chuc nang nhap gia ban)
 }
