@@ -40,24 +40,24 @@ public sealed class DatabaseService
     }
 
     public async Task<bool> TestConnectionAsync()
-{
-    try
     {
-        await using var connection = await OpenAsync();
+        try
+        {
+            await using var connection = await OpenAsync();
 
-        await connection.ExecuteScalarAsync<int>("SELECT 1;");
+            await connection.ExecuteScalarAsync<int>("SELECT 1;");
 
-        return true;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("========== DATABASE ERROR ==========");
+            Console.WriteLine(ex.ToString());
+            Console.WriteLine("====================================");
+
+            throw;
+        }
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine("========== DATABASE ERROR ==========");
-        Console.WriteLine(ex.ToString());
-        Console.WriteLine("====================================");
-
-        throw;
-    }
-}
 
     // Mở sẵn một kết nối để MySqlConnector đưa vào connection pool.
     // Lần đăng nhập sau đó có thể dùng lại kết nối này thay vì bắt tay lại với server.
@@ -375,11 +375,11 @@ public sealed class DatabaseService
             });
     }
 
-        public async Task<uint> ThemSanPhamAsync(SanPham product)
-        {
-            await using var connection = await OpenAsync();
+    public async Task<uint> ThemSanPhamAsync(SanPham product)
+    {
+        await using var connection = await OpenAsync();
 
-            const string sql = """
+        const string sql = """
             INSERT INTO san_pham
             (
                 ma_san_pham,
@@ -429,15 +429,15 @@ public sealed class DatabaseService
             SELECT LAST_INSERT_ID();
             """;
 
-            return await connection.ExecuteScalarAsync<uint>(sql, product);
-        }
+        return await connection.ExecuteScalarAsync<uint>(sql, product);
+    }
 
-        public async Task CapNhatSanPhamAsync(SanPham product)
-        {
-            await using var connection = await OpenAsync();
+    public async Task CapNhatSanPhamAsync(SanPham product)
+    {
+        await using var connection = await OpenAsync();
 
-            await connection.ExecuteAsync(
-                """
+        await connection.ExecuteAsync(
+            """
                 UPDATE san_pham
                 SET ma_san_pham = @MaSanPham,
                     ma_vach = @MaVach,
@@ -462,8 +462,8 @@ public sealed class DatabaseService
                     ngay_cap_nhat = NOW()
                 WHERE id = @Id;
                 """,
-                product);
-        }
+            product);
+    }
 
     public async Task XoaSanPhamAsync(uint productId)
     {

@@ -11,28 +11,18 @@ namespace ShopHoa.ViewModels;
 
 public partial class LoginViewModel : ObservableObject
 {
-    private const bool EnableQuickAdminLogin = true;
-    
-    private const string QuickAdminPassword = "123456";
-
     private readonly DatabaseService _db = new();
 
     public LoginViewModel()
     {
-        // Chuẩn bị connection pool từ lúc màn hình đăng nhập vừa mở.
-        // Nếu người dùng nhập thông tin sau đó, thường không phải chờ mở kết nối mới.
-        _ = LamAmKetNoiAsync();
+        _ = KiemTraKetNoiAsync();
     }
-
-    // =====================================================
-    // THÔNG TIN ĐĂNG NHẬP
-    // =====================================================
 
     [ObservableProperty]
     private string tenDangNhap = "admin";
 
     [ObservableProperty]
-    private string matKhau = EnableQuickAdminLogin ? QuickAdminPassword : "";
+    private string matKhau = "123456";
 
     [ObservableProperty]
     private bool dangXuLy;
@@ -44,109 +34,135 @@ public partial class LoginViewModel : ObservableObject
     private bool ghiNhoDangNhap;
 
     [ObservableProperty]
-    private string trangThaiKetNoi = "Hệ thống sẵn sàng";
+    private string trangThaiKetNoi = "Đang kiểm tra kết nối...";
 
+    // =========================================================
+    // KIỂM TRA DATABASE
+    // =========================================================
 
-    // =====================================================
+    private async Task KiemTraKetNoiAsync()
+    {
+        try
+        {
+            await _db.WarmUpAsync();
+
+            TrangThaiKetNoi = "Đã kết nối MariaDB";
+        }
+        catch (Exception ex)
+        {
+            TrangThaiKetNoi = "Chưa kết nối MariaDB";
+
+            Console.WriteLine("========== DATABASE CONNECTION ERROR ==========");
+            Console.WriteLine(ex.ToString());
+            Console.WriteLine("================================================");
+        }
+    }
+
+    // =========================================================
     // ĐĂNG NHẬP
-    // =====================================================
+    // =========================================================
 
     [RelayCommand]
     private async Task DangNhapAsync(Window? loginWindow)
     {
-        if (string.IsNullOrWhiteSpace(TenDangNhap) ||
-            string.IsNullOrWhiteSpace(MatKhau))
+        if (DangXuLy)
+            return;
+
+        if (string.IsNullOrWhiteSpace(TenDangNhap))
         {
-            ThongBao = "Vui lòng nhập tên đăng nhập và mật khẩu.";
-            TrangThaiKetNoi = "Vui lòng nhập thông tin đăng nhập.";
+            ThongBao = "Vui lòng nhập tên đăng nhập.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(MatKhau))
+        {
+            ThongBao = "Vui lòng nhập mật khẩu.";
             return;
         }
 
         DangXuLy = true;
-
         ThongBao = "";
         TrangThaiKetNoi = "Đang kết nối MariaDB...";
 
         try
         {
-            var normalizedUsername = TenDangNhap.Trim();
-            NguoiDung? user;
+            // =====================================================
+            // ĐĂNG NHẬP TRỰC TIẾP TỪ DATABASE
+            // =====================================================
 
-            if (EnableQuickAdminLogin &&
-                normalizedUsername.Equals("admin", StringComparison.OrdinalIgnoreCase) &&
-                MatKhau == QuickAdminPassword)
-            {
-                user = new NguoiDung
-                {
-                    Id = 1,
-                    TenDangNhap = "admin",
-                    HoTen = "Quản trị viên",
-                    VaiTro = "QUAN_TRI"
-                };
-            }
-            else
-            {
-                user = await _db.DangNhapAsync(
-                    normalizedUsername,
-                    MatKhau
-                );
-            }
+            var user = await _db.DangNhapAsync(
+                TenDangNhap.Trim(),
+                MatKhau);
 
-            // Không tìm thấy tài khoản
             if (user is null)
             {
                 ThongBao = "Tên đăng nhập hoặc mật khẩu không đúng.";
-                TrangThaiKetNoi = "Đã kết nối nhưng đăng nhập thất bại.";
+                TrangThaiKetNoi = "Kết nối database thành công.";
                 return;
             }
 
-            // Lưu phiên đăng nhập
+            // =====================================================
+            // LƯU USER HIỆN TẠI
+            // =====================================================
+
             Session.CurrentUser = user;
 
-            // Cập nhật nhật ký ở nền để không làm chậm việc mở màn hình chính.
+            // Cập nhật thời gian đăng nhập
             _ = _db.CapNhatLanDangNhapCuoiAsync(user.Id);
 
-            ThongBao = "";
             TrangThaiKetNoi = "Đăng nhập thành công.";
+            ThongBao = "";
 
-            // Mở giao diện chính
-            var main = new MainWindow();
-            main.Show();
+            // =====================================================
+            // MỞ MAIN WINDOW
+            // =====================================================
 
-            // Đóng cửa sổ đăng nhập
-            loginWindow?.Close();
+            try
+            {
+                var mainWindow = new MainWindow();
+
+                mainWindow.Show();
+
+                loginWindow?.Close();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("========== MAIN WINDOW ERROR ==========");
+                Console.WriteLine(ex.ToString());
+                Console.WriteLine("=======================================");
+
+                ThongBao =
+                    "Đăng nhập thành công nhưng không thể mở giao diện chính.\n" +
+                    ex.Message;
+
+                TrangThaiKetNoi =
+                    "Lỗi khi mở MainWindow.";
+
+                return;
+            }
         }
         catch (Exception ex)
-{
-    ThongBao = "Không thể kết nối database.";
+        {
+            Console.WriteLine("========== DATABASE LOGIN ERROR ==========");
+            Console.WriteLine(ex.ToString());
+            Console.WriteLine("==========================================");
 
-    TrangThaiKetNoi = $"Lỗi: {ex.Message}";
+            ThongBao =
+                "Không thể kết nối database.\n" +
+                ex.Message;
 
-    Console.WriteLine("===== DATABASE ERROR =====");
-    Console.WriteLine(ex.ToString());
-}
+            TrangThaiKetNoi =
+                "Lỗi kết nối MariaDB.";
+        }
         finally
         {
             DangXuLy = false;
         }
     }
 
-    private async Task LamAmKetNoiAsync()
-    {
-        try
-        {
-            await _db.WarmUpAsync();
-        }
-        catch
-        {
-            // Lỗi kết nối vẫn sẽ được báo rõ khi người dùng bấm Đăng nhập.
-        }
-    }
-
-
-    // =====================================================
+    // =========================================================
     // THOÁT
-    // =====================================================
+    // =========================================================
 
     [RelayCommand]
     private void Thoat(Window? loginWindow)
@@ -154,11 +170,9 @@ public partial class LoginViewModel : ObservableObject
         loginWindow?.Close();
     }
 
-
-
-    // =====================================================
+    // =========================================================
     // QUÊN MẬT KHẨU
-    // =====================================================
+    // =========================================================
 
     [RelayCommand]
     private void QuenMatKhau()
@@ -167,10 +181,9 @@ public partial class LoginViewModel : ObservableObject
             "Vui lòng liên hệ quản trị viên để đặt lại mật khẩu.";
     }
 
-
-    // =====================================================
+    // =========================================================
     // TÀI KHOẢN KHÁC
-    // =====================================================
+    // =========================================================
 
     [RelayCommand]
     private void TaiKhoanKhac()
@@ -179,6 +192,7 @@ public partial class LoginViewModel : ObservableObject
         MatKhau = "";
         ThongBao = "";
 
-        TrangThaiKetNoi = "Hệ thống sẵn sàng";
+        TrangThaiKetNoi =
+            "Đang chờ đăng nhập...";
     }
 }
