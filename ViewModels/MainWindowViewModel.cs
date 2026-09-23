@@ -23,6 +23,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string selectedMenu = "Tổng quan";
     [ObservableProperty] private int selectedDataTabIndex = 0;
     [ObservableProperty] private string statusMessage = "Sẵn sàng";
+    [ObservableProperty] private bool isImporting;
     [ObservableProperty] private string productSearch = "";
     [ObservableProperty] private string customerSearch = "";
     [ObservableProperty] private string invoiceSearch = "";
@@ -152,7 +153,7 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task ThemKhachHangTuFileAsync()
     {
-        if (OwnerWindow is null)
+        if (OwnerWindow is null || IsImporting)
             return;
 
         var files = await OwnerWindow.StorageProvider.OpenFilePickerAsync(
@@ -178,24 +179,87 @@ public partial class MainWindowViewModel : ObservableObject
 
         try
         {
-            var customersFromFile = _db.ParseKhachHangFromFile(file.Path.LocalPath);
+            IsImporting = true;
+            StatusMessage = $"⏳ Đã chọn file \"{file.Name}\". Đang đọc dữ liệu...";
+            await Task.Yield();
+
+            var customersFromFile = await Task.Run(() =>
+                _db.ParseKhachHangFromFile(file.Path.LocalPath));
+
             if (customersFromFile.Count == 0)
             {
-                StatusMessage = $"File \"{file.Name}\" không có dữ liệu khách hàng hợp lệ.";
+                StatusMessage = $"❌ File \"{file.Name}\" không có dữ liệu khách hàng hợp lệ.";
                 return;
             }
 
-            var importedCount = await _db.ImportKhachHangTuFileAsync(file.Path.LocalPath, customersFromFile);
+            StatusMessage = $"⏳ Đã đọc {customersFromFile.Count:N0} khách hàng. Đang kiểm tra dữ liệu trùng...";
+            await Task.Yield();
+
+            var existingCustomers = await _db.GetKhachHangAsync();
+            var duplicateCustomers = customersFromFile
+                .Where(customer => IsDuplicateCustomer(customer, existingCustomers))
+                .ToList();
+
+            bool replaceExisting = false;
+
+            if (duplicateCustomers.Count > 0)
+            {
+                var replace = await ShowConfirmationAsync(
+                    "Khách hàng bị trùng",
+                    $"Phát hiện {duplicateCustomers.Count:N0} khách hàng trong file đã tồn tại.\n\nBạn muốn giữ dữ liệu khách hàng cũ hay thay thế bằng dữ liệu trong file?",
+                    "Thay thế",
+                    "Giữ khách hàng cũ");
+
+                replaceExisting = replace;
+
+                StatusMessage = replaceExisting
+                    ? "⏳ Đã chọn thay thế. Đang nhập và cập nhật dữ liệu..."
+                    : "⏳ Đã chọn giữ dữ liệu cũ. Đang bỏ qua khách hàng trùng và nhập khách hàng mới...";
+            }
+            else
+            {
+                StatusMessage = $"⏳ Không có khách hàng trùng. Đang nhập {customersFromFile.Count:N0} khách hàng...";
+            }
+
+            await Task.Yield();
+
+            var importedCount = await Task.Run(() =>
+                _db.ImportKhachHangTuFileAsync(
+                    file.Path.LocalPath,
+                    customersFromFile,
+                    replaceExisting));
+
+            StatusMessage = "⏳ Đang làm mới danh sách khách hàng...";
             await LoadCustomersAsync();
 
-            StatusMessage = importedCount > 0
-                ? $"Đã nhập thành công {importedCount} khách hàng từ file \"{file.Name}\"."
-                : $"File \"{file.Name}\" không có dữ liệu khách hàng hợp lệ để nhập.";
+            StatusMessage = replaceExisting && duplicateCustomers.Count > 0
+                ? $"✅ Đã nhập {importedCount:N0} khách hàng và thay thế {duplicateCustomers.Count:N0} dữ liệu trùng."
+                : $"✅ Đã nhập {importedCount:N0} khách hàng từ file \"{file.Name}\".";
         }
         catch (Exception ex)
         {
-            StatusMessage = "Không thể nhập khách hàng từ file: " + ex.Message;
+            StatusMessage = "❌ Không thể nhập khách hàng từ file: " + ex.Message;
         }
+        finally
+        {
+            IsImporting = false;
+        }
+    }
+
+    private static bool IsDuplicateCustomer(
+        KhachHang customer,
+        IReadOnlyList<KhachHang> existingCustomers)
+    {
+        var code = customer.MaKhachHang?.Trim();
+        var phone = customer.SoDienThoai?.Trim();
+
+        return existingCustomers.Any(existing =>
+            (!string.IsNullOrWhiteSpace(code) &&
+             !string.IsNullOrWhiteSpace(existing.MaKhachHang) &&
+             existing.MaKhachHang.Equals(code, StringComparison.OrdinalIgnoreCase)) ||
+            (!string.IsNullOrWhiteSpace(phone) &&
+             !string.IsNullOrWhiteSpace(existing.SoDienThoai) &&
+             existing.SoDienThoai.Equals(phone, StringComparison.OrdinalIgnoreCase)));
     }
 
     [RelayCommand]

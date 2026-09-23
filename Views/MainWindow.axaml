@@ -335,6 +335,21 @@
       <Setter Property="CornerRadius" Value="8"/>
       <Setter Property="Padding" Value="14,9"/>
       <Setter Property="Margin" Value="8,0,0,10"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="White"
+                  BorderBrush="#D8E5E0"
+                  BorderThickness="1"
+                  CornerRadius="8"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              TextElement.Foreground="#344B45"/>
+          </Border>
+        </ControlTemplate>
+      </Setter>
     </Style>
 
     <Style Selector="Button.toolbar-action:pointerover">
@@ -384,6 +399,16 @@
       <Setter Property="TextElement.Foreground" Value="#344B45"/>
     </Style>
 
+
+    <Style Selector="Button.toolbar-action:focus /template/ Border">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="#087F6E"/>
+    </Style>
+
+    <Style Selector="Button.toolbar-action:pressed /template/ Border">
+      <Setter Property="Background" Value="#BDE5DA"/>
+      <Setter Property="BorderBrush" Value="#087F6E"/>
+    </Style>
     <Style Selector="Button.toolbar-primary">
       <Setter Property="Background" Value="#087F6E"/>
       <Setter Property="Foreground" Value="White"/>
@@ -1721,6 +1746,44 @@
           </Grid>
         </TabItem>
       </TabControl>
+
+
+    <!-- OVERLAY LOADING IMPORT KHÁCH HÀNG -->
+    <Grid IsVisible="{Binding IsImporting}"
+          ZIndex="999"
+          Background="#88000000">
+      <Border Width="430"
+              Padding="28"
+              Background="White"
+              CornerRadius="16"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center"
+              BoxShadow="0 8 30 #30000000">
+        <StackPanel Spacing="14">
+          <TextBlock Text="⏳ Đang nhập dữ liệu"
+                     FontSize="21"
+                     FontWeight="Bold"
+                     Foreground="#163F38"
+                     HorizontalAlignment="Center"/>
+          <ProgressBar IsIndeterminate="True"
+                       Height="8"
+                       Width="330"/>
+          <TextBlock Text="{Binding StatusMessage}"
+                     FontSize="14"
+                     Foreground="#52645E"
+                     TextWrapping="Wrap"
+                     HorizontalAlignment="Center"
+                     TextAlignment="Center"/>
+          <TextBlock Text="Vui lòng chờ, không đóng phần mềm trong lúc đang nhập."
+                     FontSize="12"
+                     Foreground="#98A2B3"
+                     TextWrapping="Wrap"
+                     HorizontalAlignment="Center"
+                     TextAlignment="Center"/>
+        </StackPanel>
+      </Border>
+    </Grid>
+
     </Grid>
   </Grid>
 </Window>

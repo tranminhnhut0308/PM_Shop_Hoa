@@ -931,9 +931,12 @@ public sealed class DatabaseService
     }
 
     public async Task<int> ImportKhachHangTuFileAsync(string filePath)
-        => await ImportKhachHangTuFileAsync(filePath, null);
+        => await ImportKhachHangTuFileAsync(filePath, null, false);
 
-    public async Task<int> ImportKhachHangTuFileAsync(string filePath, IReadOnlyCollection<KhachHang>? customersOverride)
+    public async Task<int> ImportKhachHangTuFileAsync(
+        string filePath,
+        IReadOnlyCollection<KhachHang>? customersOverride,
+        bool replaceExisting = false)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
@@ -1015,15 +1018,87 @@ public sealed class DatabaseService
 
             normalizedCustomer.TrangThai = true;
 
-            try
+            const string findSql = """
+                SELECT id
+                FROM khach_hang
+                WHERE trang_thai = 1
+                  AND (
+                        ma_khach_hang = @MaKhachHang
+                        OR (
+                            NULLIF(TRIM(@SoDienThoai), '') IS NOT NULL
+                            AND so_dien_thoai = @SoDienThoai
+                        )
+                  )
+                LIMIT 1;
+                """;
+
+            var existingId = await connection.ExecuteScalarAsync<uint?>(
+                findSql,
+                new
+                {
+                    normalizedCustomer.MaKhachHang,
+                    normalizedCustomer.SoDienThoai
+                });
+
+            if (existingId.HasValue)
             {
-                await connection.ExecuteAsync(sql, normalizedCustomer);
+                if (!replaceExisting)
+                    continue;
+
+                const string updateSql = """
+                    UPDATE khach_hang
+                    SET ma_khach_hang = @MaKhachHang,
+                        ten_khach_hang = @TenKhachHang,
+                        loai_khach_hang = @LoaiKhachHang,
+                        so_dien_thoai = @SoDienThoai,
+                        ngay_sinh = @NgaySinh,
+                        gioi_tinh = @GioiTinh,
+                        email = @Email,
+                        facebook = @Facebook,
+                        dia_chi = @DiaChi,
+                        phuong_xa = @PhuongXa,
+                        quan_huyen = @QuanHuyen,
+                        tinh_thanh = @TinhThanh,
+                        ma_so_thue = @MaSoThue,
+                        ten_nguoi_mua_hoa_don = @TenNguoiMuaHoaDon,
+                        ten_cong_ty = @TenCongTy,
+                        dia_chi_xuat_hoa_don = @DiaChiXuatHoaDon,
+                        ghi_chu = @GhiChu,
+                        trang_thai = 1,
+                        ngay_cap_nhat = NOW()
+                    WHERE id = @Id;
+                    """;
+
+                await connection.ExecuteAsync(
+                    updateSql,
+                    new
+                    {
+                        Id = existingId.Value,
+                        normalizedCustomer.MaKhachHang,
+                        normalizedCustomer.TenKhachHang,
+                        normalizedCustomer.LoaiKhachHang,
+                        normalizedCustomer.SoDienThoai,
+                        normalizedCustomer.NgaySinh,
+                        normalizedCustomer.GioiTinh,
+                        normalizedCustomer.Email,
+                        normalizedCustomer.Facebook,
+                        normalizedCustomer.DiaChi,
+                        normalizedCustomer.PhuongXa,
+                        normalizedCustomer.QuanHuyen,
+                        normalizedCustomer.TinhThanh,
+                        normalizedCustomer.MaSoThue,
+                        normalizedCustomer.TenNguoiMuaHoaDon,
+                        normalizedCustomer.TenCongTy,
+                        normalizedCustomer.DiaChiXuatHoaDon,
+                        normalizedCustomer.GhiChu
+                    });
+
                 importedCount++;
+                continue;
             }
-            catch (MySqlException ex) when (ex.Number == 1062)
-            {
-                // Ignore a duplicate customer code and continue importing the other rows.
-            }
+
+            await connection.ExecuteAsync(sql, normalizedCustomer);
+            importedCount++;
         }
 
         return importedCount;
