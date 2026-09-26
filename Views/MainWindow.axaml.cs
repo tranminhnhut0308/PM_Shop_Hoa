@@ -45,28 +45,40 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnSaleCustomerSearchTextChanged(object? sender, TextChangedEventArgs e)
+    private void OnSaleCustomerSearchTextChanged(
+    object? sender,
+    TextChangedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel viewModel)
             return;
 
-        var text = (sender as TextBox)?.Text ?? string.Empty;
+        if (sender is not TextBox textBox)
+            return;
+
+        var text = textBox.Text ?? string.Empty;
+
         viewModel.SaleCustomerName = text;
 
-        if (text == "Khách lẻ")
+        if (text.Equals(
+                "Khách lẻ",
+                StringComparison.OrdinalIgnoreCase))
         {
             viewModel.SelectedSaleCustomer = null;
             viewModel.SaleCustomerSuggestions.Clear();
             return;
         }
 
-        if (viewModel.SelectedSaleCustomer?.TenKhachHang == text)
-            return;
+        if (viewModel.SelectedSaleCustomer is not null &&
+            !viewModel.SelectedSaleCustomer.TenKhachHang.Equals(
+                text,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            viewModel.SelectedSaleCustomer = null;
+        }
 
-        viewModel.SelectedSaleCustomer = null;
+        // Tìm realtime
         _ = viewModel.SearchSaleCustomersAsync(text);
     }
-
     private void OnSaleDiscountTextChanged(object? sender, TextChangedEventArgs e)
     {
         if (_formattingDiscount || sender is not TextBox textBox)

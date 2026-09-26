@@ -191,7 +191,7 @@ public sealed class DatabaseService
 
         var keyword = (search ?? string.Empty).Trim();
         var hasSearch = !string.IsNullOrWhiteSpace(keyword);
-        var limit = hasSearch ? 200 : 30;
+        var limit = hasSearch ? 200 : 1000;
 
         // Tách 2 trường hợp để MySQL tối ưu tốt hơn:
         // - Không tìm kiếm: dùng ORDER BY + LIMIT 30, không có điều kiện OR @Search = ''.
@@ -464,7 +464,36 @@ public sealed class DatabaseService
                 """,
             product);
     }
+    public async Task CapNhatGiaBanSanPhamAsync(
+        uint productId,
+        decimal giaBan)
+    {
+        if (giaBan <= 0)
+            throw new ArgumentException(
+                "Giá bán phải lớn hơn 0.",
+                nameof(giaBan));
 
+        await using var connection = await OpenAsync();
+
+        const string sql = """
+        UPDATE san_pham
+        SET gia_ban = @GiaBan,
+            ngay_cap_nhat = NOW()
+        WHERE id = @ProductId;
+        """;
+
+        var affectedRows = await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                ProductId = productId,
+                GiaBan = giaBan
+            });
+
+        if (affectedRows == 0)
+            throw new InvalidOperationException(
+                "Không tìm thấy sản phẩm để cập nhật giá bán.");
+    }
     public async Task XoaSanPhamAsync(uint productId)
     {
         await using var connection = await OpenAsync();
@@ -897,7 +926,113 @@ public sealed class DatabaseService
         if (affectedRows == 0)
             throw new InvalidOperationException("Khách hàng không tồn tại hoặc đã bị xóa.");
     }
+    public async Task<uint> ThemKhachHangAsync(KhachHang customer)
+    {
+        await using var connection = await OpenAsync();
 
+        if (string.IsNullOrWhiteSpace(customer.MaKhachHang))
+            throw new ArgumentException("Mã khách hàng không được để trống.");
+
+        if (string.IsNullOrWhiteSpace(customer.TenKhachHang))
+            throw new ArgumentException("Tên khách hàng không được để trống.");
+
+        // Kiểm tra trùng mã khách hàng
+        const string checkCodeSql = """
+        SELECT COUNT(*)
+        FROM khach_hang
+        WHERE ma_khach_hang = @MaKhachHang
+          AND trang_thai = 1;
+        """;
+
+        var exists = await connection.ExecuteScalarAsync<int>(
+            checkCodeSql,
+            new
+            {
+                customer.MaKhachHang
+            });
+
+        if (exists > 0)
+            throw new InvalidOperationException(
+                $"Mã khách hàng {customer.MaKhachHang} đã tồn tại.");
+
+        const string sql = """
+        INSERT INTO khach_hang
+        (
+            ma_khach_hang,
+            ten_khach_hang,
+            loai_khach_hang,
+            so_dien_thoai,
+            ngay_sinh,
+            gioi_tinh,
+            email,
+            facebook,
+            dia_chi,
+            phuong_xa,
+            quan_huyen,
+            tinh_thanh,
+            nhom_khach_hang_id,
+            ma_so_thue,
+            ten_nguoi_mua_hoa_don,
+            ten_cong_ty,
+            dia_chi_xuat_hoa_don,
+            ghi_chu,
+            trang_thai,
+            ngay_tao,
+            ngay_cap_nhat
+        )
+        VALUES
+        (
+            @MaKhachHang,
+            @TenKhachHang,
+            @LoaiKhachHang,
+            @SoDienThoai,
+            @NgaySinh,
+            @GioiTinh,
+            @Email,
+            @Facebook,
+            @DiaChi,
+            @PhuongXa,
+            @QuanHuyen,
+            @TinhThanh,
+            NULL,
+            @MaSoThue,
+            @TenNguoiMuaHoaDon,
+            @TenCongTy,
+            @DiaChiXuatHoaDon,
+            @GhiChu,
+            1,
+            NOW(),
+            NOW()
+        );
+
+        SELECT LAST_INSERT_ID();
+        """;
+
+        var id = await connection.ExecuteScalarAsync<uint>(
+            sql,
+            new
+            {
+                customer.MaKhachHang,
+                customer.TenKhachHang,
+                customer.LoaiKhachHang,
+                customer.SoDienThoai,
+                customer.NgaySinh,
+                customer.GioiTinh,
+                customer.Email,
+                customer.Facebook,
+                customer.DiaChi,
+                customer.PhuongXa,
+                customer.QuanHuyen,
+                customer.TinhThanh,
+                customer.MaSoThue,
+                customer.TenNguoiMuaHoaDon,
+                customer.TenCongTy,
+                customer.DiaChiXuatHoaDon,
+                customer.GhiChu
+            });
+
+        return id;
+    }
     public async Task CapNhatKhachHangAsync(KhachHang customer)
     {
         await using var connection = await OpenAsync();
@@ -1347,9 +1482,10 @@ public sealed class DatabaseService
     }
 
     public async Task<HoaDonBanHangReceipt> TaoHoaDonBanHangAsync(
-        IReadOnlyCollection<SaleCartItem> items,
-        KhachHang? customer,
-        decimal discount)
+     IReadOnlyCollection<SaleCartItem> items,
+     KhachHang? customer,
+     decimal discount,
+     decimal tienKhachDua)
     {
         if (items.Count == 0)
             throw new InvalidOperationException("Giỏ hàng đang trống.");
@@ -1359,6 +1495,23 @@ public sealed class DatabaseService
         var total = items.Sum(item => item.ThanhTien);
         var safeDiscount = Math.Clamp(discount, 0, total);
         var amountDue = total - safeDiscount;
+        var safeCustomerPaid = Math.Max(0, tienKhachDua);
+
+        var amountPaid = Math.Min(
+            safeCustomerPaid,
+            amountDue);
+
+        var debt = Math.Max(
+            amountDue - safeCustomerPaid,
+            0);
+
+        var change = Math.Max(
+            safeCustomerPaid - amountDue,
+            0);
+
+        var paymentStatus = debt > 0
+            ? "CONG_NO"
+            : "DA_THANH_TOAN";
         var branchId = Session.CurrentUser?.ChiNhanhId ?? 1;
         var userId = Session.CurrentUser?.Id;
 
@@ -1397,7 +1550,7 @@ public sealed class DatabaseService
                     @KhachCanTra,
                     @KhachDaThanhToan,
                     @ConNo,
-                    'DA_THANH_TOAN',
+                    @TrangThaiThanhToan,
                     'HOAN_THANH',
                     @ThoiGianBan,
                     @ThoiGianBan
@@ -1417,8 +1570,8 @@ public sealed class DatabaseService
                     TongTienHang = total,
                     GiamGia = safeDiscount,
                     KhachCanTra = amountDue,
-                    KhachDaThanhToan = amountDue,
-                    ConNo = 0m
+                    KhachDaThanhToan = amountPaid,
+                    ConNo = debt
                 },
                 transaction);
 
@@ -1706,16 +1859,20 @@ public sealed class DatabaseService
 
         return importedCount;
     }
-
     public List<NhaCungCap> ParseNhaCungCapFromFile(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath))
-            throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
+            throw new ArgumentException(
+                "Đường dẫn file không hợp lệ.",
+                nameof(filePath));
 
         if (!File.Exists(filePath))
-            throw new FileNotFoundException("Không tìm thấy file danh sách nhà cung cấp.", filePath);
+            throw new FileNotFoundException(
+                "Không tìm thấy file danh sách nhà cung cấp.",
+                filePath);
 
-        var rows = ReadCustomerRowsFromFile(filePath);
+        var rows = ReadSupplierRowsFromFile(filePath);
+
         return rows
             .Select(MapRowToNhaCungCap)
             .Where(supplier =>
@@ -1723,7 +1880,171 @@ public sealed class DatabaseService
                 !string.IsNullOrWhiteSpace(supplier.MaNhaCungCap))
             .ToList();
     }
+    private static List<Dictionary<string, string>> ReadSupplierRowsFromFile(
+    string filePath)
+    {
+        var extension = Path.GetExtension(filePath)
+            .Trim()
+            .ToLowerInvariant();
 
+        if (extension == ".csv")
+            return ReadCsvRows(filePath);
+
+        if (extension == ".xlsx")
+            return ReadSupplierExcelRows(filePath);
+
+        throw new NotSupportedException(
+            "File không được hỗ trợ. Vui lòng chọn file Excel (.xlsx) hoặc CSV.");
+    }
+    private static List<Dictionary<string, string>> ReadSupplierExcelRows(
+    string filePath)
+    {
+        using var workbook = new XLWorkbook(filePath);
+
+        var worksheet = workbook.Worksheets.FirstOrDefault();
+
+        if (worksheet is null)
+            throw new InvalidOperationException(
+                "File Excel không chứa sheet dữ liệu hợp lệ.");
+
+        var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+
+        if (lastRow == 0)
+            return [];
+
+        // Tìm dòng tiêu đề nhà cung cấp
+        var headerRowNumber = FindSupplierHeaderRow(
+            worksheet,
+            lastRow);
+
+        if (headerRowNumber == 0)
+        {
+            throw new InvalidOperationException(
+                "Không tìm thấy dòng tiêu đề nhà cung cấp trong file.");
+        }
+
+        var firstHeaderColumn =
+            worksheet.Row(headerRowNumber)
+                .FirstCellUsed()
+                ?.Address.ColumnNumber ?? 1;
+
+        var lastHeaderColumn =
+            worksheet.Row(headerRowNumber)
+                .LastCellUsed()
+                ?.Address.ColumnNumber ?? 0;
+
+        if (lastHeaderColumn < firstHeaderColumn)
+            return [];
+
+        var headers = new List<string>();
+
+        for (var column = firstHeaderColumn;
+             column <= lastHeaderColumn;
+             column++)
+        {
+            var header = worksheet
+                .Cell(headerRowNumber, column)
+                .GetString()
+                .Trim();
+
+            headers.Add(header);
+        }
+
+        var result =
+            new List<Dictionary<string, string>>();
+
+        for (var rowNumber = headerRowNumber + 1;
+             rowNumber <= lastRow;
+             rowNumber++)
+        {
+            var row =
+                new Dictionary<string, string>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            var hasAnyValue = false;
+
+            for (var index = 0;
+                 index < headers.Count;
+                 index++)
+            {
+                var header = headers[index];
+
+                if (string.IsNullOrWhiteSpace(header))
+                    continue;
+
+                var columnNumber =
+                    firstHeaderColumn + index;
+
+                var value = worksheet
+                    .Cell(rowNumber, columnNumber)
+                    .GetFormattedString()
+                    .Trim();
+
+                if (!string.IsNullOrWhiteSpace(value))
+                    hasAnyValue = true;
+
+                row[header] = value;
+            }
+
+            if (hasAnyValue)
+                result.Add(row);
+        }
+
+        return result;
+    }
+    private static int FindSupplierHeaderRow(
+    IXLWorksheet worksheet,
+    int lastRow)
+    {
+        for (var rowNumber = 1;
+             rowNumber <= lastRow;
+             rowNumber++)
+        {
+            var values = worksheet
+                .Row(rowNumber)
+                .CellsUsed()
+                .Select(cell =>
+                    NormalizeHeader(cell.GetString()))
+                .Where(value =>
+                    !string.IsNullOrWhiteSpace(value))
+                .ToList();
+
+            if (values.Count == 0)
+                continue;
+
+            var hasSupplierCode =
+                values.Any(value =>
+                    value is
+                        "manhacungcap" or
+                        "mancc" or
+                        "macungcap" or
+                        "suppliercode");
+
+            var hasSupplierName =
+                values.Any(value =>
+                    value is
+                        "tennhacungcap" or
+                        "tenncc" or
+                        "suppliername");
+
+            var hasPhone =
+                values.Any(value =>
+                    value is
+                        "sodienthoai" or
+                        "dienthoai" or
+                        "sdt" or
+                        "phone");
+
+            if (hasSupplierCode ||
+                hasSupplierName ||
+                (hasPhone && values.Count >= 2))
+            {
+                return rowNumber;
+            }
+        }
+
+        return 0;
+    }
     private static NhaCungCap MapRowToNhaCungCap(Dictionary<string, string> row)
     {
         var supplier = new NhaCungCap

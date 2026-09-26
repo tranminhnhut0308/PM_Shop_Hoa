@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Threading;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
@@ -8,12 +9,15 @@ using CommunityToolkit.Mvvm.Input;
 using ShopHoa.Models;
 using ShopHoa.Services;
 using ShopHoa.Views;
+using Avalonia.Controls;
 
 namespace ShopHoa.ViewModels;
 
 public partial class MainWindowViewModel : ObservableObject
 {
     private readonly DatabaseService _db = new();
+    private CancellationTokenSource? _saleCustomerSearchCts;
+    private int _saleCustomerSearchVersion;
     public Window? OwnerWindow { get; set; }
     private bool _customersLoaded;
     private bool _invoicesLoaded;
@@ -24,6 +28,8 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private int selectedDataTabIndex = 0;
     [ObservableProperty] private string statusMessage = "Sẵn sàng";
     [ObservableProperty] private bool isImporting;
+    [ObservableProperty]
+    private string importStatus = "";
     [ObservableProperty] private string productSearch = "";
     [ObservableProperty] private string customerSearch = "";
     [ObservableProperty] private string invoiceSearch = "";
@@ -47,6 +53,17 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private decimal saleSubtotal;
     [ObservableProperty] private decimal saleDiscountInput;
     [ObservableProperty] private decimal saleDiscountAmount;
+    [ObservableProperty]
+    private decimal tienKhachDua = 0;
+
+    [ObservableProperty]
+    private decimal tienThoi = 0;
+
+    [ObservableProperty]
+    private decimal tienCongNo = 0;
+
+    [ObservableProperty]
+    private string trangThaiThanhToan = "";
     [ObservableProperty] private string saleDiscountMode = "Số tiền";
     [ObservableProperty] private KhachHang? selectedKhachHang;
     [ObservableProperty] private NhaCungCap? selectedNhaCungCap;
@@ -56,17 +73,6 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnSelectedKhachHangChanged(KhachHang? value)
     {
         NgaySinhText = value?.NgaySinh?.ToString("dd/MM/yyyy") ?? "";
-        NgaySinhText = value?.NgaySinh?.ToString("dd/MM/yyyy") ?? "";
-    }
-
-    partial void OnSelectedNhaCungCapChanged(NhaCungCap? value)
-    {
-        if (value is null)
-            return;
-        if (value is null)
-            return;
-
-        _ = SuaNhaCungCapAsync(value);
     }
 
     [RelayCommand]
@@ -118,38 +124,25 @@ public partial class MainWindowViewModel : ObservableObject
 
             SelectedKhachHang = new KhachHang
             {
+                Id = 0,
                 MaKhachHang = maKhachHangMoi,
                 TenKhachHang = "",
-                NhomKhachHang = "Cá nhân"
+                LoaiKhachHang = "CA_NHAN",
+                NhomKhachHang = "Cá nhân",
+                TrangThai = true
             };
 
             NgaySinhText = "";
-            StatusMessage = $"Đang tạo khách hàng mới - mã {maKhachHangMoi}";
+
+            StatusMessage =
+                $"Đang tạo khách hàng mới - mã {maKhachHangMoi}";
         }
         catch (Exception ex)
         {
-            StatusMessage = "Không thể tạo mã khách hàng tự động: " + ex.Message;
-        }
-        try
-        {
-            var maKhachHangMoi = await _db.TaoMaKhachHangMoiAsync();
-
-            SelectedKhachHang = new KhachHang
-            {
-                MaKhachHang = maKhachHangMoi,
-                TenKhachHang = "",
-                NhomKhachHang = "Cá nhân"
-            };
-
-            NgaySinhText = "";
-            StatusMessage = $"Đang tạo khách hàng mới - mã {maKhachHangMoi}";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = "Không thể tạo mã khách hàng tự động: " + ex.Message;
+            StatusMessage =
+                "Không thể tạo mã khách hàng tự động: " + ex.Message;
         }
     }
-
     [RelayCommand]
     private async Task ThemKhachHangTuFileAsync()
     {
@@ -305,40 +298,76 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task LuuKhachHangAsync()
     {
         if (SelectedKhachHang is null)
+        {
+            await ShowMessageAsync(
+                "Thông báo",
+                "Vui lòng tạo hoặc chọn khách hàng trước khi lưu.");
             return;
+        }
 
         var customer = SelectedKhachHang;
-        if (string.IsNullOrWhiteSpace(customer.MaKhachHang) || string.IsNullOrWhiteSpace(customer.TenKhachHang))
+
+        // Chỉ bắt buộc TÊN khách hàng
+        if (string.IsNullOrWhiteSpace(customer.TenKhachHang))
         {
-            StatusMessage = "Mã và tên khách hàng không được để trống.";
+            await ShowMessageAsync(
+                "Thiếu thông tin",
+                "Vui lòng nhập tên khách hàng trước khi lưu.");
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(NgaySinhText))
+        // Ngày sinh không bắt buộc.
+        // Nếu có nhập thì phải đúng định dạng.
+        if (!string.IsNullOrWhiteSpace(NgaySinhText))
         {
-            customer.NgaySinh = null;
-        }
-        else if (DateTime.TryParse(NgaySinhText, out var birthday))
-        {
+            if (!DateTime.TryParse(NgaySinhText, out var birthday))
+            {
+                await ShowMessageAsync(
+                    "Thông tin không hợp lệ",
+                    "Ngày sinh không hợp lệ.\nVui lòng nhập theo dạng dd/MM/yyyy.");
+                return;
+            }
+
             customer.NgaySinh = birthday;
         }
         else
         {
-            StatusMessage = "Ngày sinh không hợp lệ. Vui lòng nhập theo định dạng dd/MM/yyyy.";
-            return;
+            customer.NgaySinh = null;
         }
 
         try
         {
-            await _db.CapNhatKhachHangAsync(customer);
-            StatusMessage = $"Đã lưu thông tin khách hàng {customer.TenKhachHang}";
+            if (customer.Id == 0)
+            {
+                var newId = await _db.ThemKhachHangAsync(customer);
+
+                customer.Id = newId;
+
+                if (!KhachHangs.Contains(customer))
+                    KhachHangs.Add(customer);
+
+                SelectedKhachHang = customer;
+
+                await ShowMessageAsync(
+                    "Thành công",
+                    $"Đã thêm khách hàng:\n{customer.TenKhachHang}");
+            }
+            else
+            {
+                await _db.CapNhatKhachHangAsync(customer);
+
+                await ShowMessageAsync(
+                    "Thành công",
+                    $"Đã cập nhật khách hàng:\n{customer.TenKhachHang}");
+            }
         }
         catch (Exception ex)
         {
-            StatusMessage = "Không thể lưu thông tin khách hàng: " + ex.Message;
+            await ShowMessageAsync(
+                "Lỗi",
+                "Không thể lưu khách hàng:\n" + ex.Message);
         }
     }
-
     private bool _isInitialized;
 
     public async Task InitializeAsync()
@@ -387,8 +416,8 @@ public partial class MainWindowViewModel : ObservableObject
             "Tổng quan" => LoadOverviewAsync,
             "Khách hàng" => LoadCustomersAsync,
             "Đơn hàng" => LoadInvoicesAsync,
-            "Mua hàng" => LoadSuppliersAsync,
             "Nhà cung cấp" => LoadSuppliersAsync,
+            "Nhập hàng" => null,
             _ => null
         };
 
@@ -397,8 +426,8 @@ public partial class MainWindowViewModel : ObservableObject
             "Tổng quan" => _overviewLoaded,
             "Khách hàng" => _customersLoaded,
             "Đơn hàng" => _invoicesLoaded,
-            "Mua hàng" => _suppliersLoaded,
             "Nhà cung cấp" => _suppliersLoaded,
+            "Nhập hàng" => true,
             _ => true
         };
 
@@ -636,7 +665,6 @@ public partial class MainWindowViewModel : ObservableObject
             StatusMessage = "Không thể thêm sản phẩm: " + ex.Message;
         }
     }
-
     [RelayCommand]
     private async Task ThemSanPhamTuFileAsync()
     {
@@ -651,31 +679,52 @@ public partial class MainWindowViewModel : ObservableObject
                 FileTypeFilter =
                 [
                     new FilePickerFileType("Excel / CSV")
-                    {
-                        Patterns = ["*.xlsx", "*.xls", "*.csv"]
-                    }
+                {
+                    Patterns = ["*.xlsx", "*.xls", "*.csv"]
+                }
                 ]
             });
 
         var file = files.FirstOrDefault();
+
         if (file is null)
         {
             StatusMessage = "Bạn chưa chọn file để nhập hàng loạt.";
             return;
         }
 
-        StatusMessage = $"Đã chọn file \"{file.Name}\". Đang kiểm tra dữ liệu trước khi nhập...";
-
         try
         {
-            var productsFromFile = _db.ParseProductsFromFile(file.Path.LocalPath);
+            // BẬT LOADING
+            IsImporting = true;
+            ImportStatus = $"Đang chuẩn bị nhập file \"{file.Name}\"...";
+            StatusMessage = ImportStatus;
+
+            // Cho giao diện có thời gian hiển thị loading
+            await Task.Delay(100);
+
+            ImportStatus = "Đang đọc dữ liệu từ file Excel...";
+            StatusMessage = ImportStatus;
+
+            var productsFromFile =
+                _db.ParseProductsFromFile(file.Path.LocalPath);
+
             if (productsFromFile.Count == 0)
             {
-                StatusMessage = $"File \"{file.Name}\" không có dữ liệu sản phẩm hợp lệ để nhập.";
+                StatusMessage =
+                    $"File \"{file.Name}\" không có dữ liệu sản phẩm hợp lệ để nhập.";
                 return;
             }
 
+            ImportStatus =
+                $"Đã đọc {productsFromFile.Count:N0} sản phẩm. Đang kiểm tra dữ liệu trùng...";
+
+            StatusMessage = ImportStatus;
+
+            await Task.Delay(100);
+
             var existingProducts = await _db.GetSanPhamAsync();
+
             var duplicateProducts = productsFromFile
                 .Where(product => IsDuplicateProduct(product, existingProducts))
                 .Take(5)
@@ -683,9 +732,13 @@ public partial class MainWindowViewModel : ObservableObject
 
             if (duplicateProducts.Count > 0)
             {
+                // TẮT LOADING trước khi hiện hộp thoại
+                IsImporting = false;
+
                 var shouldKeepExisting = await ShowConfirmationAsync(
                     "Sản phẩm trùng",
-                    $"Phát hiện {duplicateProducts.Count} sản phẩm trong file đã tồn tại trong kho. Bạn muốn giữ dữ liệu hiện có và bỏ qua các sản phẩm trùng này?",
+                    $"Phát hiện {duplicateProducts.Count} sản phẩm trong file đã tồn tại trong kho. " +
+                    "Bạn muốn giữ dữ liệu hiện có và bỏ qua các sản phẩm trùng này?",
                     "Giữ dữ liệu cũ",
                     "Bỏ qua nhập file");
 
@@ -695,6 +748,13 @@ public partial class MainWindowViewModel : ObservableObject
                     return;
                 }
 
+                // BẬT LẠI LOADING sau khi người dùng chọn
+                IsImporting = true;
+                ImportStatus = "Đang loại bỏ các sản phẩm bị trùng...";
+                StatusMessage = ImportStatus;
+
+                await Task.Delay(100);
+
                 productsFromFile = productsFromFile
                     .Where(product => !IsDuplicateProduct(product, existingProducts))
                     .ToList();
@@ -702,23 +762,45 @@ public partial class MainWindowViewModel : ObservableObject
 
             if (productsFromFile.Count == 0)
             {
-                StatusMessage = "Tất cả sản phẩm trong file đều trùng với dữ liệu hiện có.";
+                StatusMessage =
+                    "Tất cả sản phẩm trong file đều trùng với dữ liệu hiện có.";
                 return;
             }
 
-            var importedCount = await _db.ImportSanPhamTuFileAsync(file.Path.LocalPath, productsFromFile);
+            ImportStatus =
+                $"Đang nhập {productsFromFile.Count:N0} sản phẩm vào database...";
+
+            StatusMessage = ImportStatus;
+
+            await Task.Delay(100);
+
+            var importedCount =
+                await _db.ImportSanPhamTuFileAsync(
+                    file.Path.LocalPath,
+                    productsFromFile);
+
+            ImportStatus = "Đang cập nhật lại danh sách hàng hóa...";
+            StatusMessage = ImportStatus;
+
+            await Task.Delay(100);
+
             await RefreshProductsAsync();
 
             StatusMessage = importedCount > 0
-                ? $"Đã nhập thành công {importedCount} sản phẩm từ file \"{file.Name}\"."
+                ? $"Đã nhập thành công {importedCount:N0} sản phẩm từ file \"{file.Name}\"."
                 : $"File \"{file.Name}\" không có dữ liệu sản phẩm hợp lệ để nhập.";
         }
         catch (Exception ex)
         {
-            StatusMessage = "Không thể nhập hàng loạt từ file: " + ex.Message;
+            StatusMessage =
+                "Không thể nhập hàng loạt từ file: " + ex.Message;
+        }
+        finally
+        {
+            // LUÔN TẮT LOADING
+            IsImporting = false;
         }
     }
-
     private async Task RefreshProductsAsync(string? searchText = null)
     {
         var products = await _db.GetSanPhamAsync(searchText ?? ProductSearch);
@@ -773,9 +855,85 @@ public partial class MainWindowViewModel : ObservableObject
             .Replace("_", " ")
             .Replace("  ", " ");
     }
+    private async Task ShowMessageAsync(string title, string message)
+    {
+        if (OwnerWindow is null)
+            return;
 
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 430,
+            Height = 230,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = Avalonia.Media.Brushes.White
+        };
+
+        var titleText = new TextBlock
+        {
+            Text = title,
+            FontSize = 20,
+            FontWeight = Avalonia.Media.FontWeight.Bold,
+            Foreground = Avalonia.Media.Brush.Parse("#173F38"),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            Margin = new Avalonia.Thickness(0, 0, 0, 12)
+        };
+
+        var messageText = new TextBlock
+        {
+            Text = message,
+            FontSize = 15,
+            Foreground = Avalonia.Media.Brush.Parse("#4F625D"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+            TextAlignment = Avalonia.Media.TextAlignment.Center,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            MaxWidth = 350
+        };
+
+        var okButton = new Button
+        {
+            Content = "Đã hiểu",
+            Width = 110,
+            Height = 38,
+            Background = Avalonia.Media.Brush.Parse("#078C7A"),
+            Foreground = Avalonia.Media.Brushes.White,
+            FontSize = 14,
+            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Margin = new Avalonia.Thickness(0, 20, 0, 0),
+            Padding = new Avalonia.Thickness(16, 0)
+        };
+
+        var panel = new StackPanel
+        {
+            Spacing = 0,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+        };
+
+        panel.Children.Add(titleText);
+        panel.Children.Add(messageText);
+        panel.Children.Add(okButton);
+
+        var border = new Border
+        {
+            Background = Avalonia.Media.Brushes.White,
+            CornerRadius = new Avalonia.CornerRadius(12),
+            Padding = new Avalonia.Thickness(25),
+            Child = panel
+        };
+
+        dialog.Content = border;
+
+        okButton.Click += (_, _) => dialog.Close();
+
+        await dialog.ShowDialog(OwnerWindow);
+    }
     private async Task<bool> ShowConfirmationAsync(string title, string message)
-        => await ShowConfirmationAsync(title, message, "Xóa", "Hủy");
+            => await ShowConfirmationAsync(title, message, "Xóa", "Hủy");
 
     private async Task<bool> ShowConfirmationAsync(string title, string message, string confirmButtonText, string cancelButtonText)
     {
@@ -817,28 +975,33 @@ public partial class MainWindowViewModel : ObservableObject
             (!string.IsNullOrWhiteSpace(trimmedTenSanPham) &&
                 existing.TenSanPham.Equals(trimmedTenSanPham, StringComparison.OrdinalIgnoreCase)));
     }
-
-    public async Task SearchSaleCustomersAsync(string text)
+    [RelayCommand]
+    public async Task SearchSaleCustomersAsync(string? search)
     {
         try
         {
+            var keyword = search?.Trim() ?? string.Empty;
+
             SaleCustomerSuggestions.Clear();
 
-            if (string.IsNullOrWhiteSpace(text))
+            if (string.IsNullOrWhiteSpace(keyword) ||
+                keyword.Equals("Khách lẻ", StringComparison.OrdinalIgnoreCase))
+            {
                 return;
+            }
 
-            var customers = await _db.GetKhachHangAsync(text.Trim());
+            var customers = await _db.GetKhachHangAsync(keyword);
 
-            foreach (var customer in customers)
+            foreach (var customer in customers.Take(20))
+            {
                 SaleCustomerSuggestions.Add(customer);
+            }
         }
         catch (Exception ex)
         {
-            StatusMessage =
-                "Không thể tìm khách hàng: " + ex.Message;
+            StatusMessage = "Không thể tìm khách hàng: " + ex.Message;
         }
     }
-
     [RelayCommand]
     private async Task SearchCustomersAsync()
     {
@@ -882,6 +1045,50 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex) { StatusMessage = ex.Message; }
     }
     [RelayCommand]
+    private async Task ThemNhaCungCapAsync()
+    {
+        if (OwnerWindow is null)
+            return;
+
+        try
+        {
+            // Tự phát sinh mã NCC từ database
+            var generatedCode = await _db.TaoMaNhaCungCapMoiAsync();
+
+            var newSupplier = new NhaCungCap
+            {
+                MaNhaCungCap = generatedCode,
+                TenNhaCungCap = string.Empty,
+                TrangThai = true
+            };
+
+            // Mở giao diện nhập thông tin nhà cung cấp
+            var editor = new NhaCungCapEditorWindow(newSupplier);
+
+            var saved = await editor.ShowDialog<bool>(OwnerWindow);
+
+            if (!saved)
+                return;
+
+            // Lưu database
+            editor.Supplier.Id =
+                await _db.ThemNhaCungCapAsync(editor.Supplier);
+
+            // Thêm ngay vào danh sách giao diện
+            NhaCungCaps.Add(editor.Supplier);
+
+            _suppliersLoaded = true;
+
+            StatusMessage =
+                $"Đã thêm nhà cung cấp {editor.Supplier.TenNhaCungCap}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage =
+                "Không thể thêm nhà cung cấp: " + ex.Message;
+        }
+    }
+    [RelayCommand]
     private async Task SuaNhaCungCapAsync(NhaCungCap? supplier)
     {
         if (supplier is null || OwnerWindow is null)
@@ -914,41 +1121,147 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-
     [RelayCommand]
-    private async Task ThemNhaCungCapAsync()
+    private async Task ThemNhaCungCapTuFileAsync()
     {
-        if (OwnerWindow is null)
+        if (OwnerWindow is null || IsImporting)
             return;
 
-        // Mã NCC do hệ thống tự phát sinh từ database, người dùng không nhập.
-        var generatedCode = await _db.TaoMaNhaCungCapMoiAsync();
-        var newSupplier = new NhaCungCap
+        var files = await OwnerWindow.StorageProvider.OpenFilePickerAsync(
+            new FilePickerOpenOptions
+            {
+                Title = "Chọn file danh sách nhà cung cấp",
+                AllowMultiple = false,
+                FileTypeFilter =
+                [
+                    new FilePickerFileType("Excel / CSV")
+                {
+                    Patterns = ["*.xlsx", "*.xls", "*.csv"]
+                }
+                ]
+            });
+
+        var file = files.FirstOrDefault();
+
+        if (file is null)
         {
-            MaNhaCungCap = generatedCode,
-            TenNhaCungCap = string.Empty,
-            TrangThai = true
-        };
-
-        var editor = new NhaCungCapEditorWindow(newSupplier);
-        var saved = await editor.ShowDialog<bool>(OwnerWindow);
-
-        if (!saved)
+            StatusMessage = "Bạn chưa chọn file nhà cung cấp.";
             return;
+        }
 
         try
         {
-            editor.Supplier.Id = await _db.ThemNhaCungCapAsync(editor.Supplier);
-            NhaCungCaps.Add(editor.Supplier);
+            IsImporting = true;
+
+            ImportStatus = $"Đang đọc file \"{file.Name}\"...";
+            StatusMessage = ImportStatus;
+
+            await Task.Yield();
+
+            // Đọc file Excel/CSV
+            var suppliersFromFile = await Task.Run(() =>
+                _db.ParseNhaCungCapFromFile(file.Path.LocalPath));
+
+            if (suppliersFromFile.Count == 0)
+            {
+                StatusMessage =
+                    $"❌ File \"{file.Name}\" không có dữ liệu nhà cung cấp hợp lệ.";
+                return;
+            }
+
+            ImportStatus =
+                $"Đã đọc {suppliersFromFile.Count:N0} nhà cung cấp. Đang kiểm tra...";
+
+            StatusMessage = ImportStatus;
+
+            await Task.Yield();
+
+            // Lấy danh sách hiện có trong database
+            var existingSuppliers = await _db.GetNhaCungCapAsync();
+
+            // Kiểm tra trùng mã nhà cung cấp
+            var existingCodes = existingSuppliers
+                .Where(x => !string.IsNullOrWhiteSpace(x.MaNhaCungCap))
+                .Select(x => x.MaNhaCungCap.Trim())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var duplicateCount = suppliersFromFile.Count(x =>
+                !string.IsNullOrWhiteSpace(x.MaNhaCungCap) &&
+                existingCodes.Contains(x.MaNhaCungCap.Trim()));
+
+            if (duplicateCount > 0)
+            {
+                // Tắt loading trước khi hiện hộp thoại
+                IsImporting = false;
+
+                var keepGoing = await ShowConfirmationAsync(
+                    "Nhà cung cấp bị trùng",
+                    $"Phát hiện {duplicateCount:N0} nhà cung cấp trong file " +
+                    $"đã tồn tại trong database.\n\n" +
+                    "Nếu tiếp tục, các mã nhà cung cấp bị trùng sẽ được bỏ qua. " +
+                    "Các nhà cung cấp mới vẫn được nhập.",
+                    "Tiếp tục nhập",
+                    "Hủy");
+
+                if (!keepGoing)
+                {
+                    StatusMessage = "Đã hủy nhập file nhà cung cấp.";
+                    return;
+                }
+
+                IsImporting = true;
+
+                ImportStatus = "Đang loại bỏ dữ liệu nhà cung cấp bị trùng...";
+                StatusMessage = ImportStatus;
+
+                await Task.Yield();
+
+                suppliersFromFile = suppliersFromFile
+                    .Where(x =>
+                        string.IsNullOrWhiteSpace(x.MaNhaCungCap) ||
+                        !existingCodes.Contains(x.MaNhaCungCap.Trim()))
+                    .ToList();
+            }
+
+            if (suppliersFromFile.Count == 0)
+            {
+                StatusMessage =
+                    "❌ Tất cả nhà cung cấp trong file đều đã tồn tại.";
+                return;
+            }
+
+            ImportStatus =
+                $"Đang nhập {suppliersFromFile.Count:N0} nhà cung cấp vào database...";
+
+            StatusMessage = ImportStatus;
+
+            await Task.Yield();
+
+            var importedCount = await Task.Run(() =>
+                _db.ImportNhaCungCapTuFileAsync(
+                    file.Path.LocalPath,
+                    suppliersFromFile));
+
+            ImportStatus = "Đang cập nhật danh sách nhà cung cấp...";
+            StatusMessage = ImportStatus;
+
+            await LoadSuppliersAsync();
+
             _suppliersLoaded = true;
 
             StatusMessage =
-                $"Đã thêm nhà cung cấp {editor.Supplier.TenNhaCungCap}";
+                importedCount > 0
+                    ? $"✅ Đã nhập thành công {importedCount:N0} nhà cung cấp từ file \"{file.Name}\"."
+                    : $"⚠️ Không có nhà cung cấp mới nào được nhập.";
         }
         catch (Exception ex)
         {
             StatusMessage =
-                "Không thể thêm nhà cung cấp: " + ex.Message;
+                "❌ Không thể nhập nhà cung cấp từ file: " + ex.Message;
+        }
+        finally
+        {
+            IsImporting = false;
         }
     }
 
@@ -1010,13 +1323,18 @@ public partial class MainWindowViewModel : ObservableObject
         SaleSearchText = "";
         SaleCart.Clear();
         ProductSearchResults.Clear();
+
         SaleTotal = 0;
         SaleSubtotal = 0;
         SaleDiscountInput = 0;
         SaleDiscountAmount = 0;
         SaleDiscountMode = "Số tiền";
-    }
 
+        TienKhachDua = 0;
+        TienThoi = 0;
+        TienCongNo = 0;
+        TrangThaiThanhToan = "";
+    }
     [RelayCommand]
     private void DongGiaoDienBanHang()
     {
@@ -1030,26 +1348,70 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ThemVaoGioHang(SanPham? product)
+    private async Task ThemVaoGioHangAsync(SanPham? product)
     {
         if (product is null)
             return;
 
-        var existing = SaleCart.FirstOrDefault(item => item.SanPham.Id == product.Id);
+        // Sản phẩm chưa có giá bán
+        if (product.GiaBan <= 0)
+        {
+            if (OwnerWindow is null)
+            {
+                StatusMessage = "Không xác định được cửa sổ bán hàng.";
+                return;
+            }
+
+            try
+            {
+                var window = new NhapGiaBanWindow();
+
+                var giaBan = await window.ShowDialog<decimal?>(OwnerWindow);
+
+                // Người dùng bấm Hủy hoặc nhập giá không hợp lệ
+                if (!giaBan.HasValue || giaBan.Value <= 0)
+                {
+                    StatusMessage = "Chưa nhập giá bán. Sản phẩm chưa được thêm vào giỏ.";
+                    return;
+                }
+
+                // Lưu giá bán vào database
+                await _db.CapNhatGiaBanSanPhamAsync(
+                    product.Id,
+                    giaBan.Value);
+
+                // Cập nhật giá của sản phẩm đang hiển thị
+                product.GiaBan = giaBan.Value;
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = "Không thể cập nhật giá bán: " + ex.Message;
+                return;
+            }
+        }
+
+        // Có giá rồi thì thêm vào giỏ
+        var existing = SaleCart.FirstOrDefault(
+            item => item.SanPham.Id == product.Id);
+
         if (existing is not null)
         {
             existing.SoLuong += 1;
         }
         else
         {
-            var item = new SaleCartItem { SanPham = product, SoLuong = 1 };
+            var item = new SaleCartItem
+            {
+                SanPham = product,
+                SoLuong = 1
+            };
+
             item.QuantityChanged += RecalculateSaleTotal;
             SaleCart.Add(item);
         }
 
         RecalculateSaleTotal();
     }
-
     [RelayCommand]
     private void CapNhatTongTienBanHang()
     {
@@ -1090,12 +1452,49 @@ public partial class MainWindowViewModel : ObservableObject
     private void RecalculateSaleTotal()
     {
         SaleSubtotal = SaleCart.Sum(item => item.ThanhTien);
+
         SaleDiscountAmount = SaleDiscountMode == "Phần trăm"
             ? SaleSubtotal * Math.Clamp(SaleDiscountInput, 0, 100) / 100
             : Math.Clamp(SaleDiscountInput, 0, SaleSubtotal);
-        SaleTotal = Math.Max(0, SaleSubtotal - SaleDiscountAmount);
-    }
 
+        SaleTotal = Math.Max(
+            0,
+            SaleSubtotal - SaleDiscountAmount);
+
+        RecalculatePayment();
+    }
+    partial void OnTienKhachDuaChanged(decimal value)
+    {
+        RecalculatePayment();
+    }
+    private void RecalculatePayment()
+    {
+        var canTra = Math.Max(0, SaleTotal);
+        var khachDua = Math.Max(0, TienKhachDua);
+
+        if (khachDua > canTra)
+        {
+            TienThoi = khachDua - canTra;
+            TienCongNo = 0;
+            TrangThaiThanhToan = "Đã thanh toán đủ - Tiền thối";
+        }
+        else if (khachDua < canTra)
+        {
+            TienThoi = 0;
+            TienCongNo = canTra - khachDua;
+
+            if (khachDua == 0)
+                TrangThaiThanhToan = "Chưa thanh toán - Công nợ";
+            else
+                TrangThaiThanhToan = "Thanh toán thiếu - Công nợ";
+        }
+        else
+        {
+            TienThoi = 0;
+            TienCongNo = 0;
+            TrangThaiThanhToan = "Đã thanh toán đủ";
+        }
+    }
     partial void OnSaleDiscountInputChanged(decimal value) => RecalculateSaleTotal();
 
     partial void OnSaleDiscountModeChanged(string value) => RecalculateSaleTotal();
@@ -1112,10 +1511,10 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             var receipt = await _db.TaoHoaDonBanHangAsync(
-                SaleCart.ToList(),
-                SelectedSaleCustomer,
-                SaleDiscountAmount);
-
+    SaleCart.ToList(),
+    SelectedSaleCustomer,
+    SaleDiscountAmount,
+    TienKhachDua);
             if (OwnerWindow is not null)
             {
                 var invoiceWindow = new InvoiceWindow(receipt);
@@ -1150,8 +1549,8 @@ public partial class MainWindowViewModel : ObservableObject
         {
             "Khách hàng" => 1,
             "Đơn hàng" => 2,
-            "Mua hàng" => 3,
-            "Nhà cung cấp" => 4,
+            "Nhà cung cấp" => 3,
+            "Nhập hàng" => 4,
             _ => 0
         };
 

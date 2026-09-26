@@ -13,7 +13,10 @@ public sealed partial class SanPham : ObservableObject
     public uint? NhomSanPhamId { get; set; }
     public uint? DonViTinhId { get; set; }
     public uint? ThuongHieuId { get; set; }
-    public decimal GiaBan { get; set; }
+
+    [ObservableProperty]
+    private decimal giaBan;
+
     public decimal GiaVon { get; set; }
     public decimal TonKho { get; set; }
     public decimal TonToiThieu { get; set; }

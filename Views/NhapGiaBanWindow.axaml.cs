@@ -99,13 +99,13 @@ public partial class NhapGiaBanWindow : Window
 
         GiaBan = giaBan;
 
-        Close(true);
+        Close(GiaBan);
     }
 
     private void HuyClicked(object? sender, RoutedEventArgs e)
     {
         GiaBan = null;
 
-        Close(false);
+        Close(null);
     }
 }
