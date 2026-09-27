@@ -1,622 +1,639 @@
 <Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:ShopHoa.ViewModels"
-        xmlns:models="using:ShopHoa.Models"
-        xmlns:converters="using:ShopHoa.Converters"
-        x:Class="ShopHoa.Views.MainWindow"
-        x:Name="RootWindow"
-        x:DataType="vm:MainWindowViewModel"
-        Title="SHOP HOA"
-        Width="1500"
-        Height="900"
-        WindowState="Maximized"
-        MinWidth="1100"
-        MinHeight="700">
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:vm="using:ShopHoa.ViewModels"
+  xmlns:models="using:ShopHoa.Models"
+  xmlns:converters="using:ShopHoa.Converters"
+  x:Class="ShopHoa.Views.MainWindow"
+  x:Name="RootWindow"
+  x:DataType="vm:MainWindowViewModel"
+  Title="SHOP HOA"
+  Width="1500"
+  Height="900"
+  WindowState="Maximized"
+  MinWidth="1100"
+  MinHeight="700">
 
   <Window.Resources>
-    <converters:ThousandsSeparatorConverter x:Key="ThousandsSeparatorConverter"/>
+    <converters:ThousandsSeparatorConverter x:Key="ThousandsSeparatorConverter" />
   </Window.Resources>
 
   <Window.Styles>
     <Style Selector="TextBox">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
-      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="BorderThickness" Value="1" />
     </Style>
 
     <Style Selector="TextBox:pointerover">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="TextBox:focus">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
-      <Setter Property="BorderBrush" Value="#087F6E"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
     <Style Selector="TextBox:pointerover:focus">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="TextBox /template/ Border#PART_BorderElement">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="TextBox /template/ ScrollViewer#PART_ContentHost">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
     </Style>
 
     <Style Selector="TextBox:pointerover /template/ ScrollViewer#PART_ContentHost">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
     </Style>
 
     <Style Selector="TextBox:focus /template/ ScrollViewer#PART_ContentHost">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
     </Style>
 
     <Style Selector="TextBlock.page-title">
-      <Setter Property="FontSize" Value="28"/>
-      <Setter Property="FontWeight" Value="Bold"/>
-      <Setter Property="Foreground" Value="#163F38"/>
-      <Setter Property="Margin" Value="0,0,0,6"/>
+      <Setter Property="FontSize" Value="28" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="#163F38" />
+      <Setter Property="Margin" Value="0,0,0,6" />
     </Style>
 
     <Style Selector="Button.menu">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="Foreground" Value="#EAF4FF"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Padding" Value="14,8"/>
-      <Setter Property="Margin" Value="0,4"/>
-      <Setter Property="FontSize" Value="13"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="HorizontalContentAlignment" Value="Center"/>
-      <Setter Property="CornerRadius" Value="9"/>
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#EAF4FF" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="14,8" />
+      <Setter Property="Margin" Value="0,4" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="CornerRadius" Value="9" />
     </Style>
 
     <Style Selector="Button.menu:pointerover">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="Foreground" Value="#EAF4FF"/>
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#EAF4FF" />
     </Style>
 
     <Style Selector="Button.menu:pressed">
-      <Setter Property="Background" Value="#FFFFFF30"/>
-      <Setter Property="Foreground" Value="#FFFFFF"/>
+      <Setter Property="Background" Value="#FFFFFF30" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
     </Style>
 
     <Style Selector="Button.salesButton">
-      <Setter Property="Background" Value="#0A8C78"/>
-      <Setter Property="Foreground" Value="#FFFFFF"/>
-      <Setter Property="BorderBrush" Value="#7AE3D3"/>
-      <Setter Property="BorderThickness" Value="1.4"/>
-      <Setter Property="Padding" Value="18,14"/>
-      <Setter Property="Margin" Value="12,18,12,0"/>
-      <Setter Property="FontWeight" Value="Bold"/>
-      <Setter Property="FontSize" Value="14"/>
-      <Setter Property="HorizontalContentAlignment" Value="Center"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="Background" Value="#0A8C78" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="BorderBrush" Value="#7AE3D3" />
+      <Setter Property="BorderThickness" Value="1.4" />
+      <Setter Property="Padding" Value="18,14" />
+      <Setter Property="Margin" Value="12,18,12,0" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="CornerRadius" Value="12" />
       <Setter Property="Template">
         <ControlTemplate>
           <Border Background="#0A8C78"
-                  BorderBrush="#7AE3D3"
-                  BorderThickness="1.4"
-                  CornerRadius="12"
-                  Padding="18,14">
+            BorderBrush="#7AE3D3"
+            BorderThickness="1.4"
+            CornerRadius="12"
+            Padding="18,14">
             <ContentPresenter Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              TextElement.Foreground="White"/>
+              ContentTemplate="{TemplateBinding ContentTemplate}"
+              HorizontalContentAlignment="Center"
+              VerticalContentAlignment="Center"
+              TextElement.Foreground="White" />
           </Border>
         </ControlTemplate>
       </Setter>
     </Style>
 
     <Style Selector="Button.salesButton:pointerover">
-      <Setter Property="Background" Value="#0A8C78"/>
-      <Setter Property="Foreground" Value="#FFFFFF"/>
-      <Setter Property="BorderBrush" Value="#7AE3D3"/>
+      <Setter Property="Background" Value="#0A8C78" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="BorderBrush" Value="#7AE3D3" />
     </Style>
 
     <Style Selector="Button.salesButton:focus">
-      <Setter Property="Background" Value="#0A8C78"/>
-      <Setter Property="Foreground" Value="#FFFFFF"/>
+      <Setter Property="Background" Value="#0A8C78" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
     </Style>
 
     <Style Selector="Button.salesButton:pointerover /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#0A8C78"/>
-      <Setter Property="BorderBrush" Value="#7AE3D3"/>
+      <Setter Property="Background" Value="#0A8C78" />
+      <Setter Property="BorderBrush" Value="#7AE3D3" />
     </Style>
 
     <Style Selector="Button.salesButton /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="#FFFFFF"/>
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
     </Style>
 
 
     <Style Selector="Border.card">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="CornerRadius" Value="14"/>
-      <Setter Property="Padding" Value="22"/>
-      <Setter Property="Margin" Value="0,0,16,16"/>
-      <Setter Property="BoxShadow" Value="0 4 16 #120A352E"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Padding" Value="22" />
+      <Setter Property="Margin" Value="0,0,16,16" />
+      <Setter Property="BoxShadow" Value="0 4 16 #120A352E" />
     </Style>
 
     <Style Selector="DataGrid">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#E2ECE8"/>
-      <Setter Property="GridLinesVisibility" Value="Horizontal"/>
-      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#E2ECE8" />
+      <Setter Property="GridLinesVisibility" Value="Horizontal" />
+      <Setter Property="BorderThickness" Value="1" />
     </Style>
 
     <Style Selector="DataGridColumnHeader">
-      <Setter Property="Background" Value="#E5F2EE"/>
-      <Setter Property="Foreground" Value="#164B40"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Padding" Value="10,8"/>
+      <Setter Property="Background" Value="#E5F2EE" />
+      <Setter Property="Foreground" Value="#164B40" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="10,8" />
     </Style>
 
     <Style Selector="TabItem">
-      <Setter Property="FontSize" Value="14"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Foreground" Value="#61736E"/>
-      <Setter Property="Padding" Value="14,10"/>
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#61736E" />
+      <Setter Property="Padding" Value="14,10" />
     </Style>
 
     <Style Selector="TabItem:selected">
-      <Setter Property="Foreground" Value="#087F6E"/>
+      <Setter Property="Foreground" Value="#087F6E" />
     </Style>
 
     <Style Selector="TabControl /template/ ItemsPresenter#PART_ItemsPresenter">
-      <Setter Property="IsVisible" Value="False"/>
+      <Setter Property="IsVisible" Value="False" />
     </Style>
 
     <Style Selector="Button.filter">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#344B45"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="18"/>
-      <Setter Property="Padding" Value="15,8"/>
-      <Setter Property="Margin" Value="0,0,8,0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#344B45" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="18" />
+      <Setter Property="Padding" Value="15,8" />
+      <Setter Property="Margin" Value="0,0,8,0" />
     </Style>
 
     <Style Selector="Button.filter:selected">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
     </Style>
 
     <Style Selector="Button.filter:pointerover">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#344B45"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#344B45" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="Button.filter:pressed">
-      <Setter Property="Background" Value="#A9DED2"/>
-      <Setter Property="Foreground" Value="#06483E"/>
-      <Setter Property="BorderBrush" Value="#087F6E"/>
+      <Setter Property="Background" Value="#A9DED2" />
+      <Setter Property="Foreground" Value="#06483E" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
     <Style Selector="Button.filter:selected:pointerover">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="Button.filter /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="Button.filter:pointerover /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="Button.filter:selected /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="Button.filter:selected:pointerover /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="Button.filter /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="#344B45"/>
+      <Setter Property="TextElement.Foreground" Value="#344B45" />
     </Style>
 
     <Style Selector="Button.filter:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="#344B45"/>
+      <Setter Property="TextElement.Foreground" Value="#344B45" />
     </Style>
 
     <Style Selector="Button.filter:selected /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="White"/>
+      <Setter Property="TextElement.Foreground" Value="White" />
     </Style>
 
-    <Style Selector="Button.filter:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="White"/>
+    <Style
+      Selector="Button.filter:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White" />
     </Style>
 
     <Style Selector="Border.product-card">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#E1EAE6"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="12"/>
-      <Setter Property="Margin" Value="0,0,14,14"/>
-      <Setter Property="Padding" Value="8"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#E1EAE6" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Margin" Value="0,0,14,14" />
+      <Setter Property="Padding" Value="8" />
     </Style>
 
     <Style Selector="Button.card-action">
-      <Setter Property="Background" Value="#E8F5F1"/>
-      <Setter Property="Foreground" Value="#087F6E"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="CornerRadius" Value="8"/>
-      <Setter Property="Padding" Value="10,6"/>
-      <Setter Property="Margin" Value="0,8,6,0"/>
+      <Setter Property="Background" Value="#E8F5F1" />
+      <Setter Property="Foreground" Value="#087F6E" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="Margin" Value="0,8,6,0" />
     </Style>
 
     <Style Selector="Button.card-action /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#E8F5F1"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Background" Value="#E8F5F1" />
+      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
     <Style Selector="Button.card-action /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="#087F6E"/>
+      <Setter Property="TextElement.Foreground" Value="#087F6E" />
     </Style>
 
     <Style Selector="Button.card-action:pointerover">
-      <Setter Property="Background" Value="#E8F5F1"/>
-      <Setter Property="Foreground" Value="#087F6E"/>
+      <Setter Property="Background" Value="#E8F5F1" />
+      <Setter Property="Foreground" Value="#087F6E" />
     </Style>
 
     <Style Selector="Button.card-action:pointerover /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#E8F5F1"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Background" Value="#E8F5F1" />
+      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
-    <Style Selector="Button.card-action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="#087F6E"/>
+    <Style
+      Selector="Button.card-action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#087F6E" />
     </Style>
 
     <Style Selector="Button.card-action.danger">
-      <Setter Property="Background" Value="#FFF0F0"/>
-      <Setter Property="Foreground" Value="#D64545"/>
+      <Setter Property="Background" Value="#FFF0F0" />
+      <Setter Property="Foreground" Value="#D64545" />
     </Style>
 
     <Style Selector="Button.card-action.danger /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#FFF0F0"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Background" Value="#FFF0F0" />
+      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
     <Style Selector="Button.card-action.danger /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="#D64545"/>
+      <Setter Property="TextElement.Foreground" Value="#D64545" />
     </Style>
 
     <Style Selector="Button.card-action.danger:pointerover">
-      <Setter Property="Background" Value="#FFF0F0"/>
-      <Setter Property="Foreground" Value="#D64545"/>
+      <Setter Property="Background" Value="#FFF0F0" />
+      <Setter Property="Foreground" Value="#D64545" />
     </Style>
 
     <Style Selector="Button.card-action.danger:pointerover /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#FFF0F0"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Background" Value="#FFF0F0" />
+      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
-    <Style Selector="Button.card-action.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="#D64545"/>
+    <Style
+      Selector="Button.card-action.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#D64545" />
     </Style>
 
     <Style Selector="Button.toolbar-action">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#344B45"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="8"/>
-      <Setter Property="Padding" Value="14,9"/>
-      <Setter Property="Margin" Value="8,0,0,10"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#344B45" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="14,9" />
+      <Setter Property="Margin" Value="8,0,0,10" />
       <Setter Property="Template">
         <ControlTemplate>
           <Border Background="White"
-                  BorderBrush="#D8E5E0"
-                  BorderThickness="1"
-                  CornerRadius="8"
-                  Padding="{TemplateBinding Padding}">
+            BorderBrush="#D8E5E0"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="{TemplateBinding Padding}">
             <ContentPresenter Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              TextElement.Foreground="#344B45"/>
+              ContentTemplate="{TemplateBinding ContentTemplate}"
+              HorizontalContentAlignment="Center"
+              VerticalContentAlignment="Center"
+              TextElement.Foreground="#344B45" />
           </Border>
         </ControlTemplate>
       </Setter>
     </Style>
 
     <Style Selector="Button.toolbar-action:pointerover">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#344B45"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#344B45" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="Button.toolbar-action:pressed">
-      <Setter Property="Background" Value="#BDE5DA"/>
-      <Setter Property="Foreground" Value="#06483E"/>
-      <Setter Property="BorderBrush" Value="#087F6E"/>
+      <Setter Property="Background" Value="#BDE5DA" />
+      <Setter Property="Foreground" Value="#06483E" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
     <Style Selector="Button.toolbar-action:focus">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#344B45"/>
-      <Setter Property="BorderBrush" Value="#087F6E"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#344B45" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
     <Style Selector="Button.toolbar-action:pointerover:focus">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#344B45"/>
-      <Setter Property="BorderBrush" Value="#087F6E"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#344B45" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
     <Style Selector="Button.toolbar-action /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="Button.toolbar-action:pointerover /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="Button.toolbar-action:pressed /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#BDE5DA"/>
-      <Setter Property="BorderBrush" Value="#087F6E"/>
+      <Setter Property="Background" Value="#BDE5DA" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
     <Style Selector="Button.toolbar-action /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="#344B45"/>
+      <Setter Property="TextElement.Foreground" Value="#344B45" />
     </Style>
 
-    <Style Selector="Button.toolbar-action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="#344B45"/>
+    <Style
+      Selector="Button.toolbar-action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#344B45" />
     </Style>
 
 
     <Style Selector="Button.toolbar-action:focus /template/ Border">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#087F6E"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
     <Style Selector="Button.toolbar-action:pressed /template/ Border">
-      <Setter Property="Background" Value="#BDE5DA"/>
-      <Setter Property="BorderBrush" Value="#087F6E"/>
+      <Setter Property="Background" Value="#BDE5DA" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
     <Style Selector="Button.toolbar-primary">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="CornerRadius" Value="8"/>
-      <Setter Property="Padding" Value="14,9"/>
-      <Setter Property="Margin" Value="8,0,0,10"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="14,9" />
+      <Setter Property="Margin" Value="8,0,0,10" />
+      <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Template">
         <ControlTemplate>
           <Border Background="#087F6E"
-                  BorderBrush="Transparent"
-                  BorderThickness="0"
-                  CornerRadius="8"
-                  Padding="14,9">
+            BorderBrush="Transparent"
+            BorderThickness="0"
+            CornerRadius="8"
+            Padding="14,9">
             <ContentPresenter Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              TextElement.Foreground="White"/>
+              ContentTemplate="{TemplateBinding ContentTemplate}"
+              HorizontalContentAlignment="Center"
+              VerticalContentAlignment="Center"
+              TextElement.Foreground="White" />
           </Border>
         </ControlTemplate>
       </Setter>
     </Style>
 
     <Style Selector="Button.toolbar-primary:pointerover">
-    <Setter Property="Background" Value="#087F6E"/>
-    <Setter Property="Foreground" Value="White"/>
-    <Setter Property="BorderBrush" Value="Transparent"/>
-    <Setter Property="Opacity" Value="1"/>
-  </Style>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
 
     <Style Selector="Button.toolbar-primary:focus">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
     <Style Selector="Button.toolbar-primary:pressed">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
     <Style Selector="Button.toolbar-primary:disabled">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
-      <Setter Property="Opacity" Value="1"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Opacity" Value="1" />
     </Style>
 
     <Style Selector="Button.toolbar-primary:pointerover:focus">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
     <Style Selector="Button.toolbar-primary:pointerover /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
     <Style Selector="Button.toolbar-primary /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
     <Style Selector="Button.toolbar-primary /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="White"/>
+      <Setter Property="TextElement.Foreground" Value="White" />
     </Style>
 
     <Style Selector="Button.toolbar-primary:focus /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
     <Style Selector="Button.toolbar-primary:pressed /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
     <Style Selector="Button.toolbar-primary:disabled /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#087F6E"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
-      <Setter Property="Opacity" Value="1"/>
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Opacity" Value="1" />
     </Style>
 
-    <Style Selector="Button.toolbar-primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="White"/>
+    <Style
+      Selector="Button.toolbar-primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White" />
     </Style>
 
-    <Style Selector="Button.toolbar-primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="White"/>
+    <Style
+      Selector="Button.toolbar-primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White" />
     </Style>
 
     <Style Selector="TextBox.searchInput">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="9"/>
-      <Setter Property="Padding" Value="12,9"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Padding" Value="12,9" />
     </Style>
 
     <Style Selector="TextBox.searchInput:focus">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
-      <Setter Property="BorderBrush" Value="#087F6E"/>
-      <Setter Property="BorderThickness" Value="1.5"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="BorderThickness" Value="1.5" />
     </Style>
 
     <Style Selector="TextBox.searchInput:pointerover">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
-      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="BorderThickness" Value="1" />
     </Style>
 
     <Style Selector="TextBox.searchInput:pointerover:focus">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
-      <Setter Property="BorderThickness" Value="1.5"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="BorderThickness" Value="1.5" />
     </Style>
 
     <Style Selector="TextBox.searchInput /template/ Border#PART_BorderElement">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="TextBox.searchInput:focus /template/ Border#PART_BorderElement">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#087F6E"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
     <Style Selector="TextBox.searchInput:pointerover /template/ Border#PART_BorderElement">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="TextBox.searchInput:pointerover:focus /template/ Border#PART_BorderElement">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#D8E5E0"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
     </Style>
 
     <Style Selector="TextBox.searchInput /template/ ScrollViewer#PART_ContentHost">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
     </Style>
 
     <Style Selector="TextBox.searchInput:focus /template/ ScrollViewer#PART_ContentHost">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
     </Style>
 
     <Style Selector="TextBox.searchInput:pointerover /template/ ScrollViewer#PART_ContentHost">
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="Foreground" Value="#263B35"/>
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
     </Style>
 
     <Style Selector="TextBox.searchInput /template/ TextPresenter#PART_TextPresenter">
-      <Setter Property="TextElement.Foreground" Value="#263B35"/>
+      <Setter Property="TextElement.Foreground" Value="#263B35" />
     </Style>
 
     <Style Selector="TextBox.searchInput:focus /template/ TextPresenter#PART_TextPresenter">
-      <Setter Property="TextElement.Foreground" Value="#263B35"/>
+      <Setter Property="TextElement.Foreground" Value="#263B35" />
     </Style>
-  
+
 
   </Window.Styles>
 
   <Grid ColumnDefinitions="220,*" Background="#F4F7F6">
     <Border Grid.Column="0" Padding="16,0">
       <Border.Background>
-        <ImageBrush Source="avares://ShopHoa/Assets/anh_menu.png" Stretch="UniformToFill"/>
+        <ImageBrush Source="avares://ShopHoa/Assets/anh_menu.png" Stretch="UniformToFill" />
       </Border.Background>
       <Grid RowDefinitions="Auto,*,Auto">
         <TextBlock Text="🌸 SHOP HOA"
-                   Foreground="White"
-                   FontSize="20"
-                   FontWeight="Bold"
-                   VerticalAlignment="Center"
-                   Margin="8,28,8,30"/>
+          Foreground="White"
+          FontSize="20"
+          FontWeight="Bold"
+          VerticalAlignment="Center"
+          Margin="8,28,8,30" />
 
         <StackPanel Grid.Row="1" Orientation="Vertical">
-          <Button Classes="menu" Content="Tổng quan" Command="{Binding ChonMenuCommand}" CommandParameter="Tổng quan"/>
-          <Button Classes="menu" Content="Hàng hóa" Command="{Binding ChonMenuCommand}" CommandParameter="Hàng hóa"/>
-          <Button Classes="menu" Content="Nhập hàng" Command="{Binding ChonMenuCommand}" CommandParameter="Nhập hàng"/>
-          <Button Classes="menu" Content="Đơn hàng" Command="{Binding ChonMenuCommand}" CommandParameter="Đơn hàng"/>
-          <Button Classes="menu" Content="Khách hàng" Command="{Binding ChonMenuCommand}" CommandParameter="Khách hàng"/>
+          <Button Classes="menu" Content="Tổng quan" Command="{Binding ChonMenuCommand}"
+            CommandParameter="Tổng quan" />
+          <Button Classes="menu" Content="Hàng hóa" Command="{Binding ChonMenuCommand}"
+            CommandParameter="Hàng hóa" />
+          <Button Classes="menu" Content="Nhập hàng" Command="{Binding ChonMenuCommand}"
+            CommandParameter="Nhập hàng" />
+          <Button Classes="menu" Content="Hóa đơn"
+            Command="{Binding ChonMenuCommand}"
+            CommandParameter="Hóa đơn" />
+          <Button Classes="menu" Content="Khách hàng" Command="{Binding ChonMenuCommand}"
+            CommandParameter="Khách hàng" />
           <Button Classes="menu"
-        Content="Nhà cung cấp"
-        Command="{Binding ChonMenuCommand}"
-        CommandParameter="Nhà cung cấp"/>
-          <Button Classes="menu" Content="Sổ quỹ" Command="{Binding ChonMenuCommand}" CommandParameter="Sổ quỹ"/>
-          <Button Classes="menu" Content="Báo cáo" Command="{Binding ChonMenuCommand}" CommandParameter="Báo cáo"/>
+            Content="Nhà cung cấp"
+            Command="{Binding ChonMenuCommand}"
+            CommandParameter="Nhà cung cấp" />
+          <Button Classes="menu" Content="Sổ quỹ" Command="{Binding ChonMenuCommand}"
+            CommandParameter="Sổ quỹ" />
+          <Button Classes="menu" Content="Báo cáo" Command="{Binding ChonMenuCommand}"
+            CommandParameter="Báo cáo" />
         </StackPanel>
 
         <StackPanel Grid.Row="2">
-          <Button Classes="salesButton" Content="🛒  Bán hàng" VerticalAlignment="Center" Command="{Binding MoGiaoDienBanHangCommand}"/>
-          <Border Background="#087F6E" Opacity="0.9" CornerRadius="10" Padding="10" Margin="0,14,0,14">
+          <Button Classes="salesButton" Content="🛒  Bán hàng" VerticalAlignment="Center"
+            Command="{Binding MoGiaoDienBanHangCommand}" />
+          <Border Background="#087F6E" Opacity="0.9" CornerRadius="10" Padding="10"
+            Margin="0,14,0,14">
             <Grid ColumnDefinitions="Auto,*">
               <Border Width="34" Height="34" Background="#D8F0E9" CornerRadius="17">
-                <TextBlock Text="A" Foreground="#087F6E" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <TextBlock Text="A" Foreground="#087F6E" FontWeight="Bold"
+                  HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Border>
               <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="admin" Foreground="White" FontWeight="SemiBold"/>
-                <TextBlock Text="Quản trị viên" Foreground="#D8F0E9" FontSize="11"/>
+                <TextBlock Text="admin" Foreground="White" FontWeight="SemiBold" />
+                <TextBlock Text="Quản trị viên" Foreground="#D8F0E9" FontSize="11" />
               </StackPanel>
             </Grid>
           </Border>
@@ -624,52 +641,61 @@
       </Grid>
     </Border>
 
-          <Grid Grid.Column="1" Margin="34,28">
+    <Grid Grid.Column="1" Margin="34,28">
 
       <Grid IsVisible="{Binding IsSalesPanelVisible}" ZIndex="10" Background="#F4F7F6">
-        <Border Background="#FFFFFF" CornerRadius="20" Padding="22" BorderBrush="#D8E5E0" BorderThickness="1" Margin="30,20" BoxShadow="0 10 30 #0A1F1B22">
-          <Grid RowDefinitions="Auto,Auto,*" ColumnDefinitions="1.2*,0.8*" ColumnSpacing="20" RowSpacing="16">
+        <Border Background="#FFFFFF" CornerRadius="20" Padding="22" BorderBrush="#D8E5E0"
+          BorderThickness="1" Margin="30,20" BoxShadow="0 10 30 #0A1F1B22">
+          <Grid RowDefinitions="Auto,Auto,*" ColumnDefinitions="1.2*,0.8*" ColumnSpacing="20"
+            RowSpacing="16">
             <StackPanel Grid.ColumnSpan="2">
-              <TextBlock Text="Bán hàng" FontSize="26" FontWeight="Bold" Foreground="#163F38"/>
-              <TextBlock Text="Tìm hoa cần bán, chọn sản phẩm, số lượng mặc định là 1" Foreground="#61736E" Margin="0,4,0,0"/>
+              <TextBlock Text="Bán hàng" FontSize="26" FontWeight="Bold" Foreground="#163F38" />
+              <TextBlock Text="Tìm hoa cần bán, chọn sản phẩm, số lượng mặc định là 1"
+                Foreground="#61736E" Margin="0,4,0,0" />
             </StackPanel>
 
-            <Border Grid.Row="1" Grid.Column="0" CornerRadius="10" BorderBrush="#D8E5E0" BorderThickness="1" Padding="0">
+            <Border Grid.Row="1" Grid.Column="0" CornerRadius="10" BorderBrush="#D8E5E0"
+              BorderThickness="1" Padding="0">
               <TextBox Watermark="🔍 Tìm tên hoa, mã hàng, mã vạch..."
-                       Text="{Binding SaleSearchText, Mode=TwoWay}"
-                       Margin="0" Padding="12,10"
-                       TextChanged="OnSaleSearchTextChanged"/>
+                Text="{Binding SaleSearchText, Mode=TwoWay}"
+                Margin="0" Padding="12,10"
+                TextChanged="OnSaleSearchTextChanged" />
             </Border>
 
             <Button Grid.Row="1" Grid.Column="1"
-                    Classes="toolbar-primary"
-                    Content="Tìm kiếm"
-                    Command="{Binding TimKiemHoaBanCommand}"
-                    CommandParameter="{Binding SaleSearchText}"/>
+              Classes="toolbar-primary"
+              Content="Tìm kiếm"
+              Command="{Binding TimKiemHoaBanCommand}"
+              CommandParameter="{Binding SaleSearchText}" />
 
-            <Border Grid.Row="2" Grid.Column="0" Padding="12" CornerRadius="12" BorderBrush="#D8E5E0" BorderThickness="1" Background="#F7FAF9">
+            <Border Grid.Row="2" Grid.Column="0" Padding="12" CornerRadius="12"
+              BorderBrush="#D8E5E0" BorderThickness="1" Background="#F7FAF9">
               <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <ItemsControl ItemsSource="{Binding ProductSearchResults}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="models:SanPham">
                       <Button Margin="0,0,0,8"
-                              Padding="10"
-                              CornerRadius="10"
-                              Background="White"
-                              BorderBrush="#D8E5E0"
-                              BorderThickness="1"
-                              HorizontalAlignment="Stretch"
-                              HorizontalContentAlignment="Left"
-                              Command="{Binding ElementName=RootWindow, Path=DataContext.ThemVaoGioHangCommand}"
-                              CommandParameter="{Binding}">
+                        Padding="10"
+                        CornerRadius="10"
+                        Background="White"
+                        BorderBrush="#D8E5E0"
+                        BorderThickness="1"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Command="{Binding ElementName=RootWindow, Path=DataContext.ThemVaoGioHangCommand}"
+                        CommandParameter="{Binding}">
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                          <Border Width="42" Height="42" CornerRadius="8" Background="#DFF5F0" VerticalAlignment="Center">
-                            <TextBlock Text="🌼" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                          <Border Width="42" Height="42" CornerRadius="8" Background="#DFF5F0"
+                            VerticalAlignment="Center">
+                            <TextBlock Text="🌼" FontSize="20" HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
                           </Border>
                           <StackPanel Grid.Column="1">
-                            <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold" Foreground="#163F38"/>
-                            <TextBlock Text="{Binding MaSanPham}" Foreground="#667A74" FontSize="12"/>
-                            <TextBlock Text="{Binding GiaBan, StringFormat={}{0:N0} đ}" Foreground="#087F6E" FontWeight="Bold" FontSize="12"/>
+                            <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold"
+                              Foreground="#163F38" />
+                            <TextBlock Text="{Binding MaSanPham}" Foreground="#667A74" FontSize="12" />
+                            <TextBlock Text="{Binding GiaBan, StringFormat={}{0:N0} đ}"
+                              Foreground="#087F6E" FontWeight="Bold" FontSize="12" />
                           </StackPanel>
                         </Grid>
                       </Button>
@@ -679,197 +705,261 @@
               </ScrollViewer>
             </Border>
 
-            <Border Grid.Row="2" Grid.Column="1" Padding="12" CornerRadius="12" BorderBrush="#D8E5E0" BorderThickness="1" Background="#F7FAF9">
+            <Border Grid.Row="2" Grid.Column="1" Padding="12" CornerRadius="12"
+              BorderBrush="#D8E5E0" BorderThickness="1" Background="#F7FAF9">
               <Grid RowDefinitions="Auto,*,Auto,Auto">
                 <StackPanel>
-                  <TextBlock Text="Khách hàng" Foreground="#61736E" FontSize="12"/>
+                  <TextBlock Text="Khách hàng" Foreground="#61736E" FontSize="12" />
                   <TextBox Text="{Binding SaleCustomerName, Mode=TwoWay}"
-                           Margin="0,6,0,4"
-                           TextChanged="OnSaleCustomerSearchTextChanged"/>
-                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
-                      <Button Content="Khách lẻ" Classes="toolbar-action" Padding="10,5"
-                        Command="{Binding ChonKhachLeCommand}"/>
-                      <Button Content="Danh sách khách hàng" Classes="toolbar-action" Padding="10,5"
-                        Command="{Binding MoDanhSachKhachBanCommand}"/>
-                    </StackPanel>
-                    <Border Background="White" BorderBrush="#D8E5E0" BorderThickness="1"
-                      CornerRadius="6" MaxHeight="150">
+                    Margin="0,6,0,4"
+                    TextChanged="OnSaleCustomerSearchTextChanged" />
+                  <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                    <Button Content="Khách lẻ" Classes="toolbar-action" Padding="10,5"
+                      Command="{Binding ChonKhachLeCommand}" />
+                    <Button Content="Danh sách khách hàng" Classes="toolbar-action" Padding="10,5"
+                      Command="{Binding MoDanhSachKhachBanCommand}" />
+                  </StackPanel>
+                  <Border Background="White" BorderBrush="#D8E5E0" BorderThickness="1"
+                    CornerRadius="6" MaxHeight="150">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                       <ItemsControl ItemsSource="{Binding SaleCustomerSuggestions}">
-    <ItemsControl.ItemTemplate>
-        <DataTemplate x:DataType="models:KhachHang">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="models:KhachHang">
 
-            <Button
-                Content="{Binding TenKhachHang}"
-                Command="{Binding ElementName=RootWindow, Path=DataContext.ChonKhachHangBanCommand}"
-                CommandParameter="{Binding}"
-                HorizontalContentAlignment="Left"
-                Background="Transparent"
-                Foreground="#263B35"
-                BorderThickness="0"
-                Padding="10,8"/>
+                            <Button
+                              Content="{Binding TenKhachHang}"
+                              Command="{Binding ElementName=RootWindow, Path=DataContext.ChonKhachHangBanCommand}"
+                              CommandParameter="{Binding}"
+                              HorizontalContentAlignment="Left"
+                              Background="Transparent"
+                              Foreground="#263B35"
+                              BorderThickness="0"
+                              Padding="10,8" />
 
-        </DataTemplate>
-    </ItemsControl.ItemTemplate>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
                       </ItemsControl>
                     </ScrollViewer>
                   </Border>
-                  <TextBlock Text="Giảm giá" Foreground="#61736E" FontSize="12" Margin="0,10,0,0"/>
-                  <Grid ColumnDefinitions="*,1.3*" ColumnSpacing="6" Margin="0,4,0,0">
-                    <ComboBox ItemsSource="{Binding DiscountModes}"
-                              SelectedItem="{Binding SaleDiscountMode, Mode=TwoWay}"
-                              Padding="8,5"/>
-                    <TextBox Grid.Column="1"
-                             Text="{Binding SaleDiscountInput, Mode=TwoWay, Converter={StaticResource ThousandsSeparatorConverter}}"
-                             Watermark="Nhập số tiền hoặc %"
-                             TextChanged="OnSaleDiscountTextChanged"
-                             Padding="8,5"/>
-                  </Grid>
                 </StackPanel>
 
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
                   <ItemsControl ItemsSource="{Binding SaleCart}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="models:SaleCartItem">
-                        <Grid ColumnDefinitions="*,Auto,140,Auto" Margin="0,8,0,8" ColumnSpacing="10">
+                        <Grid ColumnDefinitions="*,Auto,140,Auto" Margin="0,8,0,8"
+                          ColumnSpacing="10">
                           <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
-                            <TextBlock Text="{Binding SanPham.TenSanPham}" FontWeight="SemiBold" Foreground="#163F38" FontSize="13"/>
-                            <TextBlock Text="{Binding SanPham.GiaBan, StringFormat={}{0:N0} đ}" Foreground="#667A74" FontSize="12"/>
+                            <TextBlock Text="{Binding SanPham.TenSanPham}" FontWeight="SemiBold"
+                              Foreground="#163F38" FontSize="13" />
+                            <TextBlock Text="{Binding SanPham.GiaBan, StringFormat={}{0:N0} đ}"
+                              Foreground="#667A74" FontSize="12" />
                           </StackPanel>
 
-                          <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center">
-                            <TextBlock Text="SL" FontSize="11" Foreground="#61736E" Margin="0,0,0,2" HorizontalAlignment="Center"/>
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                            HorizontalAlignment="Center">
+                            <TextBlock Text="SL" FontSize="11" Foreground="#61736E" Margin="0,0,0,2"
+                              HorizontalAlignment="Center" />
                             <Grid ColumnDefinitions="32,40,32" ColumnSpacing="0">
                               <Button Content="−"
-                                      Width="32" Height="32"
-                                      MinWidth="32" MaxWidth="32"
-                                      CornerRadius="6,0,0,6"
-                                      Background="#EEF7F4"
-                                      Foreground="#0C756A"
-                                      BorderBrush="#CFE6E1"
-                                      BorderThickness="1,1,0,1"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center"
-                                      Command="{Binding ElementName=RootWindow, Path=DataContext.GiamSoLuongCommand}"
-                                      CommandParameter="{Binding}"/>
+                                Width="32" Height="32"
+                                MinWidth="32" MaxWidth="32"
+                                CornerRadius="6,0,0,6"
+                                Background="#EEF7F4"
+                                Foreground="#0C756A"
+                                BorderBrush="#CFE6E1"
+                                BorderThickness="1,1,0,1"
+                                Padding="0"
+                                HorizontalContentAlignment="Center"
+                                VerticalContentAlignment="Center"
+                                Command="{Binding ElementName=RootWindow, Path=DataContext.GiamSoLuongCommand}"
+                                CommandParameter="{Binding}" />
                               <TextBox Grid.Column="1"
-                                       Width="40"
-                                       MinWidth="40" MaxWidth="40"
-                                       Height="32"
-                                       Margin="0"
-                                       Padding="0"
-                                       TextAlignment="Center"
-                                       HorizontalContentAlignment="Center"
-                                       VerticalContentAlignment="Center"
-                                       BorderBrush="#CFE6E1"
-                                       BorderThickness="1"
-                                       Background="#F8FBFA"
-                                       Text="{Binding SoLuong, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                Width="40"
+                                MinWidth="40" MaxWidth="40"
+                                Height="32"
+                                Margin="0"
+                                Padding="0"
+                                TextAlignment="Center"
+                                HorizontalContentAlignment="Center"
+                                VerticalContentAlignment="Center"
+                                BorderBrush="#CFE6E1"
+                                BorderThickness="1"
+                                Background="#F8FBFA"
+                                Text="{Binding SoLuong, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                               <Button Grid.Column="2"
-                                      Content="+"
-                                      Width="32" Height="32"
-                                      MinWidth="32" MaxWidth="32"
-                                      CornerRadius="0,6,6,0"
-                                      Background="#EEF7F4"
-                                      Foreground="#0C756A"
-                                      BorderBrush="#CFE6E1"
-                                      BorderThickness="0,1,1,1"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center"
-                                      Command="{Binding ElementName=RootWindow, Path=DataContext.TangSoLuongCommand}"
-                                      CommandParameter="{Binding}"/>
+                                Content="+"
+                                Width="32" Height="32"
+                                MinWidth="32" MaxWidth="32"
+                                CornerRadius="0,6,6,0"
+                                Background="#EEF7F4"
+                                Foreground="#0C756A"
+                                BorderBrush="#CFE6E1"
+                                BorderThickness="0,1,1,1"
+                                Padding="0"
+                                HorizontalContentAlignment="Center"
+                                VerticalContentAlignment="Center"
+                                Command="{Binding ElementName=RootWindow, Path=DataContext.TangSoLuongCommand}"
+                                CommandParameter="{Binding}" />
                             </Grid>
                           </StackPanel>
 
                           <TextBlock Grid.Column="2"
-                                     Text="{Binding ThanhTien, StringFormat={}{0:N0} đ}"
-                                     Foreground="#087F6E"
-                                     FontWeight="Bold"
-                                     VerticalAlignment="Center"
-                                     HorizontalAlignment="Right"
-                                     Width="140"
-                                     TextAlignment="Right"
-                                     Margin="0,0,6,0"/>
+                            Text="{Binding ThanhTien, StringFormat={}{0:N0} đ}"
+                            Foreground="#087F6E"
+                            FontWeight="Bold"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Right"
+                            Width="140"
+                            TextAlignment="Right"
+                            Margin="0,0,6,0" />
 
                           <Button Grid.Column="3"
-                                  Content="×"
-                                  Width="24" Height="24"
-                                  CornerRadius="12"
-                                  Background="#FDECEC"
-                                  Foreground="#D92D20"
-                                  BorderBrush="#F1B7B1"
-                                  BorderThickness="1"
-                                  VerticalAlignment="Center"
-                                  HorizontalAlignment="Center"
-                                  Command="{Binding ElementName=RootWindow, Path=DataContext.XoaKhoiGioHangCommand}"
-                                  CommandParameter="{Binding}"/>
+                            Content="×"
+                            Width="24" Height="24"
+                            CornerRadius="12"
+                            Background="#FDECEC"
+                            Foreground="#D92D20"
+                            BorderBrush="#F1B7B1"
+                            BorderThickness="1"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            Command="{Binding ElementName=RootWindow, Path=DataContext.XoaKhoiGioHangCommand}"
+                            CommandParameter="{Binding}" />
                         </Grid>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
                 </ScrollViewer>
 
-                <Border Grid.Row="2" Margin="0,12,0,0" Padding="10" CornerRadius="10" Background="#EAF9F5">
-                  <StackPanel Spacing="3">
+                <Border Grid.Row="2"
+                  Margin="0,12,0,0"
+                  Padding="12"
+                  CornerRadius="10"
+                  Background="#EAF9F5">
+
+                  <StackPanel Spacing="4">
+
+                    <!-- TẠM TÍNH -->
                     <Grid ColumnDefinitions="*,Auto">
-                      <TextBlock Text="Tạm tính" Foreground="#61736E"/>
-                      <TextBlock Grid.Column="1" Text="{Binding SaleSubtotal, StringFormat={}{0:N0} đ}" Foreground="#263B35"/>
+                      <TextBlock Text="Tạm tính"
+                        Foreground="#61736E" />
+
+                      <TextBlock Grid.Column="1"
+                        Text="{Binding SaleSubtotal, StringFormat={}{0:N0} đ}"
+                        Foreground="#263B35" />
                     </Grid>
-                    <Grid ColumnDefinitions="*,Auto">
-                      <TextBlock Text="Giảm giá" Foreground="#61736E"/>
-                      <TextBlock Grid.Column="1" Text="{Binding SaleDiscountAmount, StringFormat=- {0:N0} đ}" Foreground="#D64545"/>
+
+                    <!-- ĐƯỜNG PHÂN CÁCH -->
+                    <Border Height="1"
+                      Background="#D5EAE4"
+                      Margin="0,0,0,4" />
+
+                    <!-- GIẢM GIÁ -->
+                    <Grid ColumnDefinitions="*,Auto"
+                      Margin="0,8,0,0">
+
+                      <TextBlock Text="Giảm giá"
+                        Foreground="#61736E"
+                        VerticalAlignment="Center" />
+
+                      <Grid Grid.Column="1"
+                        ColumnDefinitions="Auto,160"
+                        ColumnSpacing="6">
+
+                        <ComboBox ItemsSource="{Binding DiscountModes}"
+                          SelectedItem="{Binding SaleDiscountMode, Mode=TwoWay}"
+                          Padding="8,5" />
+
+                        <TextBox Grid.Column="1"
+                          Text="{Binding SaleDiscountInput, Mode=TwoWay, Converter={StaticResource ThousandsSeparatorConverter}}"
+                          Watermark="0"
+                          TextChanged="OnSaleDiscountTextChanged"
+                          HorizontalContentAlignment="Right"
+                          Padding="8,5" />
+                      </Grid>
                     </Grid>
-                    <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
-    <TextBlock Text="Tiền khách đưa"
-               Foreground="#61736E"
-               VerticalAlignment="Center"/>
 
-    <TextBox Grid.Column="1"
-             Width="160"
-             Text="{Binding TienKhachDua, Mode=TwoWay}"
-             HorizontalContentAlignment="Right"
-             Watermark="0"/>
-</Grid>
-<Grid ColumnDefinitions="*,Auto"
-      Margin="0,6,0,0">
-    <TextBlock Text="Tiền thối"
-               Foreground="#61736E"/>
+                    <!-- TIỀN KHÁCH ĐƯA -->
+                    <Grid ColumnDefinitions="*,Auto"
+                      Margin="0,6,0,0">
 
-    <TextBlock Grid.Column="1"
-               Text="{Binding TienThoi, StringFormat={}{0:N0} đ}"
-               Foreground="#087F6E"
-               FontWeight="Bold"/>
-</Grid>
+                      <TextBlock Text="Tiền khách đưa"
+                        Foreground="#61736E"
+                        VerticalAlignment="Center" />
 
-<Grid ColumnDefinitions="*,Auto"
-      Margin="0,4,0,0">
-    <TextBlock Text="Công nợ"
-               Foreground="#61736E"/>
-
-    <TextBlock Grid.Column="1"
-               Text="{Binding TienCongNo, StringFormat={}{0:N0} đ}"
-               Foreground="#D64545"
-               FontWeight="Bold"/>
-</Grid>
-
-<TextBlock Text="{Binding TrangThaiThanhToan}"
-           Margin="0,6,0,0"
-           Foreground="#087F6E"
-           FontWeight="SemiBold"
-           HorizontalAlignment="Right"/>
-                    <Grid ColumnDefinitions="*,Auto" Margin="0,3,0,0">
-                      <TextBlock Text="Tổng tiền" Foreground="#163F38" FontWeight="Bold"/>
-                      <TextBlock Grid.Column="1" Text="{Binding SaleTotal, StringFormat={}{0:N0} đ}" Foreground="#087F6E" FontWeight="Bold"/>
+                      <TextBox Grid.Column="1"
+                        Width="160"
+                        Text="{Binding TienKhachDua, Mode=OneWay}"
+                        TextChanged="OnTienKhachDuaTextChangedUI"
+                        HorizontalContentAlignment="Right"
+                        Watermark="0" />
                     </Grid>
+
+                    <!-- TIỀN THỐI -->
+                    <Grid ColumnDefinitions="*,Auto"
+                      Margin="0,6,0,0">
+
+                      <TextBlock Text="Tiền thối"
+                        Foreground="#61736E" />
+
+                      <TextBlock Grid.Column="1"
+                        Text="{Binding TienThoi, StringFormat={}{0:N0} đ}"
+                        Foreground="#087F6E"
+                        FontWeight="Bold" />
+                    </Grid>
+
+                    <!-- CÔNG NỢ -->
+                    <Grid ColumnDefinitions="*,Auto"
+                      Margin="0,4,0,0">
+
+                      <TextBlock Text="Công nợ"
+                        Foreground="#61736E" />
+
+                      <TextBlock Grid.Column="1"
+                        Text="{Binding TienCongNo, StringFormat={}{0:N0} đ}"
+                        Foreground="#D64545"
+                        FontWeight="Bold" />
+                    </Grid>
+
+                    <!-- TRẠNG THÁI -->
+                    <TextBlock Text="{Binding TrangThaiThanhToan}"
+                      Margin="0,6,0,0"
+                      Foreground="#087F6E"
+                      FontWeight="SemiBold"
+                      HorizontalAlignment="Right"
+                      TextWrapping="Wrap" />
+
+                    <!-- ĐƯỜNG PHÂN CÁCH -->
+                    <Border Height="1"
+                      Background="#D5EAE4"
+                      Margin="0,8,0,4" />
+
+                    <!-- TỔNG TIỀN -->
+                    <Grid ColumnDefinitions="*,Auto"
+                      Margin="0,4,0,0">
+
+                      <TextBlock Text="Tổng tiền"
+                        Foreground="#163F38"
+                        FontWeight="Bold"
+                        FontSize="15" />
+
+                      <TextBlock Grid.Column="1"
+                        Text="{Binding SaleTotal, StringFormat={}{0:N0} đ}"
+                        Foreground="#087F6E"
+                        FontWeight="Bold"
+                        FontSize="15" />
+                    </Grid>
+
                   </StackPanel>
                 </Border>
 
-                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,12,0,0">
-                  <Button Classes="secondary" Content="Đóng" Command="{Binding DongGiaoDienBanHangCommand}"/>
-                    <Button Classes="toolbar-primary" Content="Thanh toán"
-                      Command="{Binding ThanhToanCommand}"/>
+                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right"
+                  Spacing="10" Margin="0,12,0,0">
+                  <Button Classes="secondary" Content="Đóng"
+                    Command="{Binding DongGiaoDienBanHangCommand}" />
+                  <Button Classes="toolbar-primary" Content="Thanh toán"
+                    Command="{Binding ThanhToanCommand}" />
                 </StackPanel>
               </Grid>
             </Border>
@@ -882,27 +972,37 @@
         <StackPanel Margin="0,0,16,20" Spacing="16">
           <Grid ColumnDefinitions="*,Auto">
             <StackPanel>
-              <TextBlock Classes="page-title" Text="Tổng quan"/>
-              <TextBlock Text="Theo dõi nhanh hoạt động cửa hàng hôm nay" Foreground="#61736E"/>
+              <TextBlock Classes="page-title" Text="Tổng quan" />
+              <TextBlock Text="Theo dõi nhanh hoạt động cửa hàng hôm nay" Foreground="#61736E" />
             </StackPanel>
-            <Button Grid.Column="1" Classes="toolbar-action" Content="↻ Làm mới" Command="{Binding LoadCommand}" VerticalAlignment="Center"/>
+            <Button Grid.Column="1"
+              Classes="toolbar-action"
+              Content="↻ Làm mới"
+              Command="{Binding ClearInvoiceSearchCommand}" />
           </Grid>
 
           <Border Classes="card" Padding="22" Background="#EAF9F5" Margin="0">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24">
               <StackPanel>
-                <TextBlock Text="Chào mừng trở lại, admin" FontSize="22" FontWeight="Bold" Foreground="#163F38"/>
-                <TextBlock Text="Tất cả hoạt động bán hàng được tổng hợp tại đây để bạn theo dõi nhanh hơn." Foreground="#4B5D57" Margin="0,7,0,0"/>
+                <TextBlock Text="Chào mừng trở lại, admin" FontSize="22" FontWeight="Bold"
+                  Foreground="#163F38" />
+                <TextBlock
+                  Text="Tất cả hoạt động bán hàng được tổng hợp tại đây để bạn theo dõi nhanh hơn."
+                  Foreground="#4B5D57" Margin="0,7,0,0" />
                 <WrapPanel Margin="0,16,0,0">
-                  <Button Classes="toolbar-primary" Content="🛒 Bán hàng" Command="{Binding MoGiaoDienBanHangCommand}" Margin="0,0,10,0"/>
-                  <Button Classes="toolbar-action" Content="📊 Báo cáo"/>
+                  <Button Classes="toolbar-primary" Content="🛒 Bán hàng"
+                    Command="{Binding MoGiaoDienBanHangCommand}" Margin="0,0,10,0" />
+                  <Button Classes="toolbar-action" Content="📊 Báo cáo" />
                 </WrapPanel>
               </StackPanel>
-              <Border Grid.Column="1" Width="190" Background="#D4EEE6" CornerRadius="14" Padding="16">
+              <Border Grid.Column="1" Width="190" Background="#D4EEE6" CornerRadius="14"
+                Padding="16">
                 <StackPanel VerticalAlignment="Center">
-                  <TextBlock Text="Trạng thái hệ thống" FontSize="12" Foreground="#4B5D57"/>
-                  <TextBlock Text="Đang hoạt động" FontSize="19" FontWeight="Bold" Foreground="#087F6E" Margin="0,5,0,0"/>
-                  <TextBlock Text="Dữ liệu đã sẵn sàng" FontSize="12" Foreground="#4B5D57" Margin="0,4,0,0"/>
+                  <TextBlock Text="Trạng thái hệ thống" FontSize="12" Foreground="#4B5D57" />
+                  <TextBlock Text="Đang hoạt động" FontSize="19" FontWeight="Bold"
+                    Foreground="#087F6E" Margin="0,5,0,0" />
+                  <TextBlock Text="Dữ liệu đã sẵn sàng" FontSize="12" Foreground="#4B5D57"
+                    Margin="0,4,0,0" />
                 </StackPanel>
               </Border>
             </Grid>
@@ -911,30 +1011,34 @@
           <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="14">
             <Border Classes="card" Padding="18" Margin="0">
               <StackPanel>
-                <TextBlock Text="Sản phẩm" Foreground="#61736E"/>
-                <TextBlock Text="{Binding SanPhams.Count}" FontSize="30" FontWeight="Bold" Foreground="#163F38" Margin="0,8,0,2"/>
-                <TextBlock Text="Đang kinh doanh" FontSize="12" Foreground="#087F6E"/>
+                <TextBlock Text="Sản phẩm" Foreground="#61736E" />
+                <TextBlock Text="{Binding SanPhams.Count}" FontSize="30" FontWeight="Bold"
+                  Foreground="#163F38" Margin="0,8,0,2" />
+                <TextBlock Text="Đang kinh doanh" FontSize="12" Foreground="#087F6E" />
               </StackPanel>
             </Border>
             <Border Grid.Column="1" Classes="card" Padding="18" Margin="0">
               <StackPanel>
-                <TextBlock Text="Khách hàng" Foreground="#61736E"/>
-                <TextBlock Text="{Binding KhachHangs.Count}" FontSize="30" FontWeight="Bold" Foreground="#163F38" Margin="0,8,0,2"/>
-                <TextBlock Text="Trong hệ thống" FontSize="12" Foreground="#087F6E"/>
+                <TextBlock Text="Khách hàng" Foreground="#61736E" />
+                <TextBlock Text="{Binding KhachHangs.Count}" FontSize="30" FontWeight="Bold"
+                  Foreground="#163F38" Margin="0,8,0,2" />
+                <TextBlock Text="Trong hệ thống" FontSize="12" Foreground="#087F6E" />
               </StackPanel>
             </Border>
             <Border Grid.Column="2" Classes="card" Padding="18" Margin="0">
               <StackPanel>
-                <TextBlock Text="Hóa đơn" Foreground="#61736E"/>
-                <TextBlock Text="{Binding HoaDons.Count}" FontSize="30" FontWeight="Bold" Foreground="#163F38" Margin="0,8,0,2"/>
-                <TextBlock Text="Đã ghi nhận" FontSize="12" Foreground="#087F6E"/>
+                <TextBlock Text="Hóa đơn" Foreground="#61736E" />
+                <TextBlock Text="{Binding HoaDons.Count}" FontSize="30" FontWeight="Bold"
+                  Foreground="#163F38" Margin="0,8,0,2" />
+                <TextBlock Text="Đã ghi nhận" FontSize="12" Foreground="#087F6E" />
               </StackPanel>
             </Border>
             <Border Grid.Column="3" Classes="card" Padding="18" Margin="0">
               <StackPanel>
-                <TextBlock Text="Nhà cung cấp" Foreground="#61736E"/>
-                <TextBlock Text="{Binding NhaCungCaps.Count}" FontSize="30" FontWeight="Bold" Foreground="#163F38" Margin="0,8,0,2"/>
-                <TextBlock Text="Đang hoạt động" FontSize="12" Foreground="#087F6E"/>
+                <TextBlock Text="Nhà cung cấp" Foreground="#61736E" />
+                <TextBlock Text="{Binding NhaCungCaps.Count}" FontSize="30" FontWeight="Bold"
+                  Foreground="#163F38" Margin="0,8,0,2" />
+                <TextBlock Text="Đang hoạt động" FontSize="12" Foreground="#087F6E" />
               </StackPanel>
             </Border>
           </Grid>
@@ -944,19 +1048,26 @@
               <StackPanel>
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel>
-                    <TextBlock Text="Tình hình hàng hóa" FontSize="17" FontWeight="SemiBold" Foreground="#163F38"/>
-                    <TextBlock Text="Theo dõi tồn kho nổi bật" FontSize="12" Foreground="#61736E" Margin="0,4,0,0"/>
+                    <TextBlock Text="Tình hình hàng hóa" FontSize="17" FontWeight="SemiBold"
+                      Foreground="#163F38" />
+                    <TextBlock Text="Theo dõi tồn kho nổi bật" FontSize="12" Foreground="#61736E"
+                      Margin="0,4,0,0" />
                   </StackPanel>
-                  <TextBlock Grid.Column="1" Text="Tồn kho" Foreground="#087F6E" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="1" Text="Tồn kho" Foreground="#087F6E"
+                    VerticalAlignment="Center" />
                 </Grid>
                 <ScrollViewer MaxHeight="250" VerticalScrollBarVisibility="Auto" Margin="0,14,0,0">
                   <ItemsControl ItemsSource="{Binding SanPhams}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="models:SanPham">
                         <Grid ColumnDefinitions="150,*,Auto" Margin="0,7">
-                          <TextBlock Text="{Binding TenSanPham}" TextTrimming="CharacterEllipsis" Foreground="#263B35"/>
-                          <ProgressBar Grid.Column="1" Value="{Binding TonKhoExcel}" Maximum="100" Height="8" Margin="12,0" Foreground="#087F6E" Background="#E6F1EE" VerticalAlignment="Center"/>
-                          <TextBlock Grid.Column="2" Text="{Binding TonKhoExcel, StringFormat={}{0:N0}}" Foreground="#61736E"/>
+                          <TextBlock Text="{Binding TenSanPham}" TextTrimming="CharacterEllipsis"
+                            Foreground="#263B35" />
+                          <ProgressBar Grid.Column="1" Value="{Binding TonKhoExcel}" Maximum="100"
+                            Height="8" Margin="12,0" Foreground="#087F6E" Background="#E6F1EE"
+                            VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="2"
+                            Text="{Binding TonKhoExcel, StringFormat={}{0:N0}}" Foreground="#61736E" />
                         </Grid>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -969,10 +1080,13 @@
               <StackPanel>
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel>
-                    <TextBlock Text="Hóa đơn gần đây" FontSize="17" FontWeight="SemiBold" Foreground="#163F38"/>
-                    <TextBlock Text="Các giao dịch mới nhất" FontSize="12" Foreground="#61736E" Margin="0,4,0,0"/>
+                    <TextBlock Text="Hóa đơn gần đây" FontSize="17" FontWeight="SemiBold"
+                      Foreground="#163F38" />
+                    <TextBlock Text="Các giao dịch mới nhất" FontSize="12" Foreground="#61736E"
+                      Margin="0,4,0,0" />
                   </StackPanel>
-                  <TextBlock Grid.Column="1" Text="Mới nhất" Foreground="#087F6E" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="1" Text="Mới nhất" Foreground="#087F6E"
+                    VerticalAlignment="Center" />
                 </Grid>
                 <ScrollViewer MaxHeight="250" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
                   <ItemsControl ItemsSource="{Binding HoaDons}">
@@ -981,10 +1095,14 @@
                         <Border BorderBrush="#E2ECE8" BorderThickness="0,0,0,1" Padding="0,9">
                           <Grid ColumnDefinitions="*,Auto">
                             <StackPanel>
-                              <TextBlock Text="{Binding MaHoaDon}" FontWeight="SemiBold" Foreground="#263B35"/>
-                              <TextBlock Text="{Binding TenKhachHang, FallbackValue='Khách lẻ'}" FontSize="12" Foreground="#61736E"/>
+                              <TextBlock Text="{Binding MaHoaDon}" FontWeight="SemiBold"
+                                Foreground="#263B35" />
+                              <TextBlock Text="{Binding TenKhachHang, FallbackValue='Khách lẻ'}"
+                                FontSize="12" Foreground="#61736E" />
                             </StackPanel>
-                            <TextBlock Grid.Column="1" Text="{Binding KhachCanTra, StringFormat={}{0:N0} đ}" Foreground="#087F6E" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1"
+                              Text="{Binding KhachCanTra, StringFormat={}{0:N0} đ}"
+                              Foreground="#087F6E" FontWeight="SemiBold" VerticalAlignment="Center" />
                           </Grid>
                         </Border>
                       </DataTemplate>
@@ -998,323 +1116,322 @@
       </ScrollViewer>
 
       <TabControl Grid.RowSpan="2" Margin="0"
-                  SelectedIndex="{Binding SelectedDataTabIndex}"
-                  IsVisible="{Binding IsDataSectionSelected}">
-        <!-- TAB HÀNG HÓA - GIAO DIỆN DẠNG DANH SÁCH GIỐNG ẢNH MẪU -->
+        SelectedIndex="{Binding SelectedDataTabIndex}"
+        IsVisible="{Binding IsDataSectionSelected}">
         <!-- TAB HÀNG HÓA - GIAO DIỆN DẠNG DANH SÁCH GIỐNG ẢNH MẪU -->
         <TabItem Header="Hàng hóa">
           <Grid Margin="0,0,0,0" RowDefinitions="Auto,Auto,*">
 
             <!-- THANH CÔNG CỤ -->
             <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto"
-                  ColumnSpacing="8"
-                  Margin="0,0,0,10">
+              ColumnSpacing="8"
+              Margin="0,0,0,10">
 
               <TextBox Classes="searchInput"
-                       Watermark="⌕  Theo mã, tên hàng"
-                       Text="{Binding ProductSearch, Mode=TwoWay}"
-                       Height="38"
-                       VerticalContentAlignment="Center"
-                       Padding="12,7"
-                       Margin="0"
-                       />
+                Watermark="⌕  Theo mã, tên hàng"
+                Text="{Binding ProductSearch, Mode=TwoWay}"
+                Height="38"
+                VerticalContentAlignment="Center"
+                Padding="12,7"
+                Margin="0"
+              />
 
               <Button Grid.Column="1"
-                      Classes="toolbar-primary"
-                      Content="＋  Tạo mới"
-                      Command="{Binding ThemSanPhamCommand}"
-                      Margin="0"
-                      Height="38"/>
+                Classes="toolbar-primary"
+                Content="＋  Tạo mới"
+                Command="{Binding ThemSanPhamCommand}"
+                Margin="0"
+                Height="38" />
 
               <Button Grid.Column="2"
-                      Classes="toolbar-action"
-                      Content="⇩  Import file"
-                      Command="{Binding ThemSanPhamTuFileCommand}"
-                      Margin="0"
-                      Height="38"/>
+                Classes="toolbar-action"
+                Content="⇩  Import file"
+                Command="{Binding ThemSanPhamTuFileCommand}"
+                Margin="0"
+                Height="38" />
 
               <Button Grid.Column="3"
-                      Classes="toolbar-action"
-                      Content="⇧  Xuất file"
-                      Margin="0"
-                      Height="38"
-                      Padding="14,7"
-                      Click="OnExportProductsClick"/>
+                Classes="toolbar-action"
+                Content="⇧  Xuất file"
+                Margin="0"
+                Height="38"
+                Padding="14,7"
+                Click="OnExportProductsClick" />
 
               <Button Grid.Column="4"
-                      Classes="toolbar-action"
-                      Content="☷"
-                      ToolTip.Tip="Kiểu hiển thị"
-                      Margin="0"
-                      Padding="12,7"
-                      Height="38"/>
+                Classes="toolbar-action"
+                Content="☷"
+                ToolTip.Tip="Kiểu hiển thị"
+                Margin="0"
+                Padding="12,7"
+                Height="38" />
 
               <Button Grid.Column="5"
-                      Classes="toolbar-action"
-                      Content="⚙"
-                      ToolTip.Tip="Cài đặt"
-                      Margin="0"
-                      Padding="12,7"
-                      Height="38"/>
+                Classes="toolbar-action"
+                Content="⚙"
+                ToolTip.Tip="Cài đặt"
+                Margin="0"
+                Padding="12,7"
+                Height="38" />
 
               <Button Grid.Column="6"
-                    Classes="toolbar-action"
-                    Content="?"
-                    ToolTip.Tip="Trợ giúp"
-                    Margin="0"
-                    Padding="12,7"
-                    Height="38"/>
+                Classes="toolbar-action"
+                Content="?"
+                ToolTip.Tip="Trợ giúp"
+                Margin="0"
+                Padding="12,7"
+                Height="38" />
 
             </Grid>
 
             <!-- DÒNG TRẠNG THÁI -->
             <Grid Grid.Row="1"
-                  ColumnDefinitions="*,Auto"
-                  Margin="0,0,0,8">
+              ColumnDefinitions="*,Auto"
+              Margin="0,0,0,8">
 
               <StackPanel Orientation="Horizontal" Spacing="5">
                 <TextBlock Text="Danh sách hàng hóa"
-                           Foreground="#344054"
-                           FontSize="14"
-                           FontWeight="SemiBold"
-                           VerticalAlignment="Center"/>
+                  Foreground="#344054"
+                  FontSize="14"
+                  FontWeight="SemiBold"
+                  VerticalAlignment="Center" />
                 <TextBlock Text="•"
-                           Foreground="#98A2B3"
-                           VerticalAlignment="Center"/>
+                  Foreground="#98A2B3"
+                  VerticalAlignment="Center" />
                 <TextBlock Text="{Binding SanPhams.Count, StringFormat={}{0} sản phẩm}"
-                           Foreground="#667085"
-                           FontSize="13"
-                           VerticalAlignment="Center"/>
+                  Foreground="#667085"
+                  FontSize="13"
+                  VerticalAlignment="Center" />
               </StackPanel>
 
               <TextBlock Grid.Column="1"
-                         Text="{Binding StatusMessage}"
-                         Foreground="#667085"
-                         FontSize="12"
-                         VerticalAlignment="Center"
-                         TextTrimming="CharacterEllipsis"/>
+                Text="{Binding StatusMessage}"
+                Foreground="#667085"
+                FontSize="12"
+                VerticalAlignment="Center"
+                TextTrimming="CharacterEllipsis" />
             </Grid>
 
             <!-- BẢNG HÀNG HÓA -->
             <Border Grid.Row="2"
-                    Background="White"
-                    BorderBrush="#D9E2EC"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    ClipToBounds="True">
+              Background="White"
+              BorderBrush="#D9E2EC"
+              BorderThickness="1"
+              CornerRadius="8"
+              ClipToBounds="True">
 
               <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                            VerticalScrollBarVisibility="Auto">
+                VerticalScrollBarVisibility="Auto">
 
                 <Grid MinWidth="1450"
-                      RowDefinitions="Auto,*">
+                  RowDefinitions="Auto,*">
 
                   <!-- HEADER -->
                   <Border Grid.Row="0"
-                          Background="#E7F1FB"
-                          BorderBrush="#D7E3EF"
-                          BorderThickness="0,0,0,1"
-                          Padding="8,0">
+                    Background="#E7F1FB"
+                    BorderBrush="#D7E3EF"
+                    BorderThickness="0,0,0,1"
+                    Padding="8,0">
 
                     <Grid ColumnDefinitions="34,34,42,150,260,120,120,120,120,120,170,130"
-                          Height="42">
+                      Height="42">
 
                       <CheckBox VerticalAlignment="Center"
-                                HorizontalAlignment="Center"/>
+                        HorizontalAlignment="Center" />
 
                       <TextBlock Grid.Column="1"
-                                 Text="☆"
-                                 FontSize="21"
-                                 Foreground="#667085"
-                                 HorizontalAlignment="Center"
-                                 VerticalAlignment="Center"/>
+                        Text="☆"
+                        FontSize="21"
+                        Foreground="#667085"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
 
                       <TextBlock Grid.Column="2"
-                                 Text=""
-                                 HorizontalAlignment="Center"
-                                 VerticalAlignment="Center"/>
+                        Text=""
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
 
                       <TextBlock Grid.Column="3"
-                                 Text="Mã hàng"
-                                 FontWeight="SemiBold"
-                                 Foreground="#344054"
-                                 VerticalAlignment="Center"/>
+                        Text="Mã hàng"
+                        FontWeight="SemiBold"
+                        Foreground="#344054"
+                        VerticalAlignment="Center" />
 
                       <TextBlock Grid.Column="4"
-                                 Text="Tên hàng"
-                                 FontWeight="SemiBold"
-                                 Foreground="#344054"
-                                 VerticalAlignment="Center"/>
+                        Text="Tên hàng"
+                        FontWeight="SemiBold"
+                        Foreground="#344054"
+                        VerticalAlignment="Center" />
 
                       <TextBlock Grid.Column="5"
-                                 Text="Giá bán"
-                                 FontWeight="SemiBold"
-                                 Foreground="#344054"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,10,0"
-                                 VerticalAlignment="Center"/>
+                        Text="Giá bán"
+                        FontWeight="SemiBold"
+                        Foreground="#344054"
+                        HorizontalAlignment="Right"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Center" />
 
                       <TextBlock Grid.Column="6"
-                                 Text="Giá vốn"
-                                 FontWeight="SemiBold"
-                                 Foreground="#344054"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,10,0"
-                                 VerticalAlignment="Center"/>
+                        Text="Giá vốn"
+                        FontWeight="SemiBold"
+                        Foreground="#344054"
+                        HorizontalAlignment="Right"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Center" />
 
                       <TextBlock Grid.Column="7"
-                                 Text="Tồn kho"
-                                 FontWeight="SemiBold"
-                                 Foreground="#344054"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,10,0"
-                                 VerticalAlignment="Center"/>
+                        Text="Tồn kho"
+                        FontWeight="SemiBold"
+                        Foreground="#344054"
+                        HorizontalAlignment="Right"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Center" />
 
                       <TextBlock Grid.Column="8"
-                                 Text="Khách đặt"
-                                 FontWeight="SemiBold"
-                                 Foreground="#344054"
-                                 HorizontalAlignment="Right"
-                                 Margin="0,0,10,0"
-                                 VerticalAlignment="Center"/>
+                        Text="Khách đặt"
+                        FontWeight="SemiBold"
+                        Foreground="#344054"
+                        HorizontalAlignment="Right"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Center" />
 
                       <TextBlock Grid.Column="9"
-                                 Text="Đơn vị tính"
-                                 FontWeight="SemiBold"
-                                 Foreground="#344054"
-                                 VerticalAlignment="Center"/>
+                        Text="Đơn vị tính"
+                        FontWeight="SemiBold"
+                        Foreground="#344054"
+                        VerticalAlignment="Center" />
 
                       <TextBlock Grid.Column="10"
-                                 Text="Thời gian tạo"
-                                 FontWeight="SemiBold"
-                                 Foreground="#344054"
-                                 VerticalAlignment="Center"/>
+                        Text="Thời gian tạo"
+                        FontWeight="SemiBold"
+                        Foreground="#344054"
+                        VerticalAlignment="Center" />
 
                       <TextBlock Grid.Column="11"
-                                 Text="Dự kiến hết hàng"
-                                 FontWeight="SemiBold"
-                                 Foreground="#344054"
-                                 VerticalAlignment="Center"/>
+                        Text="Dự kiến hết hàng"
+                        FontWeight="SemiBold"
+                        Foreground="#344054"
+                        VerticalAlignment="Center" />
                     </Grid>
                   </Border>
 
                   <!-- DANH SÁCH -->
                   <ItemsControl Grid.Row="1"
-                                ItemsSource="{Binding SanPhams}">
+                    ItemsSource="{Binding SanPhams}">
 
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="models:SanPham">
 
                         <Border Background="White"
-                                BorderBrush="#E4E7EC"
-                                BorderThickness="0,0,0,1"
-                                Padding="8,0">
+                          BorderBrush="#E4E7EC"
+                          BorderThickness="0,0,0,1"
+                          Padding="8,0">
 
                           <Grid ColumnDefinitions="34,34,42,150,260,120,120,120,120,120,170,130"
-                                Height="56">
+                            Height="56">
 
                             <!-- CHỌN -->
                             <CheckBox HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"/>
+                              VerticalAlignment="Center" />
 
                             <!-- YÊU THÍCH -->
                             <TextBlock Grid.Column="1"
-                                       Text="☆"
-                                       FontSize="21"
-                                       Foreground="#8B98A7"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"/>
+                              Text="☆"
+                              FontSize="21"
+                              Foreground="#8B98A7"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
 
                             <!-- ẢNH -->
                             <Border Grid.Column="2"
-                                    Width="30"
-                                    Height="30"
-                                    CornerRadius="5"
-                                    Background="#EAF3FF"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
+                              Width="30"
+                              Height="30"
+                              CornerRadius="5"
+                              Background="#EAF3FF"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center">
 
                               <Image Source="{Binding HinhAnhBitmap}"
-                                     Stretch="Uniform"
-                                     Width="22"
-                                     Height="22"/>
+                                Stretch="Uniform"
+                                Width="22"
+                                Height="22" />
                             </Border>
 
                             <!-- MÃ HÀNG -->
                             <TextBlock Grid.Column="3"
-                                       Text="{Binding MaSanPham}"
-                                       Foreground="#344054"
-                                       FontSize="13"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                              Text="{Binding MaSanPham}"
+                              Foreground="#344054"
+                              FontSize="13"
+                              VerticalAlignment="Center"
+                              TextTrimming="CharacterEllipsis" />
 
                             <!-- TÊN HÀNG -->
                             <TextBlock Grid.Column="4"
-                                       Text="{Binding TenSanPham}"
-                                       Foreground="#344054"
-                                       FontSize="13"
-                                       VerticalAlignment="Center"
-                                       TextWrapping="NoWrap"
-                                       TextTrimming="CharacterEllipsis"/>
+                              Text="{Binding TenSanPham}"
+                              Foreground="#344054"
+                              FontSize="13"
+                              VerticalAlignment="Center"
+                              TextWrapping="NoWrap"
+                              TextTrimming="CharacterEllipsis" />
 
                             <!-- GIÁ BÁN -->
                             <TextBlock Grid.Column="5"
-                                       Text="{Binding GiaBan, StringFormat={}{0:N0}}"
-                                       Foreground="#344054"
-                                       FontSize="13"
-                                       HorizontalAlignment="Right"
-                                       Margin="0,0,10,0"
-                                       VerticalAlignment="Center"/>
+                              Text="{Binding GiaBan, StringFormat={}{0:N0}}"
+                              Foreground="#344054"
+                              FontSize="13"
+                              HorizontalAlignment="Right"
+                              Margin="0,0,10,0"
+                              VerticalAlignment="Center" />
 
                             <!-- GIÁ VỐN -->
                             <TextBlock Grid.Column="6"
-                                       Text="{Binding GiaVon, StringFormat={}{0:N0}}"
-                                       Foreground="#344054"
-                                       FontSize="13"
-                                       HorizontalAlignment="Right"
-                                       Margin="0,0,10,0"
-                                       VerticalAlignment="Center"/>
+                              Text="{Binding GiaVon, StringFormat={}{0:N0}}"
+                              Foreground="#344054"
+                              FontSize="13"
+                              HorizontalAlignment="Right"
+                              Margin="0,0,10,0"
+                              VerticalAlignment="Center" />
 
                             <!-- TỒN KHO -->
                             <TextBlock Grid.Column="7"
-                                       Text="{Binding TonKhoExcel, StringFormat={}{0:N0}}"
-                                       Foreground="#344054"
-                                       FontSize="13"
-                                       HorizontalAlignment="Right"
-                                       Margin="0,0,10,0"
-                                       VerticalAlignment="Center"/>
+                              Text="{Binding TonKhoExcel, StringFormat={}{0:N0}}"
+                              Foreground="#344054"
+                              FontSize="13"
+                              HorizontalAlignment="Right"
+                              Margin="0,0,10,0"
+                              VerticalAlignment="Center" />
 
                             <!-- KHÁCH ĐẶT -->
                             <TextBlock Grid.Column="8"
-                                       Text="{Binding KhachDat, StringFormat={}{0:N0}}"
-                                       Foreground="#344054"
-                                       FontSize="13"
-                                       HorizontalAlignment="Right"
-                                       Margin="0,0,10,0"
-                                       VerticalAlignment="Center"/>
+                              Text="{Binding KhachDat, StringFormat={}{0:N0}}"
+                              Foreground="#344054"
+                              FontSize="13"
+                              HorizontalAlignment="Right"
+                              Margin="0,0,10,0"
+                              VerticalAlignment="Center" />
 
                             <!-- ĐVT -->
                             <TextBlock Grid.Column="9"
-                                       Text="{Binding DonViTinh}"
-                                       Foreground="#667085"
-                                       FontSize="13"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                              Text="{Binding DonViTinh}"
+                              Foreground="#667085"
+                              FontSize="13"
+                              VerticalAlignment="Center"
+                              TextTrimming="CharacterEllipsis" />
 
                             <!-- THỜI GIAN TẠO -->
                             <TextBlock Grid.Column="10"
-                                       Text="{Binding NgayTao, StringFormat={}{0:dd/MM/yyyy HH:mm}}"
-                                       Foreground="#667085"
-                                       FontSize="13"
-                                       VerticalAlignment="Center"/>
+                              Text="{Binding NgayTao, StringFormat={}{0:dd/MM/yyyy HH:mm}}"
+                              Foreground="#667085"
+                              FontSize="13"
+                              VerticalAlignment="Center" />
 
                             <!-- DỰ KIẾN HẾT HÀNG -->
                             <TextBlock Grid.Column="11"
-                                       Text="{Binding DuKienHetHang}"
-                                       Foreground="#344054"
-                                       FontSize="13"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                              Text="{Binding DuKienHetHang}"
+                              Foreground="#344054"
+                              FontSize="13"
+                              VerticalAlignment="Center"
+                              TextTrimming="CharacterEllipsis" />
 
 
                           </Grid>
@@ -1334,460 +1451,655 @@
         <TabItem Header="Khách hàng">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,14,16,0" RowSpacing="12">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-              <TextBox Classes="searchInput" Watermark="🔍 Tìm mã, tên hoặc số điện thoại..."
-                       Text="{Binding CustomerSearch, Mode=TwoWay}"
-                       TextChanged="OnCustomerSearchTextChanged"
-                       Margin="0,0,10,0"/>
-              <Button Grid.Column="1" Classes="toolbar-action" Content="Tìm kiếm"
-                      Command="{Binding SearchCustomersCommand}"
-                      Margin="0,0,10,0"/>
-              <Button Grid.Column="2" Classes="toolbar-action" Content="📁 Nhập file"
-                      Margin="0,0,10,0"
-                      Command="{Binding ThemKhachHangTuFileCommand}"/>
-              <Button Grid.Column="3" Classes="toolbar-primary" Content="＋ Thêm mới"
-                      Margin="0"
-                      Command="{Binding ThemMoiKhachHangCommand}"/>
-            </Grid>
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <TextBox Classes="searchInput" Watermark="🔍 Tìm mã, tên hoặc số điện thoại..."
+                  Text="{Binding CustomerSearch, Mode=TwoWay}"
+                  TextChanged="OnCustomerSearchTextChanged"
+                  Margin="0,0,10,0" />
+                <Button Grid.Column="1" Classes="toolbar-action" Content="Tìm kiếm"
+                  Command="{Binding SearchCustomersCommand}"
+                  Margin="0,0,10,0" />
+                <Button Grid.Column="2" Classes="toolbar-action" Content="📁 Nhập file"
+                  Margin="0,0,10,0"
+                  Command="{Binding ThemKhachHangTuFileCommand}" />
+                <Button Grid.Column="3" Classes="toolbar-primary" Content="＋ Thêm mới"
+                  Margin="0"
+                  Command="{Binding ThemMoiKhachHangCommand}" />
+              </Grid>
 
-            <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="14">
-              <Border Classes="card" Padding="18" Margin="0">
-                <StackPanel>
-                  <TextBlock Text="Tổng khách hàng" Foreground="#61736E" FontSize="12"/>
-                  <TextBlock Text="{Binding KhachHangs.Count}" FontSize="28" FontWeight="Bold" Foreground="#163F38" Margin="0,8,0,0"/>
-                </StackPanel>
-              </Border>
-
-              <Border Grid.Column="1" Classes="card" Padding="18" Margin="0">
-                <StackPanel>
-                  <TextBlock Text="Khách mới" Foreground="#61736E" FontSize="12"/>
-                  <TextBlock Text="12" FontSize="28" FontWeight="Bold" Foreground="#163F38" Margin="0,8,0,0"/>
-                </StackPanel>
-              </Border>
-            </Grid>
-
-                <Border Grid.Row="2" Classes="card" Padding="0" Margin="0"
-                  IsVisible="{Binding SelectedKhachHang, Converter={x:Static ObjectConverters.IsNull}}">
-              <Grid RowDefinitions="Auto,*">
-                <Border Padding="16,14" BorderBrush="#E2ECE8" BorderThickness="0,0,0,1">
-                  <TextBlock Text="Danh sách khách hàng" FontWeight="SemiBold" FontSize="16" Foreground="#163F38"/>
+              <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="14">
+                <Border Classes="card" Padding="18" Margin="0">
+                  <StackPanel>
+                    <TextBlock Text="Tổng khách hàng" Foreground="#61736E" FontSize="12" />
+                    <TextBlock Text="{Binding KhachHangs.Count}" FontSize="28" FontWeight="Bold"
+                      Foreground="#163F38" Margin="0,8,0,0" />
+                  </StackPanel>
                 </Border>
 
-                <Grid Grid.Row="1" RowDefinitions="Auto,*">
-                  <Border Background="#E5F2EE" Padding="12,9">
-                    <Grid ColumnDefinitions="140,*,180,240,*,160">
-                      <TextBlock Text="Mã KH" FontWeight="SemiBold" Foreground="#164B40"/>
-                      <TextBlock Grid.Column="1" Text="Tên khách hàng" FontWeight="SemiBold" Foreground="#164B40"/>
-                      <TextBlock Grid.Column="2" Text="Điện thoại" FontWeight="SemiBold" Foreground="#164B40"/>
-                      <TextBlock Grid.Column="3" Text="Email" FontWeight="SemiBold" Foreground="#164B40"/>
-                      <TextBlock Grid.Column="4" Text="Địa chỉ" FontWeight="SemiBold" Foreground="#164B40"/>
-                      <TextBlock Grid.Column="5" Text="Nhóm" FontWeight="SemiBold" Foreground="#164B40"/>
-                    </Grid>
+                <Border Grid.Column="1" Classes="card" Padding="18" Margin="0">
+                  <StackPanel>
+                    <TextBlock Text="Khách mới" Foreground="#61736E" FontSize="12" />
+                    <TextBlock Text="12" FontSize="28" FontWeight="Bold" Foreground="#163F38"
+                      Margin="0,8,0,0" />
+                  </StackPanel>
+                </Border>
+              </Grid>
+
+              <Border Grid.Row="2" Classes="card" Padding="0" Margin="0"
+                IsVisible="{Binding SelectedKhachHang, Converter={x:Static ObjectConverters.IsNull}}">
+                <Grid RowDefinitions="Auto,*">
+                  <Border Padding="16,14" BorderBrush="#E2ECE8" BorderThickness="0,0,0,1">
+                    <TextBlock Text="Danh sách khách hàng" FontWeight="SemiBold" FontSize="16"
+                      Foreground="#163F38" />
                   </Border>
 
-                  <ListBox Grid.Row="1" ItemsSource="{Binding KhachHangs}"
-                           SelectedItem="{Binding SelectedKhachHang, Mode=TwoWay}"
-                           SelectionChanged="OnCustomerSelectionChanged"
-                           Background="Transparent" BorderThickness="0">
-                    <ListBox.ItemTemplate>
-                      <DataTemplate x:DataType="models:KhachHang">
-                        <Border BorderBrush="#E2ECE8" BorderThickness="0,0,0,1" Padding="12,10">
-                          <Grid ColumnDefinitions="140,*,180,240,*,160">
-                            <TextBlock Text="{Binding MaKhachHang}" Foreground="#263B35"/>
-                            <TextBlock Grid.Column="1" Text="{Binding TenKhachHang}" Foreground="#263B35"/>
-                            <TextBlock Grid.Column="2" Text="{Binding SoDienThoai}" Foreground="#52645E"/>
-                            <TextBlock Grid.Column="3" Text="{Binding Email}" Foreground="#52645E"/>
-                            <TextBlock Grid.Column="4" Text="{Binding DiaChi}" Foreground="#52645E" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Grid.Column="5" Text="{Binding NhomKhachHang}" Foreground="#52645E"/>
-                          </Grid>
-                        </Border>
-                      </DataTemplate>
-                    </ListBox.ItemTemplate>
-                  </ListBox>
-                </Grid>
-              </Grid>
-            </Border>
-
-                <Border Grid.Row="2" BorderBrush="#1D7A6D" BorderThickness="1.2" CornerRadius="8" Padding="16" Margin="0" Background="#F8FBFA"
-                  IsVisible="{Binding SelectedKhachHang, Converter={x:Static ObjectConverters.IsNotNull}}">
-              <Grid>
-                <Grid IsVisible="{Binding SelectedKhachHang, Converter={x:Static ObjectConverters.IsNull}}" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,30">
-                  <TextBlock Text="Chọn khách hàng trong danh sách để xem chi tiết" Foreground="#61736E" FontSize="16"/>
-                </Grid>
-
-                <Grid IsVisible="{Binding SelectedKhachHang, Converter={x:Static ObjectConverters.IsNotNull}}" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
-                  <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
-                    <TextBlock Text="Thông tin" FontWeight="SemiBold" Foreground="#1E3B35" FontSize="15"/>
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10">
-                      <TextBlock Text="Lịch sử bán/trả hàng" Foreground="#61736E" FontSize="13"/>
-                      <TextBlock Text="Nợ cần thu từ khách" Foreground="#61736E" FontSize="13"/>
-                      <Button Content="← Danh sách" Classes="toolbar-action" Margin="12,0,0,0"
-                              Command="{Binding QuayLaiDanhSachKhachHangCommand}"/>
-                    </StackPanel>
-                  </Grid>
-
-                  <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
-                    <Border Width="54" Height="54" CornerRadius="27" Background="#B8DDF3" Margin="0,0,14,0">
-                      <TextBlock Text="H" FontSize="24" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  <Grid Grid.Row="1" RowDefinitions="Auto,*">
+                    <Border Background="#E5F2EE" Padding="12,9">
+                      <Grid ColumnDefinitions="140,*,180,240,*,160">
+                        <TextBlock Text="Mã KH" FontWeight="SemiBold" Foreground="#164B40" />
+                        <TextBlock Grid.Column="1" Text="Tên khách hàng" FontWeight="SemiBold"
+                          Foreground="#164B40" />
+                        <TextBlock Grid.Column="2" Text="Điện thoại" FontWeight="SemiBold"
+                          Foreground="#164B40" />
+                        <TextBlock Grid.Column="3" Text="Email" FontWeight="SemiBold"
+                          Foreground="#164B40" />
+                        <TextBlock Grid.Column="4" Text="Địa chỉ" FontWeight="SemiBold"
+                          Foreground="#164B40" />
+                        <TextBlock Grid.Column="5" Text="Nhóm" FontWeight="SemiBold"
+                          Foreground="#164B40" />
+                      </Grid>
                     </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding SelectedKhachHang.TenKhachHang}" FontSize="18" FontWeight="Bold" Foreground="#163F38"/>
-                      <TextBlock Text="{Binding SelectedKhachHang.MaKhachHang}" Foreground="#61736E" FontSize="13"/>
-                    </StackPanel>
-                    <TextBlock Grid.Column="2" Text="Chỉ nhận trung tâm" Foreground="#61736E" FontSize="12" VerticalAlignment="Center"/>
-                  </Grid>
 
-                  <Grid Grid.Row="2" ColumnDefinitions="*,*,*" Margin="0,8,0,0">
-                    <StackPanel>
-                      <TextBlock Text="Mã khách hàng" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.MaKhachHang}"
-                               IsReadOnly="True"
-                               Background="#F1F5F3"
-                               Foreground="#6B7280"
-                               BorderBrush="#D8E5E0"
-                               BorderThickness="1"
-                               Margin="0,6,0,0"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Margin="14,0,14,0">
-                      <TextBlock Text="Tên khách hàng *" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.TenKhachHang}" Margin="0,6,0,0"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                      <TextBlock Text="Loại khách hàng" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.LoaiKhachHang}" Margin="0,6,0,0"/>
-                    </StackPanel>
-                  </Grid>
-
-                  <Grid Grid.Row="3" ColumnDefinitions="*,*,*" Margin="0,0,0,0">
-                    <StackPanel>
-                      <TextBlock Text="Điện thoại" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.SoDienThoai}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Margin="14,0,14,0">
-                      <TextBlock Text="Ngày sinh" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding NgaySinhText, Mode=TwoWay}" Watermark="dd/MM/yyyy" Margin="0,6,0,0"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                      <TextBlock Text="Giới tính" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.GioiTinh}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                  </Grid>
-
-                  <Grid Grid.Row="4" ColumnDefinitions="*,*" Margin="0,0,0,0">
-                    <StackPanel>
-                      <TextBlock Text="Email" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.Email}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                      <TextBlock Text="Facebook" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.Facebook}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                  </Grid>
-
-                  <Grid Grid.Row="5" ColumnDefinitions="*">
-                    <StackPanel>
-                      <TextBlock Text="Địa chỉ" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.DiaChi}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                  </Grid>
-
-                  <Grid Grid.Row="6" ColumnDefinitions="*,*,*" Margin="0,0,0,0">
-                    <StackPanel>
-                      <TextBlock Text="Phường/Xã" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.PhuongXa}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Margin="14,0,14,0">
-                      <TextBlock Text="Quận/Huyện" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.QuanHuyen}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                      <TextBlock Text="Tỉnh/Thành" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.TinhThanh}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                  </Grid>
-
-                  <Grid Grid.Row="7" ColumnDefinitions="*,*" Margin="0,0,0,0">
-                    <StackPanel>
-                      <TextBlock Text="Nhóm khách hàng" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.NhomKhachHang}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                      <TextBlock Text="Mã số thuế" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.MaSoThue}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                  </Grid>
-
-                  <Grid Grid.Row="8" ColumnDefinitions="*,*" Margin="0,0,0,0">
-                    <StackPanel>
-                      <TextBlock Text="Tên người mua hóa đơn" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.TenNguoiMuaHoaDon}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                      <TextBlock Text="Tên công ty" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.TenCongTy}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                  </Grid>
-
-                  <Grid Grid.Row="9" ColumnDefinitions="*">
-                    <StackPanel>
-                      <TextBlock Text="Địa chỉ xuất hóa đơn" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.DiaChiXuatHoaDon}" Watermark="Chưa có" Margin="0,6,0,0"/>
-                    </StackPanel>
-                  </Grid>
-
-                  <Grid Grid.Row="10" Margin="0,8,0,0">
-                    <StackPanel>
-                      <TextBlock Text="Ghi chú" Foreground="#61736E" FontSize="12"/>
-                      <TextBox Text="{Binding SelectedKhachHang.GhiChu}" Watermark="Chưa có ghi chú" Margin="0,6,0,0"/>
-                    </StackPanel>
-                  </Grid>
-
-                  <Grid Grid.Row="11" ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,0">
-                    <Button Content="🗑 Xóa" Classes="toolbar-action" Margin="0" Command="{Binding XoaKhachHangCommand}"/>
-                    <TextBlock Grid.Column="1"/>
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10">
-                      <Button Content="💾 Lưu" Classes="toolbar-primary" Margin="0" Command="{Binding LuuKhachHangCommand}"/>
-                    </StackPanel>
+                    <ListBox Grid.Row="1" ItemsSource="{Binding KhachHangs}"
+                      SelectedItem="{Binding SelectedKhachHang, Mode=TwoWay}"
+                      SelectionChanged="OnCustomerSelectionChanged"
+                      Background="Transparent" BorderThickness="0">
+                      <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="models:KhachHang">
+                          <Border BorderBrush="#E2ECE8" BorderThickness="0,0,0,1" Padding="12,10">
+                            <Grid ColumnDefinitions="140,*,180,240,*,160">
+                              <TextBlock Text="{Binding MaKhachHang}" Foreground="#263B35" />
+                              <TextBlock Grid.Column="1" Text="{Binding TenKhachHang}"
+                                Foreground="#263B35" />
+                              <TextBlock Grid.Column="2" Text="{Binding SoDienThoai}"
+                                Foreground="#52645E" />
+                              <TextBlock Grid.Column="3" Text="{Binding Email}" Foreground="#52645E" />
+                              <TextBlock Grid.Column="4" Text="{Binding DiaChi}"
+                                Foreground="#52645E" TextTrimming="CharacterEllipsis" />
+                              <TextBlock Grid.Column="5" Text="{Binding NhomKhachHang}"
+                                Foreground="#52645E" />
+                            </Grid>
+                          </Border>
+                        </DataTemplate>
+                      </ListBox.ItemTemplate>
+                    </ListBox>
                   </Grid>
                 </Grid>
-              </Grid>
-            </Border>
+              </Border>
+
+              <Border Grid.Row="2" BorderBrush="#1D7A6D" BorderThickness="1.2" CornerRadius="8"
+                Padding="16" Margin="0" Background="#F8FBFA"
+                IsVisible="{Binding SelectedKhachHang, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <Grid>
+                  <Grid
+                    IsVisible="{Binding SelectedKhachHang, Converter={x:Static ObjectConverters.IsNull}}"
+                    VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,30">
+                    <TextBlock Text="Chọn khách hàng trong danh sách để xem chi tiết"
+                      Foreground="#61736E" FontSize="16" />
+                  </Grid>
+
+                  <Grid
+                    IsVisible="{Binding SelectedKhachHang, Converter={x:Static ObjectConverters.IsNotNull}}"
+                    RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                    RowSpacing="10">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+                      <TextBlock Text="Thông tin" FontWeight="SemiBold" Foreground="#1E3B35"
+                        FontSize="15" />
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="Lịch sử bán/trả hàng" Foreground="#61736E" FontSize="13" />
+                        <TextBlock Text="Nợ cần thu từ khách" Foreground="#61736E" FontSize="13" />
+                        <Button Content="← Danh sách" Classes="toolbar-action" Margin="12,0,0,0"
+                          Command="{Binding QuayLaiDanhSachKhachHangCommand}" />
+                      </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+                      <Border Width="54" Height="54" CornerRadius="27" Background="#B8DDF3"
+                        Margin="0,0,14,0">
+                        <TextBlock Text="H" FontSize="24" FontWeight="Bold" Foreground="#FFFFFF"
+                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding SelectedKhachHang.TenKhachHang}" FontSize="18"
+                          FontWeight="Bold" Foreground="#163F38" />
+                        <TextBlock Text="{Binding SelectedKhachHang.MaKhachHang}"
+                          Foreground="#61736E" FontSize="13" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="2" Text="Chỉ nhận trung tâm" Foreground="#61736E"
+                        FontSize="12" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <Grid Grid.Row="2" ColumnDefinitions="*,*,*" Margin="0,8,0,0">
+                      <StackPanel>
+                        <TextBlock Text="Mã khách hàng" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.MaKhachHang}"
+                          IsReadOnly="True"
+                          Background="#F1F5F3"
+                          Foreground="#6B7280"
+                          BorderBrush="#D8E5E0"
+                          BorderThickness="1"
+                          Margin="0,6,0,0" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Margin="14,0,14,0">
+                        <TextBlock Text="Tên khách hàng *" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.TenKhachHang}" Margin="0,6,0,0" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2">
+                        <TextBlock Text="Loại khách hàng" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.LoaiKhachHang}" Margin="0,6,0,0" />
+                      </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="3" ColumnDefinitions="*,*,*" Margin="0,0,0,0">
+                      <StackPanel>
+                        <TextBlock Text="Điện thoại" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.SoDienThoai}" Watermark="Chưa có"
+                          Margin="0,6,0,0" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Margin="14,0,14,0">
+                        <TextBlock Text="Ngày sinh" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding NgaySinhText, Mode=TwoWay}" Watermark="dd/MM/yyyy"
+                          Margin="0,6,0,0" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2">
+                        <TextBlock Text="Giới tính" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.GioiTinh}" Watermark="Chưa có"
+                          Margin="0,6,0,0" />
+                      </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="4" ColumnDefinitions="*,*" Margin="0,0,0,0">
+                      <StackPanel>
+                        <TextBlock Text="Email" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.Email}" Watermark="Chưa có"
+                          Margin="0,6,0,0" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                        <TextBlock Text="Facebook" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.Facebook}" Watermark="Chưa có"
+                          Margin="0,6,0,0" />
+                      </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="5" ColumnDefinitions="*">
+                      <StackPanel>
+                        <TextBlock Text="Địa chỉ" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.DiaChi}" Watermark="Chưa có"
+                          Margin="0,6,0,0" />
+                      </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="6" ColumnDefinitions="*,*,*" Margin="0,0,0,0">
+                      <StackPanel>
+                        <TextBlock Text="Phường/Xã" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.PhuongXa}" Watermark="Chưa có"
+                          Margin="0,6,0,0" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Margin="14,0,14,0">
+                        <TextBlock Text="Quận/Huyện" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.QuanHuyen}" Watermark="Chưa có"
+                          Margin="0,6,0,0" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2">
+                        <TextBlock Text="Tỉnh/Thành" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.TinhThanh}" Watermark="Chưa có"
+                          Margin="0,6,0,0" />
+                      </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="7" ColumnDefinitions="*,*" Margin="0,0,0,0">
+                      <StackPanel>
+                        <TextBlock Text="Nhóm khách hàng" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.NhomKhachHang}"
+                          Watermark="Chưa có" Margin="0,6,0,0" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                        <TextBlock Text="Mã số thuế" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.MaSoThue}" Watermark="Chưa có"
+                          Margin="0,6,0,0" />
+                      </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="8" ColumnDefinitions="*,*" Margin="0,0,0,0">
+                      <StackPanel>
+                        <TextBlock Text="Tên người mua hóa đơn" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.TenNguoiMuaHoaDon}"
+                          Watermark="Chưa có" Margin="0,6,0,0" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                        <TextBlock Text="Tên công ty" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.TenCongTy}" Watermark="Chưa có"
+                          Margin="0,6,0,0" />
+                      </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="9" ColumnDefinitions="*">
+                      <StackPanel>
+                        <TextBlock Text="Địa chỉ xuất hóa đơn" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.DiaChiXuatHoaDon}"
+                          Watermark="Chưa có" Margin="0,6,0,0" />
+                      </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="10" Margin="0,8,0,0">
+                      <StackPanel>
+                        <TextBlock Text="Ghi chú" Foreground="#61736E" FontSize="12" />
+                        <TextBox Text="{Binding SelectedKhachHang.GhiChu}"
+                          Watermark="Chưa có ghi chú" Margin="0,6,0,0" />
+                      </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="11" ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,0">
+                      <Button Content="🗑 Xóa" Classes="toolbar-action" Margin="0"
+                        Command="{Binding XoaKhachHangCommand}" />
+                      <TextBlock Grid.Column="1" />
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10">
+                        <Button Content="💾 Lưu" Classes="toolbar-primary" Margin="0"
+                          Command="{Binding LuuKhachHangCommand}" />
+                      </StackPanel>
+                    </Grid>
+                  </Grid>
+                </Grid>
+              </Border>
             </Grid>
           </ScrollViewer>
         </TabItem>
 
-        <TabItem Header="Đơn hàng">
-          <Grid RowDefinitions="Auto,*" Margin="0,14,0,0">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBox Watermark="🔍 Theo mã hóa đơn hoặc tên khách hàng..."
-                       Text="{Binding InvoiceSearch}"
-                       Margin="0,0,10,10"/>
-                    <Button Grid.Column="1" Classes="toolbar-primary" Content="+ Hóa đơn"
-                      Command="{Binding SearchInvoicesCommand}"
-                      Margin="0,0,0,10"/>
+        <TabItem Header="Hóa đơn">
+          <Grid RowDefinitions="Auto,Auto,*" Margin="0,10,0,0" RowSpacing="14">
+
+            <!-- 1. TIÊU ĐỀ & LÀM MỚI -->
+            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+              <StackPanel>
+                <TextBlock Text="Quản lý hóa đơn"
+                  FontSize="24"
+                  FontWeight="Bold"
+                  Foreground="#163F38" />
+                <TextBlock Text="Theo dõi các hóa đơn bán hàng và công nợ khách hàng"
+                  Foreground="#61736E"
+                  FontSize="13"
+                  Margin="0,3,0,0" />
+              </StackPanel>
+
+              <Button Grid.Column="1"
+                Classes="toolbar-action"
+                Content="↻ Làm mới"
+                Command="{Binding ClearInvoiceSearchCommand}" />
             </Grid>
-            <DataGrid Grid.Row="1" ItemsSource="{Binding HoaDons}" AutoGenerateColumns="False"
-                      IsReadOnly="True">
-              <DataGrid.Columns>
-                <DataGridTextColumn Header="Mã hóa đơn" Binding="{Binding MaHoaDon}" Width="150"/>
-                <DataGridTextColumn Header="Thời gian" Binding="{Binding ThoiGianBan, StringFormat=\{0:dd/MM/yyyy HH:mm\}}" Width="160"/>
-                <DataGridTextColumn Header="Khách hàng" Binding="{Binding TenKhachHang}" Width="*"/>
-                <DataGridTextColumn Header="Khách cần trả" Binding="{Binding KhachCanTra, StringFormat=\{0:N0\}}" Width="140"/>
-                <DataGridTextColumn Header="Đã thanh toán" Binding="{Binding KhachDaThanhToan, StringFormat=\{0:N0\}}" Width="140"/>
-                <DataGridTextColumn Header="Còn nợ" Binding="{Binding ConNo, StringFormat=\{0:N0\}}" Width="120"/>
-                <DataGridTextColumn Header="Trạng thái" Binding="{Binding TrangThaiThanhToan}" Width="150"/>
-              </DataGrid.Columns>
-            </DataGrid>
+
+            <!-- 2. THANH TÌM KIẾM (ĐÃ BỎ NÚT XÓA TÌM KIẾM) -->
+            <Border Grid.Row="1"
+              Background="White"
+              BorderBrush="#E2ECE8"
+              BorderThickness="1"
+              CornerRadius="12"
+              Padding="14,10"
+              BoxShadow="0 2 8 #080A352E">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBox Classes="searchInput"
+                  Watermark="🔍 Tìm theo mã hóa đơn hoặc tên khách hàng..."
+                  Text="{Binding InvoiceSearch, Mode=TwoWay}"
+                  Height="38"
+                  VerticalContentAlignment="Center"
+                  Padding="12,0" />
+
+                <Button Grid.Column="1"
+                  Classes="toolbar-primary"
+                  Content="Tìm kiếm"
+                  Height="38"
+                  Padding="18,0"
+                  Command="{Binding SearchInvoicesCommand}" />
+              </Grid>
+            </Border>
+
+            <!-- 3. DANH SÁCH HÓA ĐƠN -->
+            <Border Grid.Row="2"
+              Background="White"
+              BorderBrush="#E2ECE8"
+              BorderThickness="1"
+              CornerRadius="12"
+              ClipToBounds="True"
+              BoxShadow="0 4 16 #0A0A352E">
+              <Grid RowDefinitions="Auto,*">
+
+                <!-- HEADER BẢNG -->
+                <Border Background="#EBF5F1"
+                  BorderBrush="#D5EAE3"
+                  BorderThickness="0,0,0,1"
+                  Padding="16,12">
+                  <Grid ColumnDefinitions="200,160,*,140,140,140,170" ColumnSpacing="12">
+                    <TextBlock Text="MÃ HÓA ĐƠN" FontWeight="Bold" Foreground="#164B40"
+                      FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="THỜI GIAN" FontWeight="Bold"
+                      Foreground="#164B40" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="KHÁCH HÀNG" FontWeight="Bold"
+                      Foreground="#164B40" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3" Text="TỔNG TIỀN" FontWeight="Bold"
+                      Foreground="#164B40" FontSize="12" HorizontalAlignment="Right"
+                      VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="4" Text="ĐÃ TRẢ" FontWeight="Bold" Foreground="#164B40"
+                      FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="5" Text="CÒN NỢ" FontWeight="Bold" Foreground="#164B40"
+                      FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="6" Text="TRẠNG THÁI" FontWeight="Bold"
+                      Foreground="#164B40" FontSize="12" HorizontalAlignment="Center"
+                      VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+
+                <!-- NỘI DUNG DỮ LIỆU -->
+                <ListBox Grid.Row="1"
+                  ItemsSource="{Binding HoaDons}"
+                  Background="Transparent"
+                  BorderThickness="0">
+                  <ListBox.Styles>
+                    <Style Selector="ListBoxItem">
+                      <Setter Property="Padding" Value="0" />
+                      <Setter Property="Margin" Value="0" />
+                    </Style>
+                    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+                      <Setter Property="Background" Value="#F4FAF8" />
+                    </Style>
+                  </ListBox.Styles>
+
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="models:HoaDon">
+                      <Border BorderBrush="#EEF3F1" BorderThickness="0,0,0,1" Padding="16,12">
+                        <Grid ColumnDefinitions="200,160,*,140,140,140,170" ColumnSpacing="12"
+                          VerticalAlignment="Center">
+
+                          <!-- Mã hóa đơn -->
+                          <TextBlock Text="{Binding MaHoaDon}"
+                            FontWeight="SemiBold"
+                            Foreground="#163F38"
+                            VerticalAlignment="Center" />
+
+                          <!-- Thời gian -->
+                          <TextBlock Grid.Column="1"
+                            Text="{Binding ThoiGianBan, StringFormat={}{0:dd/MM/yyyy HH:mm}}"
+                            Foreground="#667A74"
+                            FontSize="12"
+                            VerticalAlignment="Center" />
+
+                          <!-- Khách hàng -->
+                          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                            VerticalAlignment="Center">
+                            <TextBlock Text="👤" FontSize="11" Foreground="#8FA39D"
+                              VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding TenKhachHang, FallbackValue='Khách lẻ'}"
+                              Foreground="#263B35"
+                              FontWeight="Medium"
+                              VerticalAlignment="Center"
+                              TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+
+                          <!-- Tổng tiền -->
+                          <TextBlock Grid.Column="3"
+                            Text="{Binding KhachCanTra, StringFormat={}{0:N0} đ}"
+                            FontWeight="Bold"
+                            Foreground="#087F6E"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center" />
+
+                          <!-- Đã trả -->
+                          <TextBlock Grid.Column="4"
+                            Text="{Binding KhachDaThanhToan, StringFormat={}{0:N0} đ}"
+                            Foreground="#263B35"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center" />
+
+                          <!-- Còn nợ -->
+                          <TextBlock Grid.Column="5"
+                            Text="{Binding ConNo, StringFormat={}{0:N0} đ}"
+                            FontWeight="Bold"
+                            Foreground="#D64545"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center" />
+
+                          <!-- Tag Trạng thái bo góc -->
+                          <Border Grid.Column="6"
+                            CornerRadius="14"
+                            Padding="10,4"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Background="{Binding ConNo, Converter={x:Static ObjectConverters.IsNull}}">
+                            <TextBlock Text="{Binding TrangThaiThanhToan}"
+                              FontSize="11"
+                              FontWeight="SemiBold"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Foreground="#087F6E" />
+                          </Border>
+
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+
+              </Grid>
+            </Border>
+
           </Grid>
         </TabItem>
 
         <TabItem Header="Nhà cung cấp">
           <Grid Margin="0,14,0,0"
-                RowDefinitions="Auto,Auto,*"
-                RowSpacing="14">
+            RowDefinitions="Auto,Auto,*"
+            RowSpacing="14">
 
             <!-- HEADER -->
             <Grid ColumnDefinitions="*,Auto"
-      VerticalAlignment="Center">
+              VerticalAlignment="Center">
 
-    <StackPanel>
-        <TextBlock Text="Nhà cung cấp"
-                   FontSize="26"
-                   FontWeight="Bold"
-                   Foreground="#163F38"/>
+              <StackPanel>
+                <TextBlock Text="Nhà cung cấp"
+                  FontSize="26"
+                  FontWeight="Bold"
+                  Foreground="#163F38" />
 
-        <TextBlock Text="Quản lý danh sách nhà cung cấp"
-                   Foreground="#61736E"
-                   FontSize="13"
-                   Margin="0,4,0,0"/>
-    </StackPanel>
+                <TextBlock Text="Quản lý danh sách nhà cung cấp"
+                  Foreground="#61736E"
+                  FontSize="13"
+                  Margin="0,4,0,0" />
+              </StackPanel>
 
-    <!-- CÁC NÚT -->
-    <StackPanel Grid.Column="1"
+              <!-- CÁC NÚT -->
+              <StackPanel Grid.Column="1"
                 Orientation="Horizontal"
                 Spacing="10">
 
-        <!-- NHẬP FILE -->
-        <Button Classes="toolbar-action"
-                Content="📁  Nhập file"
-                Command="{Binding ThemNhaCungCapTuFileCommand}"
-                Margin="0"/>
+                <!-- NHẬP FILE -->
+                <Button Classes="toolbar-action"
+                  Content="📁  Nhập file"
+                  Command="{Binding ThemNhaCungCapTuFileCommand}"
+                  Margin="0" />
 
-        <!-- THÊM NHÀ CUNG CẤP -->
-        <Button Classes="toolbar-primary"
-                Content="＋  Thêm nhà cung cấp"
-                Command="{Binding ThemNhaCungCapCommand}"
-                Margin="0"/>
-    </StackPanel>
+                <!-- THÊM NHÀ CUNG CẤP -->
+                <Button Classes="toolbar-primary"
+                  Content="＋  Thêm nhà cung cấp"
+                  Command="{Binding ThemNhaCungCapCommand}"
+                  Margin="0" />
+              </StackPanel>
 
-</Grid>
+            </Grid>
 
             <!-- TÌM KIẾM -->
             <Border Grid.Row="1"
-                    Background="White"
-                    BorderBrush="#E2ECE8"
-                    BorderThickness="1"
-                    CornerRadius="12"
-                    Padding="12">
+              Background="White"
+              BorderBrush="#E2ECE8"
+              BorderThickness="1"
+              CornerRadius="12"
+              Padding="12">
 
               <Grid ColumnDefinitions="*,Auto"
-                    ColumnSpacing="10">
+                ColumnSpacing="10">
 
                 <TextBox Classes="searchInput"
-                         Watermark="🔍  Tìm mã, tên, số điện thoại hoặc email..."
-                         Text="{Binding SupplierSearch, Mode=TwoWay}"
-                         Padding="12,9"/>
+                  Watermark="🔍  Tìm mã, tên, số điện thoại hoặc email..."
+                  Text="{Binding SupplierSearch, Mode=TwoWay}"
+                  Padding="12,9" />
 
                 <Button Grid.Column="1"
-                        Classes="toolbar-action"
-                        Content="🔍  Tìm kiếm"
-                        Command="{Binding SearchSuppliersCommand}"
-                        Margin="0"/>
+                  Classes="toolbar-action"
+                  Content="🔍  Tìm kiếm"
+                  Command="{Binding SearchSuppliersCommand}"
+                  Margin="0" />
               </Grid>
             </Border>
 
             <!-- DANH SÁCH -->
             <Border Grid.Row="2"
-                    Background="White"
-                    BorderBrush="#E2ECE8"
-                    BorderThickness="1"
-                    CornerRadius="12"
-                    ClipToBounds="True">
+              Background="White"
+              BorderBrush="#E2ECE8"
+              BorderThickness="1"
+              CornerRadius="12"
+              ClipToBounds="True">
 
               <Grid RowDefinitions="Auto,*">
 
                 <!-- HEADER BẢNG -->
                 <Border Background="#F7FAF9"
-                        BorderBrush="#E2ECE8"
-                        BorderThickness="0,0,0,1"
-                        Padding="16,13">
+                  BorderBrush="#E2ECE8"
+                  BorderThickness="0,0,0,1"
+                  Padding="16,13">
 
                   <Grid ColumnDefinitions="130,*,170,*,150,Auto"
-                        ColumnSpacing="10">
+                    ColumnSpacing="10">
 
                     <TextBlock Text="MÃ NCC"
-                               FontWeight="SemiBold"
-                               Foreground="#164B40"
-                               FontSize="12"/>
+                      FontWeight="SemiBold"
+                      Foreground="#164B40"
+                      FontSize="12" />
 
                     <TextBlock Grid.Column="1"
-                               Text="TÊN NHÀ CUNG CẤP"
-                               FontWeight="SemiBold"
-                               Foreground="#164B40"
-                               FontSize="12"/>
+                      Text="TÊN NHÀ CUNG CẤP"
+                      FontWeight="SemiBold"
+                      Foreground="#164B40"
+                      FontSize="12" />
 
                     <TextBlock Grid.Column="2"
-                               Text="ĐIỆN THOẠI"
-                               FontWeight="SemiBold"
-                               Foreground="#164B40"
-                               FontSize="12"/>
+                      Text="ĐIỆN THOẠI"
+                      FontWeight="SemiBold"
+                      Foreground="#164B40"
+                      FontSize="12" />
 
                     <TextBlock Grid.Column="3"
-                               Text="ĐỊA CHỈ"
-                               FontWeight="SemiBold"
-                               Foreground="#164B40"
-                               FontSize="12"/>
+                      Text="ĐỊA CHỈ"
+                      FontWeight="SemiBold"
+                      Foreground="#164B40"
+                      FontSize="12" />
 
                     <TextBlock Grid.Column="4"
-                               Text="CÒN NỢ"
-                               FontWeight="SemiBold"
-                               Foreground="#164B40"
-                               FontSize="12"/>
+                      Text="CÒN NỢ"
+                      FontWeight="SemiBold"
+                      Foreground="#164B40"
+                      FontSize="12" />
 
                     <TextBlock Grid.Column="5"
-                               Text="THAO TÁC"
-                               FontWeight="SemiBold"
-                               Foreground="#164B40"
-                               FontSize="12"/>
+                      Text="THAO TÁC"
+                      FontWeight="SemiBold"
+                      Foreground="#164B40"
+                      FontSize="12" />
                   </Grid>
                 </Border>
 
                 <ListBox Grid.Row="1"
-                         ItemsSource="{Binding NhaCungCaps}"
-                         Background="Transparent"
-                         BorderThickness="0">
+                  ItemsSource="{Binding NhaCungCaps}"
+                  Background="Transparent"
+                  BorderThickness="0">
 
                   <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="models:NhaCungCap">
 
                       <Border BorderBrush="#EEF2F0"
-                              BorderThickness="0,0,0,1"
-                              Padding="16,12">
+                        BorderThickness="0,0,0,1"
+                        Padding="16,12">
 
                         <Grid ColumnDefinitions="130,*,170,*,150,Auto"
-                              ColumnSpacing="10">
+                          ColumnSpacing="10">
 
                           <!-- MÃ -->
                           <TextBlock Text="{Binding MaNhaCungCap}"
-                                     Foreground="#263B35"
-                                     VerticalAlignment="Center"/>
+                            Foreground="#263B35"
+                            VerticalAlignment="Center" />
 
                           <!-- TÊN -->
                           <TextBlock Grid.Column="1"
-                                     Text="{Binding TenNhaCungCap}"
-                                     Foreground="#263B35"
-                                     FontWeight="SemiBold"
-                                     VerticalAlignment="Center"/>
+                            Text="{Binding TenNhaCungCap}"
+                            Foreground="#263B35"
+                            FontWeight="SemiBold"
+                            VerticalAlignment="Center" />
 
                           <!-- ĐIỆN THOẠI -->
                           <TextBlock Grid.Column="2"
-                                     Text="{Binding SoDienThoai}"
-                                     Foreground="#52645E"
-                                     VerticalAlignment="Center"/>
+                            Text="{Binding SoDienThoai}"
+                            Foreground="#52645E"
+                            VerticalAlignment="Center" />
 
                           <!-- ĐỊA CHỈ -->
                           <TextBlock Grid.Column="3"
-                                     Text="{Binding DiaChi}"
-                                     Foreground="#52645E"
-                                     TextTrimming="CharacterEllipsis"
-                                     VerticalAlignment="Center"/>
+                            Text="{Binding DiaChi}"
+                            Foreground="#52645E"
+                            TextTrimming="CharacterEllipsis"
+                            VerticalAlignment="Center" />
 
                           <!-- CÒN NỢ -->
                           <TextBlock Grid.Column="4"
-                                     Text="{Binding ConNo, StringFormat=\{0:N0\} đ}"
-                                     Foreground="#D97706"
-                                     FontWeight="SemiBold"
-                                     VerticalAlignment="Center"/>
+                            Text="{Binding ConNo, StringFormat=\{0:N0\} đ}"
+                            Foreground="#D97706"
+                            FontWeight="SemiBold"
+                            VerticalAlignment="Center" />
 
                           <!-- THAO TÁC -->
                           <StackPanel Grid.Column="5"
-                                      Orientation="Horizontal"
-                                      Spacing="6"
-                                      VerticalAlignment="Center">
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            VerticalAlignment="Center">
 
                             <!-- SỬA -->
                             <Button Content="✏"
-                                    Width="34"
-                                    Height="34"
-                                    Padding="0"
-                                    HorizontalContentAlignment="Center"
-                                    VerticalContentAlignment="Center"
-                                    FontSize="15"
-                                    Background="#EAF6F2"
-                                    Foreground="#087F6E"
-                                    BorderBrush="#CFE6DF"
-                                    BorderThickness="1"
-                                    CornerRadius="7"
-                                    ToolTip.Tip="Sửa nhà cung cấp"
-                                    Command="{Binding ElementName=RootWindow, Path=DataContext.SuaNhaCungCapCommand}"
-                                    CommandParameter="{Binding}"/>
+                              Width="34"
+                              Height="34"
+                              Padding="0"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              FontSize="15"
+                              Background="#EAF6F2"
+                              Foreground="#087F6E"
+                              BorderBrush="#CFE6DF"
+                              BorderThickness="1"
+                              CornerRadius="7"
+                              ToolTip.Tip="Sửa nhà cung cấp"
+                              Command="{Binding ElementName=RootWindow, Path=DataContext.SuaNhaCungCapCommand}"
+                              CommandParameter="{Binding}" />
 
                             <!-- XÓA -->
                             <Button Content="🗑"
-                                    Width="34"
-                                    Height="34"
-                                    Padding="0"
-                                    HorizontalContentAlignment="Center"
-                                    VerticalContentAlignment="Center"
-                                    FontSize="15"
-                                    Background="#FFF1F0"
-                                    Foreground="#D64545"
-                                    BorderBrush="#F1B7B1"
-                                    BorderThickness="1"
-                                    CornerRadius="7"
-                                    ToolTip.Tip="Xóa nhà cung cấp"
-                                    Command="{Binding ElementName=RootWindow, Path=DataContext.XoaNhaCungCapCommand}"
-                                    CommandParameter="{Binding}"/>
+                              Width="34"
+                              Height="34"
+                              Padding="0"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              FontSize="15"
+                              Background="#FFF1F0"
+                              Foreground="#D64545"
+                              BorderBrush="#F1B7B1"
+                              BorderThickness="1"
+                              CornerRadius="7"
+                              ToolTip.Tip="Xóa nhà cung cấp"
+                              Command="{Binding ElementName=RootWindow, Path=DataContext.XoaNhaCungCapCommand}"
+                              CommandParameter="{Binding}" />
                           </StackPanel>
 
                         </Grid>
@@ -1802,117 +2114,117 @@
 
           </Grid>
         </TabItem>
-                <!-- TAB NHẬP HÀNG / MUA HÀNG -->
+        <!-- TAB NHẬP HÀNG / MUA HÀNG -->
         <TabItem Header="Nhập hàng">
           <Grid Margin="0,14,0,0"
-                RowDefinitions="Auto,Auto,*"
-                RowSpacing="14">
+            RowDefinitions="Auto,Auto,*"
+            RowSpacing="14">
 
             <!-- TIÊU ĐỀ -->
             <Grid ColumnDefinitions="*,Auto">
 
               <StackPanel>
                 <TextBlock Text="Nhập hàng"
-                           FontSize="26"
-                           FontWeight="Bold"
-                           Foreground="#163F38"/>
+                  FontSize="26"
+                  FontWeight="Bold"
+                  Foreground="#163F38" />
 
                 <TextBlock Text="Quản lý mua hàng và nhập hàng từ nhà cung cấp"
-                           Foreground="#61736E"
-                           FontSize="13"
-                           Margin="0,4,0,0"/>
+                  Foreground="#61736E"
+                  FontSize="13"
+                  Margin="0,4,0,0" />
               </StackPanel>
 
               <Button Grid.Column="1"
-                      Classes="toolbar-primary"
-                      Content="＋  Tạo phiếu nhập"
-                      Margin="0"/>
+                Classes="toolbar-primary"
+                Content="＋  Tạo phiếu nhập"
+                Margin="0" />
             </Grid>
 
             <!-- THANH TÌM KIẾM -->
             <Border Grid.Row="1"
-                    Background="White"
-                    BorderBrush="#E2ECE8"
-                    BorderThickness="1"
-                    CornerRadius="12"
-                    Padding="12">
+              Background="White"
+              BorderBrush="#E2ECE8"
+              BorderThickness="1"
+              CornerRadius="12"
+              Padding="12">
 
               <Grid ColumnDefinitions="*,Auto"
-                    ColumnSpacing="10">
+                ColumnSpacing="10">
 
                 <TextBox Classes="searchInput"
-                         Watermark="🔍 Tìm mã phiếu hoặc nhà cung cấp..."
-                         Padding="12,9"
-                         Margin="0"/>
+                  Watermark="🔍 Tìm mã phiếu hoặc nhà cung cấp..."
+                  Padding="12,9"
+                  Margin="0" />
 
                 <Button Grid.Column="1"
-                        Classes="toolbar-action"
-                        Content="🔍 Tìm kiếm"
-                        Margin="0"/>
+                  Classes="toolbar-action"
+                  Content="🔍 Tìm kiếm"
+                  Margin="0" />
               </Grid>
             </Border>
 
             <!-- DANH SÁCH PHIẾU NHẬP -->
             <Border Grid.Row="2"
-                    Background="White"
-                    BorderBrush="#E2ECE8"
-                    BorderThickness="1"
-                    CornerRadius="12"
-                    ClipToBounds="True">
+              Background="White"
+              BorderBrush="#E2ECE8"
+              BorderThickness="1"
+              CornerRadius="12"
+              ClipToBounds="True">
 
               <Grid RowDefinitions="Auto,*">
 
                 <!-- HEADER -->
                 <Border Background="#F7FAF9"
-                        BorderBrush="#E2ECE8"
-                        BorderThickness="0,0,0,1"
-                        Padding="16,13">
+                  BorderBrush="#E2ECE8"
+                  BorderThickness="0,0,0,1"
+                  Padding="16,13">
 
                   <Grid ColumnDefinitions="150,*,180,160,150"
-                        ColumnSpacing="10">
+                    ColumnSpacing="10">
 
                     <TextBlock Text="MÃ PHIẾU"
-                               FontWeight="SemiBold"
-                               Foreground="#164B40"
-                               FontSize="12"/>
+                      FontWeight="SemiBold"
+                      Foreground="#164B40"
+                      FontSize="12" />
 
                     <TextBlock Grid.Column="1"
-                               Text="NHÀ CUNG CẤP"
-                               FontWeight="SemiBold"
-                               Foreground="#164B40"
-                               FontSize="12"/>
+                      Text="NHÀ CUNG CẤP"
+                      FontWeight="SemiBold"
+                      Foreground="#164B40"
+                      FontSize="12" />
 
                     <TextBlock Grid.Column="2"
-                               Text="NGÀY NHẬP"
-                               FontWeight="SemiBold"
-                               Foreground="#164B40"
-                               FontSize="12"/>
+                      Text="NGÀY NHẬP"
+                      FontWeight="SemiBold"
+                      Foreground="#164B40"
+                      FontSize="12" />
 
                     <TextBlock Grid.Column="3"
-                               Text="TỔNG TIỀN"
-                               FontWeight="SemiBold"
-                               Foreground="#164B40"
-                               FontSize="12"/>
+                      Text="TỔNG TIỀN"
+                      FontWeight="SemiBold"
+                      Foreground="#164B40"
+                      FontSize="12" />
 
                     <TextBlock Grid.Column="4"
-                               Text="TRẠNG THÁI"
-                               FontWeight="SemiBold"
-                               Foreground="#164B40"
-                               FontSize="12"/>
+                      Text="TRẠNG THÁI"
+                      FontWeight="SemiBold"
+                      Foreground="#164B40"
+                      FontSize="12" />
                   </Grid>
                 </Border>
 
                 <!-- DỮ LIỆU -->
                 <ScrollViewer Grid.Row="1"
-                              VerticalScrollBarVisibility="Auto">
+                  VerticalScrollBarVisibility="Auto">
 
                   <StackPanel>
 
                     <TextBlock Text="Chưa có phiếu nhập"
-                               FontSize="15"
-                               Foreground="#61736E"
-                               HorizontalAlignment="Center"
-                               Margin="0,40"/>
+                      FontSize="15"
+                      Foreground="#61736E"
+                      HorizontalAlignment="Center"
+                      Margin="0,40" />
 
                   </StackPanel>
 
@@ -1926,74 +2238,74 @@
       </TabControl>
 
 
-    <!-- OVERLAY LOADING IMPORT -->
-<Grid IsVisible="{Binding IsImporting}"
-      ZIndex="9999"
-      Background="#99000000">
+      <!-- OVERLAY LOADING IMPORT -->
+      <Grid IsVisible="{Binding IsImporting}"
+        ZIndex="9999"
+        Background="#99000000">
 
-    <Border Width="480"
-            Padding="30"
-            Background="White"
-            CornerRadius="18"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            BoxShadow="0 10 35 #40000000">
+        <Border Width="480"
+          Padding="30"
+          Background="White"
+          CornerRadius="18"
+          HorizontalAlignment="Center"
+          VerticalAlignment="Center"
+          BoxShadow="0 10 35 #40000000">
 
-        <StackPanel Spacing="16">
+          <StackPanel Spacing="16">
 
             <!-- ICON -->
             <Border Width="60"
-                    Height="60"
-                    CornerRadius="30"
-                    Background="#EAF9F5"
-                    HorizontalAlignment="Center">
+              Height="60"
+              CornerRadius="30"
+              Background="#EAF9F5"
+              HorizontalAlignment="Center">
 
-                <TextBlock Text="⇩"
-                           FontSize="30"
-                           FontWeight="Bold"
-                           Foreground="#087F6E"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"/>
+              <TextBlock Text="⇩"
+                FontSize="30"
+                FontWeight="Bold"
+                Foreground="#087F6E"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center" />
             </Border>
 
             <!-- TIÊU ĐỀ -->
             <TextBlock Text="Đang nhập dữ liệu"
-                       FontSize="22"
-                       FontWeight="Bold"
-                       Foreground="#163F38"
-                       HorizontalAlignment="Center"/>
+              FontSize="22"
+              FontWeight="Bold"
+              Foreground="#163F38"
+              HorizontalAlignment="Center" />
 
             <!-- LOADING -->
             <ProgressBar IsIndeterminate="True"
-                         Height="9"
-                         Width="360"/>
+              Height="9"
+              Width="360" />
 
             <!-- TRẠNG THÁI -->
             <TextBlock Text="{Binding ImportStatus}"
-                       FontSize="14"
-                       Foreground="#52645E"
-                       TextWrapping="Wrap"
-                       HorizontalAlignment="Center"
-                       TextAlignment="Center"/>
+              FontSize="14"
+              Foreground="#52645E"
+              TextWrapping="Wrap"
+              HorizontalAlignment="Center"
+              TextAlignment="Center" />
 
             <!-- CẢNH BÁO -->
             <Border Background="#F7FAF9"
-                    CornerRadius="10"
-                    Padding="12"
-                    Margin="0,4,0,0">
+              CornerRadius="10"
+              Padding="12"
+              Margin="0,4,0,0">
 
-                <TextBlock Text="⏳ Vui lòng chờ trong khi hệ thống đang xử lý. Không đóng phần mềm."
-                           FontSize="12"
-                           Foreground="#667085"
-                           TextWrapping="Wrap"
-                           HorizontalAlignment="Center"
-                           TextAlignment="Center"/>
+              <TextBlock Text="⏳ Vui lòng chờ trong khi hệ thống đang xử lý. Không đóng phần mềm."
+                FontSize="12"
+                Foreground="#667085"
+                TextWrapping="Wrap"
+                HorizontalAlignment="Center"
+                TextAlignment="Center" />
             </Border>
 
-        </StackPanel>
-    </Border>
+          </StackPanel>
+        </Border>
 
-</Grid>
+      </Grid>
 
     </Grid>
   </Grid>

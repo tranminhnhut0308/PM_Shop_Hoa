@@ -11,7 +11,11 @@ public sealed class HoaDonBanHangReceipt
     public decimal GiamGia { get; set; }
     public decimal KhachCanTra { get; set; }
     public decimal KhachDaThanhToan { get; set; }
+    public decimal TienKhachDua { get; set; }
+
+    public decimal TienThoi { get; set; }
     public decimal ConNo { get; set; }
+    public string TrangThaiThanhToan { get; set; } = "";
 }
 
 public sealed class HoaDonBanHangReceiptItem

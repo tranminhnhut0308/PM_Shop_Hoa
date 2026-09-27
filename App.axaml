@@ -1,10 +1,11 @@
 <Application xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="ShopHoa.App">
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  x:Class="ShopHoa.App"
+  RequestedThemeVariant="Light">
+
   <Application.Styles>
     <FluentTheme />
-    <Style Selector="Window">
-      <Setter Property="FontFamily" Value="Inter"/>
-    </Style>
+    <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
   </Application.Styles>
+
 </Application>

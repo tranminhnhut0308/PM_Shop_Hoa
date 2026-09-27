@@ -13,6 +13,7 @@ namespace ShopHoa.Views;
 public partial class MainWindow : Window
 {
     private bool _formattingDiscount;
+    private bool _formattingCash;
 
     public MainWindow()
     {
@@ -416,6 +417,62 @@ public partial class MainWindow : Window
         return EscapeCsv(value);
     }
 
+    private void OnTienKhachDuaTextChangedUI(
+    object? sender,
+    TextChangedEventArgs e)
+    {
+        if (_formattingCash || sender is not TextBox textBox)
+            return;
+
+        var text = textBox.Text ?? string.Empty;
+
+        // Cho phép xóa trắng
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            if (DataContext is MainWindowViewModel vm)
+                vm.TienKhachDua = 0;
+
+            return;
+        }
+
+        // Bỏ dấu phân cách hàng nghìn
+        var normalized = text
+            .Replace(".", "")
+            .Replace(",", "");
+
+        // Chỉ nhận số
+        if (!decimal.TryParse(
+                normalized,
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out var amount))
+        {
+            return;
+        }
+
+        // Cập nhật số thật
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.TienKhachDua = amount;
+        }
+
+        // Format giống ô Giảm giá
+        var formatted = amount.ToString(
+            "N0",
+            CultureInfo.GetCultureInfo("vi-VN"));
+
+        if (formatted == text)
+            return;
+
+        _formattingCash = true;
+
+        textBox.Text = formatted;
+
+        // Đưa con trỏ về cuối
+        textBox.CaretIndex = formatted.Length;
+
+        _formattingCash = false;
+    }
 
     // ============================================================
     // MESSAGE BOX

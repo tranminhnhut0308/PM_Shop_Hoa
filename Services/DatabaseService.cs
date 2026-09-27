@@ -1447,30 +1447,37 @@ public sealed class DatabaseService
         await using var connection = await OpenAsync();
 
         const string sql = """
-        SELECT
-            hd.id AS Id,
-            hd.ma_hoa_don AS MaHoaDon,
-            hd.thoi_gian_ban AS ThoiGianBan,
-            kh.ten_khach_hang AS TenKhachHang,
-            hd.tong_tien_hang AS TongTienHang,
-            hd.giam_gia AS GiamGia,
-            hd.thu_khac AS ThuKhac,
-            hd.khach_can_tra AS KhachCanTra,
-            hd.khach_da_thanh_toan AS KhachDaThanhToan,
-            hd.con_no AS ConNo,
-            hd.trang_thai_thanh_toan AS TrangThaiThanhToan
-        FROM hoa_don_ban_hang hd
-        LEFT JOIN khach_hang kh
-            ON kh.id = hd.khach_hang_id
-        WHERE (
-            @Search = ''
-            OR hd.ma_hoa_don LIKE CONCAT('%', @Search, '%')
-            OR kh.ten_khach_hang LIKE CONCAT('%', @Search, '%')
-        )
-        ORDER BY hd.thoi_gian_ban DESC
-        LIMIT 500;
-        """;
+SELECT
+    hd.id AS Id,
+    hd.ma_hoa_don AS MaHoaDon,
+    hd.thoi_gian_ban AS ThoiGianBan,
 
+    COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
+    COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
+
+    hd.tong_tien_hang AS TongTienHang,
+    hd.giam_gia AS GiamGia,
+    hd.thu_khac AS ThuKhac,
+    hd.khach_can_tra AS KhachCanTra,
+    hd.khach_da_thanh_toan AS KhachDaThanhToan,
+    hd.con_no AS ConNo,
+    hd.trang_thai_thanh_toan AS TrangThaiThanhToan
+
+FROM hoa_don_ban_hang hd
+
+LEFT JOIN khach_hang kh
+    ON kh.id = hd.khach_hang_id
+
+WHERE (
+    @Search = ''
+    OR hd.ma_hoa_don LIKE CONCAT('%', @Search, '%')
+    OR kh.ma_khach_hang LIKE CONCAT('%', @Search, '%')
+    OR kh.ten_khach_hang LIKE CONCAT('%', @Search, '%')
+)
+
+ORDER BY hd.thoi_gian_ban DESC
+LIMIT 500;
+""";
         return (
             await connection.QueryAsync<HoaDon>(
                 sql,
@@ -1480,38 +1487,68 @@ public sealed class DatabaseService
                 })
         ).AsList();
     }
+    public async Task<string> TaoMaHoaDonMoiAsync()
+    {
+        await using var connection = await OpenAsync();
+        var prefix = $"HD{DateTime.Now:yyMMdd}"; // VD: HD260927
 
+        var sql = @"
+        SELECT COALESCE(
+            MAX(CAST(SUBSTRING(ma_hoa_don, 9) AS UNSIGNED)), 
+            0
+        ) + 1
+        FROM hoa_don_ban_hang
+        WHERE ma_hoa_don LIKE CONCAT(@Prefix, '-%');";
+
+        var nextNum = await connection.ExecuteScalarAsync<long>(sql, new { Prefix = prefix });
+        return $"{prefix}-{nextNum:D3}"; // Kết quả: HD260927-001, HD260927-002...
+    }
     public async Task<HoaDonBanHangReceipt> TaoHoaDonBanHangAsync(
-     IReadOnlyCollection<SaleCartItem> items,
-     KhachHang? customer,
-     decimal discount,
-     decimal tienKhachDua)
+    IReadOnlyCollection<SaleCartItem> items,
+    KhachHang? customer,
+    decimal discount,
+    decimal tienKhachDua)
     {
         if (items.Count == 0)
             throw new InvalidOperationException("Giỏ hàng đang trống.");
 
         var now = DateTime.Now;
-        var invoiceCode = $"HD{now:yyyyMMddHHmmssfff}";
+        var invoiceCode = await TaoMaHoaDonMoiAsync();
+
+        // Tổng tiền hàng
         var total = items.Sum(item => item.ThanhTien);
+
+        // Giảm giá hợp lệ
         var safeDiscount = Math.Clamp(discount, 0, total);
+
+        // Khách cần thanh toán
         var amountDue = total - safeDiscount;
-        var safeCustomerPaid = Math.Max(0, tienKhachDua);
 
-        var amountPaid = Math.Min(
-            safeCustomerPaid,
-            amountDue);
+        // Tiền khách đưa không được âm
+        var cashReceived = Math.Max(0, tienKhachDua);
 
-        var debt = Math.Max(
-            amountDue - safeCustomerPaid,
-            0);
+        // Số tiền thực tế được tính là đã thanh toán
+        // Nếu khách đưa dư thì chỉ ghi nhận bằng số tiền cần trả.
+        var paidAmount = Math.Min(cashReceived, amountDue);
 
-        var change = Math.Max(
-            safeCustomerPaid - amountDue,
-            0);
+        // Công nợ phát sinh
+        var debtAmount = Math.Max(0, amountDue - paidAmount);
 
-        var paymentStatus = debt > 0
-            ? "CONG_NO"
-            : "DA_THANH_TOAN";
+        // Tiền thối
+        var changeAmount = Math.Max(0, cashReceived - amountDue);
+
+        // Trạng thái thanh toán
+        string paymentStatus;
+
+        if (debtAmount > 0)
+        {
+            paymentStatus = "CONG_NO";
+        }
+        else
+        {
+            paymentStatus = "DA_THANH_TOAN";
+        }
+
         var branchId = Session.CurrentUser?.ChiNhanhId ?? 1;
         var userId = Session.CurrentUser?.Id;
 
@@ -1520,43 +1557,48 @@ public sealed class DatabaseService
 
         try
         {
+            // ============================================================
+            // 1. TẠO HÓA ĐƠN
+            // ============================================================
+
             const string invoiceSql = """
-                INSERT INTO hoa_don_ban_hang
-                (
-                    ma_hoa_don,
-                    chi_nhanh_id,
-                    khach_hang_id,
-                    nguoi_ban_id,
-                    thoi_gian_ban,
-                    tong_tien_hang,
-                    giam_gia,
-                    khach_can_tra,
-                    khach_da_thanh_toan,
-                    con_no,
-                    trang_thai_thanh_toan,
-                    trang_thai_hoa_don,
-                    ngay_tao,
-                    ngay_cap_nhat
-                )
-                VALUES
-                (
-                    @MaHoaDon,
-                    @ChiNhanhId,
-                    @KhachHangId,
-                    @NguoiBanId,
-                    @ThoiGianBan,
-                    @TongTienHang,
-                    @GiamGia,
-                    @KhachCanTra,
-                    @KhachDaThanhToan,
-                    @ConNo,
-                    @TrangThaiThanhToan,
-                    'HOAN_THANH',
-                    @ThoiGianBan,
-                    @ThoiGianBan
-                );
-                SELECT LAST_INSERT_ID();
-                """;
+            INSERT INTO hoa_don_ban_hang
+            (
+                ma_hoa_don,
+                chi_nhanh_id,
+                khach_hang_id,
+                nguoi_ban_id,
+                thoi_gian_ban,
+                tong_tien_hang,
+                giam_gia,
+                khach_can_tra,
+                khach_da_thanh_toan,
+                con_no,
+                trang_thai_thanh_toan,
+                trang_thai_hoa_don,
+                ngay_tao,
+                ngay_cap_nhat
+            )
+            VALUES
+            (
+                @MaHoaDon,
+                @ChiNhanhId,
+                @KhachHangId,
+                @NguoiBanId,
+                @ThoiGianBan,
+                @TongTienHang,
+                @GiamGia,
+                @KhachCanTra,
+                @KhachDaThanhToan,
+                @ConNo,
+                @TrangThaiThanhToan,
+                'HOAN_THANH',
+                @ThoiGianBan,
+                @ThoiGianBan
+            );
+
+            SELECT LAST_INSERT_ID();
+            """;
 
             var invoiceId = await connection.ExecuteScalarAsync<uint>(
                 invoiceSql,
@@ -1567,40 +1609,53 @@ public sealed class DatabaseService
                     KhachHangId = customer?.Id,
                     NguoiBanId = userId,
                     ThoiGianBan = now,
+
                     TongTienHang = total,
                     GiamGia = safeDiscount,
+
+                    // Khách cần trả
                     KhachCanTra = amountDue,
-                    KhachDaThanhToan = amountPaid,
-                    ConNo = debt
+
+                    // Khách thực tế đã thanh toán
+                    KhachDaThanhToan = paidAmount,
+
+                    // Công nợ
+                    ConNo = debtAmount,
+
+                    TrangThaiThanhToan = paymentStatus
                 },
                 transaction);
 
+            // ============================================================
+            // 2. CHI TIẾT HÓA ĐƠN
+            // ============================================================
+
             const string detailSql = """
-                INSERT INTO chi_tiet_hoa_don_ban_hang
-                (
-                    hoa_don_id,
-                    san_pham_id,
-                    ma_san_pham,
-                    ten_san_pham,
-                    don_vi_tinh,
-                    so_luong,
-                    don_gia,
-                    thanh_tien,
-                    gia_von
-                )
-                VALUES
-                (
-                    @HoaDonId,
-                    @SanPhamId,
-                    @MaSanPham,
-                    @TenSanPham,
-                    @DonViTinh,
-                    @SoLuong,
-                    @DonGia,
-                    @ThanhTien,
-                    @GiaVon
-                );
-                """;
+            INSERT INTO chi_tiet_hoa_don_ban_hang
+            (
+                hoa_don_id,
+                san_pham_id,
+                ma_san_pham,
+                ten_san_pham,
+                don_vi_tinh,
+                so_luong,
+                don_gia,
+                thanh_tien,
+                gia_von
+            )
+            VALUES
+            (
+                @HoaDonId,
+                @SanPhamId,
+                @MaSanPham,
+                @TenSanPham,
+                @DonViTinh,
+                @SoLuong,
+                @DonGia,
+                @ThanhTien,
+                @GiaVon
+            );
+            """;
 
             foreach (var item in items)
             {
@@ -1621,19 +1676,133 @@ public sealed class DatabaseService
                     transaction);
             }
 
+            // ============================================================
+            // 3. NẾU CÓ CÔNG NỢ -> LƯU VÀO LỊCH SỬ CÔNG NỢ KHÁCH HÀNG
+            // ============================================================
+
+            if (customer is not null && customer.Id > 0 && debtAmount > 0)
+            {
+                // Lấy công nợ hiện tại của khách
+                const string currentDebtSql = """
+                SELECT COALESCE(
+                    SUM(ghi_no - ghi_co),
+                    0
+                )
+                FROM lich_su_cong_no_khach_hang
+                WHERE khach_hang_id = @KhachHangId;
+                """;
+
+                var currentDebt = await connection.ExecuteScalarAsync<decimal>(
+                    currentDebtSql,
+                    new
+                    {
+                        KhachHangId = customer.Id
+                    },
+                    transaction);
+
+                // Công nợ mới sau khi phát sinh hóa đơn
+                var newDebtBalance = currentDebt + debtAmount;
+
+                // Ghi lịch sử công nợ
+                const string debtSql = """
+                INSERT INTO lich_su_cong_no_khach_hang
+                (
+                    khach_hang_id,
+                    chi_nhanh_id,
+                    loai_giao_dich,
+                    loai_chung_tu,
+                    ma_chung_tu,
+                    ghi_no,
+                    ghi_co,
+                    so_du,
+                    thoi_gian,
+                    nguoi_thuc_hien_id,
+                    ghi_chu
+                )
+                VALUES
+                (
+                    @KhachHangId,
+                    @ChiNhanhId,
+                    'BAN_HANG',
+                    'HOA_DON',
+                    @MaChungTu,
+                    @GhiNo,
+                    0,
+                    @SoDu,
+                    @ThoiGian,
+                    @NguoiThucHienId,
+                    @GhiChu
+                );
+                """;
+
+                await connection.ExecuteAsync(
+                    debtSql,
+                    new
+                    {
+                        KhachHangId = customer.Id,
+                        ChiNhanhId = branchId,
+
+                        MaChungTu = invoiceCode,
+
+                        // Khoản nợ phát sinh
+                        GhiNo = debtAmount,
+
+                        // Số dư công nợ mới
+                        SoDu = newDebtBalance,
+
+                        ThoiGian = now,
+
+                        NguoiThucHienId = userId,
+
+                        GhiChu =
+                            $"Công nợ phát sinh từ hóa đơn {invoiceCode}"
+                    },
+                    transaction);
+            }
+
+            // ============================================================
+            // 4. COMMIT
+            // ============================================================
+
             await transaction.CommitAsync();
+
+            // ============================================================
+            // 5. TRẢ DỮ LIỆU CHO HÓA ĐƠN HIỂN THỊ
+            // ============================================================
 
             return new HoaDonBanHangReceipt
             {
                 MaHoaDon = invoiceCode,
                 ThoiGianBan = now,
+
                 TenKhachHang = customer?.TenKhachHang ?? "Khách lẻ",
                 TenNhanVien = Session.CurrentUser?.HoTen ?? "",
+
                 TongTienHang = total,
                 GiamGia = safeDiscount,
+
+                // Tổng khách cần trả
                 KhachCanTra = amountDue,
-                KhachDaThanhToan = amountDue,
-                ConNo = 0,
+
+                // Số tiền thực tế đã thanh toán
+                KhachDaThanhToan = paidAmount,
+
+                // Tiền khách đưa
+                TienKhachDua = cashReceived,
+
+                // Tiền thối
+                TienThoi = changeAmount,
+
+                // Công nợ
+                ConNo = debtAmount,
+
+                // Trạng thái
+                TrangThaiThanhToan = debtAmount > 0
+        ? "Thanh toán thiếu - Công nợ"
+        : changeAmount > 0
+            ? "Đã thanh toán đủ - Tiền thối"
+            : "Đã thanh toán đủ",
+
                 Items = items.Select(item => new HoaDonBanHangReceiptItem
                 {
                     TenSanPham = item.SanPham.TenSanPham,

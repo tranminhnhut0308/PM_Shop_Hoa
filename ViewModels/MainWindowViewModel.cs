@@ -10,6 +10,7 @@ using ShopHoa.Models;
 using ShopHoa.Services;
 using ShopHoa.Views;
 using Avalonia.Controls;
+using System.Globalization;
 
 namespace ShopHoa.ViewModels;
 
@@ -405,67 +406,44 @@ public partial class MainWindowViewModel : ObservableObject
             return dataName + ": " + ex.Message;
         }
     }
-
     private async Task LoadSelectedSectionAsync(string menu)
     {
-        if (menu == "Hàng hóa")
-            return;
-
-        Func<Task>? load = menu switch
-        {
-            "Tổng quan" => LoadOverviewAsync,
-            "Khách hàng" => LoadCustomersAsync,
-            "Đơn hàng" => LoadInvoicesAsync,
-            "Nhà cung cấp" => LoadSuppliersAsync,
-            "Nhập hàng" => null,
-            _ => null
-        };
-
-        var loaded = menu switch
-        {
-            "Tổng quan" => _overviewLoaded,
-            "Khách hàng" => _customersLoaded,
-            "Đơn hàng" => _invoicesLoaded,
-            "Nhà cung cấp" => _suppliersLoaded,
-            "Nhập hàng" => true,
-            _ => true
-        };
-
-        if (loaded || load is null)
-            return;
-
-        StatusMessage = $"Đang tải {menu.ToLowerInvariant()}...";
-        var error = await LoadSafelyAsync(menu.ToLowerInvariant(), load);
-
-        if (error is null)
+        try
         {
             switch (menu)
             {
                 case "Tổng quan":
+                    await LoadOverviewAsync();
                     _overviewLoaded = true;
                     break;
+
                 case "Khách hàng":
+                    await LoadCustomersAsync();
                     _customersLoaded = true;
                     break;
-                case "Đơn hàng":
+
+                case "Hóa đơn":
+                    // Mỗi lần vào Hóa đơn đều đọc lại database
+                    await LoadInvoicesAsync();
                     _invoicesLoaded = true;
                     break;
-                case "Mua hàng":
+
+                case "Nhà cung cấp":
+                    await LoadSuppliersAsync();
                     _suppliersLoaded = true;
                     break;
-                case "Nhà cung cấp":
-                    _suppliersLoaded = true;
+
+                case "Nhập hàng":
                     break;
             }
 
             StatusMessage = $"Đã tải {menu.ToLowerInvariant()}";
         }
-        else
+        catch (Exception ex)
         {
-            StatusMessage = "Không thể tải " + error;
+            StatusMessage = $"Không thể tải {menu}: {ex.Message}";
         }
     }
-
     private async Task LoadProductsAsync()
     {
         SanPhams.Clear();
@@ -498,9 +476,23 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task LoadInvoicesAsync()
     {
-        HoaDons.Clear();
-        foreach (var item in await _db.GetHoaDonAsync())
-            HoaDons.Add(item);
+        try
+        {
+            var invoices = await _db.GetHoaDonAsync();
+
+            HoaDons.Clear();
+
+            foreach (var item in invoices)
+                HoaDons.Add(item);
+
+            StatusMessage = $"Đã tải {HoaDons.Count} hóa đơn";
+        }
+        catch (Exception ex)
+        {
+            HoaDons.Clear();
+
+            StatusMessage = $"Lỗi tải hóa đơn: {ex.Message}";
+        }
     }
 
     private async Task LoadSuppliersAsync()
@@ -1031,7 +1023,25 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex) { StatusMessage = ex.Message; }
     }
+    [RelayCommand]
+    private async Task ClearInvoiceSearchAsync()
+    {
+        InvoiceSearch = "";
 
+        try
+        {
+            HoaDons.Clear();
+
+            foreach (var item in await _db.GetHoaDonAsync())
+                HoaDons.Add(item);
+
+            StatusMessage = $"Đã tải {HoaDons.Count} hóa đơn";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể tải hóa đơn: " + ex.Message;
+        }
+    }
     [RelayCommand]
     private async Task SearchSuppliersAsync()
     {
@@ -1316,13 +1326,27 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void MoGiaoDienBanHang()
+    private async Task MoGiaoDienBanHangAsync()
     {
         IsSalesPanelVisible = true;
         SaleCustomerName = "Khách lẻ";
         SaleSearchText = "";
         SaleCart.Clear();
+
         ProductSearchResults.Clear();
+
+        // TẢI DANH SÁCH SẢN PHẨM KHI MỞ BÁN HÀNG
+        try
+        {
+            var products = await _db.GetSanPhamAsync();
+
+            foreach (var product in products)
+                ProductSearchResults.Add(product);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể tải danh sách sản phẩm: " + ex.Message;
+        }
 
         SaleTotal = 0;
         SaleSubtotal = 0;
@@ -1335,6 +1359,7 @@ public partial class MainWindowViewModel : ObservableObject
         TienCongNo = 0;
         TrangThaiThanhToan = "";
     }
+
     [RelayCommand]
     private void DongGiaoDienBanHang()
     {
@@ -1495,7 +1520,21 @@ public partial class MainWindowViewModel : ObservableObject
             TrangThaiThanhToan = "Đã thanh toán đủ";
         }
     }
-    partial void OnSaleDiscountInputChanged(decimal value) => RecalculateSaleTotal();
+    partial void OnSaleDiscountInputChanged(decimal value)
+    {
+        if (SaleDiscountMode == "Số tiền")
+        {
+            var maxDiscount = Math.Max(0, SaleSubtotal);
+
+            if (value > maxDiscount)
+            {
+                SaleDiscountInput = maxDiscount;
+                return;
+            }
+        }
+
+        RecalculateSaleTotal();
+    }
 
     partial void OnSaleDiscountModeChanged(string value) => RecalculateSaleTotal();
 
@@ -1508,13 +1547,36 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        var tenKhachHang = SelectedSaleCustomer?.TenKhachHang ?? "Khách lẻ";
+
+        // Mở popup xác nhận đẹp mắt thay vì hộp thoại chữ thô
+        bool xacNhan = false;
+        if (OwnerWindow is not null)
+        {
+            var confirmWindow = new ThanhToanConfirmWindow(
+                tenKhachHang,
+                SaleTotal,
+                TienKhachDua,
+                TienThoi,
+                TienCongNo
+            );
+            xacNhan = await confirmWindow.ShowDialog<bool>(OwnerWindow);
+        }
+
+        if (!xacNhan)
+        {
+            StatusMessage = "Đã hủy thanh toán.";
+            return;
+        }
+
         try
         {
             var receipt = await _db.TaoHoaDonBanHangAsync(
-    SaleCart.ToList(),
-    SelectedSaleCustomer,
-    SaleDiscountAmount,
-    TienKhachDua);
+                SaleCart.ToList(),
+                SelectedSaleCustomer,
+                SaleDiscountAmount,
+                TienKhachDua);
+
             if (OwnerWindow is not null)
             {
                 var invoiceWindow = new InvoiceWindow(receipt);
@@ -1523,11 +1585,14 @@ public partial class MainWindowViewModel : ObservableObject
 
             SaleCart.Clear();
             SaleCustomerSuggestions.Clear();
+
             SaleTotal = 0;
             SaleSubtotal = 0;
             SaleDiscountInput = 0;
             SaleDiscountAmount = 0;
+
             _invoicesLoaded = false;
+            SelectedMenu = "Hóa đơn";
             StatusMessage = $"Đã tạo hóa đơn {receipt.MaHoaDon}";
         }
         catch (Exception ex)
@@ -1535,7 +1600,6 @@ public partial class MainWindowViewModel : ObservableObject
             StatusMessage = "Không thể thanh toán: " + ex.Message;
         }
     }
-
     [RelayCommand]
     private void ChonMenu(string menu)
     {
@@ -1548,7 +1612,7 @@ public partial class MainWindowViewModel : ObservableObject
         SelectedDataTabIndex = value switch
         {
             "Khách hàng" => 1,
-            "Đơn hàng" => 2,
+            "Hóa đơn" => 2,
             "Nhà cung cấp" => 3,
             "Nhập hàng" => 4,
             _ => 0
