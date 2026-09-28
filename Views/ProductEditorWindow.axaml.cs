@@ -1,7 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Avalonia.Controls;
 using ShopHoa.Models;
-using System.Collections.Generic;
 
 namespace ShopHoa.Views;
 
@@ -46,8 +48,6 @@ public partial class ProductEditorWindow : Window
         GiaVonTextBox.Text = _product.GiaVon.ToString(CultureInfo.InvariantCulture);
         TonKhoTextBox.Text = _product.TonKhoExcel.ToString(CultureInfo.InvariantCulture);
         KhachDatTextBox.Text = _product.KhachDat.ToString(CultureInfo.InvariantCulture);
-        TonToiThieuTextBox.Text = _product.TonToiThieu.ToString(CultureInfo.InvariantCulture);
-        TonToiDaTextBox.Text = _product.TonToiDa.ToString(CultureInfo.InvariantCulture);
         ViTriKhoTextBox.Text = _product.ViTriKho ?? "";
         LoaiHangTextBox.Text = _product.LoaiHang ?? "";
         NhomHangBaCapTextBox.Text = _product.NhomHangBaCap ?? "";
@@ -65,11 +65,16 @@ public partial class ProductEditorWindow : Window
         }
 
         if (!TryReadDecimal(GiaBanTextBox.Text, out var giaBan) ||
-            !TryReadDecimal(GiaVonTextBox.Text, out var giaVon) ||
-            !TryReadDecimal(TonToiThieuTextBox.Text, out var tonToiThieu) ||
-            !TryReadDecimal(TonToiDaTextBox.Text, out var tonToiDa))
+            !TryReadDecimal(GiaVonTextBox.Text, out var giaVon))
         {
-            ErrorTextBlock.Text = "Giá và số lượng phải là số hợp lệ.";
+            ErrorTextBlock.Text = "Giá bán và giá vốn phải là số hợp lệ.";
+            return;
+        }
+
+        if (!TryReadDecimal(TonKhoTextBox.Text, out var tonKho) ||
+            !TryReadDecimal(KhachDatTextBox.Text, out var khachDat))
+        {
+            ErrorTextBlock.Text = "Tồn kho và KH đặt phải là số hợp lệ.";
             return;
         }
 
@@ -78,23 +83,15 @@ public partial class ProductEditorWindow : Window
         _product.DonViTinhId = (DonViTinhComboBox.SelectedItem as ProductOption)?.Id;
         _product.GiaBan = giaBan;
         _product.GiaVon = giaVon;
-        if (!TryReadDecimal(TonKhoTextBox.Text, out var tonKho) ||
-            !TryReadDecimal(KhachDatTextBox.Text, out var khachDat))
-        {
-            ErrorTextBlock.Text = "Tồn kho và KH đặt phải là số hợp lệ.";
-            return;
-        }
-
         _product.TonKhoExcel = tonKho;
         _product.KhachDat = khachDat;
-        _product.TonToiThieu = tonToiThieu;
-        _product.TonToiDa = tonToiDa;
         _product.ViTriKho = NullIfEmpty(ViTriKhoTextBox.Text);
         _product.LoaiHang = NullIfEmpty(LoaiHangTextBox.Text);
         _product.NhomHangBaCap = NullIfEmpty(NhomHangBaCapTextBox.Text);
         _product.DuKienHetHang = NullIfEmpty(DuKienHetHangTextBox.Text);
         _product.DuocBanTrucTiep = DuocBanTrucTiepCheckBox.IsChecked == true;
         _product.DangKinhDoanh = DangKinhDoanhCheckBox.IsChecked == true;
+
         Close(true);
     }
 

@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using ShopHoa.ViewModels;
@@ -31,7 +32,14 @@ public partial class MainWindow : Window
             await viewModel.InitializeAsync();
         };
     }
+    private async void OpenSettingsButton_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var settingsDialog = new CategorySettingsWindow();
+        await settingsDialog.ShowDialog(this);
 
+        // Tải lại danh sách nhóm hàng & ĐVT trong ViewModel nếu cần
+        // viewModel.ReloadProductOptions();
+    }
     private void OnSaleSearchTextChanged(object? sender, TextChangedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel viewModel)
@@ -116,9 +124,109 @@ public partial class MainWindow : Window
         _formattingDiscount = false;
     }
 
-    private void OnCustomerSearchTextChanged(object? sender, TextChangedEventArgs e)
+    private void OnImportProductSearchTextChanged(
+    object? sender,
+    TextChangedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        if (sender is not TextBox textBox)
+            return;
+
+        viewModel.ImportProductSearch = textBox.Text ?? string.Empty;
+
+        if (viewModel.TimKiemSanPhamNhapCommand.CanExecute(null))
+        {
+            _ = viewModel.TimKiemSanPhamNhapCommand.ExecuteAsync(textBox.Text);
+        }
+    }
+
+    private void OnImportSupplierSearchTextChanged(
+    object? sender,
+    TextChangedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        if (sender is not TextBox textBox)
+            return;
+
+        viewModel.ImportSupplierSearch = textBox.Text ?? string.Empty;
+
+        if (viewModel.TimKiemNhaCungCapNhapCommand.CanExecute(null))
+        {
+            _ = viewModel.TimKiemNhaCungCapNhapCommand.ExecuteAsync(textBox.Text);
+        }
+    }
+
+    private void OnPhieuNhapNgayNhapBoxPointerPressed(
+    object? sender,
+        PointerPressedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        // Ô ngày nhập chỉ để hiển thị, bấm vào để mở lịch chọn ngày
+        viewModel.MoLichPhieuNhapCommand.Execute(null);
+    }
+
+    private void OnBaoCaoPhieuNhapSearchTextChanged(
+    object? sender,
+        TextChangedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        if (sender is not TextBox textBox)
+            return;
+
+        viewModel.BaoCaoPhieuNhapSearch = textBox.Text ?? string.Empty;
+
+        viewModel.TimKiemBaoCaoPhieuNhapTuDong();
+    }
+
+    private void OnBaoCaoPhieuNhapChonTatCaChanged(
+    object? sender,
+    RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        if (sender is not CheckBox checkBox)
+            return;
+
+        viewModel.ChonTatCaBaoCaoPhieuNhapCommand.Execute(checkBox.IsChecked);
+    }
+
+    private void OnBaoCaoPhieuNhapRowChecked(
+    object? sender,
+    RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        viewModel.CapNhatTrangThaiChonTatCaBaoCaoPhieuNhap();
+    }
+
+    private void OnBaoCaoPhieuNhapPageSizeChanged(
+    object? sender,
+    SelectionChangedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        if (sender is not ComboBox comboBox)
+            return;
+
+        if (!int.TryParse(comboBox.SelectedItem?.ToString(), out var pageSize) || pageSize <= 0)
+            return;
+
+        viewModel.BaoCaoPhieuNhapPageSize = pageSize;
+        viewModel.TimKiemBaoCaoPhieuNhapTuDong();
+    }
+
+    private void OnCustomerSearchTextChanged(object? sender, TextChangedEventArgs e)    {        if (DataContext is not MainWindowViewModel viewModel)
             return;
 
         var text = (sender as TextBox)?.Text ?? string.Empty;

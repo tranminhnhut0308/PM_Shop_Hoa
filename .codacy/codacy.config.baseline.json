@@ -6,8 +6,8 @@
     "organization": null,
     "repositoryId": null,
     "repositoryName": null,
-    "createdAt": "2026-09-27T09:31:52.867Z",
-    "updatedAt": "2026-09-27T09:31:52.867Z",
+    "createdAt": "2026-09-28T14:55:12.518Z",
+    "updatedAt": "2026-09-28T14:55:12.518Z",
     "languages": [
       "CSharp",
       "JSON",
@@ -671,7 +671,7 @@
         {
           "patternId": "Lizard_file-nloc-medium",
           "parameters": {
-            "threshold": "1440"
+            "threshold": "1430"
           }
         },
         {
@@ -701,7 +701,7 @@
         {
           "patternId": "Lizard_file-nloc-critical",
           "parameters": {
-            "threshold": "1870"
+            "threshold": "1880"
           }
         }
       ]

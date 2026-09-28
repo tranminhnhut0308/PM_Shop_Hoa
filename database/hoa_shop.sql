@@ -1358,6 +1358,29 @@ ALTER TABLE `thanh_toan_nha_cung_cap`
   ADD CONSTRAINT `fk_ttncc_phieu` FOREIGN KEY (`phieu_nhap_id`) REFERENCES `phieu_nhap_hang` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
+-- PHIẾU NHẬP HÀNG - bổ sung (chạy 1 lần cho database đã có sẵn)
+--
+-- Hai cột này là TÙY CHỌN. Nếu database chưa có thì ứng dụng vẫn chạy bình
+-- thường, chỉ bỏ qua việc lưu "số hóa đơn đầu vào" và "mã đặt hàng nhập".
+-- Chạy lại đoạn dưới sau khi đã thêm thì không bị lỗi.
+--
+SET @co_so_dat = IFNULL((SELECT `information_schema`.`SCHEMA_NAME` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'phieu_nhap_hang' LIMIT 1), '');
+
+SET @co_hoa_don = IFNULL((SELECT `information_schema`.`COLUMN_NAME` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'phieu_nhap_hang' AND `COLUMN_NAME` = 'so_hoa_don_dau_vao' LIMIT 1), '');
+
+SET @co_dat_hang = IFNULL((SELECT `information_schema`.`COLUMN_NAME` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'phieu_nhap_hang' AND `COLUMN_NAME` = 'ma_dat_hang_nhap' LIMIT 1), '');
+
+SET @sql = IF(@co_so_dat = '' OR @co_hoa_don <> '', 'SELECT 1', 'ALTER TABLE `phieu_nhap_hang` ADD COLUMN `so_hoa_don_dau_vao` varchar(50) DEFAULT NULL AFTER `ghi_chu`');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(@co_so_dat = '' OR @co_dat_hang <> '', 'SELECT 1', 'ALTER TABLE `phieu_nhap_hang` ADD COLUMN `ma_dat_hang_nhap` varchar(50) DEFAULT NULL AFTER `so_hoa_don_dau_vao`');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+--
 -- Các ràng buộc cho bảng `ton_kho`
 --
 ALTER TABLE `ton_kho`

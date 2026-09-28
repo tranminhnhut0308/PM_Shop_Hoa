@@ -10,6 +10,7 @@ namespace ShopHoa.Services;
 public sealed class DatabaseService
 {
     private readonly DatabaseConfigService _configService;
+    private bool? _hasPhieuNhapExtraColumns;
 
     public DatabaseService()
     {
@@ -2241,4 +2242,621 @@ LIMIT 500;
     {
         return $"NCC{DateTime.Now:yyyyMMddHHmmssfff}";
     }
+    // ==========================================
+    // QUẢN LÝ NHÓM SẢN PHẨM & ĐƠN VỊ TÍNH
+    // ==========================================
+
+    public async Task<uint> ThemNhomSanPhamAsync(string tenNhom)
+    {
+        await using var connection = await OpenAsync();
+        const string sql = """
+            INSERT INTO nhom_san_pham (ten_nhom, trang_thai)
+            VALUES (@TenNhom, 1);
+            SELECT LAST_INSERT_ID();
+            """;
+        return await connection.ExecuteScalarAsync<uint>(sql, new { TenNhom = tenNhom });
+    }
+
+    public async Task XoaNhomSanPhamAsync(uint id)
+    {
+        await using var connection = await OpenAsync();
+        const string sql = "UPDATE nhom_san_pham SET trang_thai = 0 WHERE id = @Id;";
+        await connection.ExecuteAsync(sql, new { Id = id });
+    }
+
+    public async Task<uint> ThemDonViTinhAsync(string tenDonVi)
+    {
+        await using var connection = await OpenAsync();
+        const string sql = """
+            INSERT INTO don_vi_tinh (ten_don_vi, trang_thai)
+            VALUES (@TenDonVi, 1);
+            SELECT LAST_INSERT_ID();
+            """;
+        return await connection.ExecuteScalarAsync<uint>(sql, new { TenDonVi = tenDonVi });
+    }
+
+    public async Task XoaDonViTinhAsync(uint id)
+    {
+        await using var connection = await OpenAsync();
+        const string sql = "UPDATE don_vi_tinh SET trang_thai = 0 WHERE id = @Id;";
+        await connection.ExecuteAsync(sql, new { Id = id });
+    }
+
+    // ==========================================
+    // PHIẾU NHẬP HÀNG
+    // ==========================================
+
+    /// <summary>
+    /// Sinh mã phiếu nhập tự động theo dạng PN260927-001,
+    /// cùng cơ chế sinh mã tuần tự như hóa đơn bán hàng.
+    /// </summary>
+    public async Task<string> TaoMaPhieuNhapMoiAsync()
+    {
+        await using var connection = await OpenAsync();
+        var prefix = $"PN{DateTime.Now:yyMMdd}";
+
+        const string sql = """
+        SELECT COALESCE(
+            MAX(CAST(SUBSTRING(ma_phieu_nhap, 9) AS UNSIGNED)),
+            0
+        ) + 1
+        FROM phieu_nhap_hang
+        WHERE ma_phieu_nhap LIKE CONCAT(@Prefix, '-%');
+        """;
+
+        var nextNum = await connection.ExecuteScalarAsync<long>(sql, new { Prefix = prefix });
+        return $"{prefix}-{nextNum:D3}";
+    }
+
+    public async Task<IReadOnlyList<PhieuNhapHang>> GetPhieuNhapHangAsync(
+        string? search = null)
+    {
+        await using var connection = await OpenAsync();
+
+        const string sql = """
+        SELECT
+            p.id AS Id,
+            p.ma_phieu_nhap AS MaPhieuNhap,
+            p.nha_cung_cap_id AS NhaCungCapId,
+            ncc.ma_nha_cung_cap AS MaNhaCungCap,
+            ncc.ten_nha_cung_cap AS TenNhaCungCap,
+            p.nguoi_nhap_id AS NguoiNhapId,
+            nd.ho_ten AS TenNhanVien,
+            p.thoi_gian_nhap AS ThoiGianNhap,
+            p.tong_tien_hang AS TongTienHang,
+            p.chi_phi_khac AS ChiPhiKhac,
+            p.tong_tien_nhap AS TongTienNhap,
+            p.da_thanh_toan AS DaThanhToan,
+            p.con_no AS ConNo,
+            p.trang_thai AS TrangThai,
+            p.ghi_chu AS GhiChu
+        FROM phieu_nhap_hang p
+        LEFT JOIN nha_cung_cap ncc
+            ON ncc.id = p.nha_cung_cap_id
+        LEFT JOIN nguoi_dung nd
+            ON nd.id = p.nguoi_nhap_id
+        WHERE (
+                @Search = ''
+                OR p.ma_phieu_nhap LIKE CONCAT('%', @Search, '%')
+                OR ncc.ten_nha_cung_cap LIKE CONCAT('%', @Search, '%')
+              )
+        ORDER BY p.thoi_gian_nhap DESC, p.id DESC;
+        """;
+
+        return (
+            await connection.QueryAsync<PhieuNhapHang>(
+                sql,
+                new
+                {
+                    Search = search ?? ""
+                })
+        ).AsList();
+    }
+
+    /// <summary>
+    /// Lấy danh sách phiếu nhập theo trang cho báo cáo.
+    /// Chỉ đọc dữ liệu của trang hiện tại (LIMIT/OFFSET) kèm tổng số bản ghi,
+    /// không tải toàn bộ bảng lên giao diện.
+    /// </summary>
+    public async Task<(IReadOnlyList<PhieuNhapHang> Items, int TongSoBanGhi)> GetPhieuNhapHangPagedAsync(
+        string? search,
+        int page,
+        int pageSize)
+    {
+        if (page < 1)
+            page = 1;
+
+        if (pageSize < 1)
+            pageSize = 15;
+
+        var offset = (page - 1) * pageSize;
+        var keyword = (search ?? "").Trim();
+
+        const string countSql = """
+        SELECT COUNT(*)
+        FROM phieu_nhap_hang p
+        LEFT JOIN nha_cung_cap ncc
+            ON ncc.id = p.nha_cung_cap_id
+        WHERE @Search = ''
+           OR p.ma_phieu_nhap LIKE CONCAT('%', @Search, '%');
+        """;
+
+        const string pageSql = """
+        SELECT
+            p.id AS Id,
+            p.ma_phieu_nhap AS MaPhieuNhap,
+            p.nha_cung_cap_id AS NhaCungCapId,
+            ncc.ma_nha_cung_cap AS MaNhaCungCap,
+            ncc.ten_nha_cung_cap AS TenNhaCungCap,
+            p.nguoi_nhap_id AS NguoiNhapId,
+            nd.ho_ten AS TenNhanVien,
+            p.thoi_gian_nhap AS ThoiGianNhap,
+            p.tong_tien_hang AS TongTienHang,
+            p.chi_phi_khac AS ChiPhiKhac,
+            p.tong_tien_nhap AS TongTienNhap,
+            p.da_thanh_toan AS DaThanhToan,
+            p.con_no AS ConNo,
+            p.trang_thai AS TrangThai,
+            p.ghi_chu AS GhiChu
+        FROM phieu_nhap_hang p
+        LEFT JOIN nha_cung_cap ncc
+            ON ncc.id = p.nha_cung_cap_id
+        LEFT JOIN nguoi_dung nd
+            ON nd.id = p.nguoi_nhap_id
+        WHERE @Search = ''
+           OR p.ma_phieu_nhap LIKE CONCAT('%', @Search, '%')
+        ORDER BY p.thoi_gian_nhap DESC, p.id DESC
+        LIMIT @PageSize OFFSET @Offset;
+        """;
+
+        await using var connection = await OpenAsync();
+
+        var parameters = new
+        {
+            Search = keyword,
+            PageSize = pageSize,
+            Offset = offset
+        };
+
+        var tongSoBanGhi = Convert.ToInt32(
+            await connection.ExecuteScalarAsync<long>(countSql, parameters));
+
+        var items = (
+            await connection.QueryAsync<PhieuNhapHang>(pageSql, parameters)
+        ).AsList();
+
+        return (items, tongSoBanGhi);
+    }
+
+    /// <summary>
+    /// Hoàn thành phiếu nhập: lưu header, toàn bộ dòng chi tiết, cộng tồn kho,
+    /// ghi lịch sử nhập xuất kho và cập nhật lại giá vốn bình quân — tất cả trong
+    /// một transaction, hoặc rollback trọn vẹn nếu có bước nào lỗi.
+    /// </summary>
+    public async Task<uint> LuuPhieuNhapHangAsync(
+        PhieuNhapHang phieu,
+        IReadOnlyList<ChiTietPhieuNhapHang> items)
+    {
+        if (phieu is null)
+            throw new ArgumentNullException(nameof(phieu));
+
+        if (items is null)
+            throw new ArgumentNullException(nameof(items));
+
+        var dongHopLe = items
+            .Where(item => item.SanPham.Id != 0 && item.SoLuong > 0)
+            .ToList();
+
+        if (dongHopLe.Count == 0)
+            throw new InvalidOperationException("Phiếu nhập chưa có hàng hóa nào hợp lệ.");
+
+        var branchId = phieu.ChiNhanhId != 0
+            ? phieu.ChiNhanhId
+            : Session.CurrentUser?.ChiNhanhId ?? 1;
+
+        phieu.ChiNhanhId = branchId;
+        phieu.NguoiNhapId ??= Session.CurrentUser?.Id;
+
+        phieu.TongTienHang = dongHopLe.Sum(item => item.ThanhTien);
+        phieu.ChiPhiKhac = phieu.ChiPhiKhac < 0 ? 0 : phieu.ChiPhiKhac;
+        phieu.TongTienNhap = phieu.TongTienHang + phieu.ChiPhiKhac;
+        phieu.DaThanhToan = Math.Clamp(phieu.DaThanhToan, 0, phieu.TongTienNhap);
+        phieu.ConNo = phieu.TongTienNhap - phieu.DaThanhToan;
+        phieu.TrangThai = "DA_NHAP_HANG";
+
+        var hasExtraColumns = await HasPhieuNhapExtraColumnsAsync();
+
+        var extraColumns = hasExtraColumns
+            ? ",\n                    so_hoa_don_dau_vao,\n                    ma_dat_hang_nhap"
+            : string.Empty;
+
+        var extraValues = hasExtraColumns
+            ? ",\n                    @SoHoaDonDauVao,\n                    @MaDatHangNhap"
+            : string.Empty;
+
+        var extraAssignments = hasExtraColumns
+            ? ",\n                    so_hoa_don_dau_vao = @SoHoaDonDauVao,\n                    ma_dat_hang_nhap   = @MaDatHangNhap"
+            : string.Empty;
+
+        await using var connection = await OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            // ============================================================
+            // 0. CHỐN GHI TRÙNG KHI BẤM "HOÀN THÀNH" NHIỀU LẦN
+            //    Đọc trạng thái hiện tại trong transaction để tồn kho
+            //    không bị cộng hai lần cho cùng một phiếu.
+            // ============================================================
+
+            var trangThaiHienTai = phieu.Id == 0
+                ? null
+                : await connection.ExecuteScalarAsync<string?>(
+                    """
+                    SELECT trang_thai
+                    FROM phieu_nhap_hang
+                    WHERE id = @Id
+                    FOR UPDATE;
+                    """,
+                    new { phieu.Id },
+                    transaction);
+
+            // Phiếu đã hoàn thành thì tồn kho đã được cộng một lần,
+            // không được cộng thêm lần nữa.
+            if (trangThaiHienTai == "DA_NHAP_HANG")
+                throw new InvalidOperationException(
+                    "Phiếu nhập này đã hoàn thành trước đó. Tồn kho đã được cập nhật nên không thể hoàn thành lại.");
+
+            // ============================================================
+            // 1. HEADER
+            // ============================================================
+
+            if (phieu.Id == 0)
+            {
+                var insertSql = $"""
+                INSERT INTO phieu_nhap_hang
+                (
+                    ma_phieu_nhap,
+                    chi_nhanh_id,
+                    nha_cung_cap_id,
+                    nguoi_nhap_id,
+                    thoi_gian_nhap,
+                    tong_tien_hang,
+                    giam_gia,
+                    chi_phi_khac,
+                    tong_tien_nhap,
+                    da_thanh_toan,
+                    con_no,
+                    trang_thai,
+                    ghi_chu{extraColumns},
+                    ngay_tao,
+                    ngay_cap_nhat
+                )
+                VALUES
+                (
+                    @MaPhieuNhap,
+                    @ChiNhanhId,
+                    @NhaCungCapId,
+                    @NguoiNhapId,
+                    @ThoiGianNhap,
+                    @TongTienHang,
+                    0,
+                    @ChiPhiKhac,
+                    @TongTienNhap,
+                    @DaThanhToan,
+                    @ConNo,
+                    @TrangThai,
+                    @GhiChu{extraValues},
+                    NOW(),
+                    NOW()
+                );
+                SELECT LAST_INSERT_ID();
+                """;
+
+                phieu.Id = await connection.ExecuteScalarAsync<uint>(
+                    insertSql,
+                    BuildPhieuNhapParameters(phieu),
+                    transaction);
+            }
+            else
+            {
+                var updateSql = $"""
+                UPDATE phieu_nhap_hang
+                SET ma_phieu_nhap      = @MaPhieuNhap,
+                    nha_cung_cap_id    = @NhaCungCapId,
+                    nguoi_nhap_id      = @NguoiNhapId,
+                    thoi_gian_nhap     = @ThoiGianNhap,
+                    tong_tien_hang     = @TongTienHang,
+                    giam_gia           = 0,
+                    chi_phi_khac       = @ChiPhiKhac,
+                    tong_tien_nhap     = @TongTienNhap,
+                    da_thanh_toan      = @DaThanhToan,
+                    con_no             = @ConNo,
+                    trang_thai         = @TrangThai,
+                    ghi_chu            = @GhiChu{extraAssignments},
+                    ngay_cap_nhat      = NOW()
+                WHERE id = @Id;
+                """;
+
+                await connection.ExecuteAsync(
+                    updateSql,
+                    BuildPhieuNhapParameters(phieu),
+                    transaction);
+            }
+
+            // ============================================================
+            // 2. CHI TIẾT PHIẾU NHẬP
+            // ============================================================
+
+            await connection.ExecuteAsync(
+                "DELETE FROM chi_tiet_phieu_nhap_hang WHERE phieu_nhap_id = @PhieuNhapId;",
+                new { PhieuNhapId = phieu.Id },
+                transaction);
+
+            const string insertDetailSql = """
+            INSERT INTO chi_tiet_phieu_nhap_hang
+            (
+                phieu_nhap_id,
+                san_pham_id,
+                ma_san_pham,
+                ten_san_pham,
+                so_luong,
+                don_gia_nhap,
+                giam_gia,
+                thanh_tien,
+                ghi_chu
+            )
+            VALUES
+            (
+                @PhieuNhapId,
+                @SanPhamId,
+                @MaSanPham,
+                @TenSanPham,
+                @SoLuong,
+                @DonGiaNhap,
+                @GiamGia,
+                @ThanhTien,
+                NULL
+            );
+            """;
+
+            foreach (var item in dongHopLe)
+            {
+                await connection.ExecuteAsync(
+                    insertDetailSql,
+                    new
+                    {
+                        PhieuNhapId = phieu.Id,
+                        SanPhamId = item.SanPham.Id,
+                        MaSanPham = item.SanPham.MaSanPham,
+                        TenSanPham = item.SanPham.TenSanPham,
+                        item.SoLuong,
+                        item.DonGiaNhap,
+                        item.GiamGia,
+                        item.ThanhTien
+                    },
+                    transaction);
+            }
+
+            // ============================================================
+            // 3. CẬP NHẬT TỒN KHO + LỊCH SỬ NHẬP XUẤT KHO
+            // ============================================================
+
+            await CapNhatTonKhoPhieuNhapAsync(
+                connection,
+                transaction,
+                phieu,
+                dongHopLe);
+
+            await transaction.CommitAsync();
+
+            return phieu.Id;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    private async Task CapNhatTonKhoPhieuNhapAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        PhieuNhapHang phieu,
+        IReadOnlyList<ChiTietPhieuNhapHang> items)
+    {
+        const string selectTonSql = """
+        SELECT so_luong_ton, gia_von_binh_quan
+        FROM ton_kho
+        WHERE chi_nhanh_id = @ChiNhanhId
+          AND san_pham_id = @SanPhamId
+        FOR UPDATE;
+        """;
+
+        const string upsertTonSql = """
+        INSERT INTO ton_kho
+        (
+            chi_nhanh_id,
+            san_pham_id,
+            so_luong_ton,
+            gia_von_binh_quan,
+            ngay_cap_nhat
+        )
+        VALUES
+        (
+            @ChiNhanhId,
+            @SanPhamId,
+            @SoLuongTon,
+            @GiaVonBinhQuan,
+            NOW()
+        )
+        ON DUPLICATE KEY UPDATE
+            so_luong_ton      = @SoLuongTon,
+            gia_von_binh_quan = @GiaVonBinhQuan,
+            ngay_cap_nhat     = NOW();
+        """;
+
+        const string updateGiaVonSql = """
+        UPDATE san_pham
+        SET gia_von      = @GiaVon,
+            ngay_cap_nhat = NOW()
+        WHERE id = @SanPhamId;
+        """;
+
+        const string insertLichSuSql = """
+        INSERT INTO lich_su_nhap_xuat_kho
+        (
+            chi_nhanh_id,
+            san_pham_id,
+            loai_giao_dich,
+            loai_chung_tu,
+            ma_chung_tu,
+            so_luong,
+            ton_truoc,
+            ton_sau,
+            gia_von,
+            nguoi_thuc_hien_id,
+            thoi_gian,
+            ghi_chu
+        )
+        VALUES
+        (
+            @ChiNhanhId,
+            @SanPhamId,
+            'NHAP',
+            'PHIEU_NHAP_HANG',
+            @MaChungTu,
+            @SoLuong,
+            @TonTruoc,
+            @TonSau,
+            @GiaVon,
+            @NguoiThucHienId,
+            NOW(),
+            NULL
+        );
+        """;
+
+        foreach (var item in items)
+        {
+            var tonHienTai = await connection.QueryAsync(
+                selectTonSql,
+                new
+                {
+                    phieu.ChiNhanhId,
+                    SanPhamId = item.SanPham.Id
+                },
+                transaction);
+
+            decimal tonTruoc = 0;
+            decimal giaVonCu = 0;
+
+            if (tonHienTai.FirstOrDefault() is IDictionary<string, object> row)
+            {
+                tonTruoc = ToDecimal(row.TryGetValue("so_luong_ton", out var soLuong) ? soLuong : null);
+                giaVonCu = ToDecimal(row.TryGetValue("gia_von_binh_quan", out var giaVon) ? giaVon : null);
+            }
+
+            var tonSau = tonTruoc + item.SoLuong;
+
+            // Giá vốn bình quân = (tồn cũ * giá cũ + lượng nhập * giá nhập) / tồn sau
+            var giaVonBinhQuan = tonSau > 0
+                ? (tonTruoc * giaVonCu + item.SoLuong * item.DonGiaNhap) / tonSau
+                : item.DonGiaNhap;
+
+            await connection.ExecuteAsync(
+                upsertTonSql,
+                new
+                {
+                    phieu.ChiNhanhId,
+                    SanPhamId = item.SanPham.Id,
+                    SoLuongTon = tonSau,
+                    GiaVonBinhQuan = Math.Round(giaVonBinhQuan, 2)
+                },
+                transaction);
+
+            await connection.ExecuteAsync(
+                updateGiaVonSql,
+                new
+                {
+                    GiaVon = item.DonGiaNhap,
+                    SanPhamId = item.SanPham.Id
+                },
+                transaction);
+
+            await connection.ExecuteAsync(
+                insertLichSuSql,
+                new
+                {
+                    phieu.ChiNhanhId,
+                    SanPhamId = item.SanPham.Id,
+                    MaChungTu = phieu.MaPhieuNhap,
+                    item.SoLuong,
+                    TonTruoc = tonTruoc,
+                    TonSau = tonSau,
+                    GiaVon = item.DonGiaNhap,
+                    phieu.NguoiNhapId
+                },
+                transaction);
+        }
+    }
+
+    private object BuildPhieuNhapParameters(PhieuNhapHang phieu) => new
+    {
+        phieu.Id,
+        phieu.MaPhieuNhap,
+        phieu.ChiNhanhId,
+        phieu.NhaCungCapId,
+        phieu.NguoiNhapId,
+        phieu.ThoiGianNhap,
+        phieu.TongTienHang,
+        phieu.ChiPhiKhac,
+        phieu.TongTienNhap,
+        phieu.DaThanhToan,
+        phieu.ConNo,
+        phieu.TrangThai,
+        GhiChu = string.IsNullOrWhiteSpace(phieu.GhiChu) ? null : phieu.GhiChu.Trim(),
+        SoHoaDonDauVao = string.IsNullOrWhiteSpace(phieu.SoHoaDonDauVao) ? null : phieu.SoHoaDonDauVao.Trim(),
+        MaDatHangNhap = string.IsNullOrWhiteSpace(phieu.MaDatHangNhap) ? null : phieu.MaDatHangNhap.Trim()
+    };
+
+    /// <summary>
+    /// Hai cột so_hoa_don_dau_vao / ma_dat_hang_nhap là tuỳ chọn.
+    /// Kiểm tra information_schema một lần để database cũ vẫn chạy được.
+    /// </summary>
+    private async Task<bool> HasPhieuNhapExtraColumnsAsync()
+    {
+        if (_hasPhieuNhapExtraColumns.HasValue)
+            return _hasPhieuNhapExtraColumns.Value;
+
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            const string sql = """
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'phieu_nhap_hang'
+              AND COLUMN_NAME IN ('so_hoa_don_dau_vao', 'ma_dat_hang_nhap');
+            """;
+
+            var count = await connection.ExecuteScalarAsync<long>(sql);
+            _hasPhieuNhapExtraColumns = count >= 2;
+        }
+        catch
+        {
+            _hasPhieuNhapExtraColumns = false;
+        }
+
+        return _hasPhieuNhapExtraColumns.Value;
+    }
+
+    private static decimal ToDecimal(object? value)
+    {
+        if (value is null || value is DBNull)
+            return 0;
+
+        return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+    }
 }
+

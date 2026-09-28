@@ -24,9 +24,13 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _invoicesLoaded;
     private bool _suppliersLoaded;
     private bool _overviewLoaded;
+    private CancellationTokenSource? _baoCaoPhieuNhapSearchCts;
+    private int _baoCaoPhieuNhapLoadVersion;
+    private bool _baoCaoPhieuNhapLoaded;
 
     [ObservableProperty] private string selectedMenu = "Tổng quan";
     [ObservableProperty] private int selectedDataTabIndex = 0;
+    [ObservableProperty] private string selectedReportKey = "";
     [ObservableProperty] private string statusMessage = "Sẵn sàng";
     [ObservableProperty] private bool isImporting;
     [ObservableProperty]
@@ -434,6 +438,25 @@ public partial class MainWindowViewModel : ObservableObject
                     break;
 
                 case "Nhập hàng":
+                    // Mỗi lần bấm menu "Nhập hàng" phải khởi tạo phiếu mới:
+                    // sinh mã phiếu, gán nhân viên/ngày/trạng thái và nạp danh sách hàng hóa.
+                    // Thiếu bước này thì PhieuNhapMa rỗng => lưu phiếu sẽ lỗi
+                    // "Duplicate entry '' for key 'uk_pnh_ma'".
+                    await MoPhieuNhapHangAsync();
+                    break;
+
+                case "Báo cáo":
+                    // Báo cáo chưa chọn mục nào thì mở mặc định báo cáo phiếu nhập
+                    if (string.IsNullOrEmpty(SelectedReportKey))
+                        SelectedReportKey = BaoCaoMenuItems.FirstOrDefault()?.Key ?? "";
+
+                    // Chỉ tải lần đầu khi vào màn, các lần sau giữ nguyên trang/tìm kiếm đang xem
+                    if (SelectedReportKey == "phieu-nhap-hang" && !_baoCaoPhieuNhapLoaded)
+                    {
+                        _baoCaoPhieuNhapLoaded = true;
+                        await LoadBaoCaoPhieuNhapAsync();
+                    }
+
                     break;
             }
 
@@ -1057,46 +1080,52 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task ThemNhaCungCapAsync()
     {
-        if (OwnerWindow is null)
+        var supplier = await HienThiFormThemNhaCungCapAsync();
+
+        if (supplier is null)
             return;
 
-        try
+        StatusMessage =
+            $"Đã thêm nhà cung cấp {supplier.TenNhaCungCap}";
+    }
+
+    /// <summary>
+    /// Mở form thêm nhà cung cấp dùng chung cho cả module quản lý
+    /// và màn lập phiếu nhập. Trả về nhà cung cấp vừa lưu, null nếu người dùng hủy.
+    /// </summary>
+    private async Task<NhaCungCap?> HienThiFormThemNhaCungCapAsync()
+    {
+        if (OwnerWindow is null)
+            return null;
+
+        // Tự phát sinh mã NCC từ database
+        var generatedCode = await _db.TaoMaNhaCungCapMoiAsync();
+
+        var newSupplier = new NhaCungCap
         {
-            // Tự phát sinh mã NCC từ database
-            var generatedCode = await _db.TaoMaNhaCungCapMoiAsync();
+            MaNhaCungCap = generatedCode,
+            TenNhaCungCap = string.Empty,
+            TrangThai = true
+        };
 
-            var newSupplier = new NhaCungCap
-            {
-                MaNhaCungCap = generatedCode,
-                TenNhaCungCap = string.Empty,
-                TrangThai = true
-            };
+        // Mở giao diện nhập thông tin nhà cung cấp
+        var editor = new NhaCungCapEditorWindow(newSupplier);
 
-            // Mở giao diện nhập thông tin nhà cung cấp
-            var editor = new NhaCungCapEditorWindow(newSupplier);
+        var saved = await editor.ShowDialog<bool>(OwnerWindow);
 
-            var saved = await editor.ShowDialog<bool>(OwnerWindow);
+        if (!saved)
+            return null;
 
-            if (!saved)
-                return;
+        // Lưu database
+        editor.Supplier.Id =
+            await _db.ThemNhaCungCapAsync(editor.Supplier);
 
-            // Lưu database
-            editor.Supplier.Id =
-                await _db.ThemNhaCungCapAsync(editor.Supplier);
+        // Thêm ngay vào danh sách giao diện
+        NhaCungCaps.Add(editor.Supplier);
 
-            // Thêm ngay vào danh sách giao diện
-            NhaCungCaps.Add(editor.Supplier);
+        _suppliersLoaded = true;
 
-            _suppliersLoaded = true;
-
-            StatusMessage =
-                $"Đã thêm nhà cung cấp {editor.Supplier.TenNhaCungCap}";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage =
-                "Không thể thêm nhà cung cấp: " + ex.Message;
-        }
+        return editor.Supplier;
     }
     [RelayCommand]
     private async Task SuaNhaCungCapAsync(NhaCungCap? supplier)
@@ -1488,6 +1517,864 @@ public partial class MainWindowViewModel : ObservableObject
 
         RecalculatePayment();
     }
+
+    // ============================================================
+    // BÁO CÁO
+    // ============================================================
+
+    /// <summary>
+    /// Danh sách các báo cáo trong nhóm menu "Báo cáo".
+    /// Muốn thêm báo cáo mới (bán hàng, tồn kho, doanh thu...) chỉ cần
+    /// thêm một phần tử nữa vào đây, giao diện tự hiển thị theo.
+    /// </summary>
+    public ObservableCollection<BaoCaoMenuItem> BaoCaoMenuItems { get; } = new()
+    {
+        new BaoCaoMenuItem
+        {
+            Key = "phieu-nhap-hang",
+            TieuDe = "Báo cáo phiếu nhập hàng",
+            BieuTuong = "📥"
+        }
+    };
+
+    public ObservableCollection<PhieuNhapHang> BaoCaoPhieuNhaps { get; } = new();
+
+    [ObservableProperty] private string baoCaoPhieuNhapSearch = "";
+    [ObservableProperty] private int baoCaoPhieuNhapPage = 1;
+    [ObservableProperty] private int baoCaoPhieuNhapPageSize = 15;
+    [ObservableProperty] private int baoCaoPhieuNhapTotalCount;
+    [ObservableProperty] private bool isLoadingBaoCaoPhieuNhap;
+
+    public int BaoCaoPhieuNhapTotalPages =>
+        BaoCaoPhieuNhapPageSize <= 0
+            ? 0
+            : (int)Math.Ceiling(BaoCaoPhieuNhapTotalCount / (double)BaoCaoPhieuNhapPageSize);
+
+    /// <summary>Ví dụ: "1 - 15 trong 367 giao dịch"</summary>
+    public string BaoCaoPhieuNhapRangeText
+    {
+        get
+        {
+            if (BaoCaoPhieuNhapTotalCount == 0)
+                return "0 giao dịch";
+
+            var from = (BaoCaoPhieuNhapPage - 1) * BaoCaoPhieuNhapPageSize + 1;
+            var to = Math.Min(from + BaoCaoPhieuNhapPageSize - 1, BaoCaoPhieuNhapTotalCount);
+
+            return $"{from} - {to} trong {BaoCaoPhieuNhapTotalCount} giao dịch";
+        }
+    }
+
+    public bool HasBaoCaoPhieuNhapData => BaoCaoPhieuNhaps.Count > 0;
+
+    public bool IsBaoCaoPhieuNhapEmpty => BaoCaoPhieuNhaps.Count == 0;
+
+    /// <summary>Trạng thái ô "chọn tất cả" ở đầu bảng: đã chọn / chọn một phần / chưa chọn.</summary>
+    public bool? IsBaoCaoPhieuNhapAllSelected
+    {
+        get
+        {
+            if (BaoCaoPhieuNhaps.Count == 0)
+                return false;
+
+            var soDaChon = BaoCaoPhieuNhaps.Count(x => x.IsSelected);
+
+            if (soDaChon == 0)
+                return false;
+
+            return soDaChon == BaoCaoPhieuNhaps.Count ? true : null;
+        }
+    }
+
+    public int BaoCaoPhieuNhapSelectedCount => BaoCaoPhieuNhaps.Count(x => x.IsSelected);
+
+    public bool CanBaoCaoPhieuNhapTrangTruoc => BaoCaoPhieuNhapPage > 1;
+
+    public bool CanBaoCaoPhieuNhapTrangSau => BaoCaoPhieuNhapPage < BaoCaoPhieuNhapTotalPages;
+
+    public bool IsBaoCaoSectionSelected => SelectedMenu == "Báo cáo";
+
+    public bool IsBaoCaoPhieuNhapSelected =>
+        SelectedMenu == "Báo cáo" && SelectedReportKey == "phieu-nhap-hang";
+
+    partial void OnBaoCaoPhieuNhapSearchChanged(string value)
+    {
+        // Mỗi lần tìm kiếm luôn quay về trang đầu
+        if (BaoCaoPhieuNhapPage != 1)
+            BaoCaoPhieuNhapPage = 1;
+    }
+
+    partial void OnBaoCaoPhieuNhapPageChanged(int value)
+    {
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapTotalPages));
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapRangeText));
+        OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangTruoc));
+        OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangSau));
+    }
+
+    partial void OnBaoCaoPhieuNhapPageSizeChanged(int value)
+    {
+        if (BaoCaoPhieuNhapPage != 1)
+            BaoCaoPhieuNhapPage = 1;
+    }
+
+    partial void OnBaoCaoPhieuNhapTotalCountChanged(int value)
+    {
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapTotalPages));
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapRangeText));
+    }
+
+    partial void OnSelectedReportKeyChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
+    }
+
+    [RelayCommand]
+    private void ChonBaoCao(BaoCaoMenuItem? item)
+    {
+        if (item is null)
+            return;
+
+        SelectedMenu = "Báo cáo";
+        SelectedReportKey = item.Key;
+
+        // Mỗi báo cáo có danh sách riêng
+        BaoCaoPhieuNhapPage = 1;
+
+        if (item.Key == "phieu-nhap-hang" && !_baoCaoPhieuNhapLoaded)
+        {
+            _baoCaoPhieuNhapLoaded = true;
+            _ = LoadBaoCaoPhieuNhapAsync();
+        }
+
+        StatusMessage = item.TieuDe;
+    }
+
+    [RelayCommand]
+    private async Task LoadBaoCaoPhieuNhapAsync()
+    {
+        if (IsLoadingBaoCaoPhieuNhap)
+            return;
+
+        IsLoadingBaoCaoPhieuNhap = true;
+
+        // Version guard: bỏ qua kết quả của lần tải cũ nếu người dùng đã tìm/chuyển trang mới
+        var version = ++_baoCaoPhieuNhapLoadVersion;
+
+        try
+        {
+            var page = BaoCaoPhieuNhapPage;
+            var (items, tongSoBanGhi) = await _db.GetPhieuNhapHangPagedAsync(
+                BaoCaoPhieuNhapSearch,
+                page,
+                BaoCaoPhieuNhapPageSize);
+
+            if (version != _baoCaoPhieuNhapLoadVersion)
+                return;
+
+            // Trang vượt quá số trang thực tế (ví dụ sau khi tìm kiếm) -> quay về trang cuối
+            var totalPages = BaoCaoPhieuNhapPageSize <= 0
+                ? 0
+                : (int)Math.Ceiling(tongSoBanGhi / (double)BaoCaoPhieuNhapPageSize);
+
+            if (items.Count == 0 && totalPages > 0 && page > totalPages)
+            {
+                BaoCaoPhieuNhapPage = totalPages;
+                IsLoadingBaoCaoPhieuNhap = false;
+                await LoadBaoCaoPhieuNhapAsync();
+                return;
+            }
+
+            BaoCaoPhieuNhaps.Clear();
+
+            foreach (var item in items)
+                BaoCaoPhieuNhaps.Add(item);
+
+            BaoCaoPhieuNhapTotalCount = tongSoBanGhi;
+
+            OnPropertyChanged(nameof(HasBaoCaoPhieuNhapData));
+            OnPropertyChanged(nameof(IsBaoCaoPhieuNhapEmpty));
+            OnPropertyChanged(nameof(BaoCaoPhieuNhapRangeText));
+            OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangTruoc));
+            OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangSau));
+            OnPropertyChanged(nameof(IsBaoCaoPhieuNhapAllSelected));
+            OnPropertyChanged(nameof(BaoCaoPhieuNhapSelectedCount));
+
+            StatusMessage = BaoCaoPhieuNhaps.Count == 0
+                ? "Không có dữ liệu phiếu nhập phù hợp"
+                : $"Đã tải {BaoCaoPhieuNhaps.Count} phiếu nhập (trang {BaoCaoPhieuNhapPage}/{Math.Max(1, totalPages)})";
+        }
+        catch (Exception ex)
+        {
+            if (version == _baoCaoPhieuNhapLoadVersion)
+                StatusMessage = "Không thể tải báo cáo phiếu nhập: " + ex.Message;
+        }
+        finally
+        {
+            if (version == _baoCaoPhieuNhapLoadVersion)
+                IsLoadingBaoCaoPhieuNhap = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task TimKiemBaoCaoPhieuNhapAsync()
+    {
+        BaoCaoPhieuNhapPage = 1;
+        await LoadBaoCaoPhieuNhapAsync();
+    }
+
+    /// <summary>
+    /// Tìm kiếm khi người dùng gõ: chống debounce để không gọi database liên tục.
+    /// </summary>
+    public void TimKiemBaoCaoPhieuNhapTuDong()
+    {
+        _baoCaoPhieuNhapSearchCts?.Cancel();
+        _baoCaoPhieuNhapSearchCts?.Dispose();
+        _baoCaoPhieuNhapSearchCts = new CancellationTokenSource();
+        var token = _baoCaoPhieuNhapSearchCts.Token;
+
+        _ = DebounceBaoCaoPhieuNhapAsync(token);
+    }
+
+    private async Task DebounceBaoCaoPhieuNhapAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(350, token);
+
+            if (token.IsCancellationRequested)
+                return;
+
+            await TimKiemBaoCaoPhieuNhapAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // Người dùng gõ tiếp -> huỷ lần tìm kiếm cũ
+        }
+    }
+
+    [RelayCommand]
+    private async Task BaoCaoPhieuNhapTrangDauAsync()
+    {
+        BaoCaoPhieuNhapPage = 1;
+        await LoadBaoCaoPhieuNhapAsync();
+    }
+
+    [RelayCommand]
+    private async Task BaoCaoPhieuNhapTrangCuoiAsync()
+    {
+        BaoCaoPhieuNhapPage = Math.Max(1, BaoCaoPhieuNhapTotalPages);
+        await LoadBaoCaoPhieuNhapAsync();
+    }
+
+    [RelayCommand]
+    private async Task BaoCaoPhieuNhapTrangTruocAsync()
+    {
+        if (BaoCaoPhieuNhapPage > 1)
+            BaoCaoPhieuNhapPage--;
+
+        await LoadBaoCaoPhieuNhapAsync();
+    }
+
+    [RelayCommand]
+    private async Task BaoCaoPhieuNhapTrangSauAsync()
+    {
+        if (BaoCaoPhieuNhapPage < BaoCaoPhieuNhapTotalPages)
+            BaoCaoPhieuNhapPage++;
+
+        await LoadBaoCaoPhieuNhapAsync();
+    }
+
+    [RelayCommand]
+    private void ChonTatCaBaoCaoPhieuNhap(bool? isChecked)
+    {
+        foreach (var item in BaoCaoPhieuNhaps)
+            item.IsSelected = isChecked == true;
+
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapAllSelected));
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapSelectedCount));
+    }
+
+    [RelayCommand]
+    private static void BatYeuThichBaoCaoPhieuNhap(PhieuNhapHang? item)
+    {
+        if (item is null)
+            return;
+
+        item.IsYeuThich = !item.IsYeuThich;
+    }
+
+    /// <summary>Đồng bộ lại trạng thái ô "chọn tất cả" khi người dùng bấm checkbox của một dòng.</summary>
+    public void CapNhatTrangThaiChonTatCaBaoCaoPhieuNhap()
+    {
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapAllSelected));
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapSelectedCount));
+    }
+
+    [RelayCommand]
+    private async Task MoGiaoDienNhapHangTuBaoCaoAsync()
+    {
+        // Nút "+ Nhập hàng" trong báo cáo: chuyển sang màn lập phiếu nhập hàng
+        await MoGiaoDienNhapHangAsync();
+    }
+
+    // ============================================================
+    // PHIẾU NHẬP HÀNG
+    // ============================================================
+
+    public ObservableCollection<ChiTietPhieuNhapHang> PhieuNhapItems { get; } = new();
+    public ObservableCollection<SanPham> PhieuNhapProductSuggestions { get; } = new();
+    public ObservableCollection<NhaCungCap> PhieuNhapSupplierSuggestions { get; } = new();
+
+    [ObservableProperty] private bool isNhapHangFormVisible;
+    [ObservableProperty] private string importProductSearch = "";
+    [ObservableProperty] private string importSupplierSearch = "";
+    [ObservableProperty] private string phieuNhapMa = "";
+    [ObservableProperty] private string phieuNhapSoHoaDonDauVao = "";
+    [ObservableProperty] private string phieuNhapGhiChu = "";
+    [ObservableProperty] private string phieuNhapNhanVien = "";
+    [ObservableProperty] private NhaCungCap? selectedPhieuNhapNcc;
+    [ObservableProperty] private DateTime? phieuNhapNgayNhap = DateTime.Now;
+    [ObservableProperty] private decimal phieuNhapTongTienHang;
+    [ObservableProperty] private decimal phieuNhapChiPhiKhac;
+    [ObservableProperty] private decimal phieuNhapTongTienNhap;
+    [ObservableProperty] private decimal phieuNhapDaThanhToan;
+
+    [ObservableProperty] private bool isSavingPhieuNhap;
+
+    /// <summary>Ngày nhập luôn dùng kiểu DateTime vì cột thoi_gian_nhap trong database là DATETIME.</summary>
+    [ObservableProperty] private bool isPhieuNhapCalendarOpen;
+
+    private uint _phieuNhapId;
+
+    public string PhieuNhapTongTienHangText => PhieuNhapTongTienHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+
+    public string PhieuNhapTongTienNhapText => PhieuNhapTongTienNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+
+    /// <summary>Ngày nhập hiển thị theo định dạng Việt Nam dd/MM/yyyy HH:mm.</summary>
+    public string PhieuNhapNgayNhapText => PhieuNhapNgayNhap?.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
+                                           ?? string.Empty;
+
+    /// <summary>Công nợ còn phải trả cho nhà cung cấp, khớp với cột con_no trong database.</summary>
+    public decimal PhieuNhapConNo => Math.Max(0, PhieuNhapTongTienNhap - PhieuNhapDaThanhToan);
+
+    public string PhieuNhapConNoText => PhieuNhapConNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+
+    public bool HasPhieuNhapItems => PhieuNhapItems.Count > 0;
+
+    public bool IsPhieuNhapEmpty => PhieuNhapItems.Count == 0;
+
+    public bool HasPhieuNhapSuggestions => PhieuNhapProductSuggestions.Count > 0;
+
+    public bool HasPhieuNhapSupplierSuggestions => PhieuNhapSupplierSuggestions.Count > 0;
+
+    public bool IsNhapHangListVisible => !IsNhapHangFormVisible;
+
+    public bool CanSavePhieuNhap => !IsSavingPhieuNhap;
+
+    partial void OnIsNhapHangFormVisibleChanged(bool value) =>
+        OnPropertyChanged(nameof(IsNhapHangListVisible));
+
+    partial void OnPhieuNhapTongTienHangChanged(decimal value)
+    {
+        RecalculatePhieuNhapTotal();
+
+        OnPropertyChanged(nameof(PhieuNhapTongTienHangText));
+        OnPropertyChanged(nameof(PhieuNhapTongTienNhapText));
+    }
+
+    partial void OnPhieuNhapTongTienNhapChanged(decimal value)
+    {
+        OnPropertyChanged(nameof(PhieuNhapTongTienNhapText));
+        OnPropertyChanged(nameof(PhieuNhapConNoText));
+    }
+
+    partial void OnPhieuNhapChiPhiKhacChanged(decimal value) => RecalculatePhieuNhapTotal();
+
+    partial void OnPhieuNhapDaThanhToanChanged(decimal value) =>
+        OnPropertyChanged(nameof(PhieuNhapConNoText));
+
+    partial void OnIsSavingPhieuNhapChanged(bool value) => OnPropertyChanged(nameof(CanSavePhieuNhap));
+
+    partial void OnPhieuNhapNgayNhapChanged(DateTime? value)
+    {
+        OnPropertyChanged(nameof(PhieuNhapNgayNhapText));
+
+        // Chọn xong ngày thì đóng lịch luôn
+        IsPhieuNhapCalendarOpen = false;
+    }
+
+    [RelayCommand]
+    private void MoLichPhieuNhap() => IsPhieuNhapCalendarOpen = !IsPhieuNhapCalendarOpen;
+
+    private void RecalculatePhieuNhapTotal()
+    {
+        PhieuNhapTongTienNhap = PhieuNhapTongTienHang + PhieuNhapChiPhiKhac;
+    }
+
+    [RelayCommand]
+    private async Task MoPhieuNhapHangAsync()
+    {
+        IsNhapHangFormVisible = true;
+
+        _phieuNhapId = 0;
+
+        BoDangKyPhieuNhapItems();
+
+        PhieuNhapItems.Clear();
+        PhieuNhapProductSuggestions.Clear();
+        PhieuNhapSupplierSuggestions.Clear();
+        OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+        PhieuNhapSoHoaDonDauVao = "";
+        PhieuNhapGhiChu = "";
+        PhieuNhapChiPhiKhac = 0;
+        PhieuNhapDaThanhToan = 0;
+        ImportProductSearch = "";
+        ImportSupplierSearch = "";
+        SelectedPhieuNhapNcc = null;
+
+        PhieuNhapNhanVien = Session.CurrentUser?.HoTen ?? "Chưa đăng nhập";
+        PhieuNhapNgayNhap = DateTime.Now;
+
+        try
+        {
+            PhieuNhapMa = await _db.TaoMaPhieuNhapMoiAsync();
+        }
+        catch (Exception ex)
+        {
+            PhieuNhapMa = "LỖI-TẠO-MÃ";
+            StatusMessage = "Không thể tạo mã phiếu nhập tự động: " + ex.Message;
+        }
+
+        RecalculatePhieuNhapTongTienHang();
+
+        await LoadPhieuNhapProductSuggestionsAsync();
+    }
+
+    [RelayCommand]
+    private async Task MoGiaoDienNhapHangAsync()
+    {
+        // Nếu đang đứng ở màn Nhập hàng thì SelectedMenu không đổi,
+        // LoadSelectedSectionAsync sẽ không chạy nên phải tự khởi tạo phiếu mới.
+        if (SelectedMenu == "Nhập hàng")
+        {
+            await MoPhieuNhapHangAsync();
+            return;
+        }
+
+        // SelectedMenu đổi => case "Nhập hàng" trong LoadSelectedSectionAsync gọi
+        // MoPhieuNhapHangAsync() giúp, không gọi ở đây để tránh chạy 2 lần.
+        SelectedMenu = "Nhập hàng";
+    }
+
+    [RelayCommand]
+    private async Task DongPhieuNhapHangAsync()
+    {
+        if (PhieuNhapItems.Count > 0)
+        {
+            var confirmed = await ShowConfirmationAsync(
+                "Thoát lập phiếu nhập",
+                "Phiếu nhập đang có dữ liệu chưa được lưu. Bạn có chắc muốn thoát?",
+                "Thoát",
+                "Tiếp tục nhập");
+
+            if (!confirmed)
+                return;
+        }
+
+        BoDangKyPhieuNhapItems();
+
+        RecalculatePhieuNhapTongTienHang();
+        OnPropertyChanged(nameof(HasPhieuNhapSuggestions));
+
+        _phieuNhapId = 0;
+
+        IsNhapHangFormVisible = false;
+    }
+
+    private void BoDangKyPhieuNhapItems()
+    {
+        foreach (var item in PhieuNhapItems)
+            item.PropertyChanged -= ChiTietPhieuNhapHang_OnPropertyChanged;
+    }
+
+    [RelayCommand]
+    private async Task TimKiemSanPhamNhapAsync(string? keyword)
+    {
+        // Không gán đè khi lệnh được gọi không có tham số,
+        // nếu không TextBox sẽ bị xoá ngay khi vừa gõ ký tự đầu tiên.
+        if (keyword is not null && keyword != ImportProductSearch)
+            ImportProductSearch = keyword;
+
+        try
+        {
+            await LoadPhieuNhapProductSuggestionsAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể tìm hàng hóa: " + ex.Message;
+        }
+    }
+
+    private async Task LoadPhieuNhapProductSuggestionsAsync()
+    {
+        var keyword = ImportProductSearch.Trim();
+
+        // Rút gọn danh sách gợi ý: sản phẩm đã có trong phiếu thì ẩn đi
+        var sanPhamDaChon = PhieuNhapItems
+            .Select(item => item.SanPham.Id)
+            .ToHashSet();
+
+        var products = await _db.GetSanPhamAsync(keyword);
+
+        PhieuNhapProductSuggestions.Clear();
+
+        foreach (var product in products
+                     .Where(product => !sanPhamDaChon.Contains(product.Id))
+                     .Take(20))
+        {
+            PhieuNhapProductSuggestions.Add(product);
+        }
+
+        OnPropertyChanged(nameof(HasPhieuNhapSuggestions));
+    }
+
+    [RelayCommand]
+    private void ThemSanPhamVaoPhieuNhap(SanPham? product)
+    {
+        if (product is null)
+            return;
+
+        var existing = PhieuNhapItems
+            .FirstOrDefault(item => item.SanPham.Id == product.Id);
+
+        if (existing is not null)
+        {
+            existing.SoLuong += 1;
+            RecalculatePhieuNhapTongTienHang();
+            StatusMessage = $"Đã tăng số lượng {product.TenSanPham} lên {existing.SoLuong:N0}";
+            return;
+        }
+
+        var dongMoi = new ChiTietPhieuNhapHang(product);
+
+        // Nghe thay đổi số lượng / giá nhập / giảm giá để tính lại tổng realtime
+        dongMoi.PropertyChanged += ChiTietPhieuNhapHang_OnPropertyChanged;
+
+        PhieuNhapItems.Add(dongMoi);
+
+        PhieuNhapProductSuggestions.Remove(product);
+
+        OnPropertyChanged(nameof(HasPhieuNhapSuggestions));
+
+        RecalculatePhieuNhapTongTienHang();
+
+        StatusMessage = $"Đã thêm {product.TenSanPham} vào phiếu nhập";
+    }
+
+    private void ChiTietPhieuNhapHang_OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(ChiTietPhieuNhapHang.SoLuong)
+            or nameof(ChiTietPhieuNhapHang.DonGiaNhap)
+            or nameof(ChiTietPhieuNhapHang.GiamGia)
+            or nameof(ChiTietPhieuNhapHang.ThanhTien))
+        {
+            RecalculatePhieuNhapTongTienHang();
+        }
+    }
+
+    [RelayCommand]
+    private void XoaDongPhieuNhap(ChiTietPhieuNhapHang? item)
+    {
+        if (item is null)
+            return;
+
+        item.PropertyChanged -= ChiTietPhieuNhapHang_OnPropertyChanged;
+
+        PhieuNhapItems.Remove(item);
+
+        RecalculatePhieuNhapTongTienHang();
+    }
+
+    [RelayCommand]
+    private async Task XoaTatPhieuNhapAsync()
+    {
+        if (PhieuNhapItems.Count == 0)
+        {
+            StatusMessage = "Phiếu nhập không có dòng hàng nào để xóa.";
+            return;
+        }
+
+        var soDong = PhieuNhapItems.Count;
+
+        var confirmed = await ShowConfirmationAsync(
+            "Xóa tất cả dòng hàng",
+            $"Bạn có chắc muốn xóa tất cả hàng hóa trong phiếu nhập? ({soDong} dòng sẽ bị xóa khỏi phiếu, sản phẩm trong database không bị ảnh hưởng)",
+            "Xóa tất cả",
+            "Hủy");
+
+        if (!confirmed)
+        {
+            StatusMessage = "Đã hủy xóa tất cả dòng hàng.";
+            return;
+        }
+
+        BoDangKyPhieuNhapItems();
+        PhieuNhapItems.Clear();
+
+        // Tổng tiền hàng = 0, Tổng tiền nhập = Chi phí khác, Còn phải trả = Tổng tiền nhập - Đã thanh toán
+        RecalculatePhieuNhapTongTienHang();
+        RecalculatePhieuNhapTotal();
+
+        StatusMessage = $"Đã xóa toàn bộ {soDong} dòng hàng khỏi phiếu nhập";
+    }
+
+    [RelayCommand]
+    private void TangSoLuongNhap(ChiTietPhieuNhapHang? item)
+    {
+        if (item is null)
+            return;
+
+        item.SoLuong += 1;
+        RecalculatePhieuNhapTongTienHang();
+    }
+
+    [RelayCommand]
+    private void GiamSoLuongNhap(ChiTietPhieuNhapHang? item)
+    {
+        if (item is null)
+            return;
+
+        item.SoLuong = Math.Max(0, item.SoLuong - 1);
+        RecalculatePhieuNhapTongTienHang();
+    }
+
+    private void RecalculatePhieuNhapTongTienHang()
+    {
+        PhieuNhapTongTienHang = PhieuNhapItems.Sum(item => item.ThanhTien);
+
+        for (var i = 0; i < PhieuNhapItems.Count; i++)
+            PhieuNhapItems[i].Index = i + 1;
+
+        OnPropertyChanged(nameof(HasPhieuNhapItems));
+        OnPropertyChanged(nameof(IsPhieuNhapEmpty));
+    }
+
+    /// <summary>
+    /// Ô tìm nhà cung cấp đang chứa đúng tên NCC vừa chọn
+    /// thì không cần tìm lại lần nữa.
+    /// </summary>
+    private bool DaChonNhaCungCapNhap =>
+        SelectedPhieuNhapNcc is not null &&
+        ImportSupplierSearch.Trim()
+            .Equals(SelectedPhieuNhapNcc.TenNhaCungCap, StringComparison.OrdinalIgnoreCase);
+
+    [RelayCommand]
+    private async Task TimKiemNhaCungCapNhapAsync(string? keyword)
+    {
+        // Không gán đè khi lệnh được gọi không có tham số,
+        // nếu không TextBox sẽ bị xoá ngay khi vừa gõ ký tự đầu tiên.
+        if (keyword is not null && keyword != ImportSupplierSearch)
+            ImportSupplierSearch = keyword;
+
+        try
+        {
+            PhieuNhapSupplierSuggestions.Clear();
+            OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+
+            if (string.IsNullOrWhiteSpace(ImportSupplierSearch))
+                return;
+
+            // Đã chọn xong NCC thì không tìm lại, tránh mở lại danh sách gợi ý
+            if (DaChonNhaCungCapNhap)
+                return;
+
+            var suppliers = await _db.GetNhaCungCapAsync(ImportSupplierSearch);
+
+            foreach (var supplier in suppliers.Take(20))
+                PhieuNhapSupplierSuggestions.Add(supplier);
+                OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể tìm nhà cung cấp: " + ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void ChonNhaCungCapNhap(NhaCungCap? supplier)
+    {
+        if (supplier is null)
+            return;
+
+        SelectedPhieuNhapNcc = supplier;
+        ImportSupplierSearch = supplier.TenNhaCungCap;
+
+        PhieuNhapSupplierSuggestions.Clear();
+        OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+
+        StatusMessage = $"Đã chọn nhà cung cấp {supplier.TenNhaCungCap}";
+    }
+
+    [RelayCommand]
+    private async Task ThemNhaCungCapNhapNhanhAsync()
+    {
+        try
+        {
+            // Tái sử dụng đúng form thêm nhà cung cấp sẵn có
+            var supplier = await HienThiFormThemNhaCungCapAsync();
+
+            if (supplier is null)
+                return;
+
+            // Tự động chọn nhà cung cấp vừa thêm cho phiếu nhập
+            SelectedPhieuNhapNcc = supplier;
+            ImportSupplierSearch = supplier.TenNhaCungCap;
+            PhieuNhapSupplierSuggestions.Clear();
+            OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+
+            StatusMessage = $"Đã thêm và chọn nhà cung cấp {supplier.TenNhaCungCap}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể thêm nhà cung cấp: " + ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task HoanThanhPhieuNhapAsync()
+    {
+        if (IsSavingPhieuNhap)
+            return;
+
+        // ------------------------------------------
+        // VALIDATE
+        // ------------------------------------------
+
+        // 1. Phiếu phải có ít nhất 1 hàng hóa
+        if (PhieuNhapItems.Count == 0)
+        {
+            StatusMessage = "Phiếu nhập chưa có hàng hóa.";
+            return;
+        }
+
+        // 2. Số lượng mỗi hàng phải > 0
+        var dongSoLuongSai = PhieuNhapItems
+            .Where(item => item.SanPham.Id != 0 && item.SoLuong <= 0)
+            .ToList();
+
+        if (dongSoLuongSai.Count > 0)
+        {
+            StatusMessage = dongSoLuongSai.Count == 1
+                ? $"Vui lòng kiểm tra số lượng của hàng \"{dongSoLuongSai[0].SanPham.TenSanPham}\" (phải lớn hơn 0)."
+                : $"Vui lòng kiểm tra số lượng hàng hóa: còn {dongSoLuongSai.Count} dòng chưa nhập số lượng.";
+            return;
+        }
+
+        // 3. Giá nhập phải hợp lệ (không âm)
+        var dongGiaSai = PhieuNhapItems
+            .Where(item => item.SanPham.Id != 0 && item.DonGiaNhap < 0)
+            .ToList();
+
+        if (dongGiaSai.Count > 0)
+        {
+            StatusMessage = dongGiaSai.Count == 1
+                ? $"Vui lòng kiểm tra giá nhập của hàng \"{dongGiaSai[0].SanPham.TenSanPham}\"."
+                : $"Vui lòng kiểm tra giá nhập: còn {dongGiaSai.Count} dòng có giá nhập không hợp lệ.";
+            return;
+        }
+
+        // Chỉ lấy những dòng thực sự gắn với một sản phẩm trong database
+        var dongHopLe = PhieuNhapItems
+            .Where(item => item.SanPham.Id != 0 && item.SoLuong > 0)
+            .ToList();
+
+        if (dongHopLe.Count == 0)
+        {
+            StatusMessage = "Phiếu nhập chưa có hàng hóa hợp lệ nào để hoàn thành.";
+            return;
+        }
+
+        // 4. Nhà cung cấp là trường bắt buộc khi hoàn thành phiếu
+        if (SelectedPhieuNhapNcc is null || SelectedPhieuNhapNcc.Id == 0)
+        {
+            StatusMessage = "Vui lòng chọn nhà cung cấp.";
+            return;
+        }
+
+        // 5. Ngày nhập hợp lệ
+        if (PhieuNhapNgayNhap is null)
+        {
+            StatusMessage = "Vui lòng chọn ngày nhập.";
+            return;
+        }
+
+        // 6. Mã phiếu phải sinh được trước khi lưu
+        if (string.IsNullOrWhiteSpace(PhieuNhapMa))
+        {
+            StatusMessage = "Chưa tạo được mã phiếu nhập, vui lòng mở lại màn hình và thử lại.";
+            return;
+        }
+
+        var confirmed = await ShowConfirmationAsync(
+            "Hoàn thành phiếu nhập",
+            "Tồn kho sẽ được cộng thêm số lượng vừa nhập và giá vốn được cập nhật. Bạn có chắc muốn tiếp tục?",
+            "Hoàn thành",
+            "Hủy");
+
+        if (!confirmed)
+            return;
+
+        IsSavingPhieuNhap = true;
+
+        try
+        {
+            var phieu = new PhieuNhapHang
+            {
+                Id = _phieuNhapId,
+                MaPhieuNhap = PhieuNhapMa,
+                NhaCungCapId = SelectedPhieuNhapNcc.Id,
+                TenNhaCungCap = SelectedPhieuNhapNcc.TenNhaCungCap,
+                ThoiGianNhap = PhieuNhapNgayNhap.Value,
+                ChiPhiKhac = PhieuNhapChiPhiKhac,
+                DaThanhToan = PhieuNhapDaThanhToan,
+                GhiChu = PhieuNhapGhiChu,
+                SoHoaDonDauVao = PhieuNhapSoHoaDonDauVao
+            };
+
+            // Lưu header + chi tiết + tồn kho + lịch sử trong một transaction.
+            // Service tự rollback toàn bộ nếu bất kỳ bước nào lỗi.
+            _phieuNhapId = await _db.LuuPhieuNhapHangAsync(phieu, dongHopLe);
+
+            // Phiếu vừa lưu phải xuất hiện trong "Báo cáo → Báo cáo phiếu nhập hàng"
+            // nên đánh dấu cần tải lại thay vì giữ cache cũ.
+            _baoCaoPhieuNhapLoaded = false;
+
+            // Tồn kho và giá vốn đã đổi -> nạp lại danh sách sản phẩm
+            await LoadProductsAsync();
+
+            StatusMessage =
+                $"✅ Đã hoàn thành phiếu nhập {PhieuNhapMa} - tổng {PhieuNhapTongTienNhapText} đ";
+
+            // Quay về danh sách phiếu nhập theo flow hiện tại của project
+            IsNhapHangFormVisible = false;
+
+            BoDangKyPhieuNhapItems();
+            PhieuNhapItems.Clear();
+            RecalculatePhieuNhapTongTienHang();
+            RecalculatePhieuNhapTotal();
+            _phieuNhapId = 0;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể hoàn thành phiếu nhập: " + ex.Message;
+        }
+        finally
+        {
+            IsSavingPhieuNhap = false;
+        }
+    }
+
     partial void OnTienKhachDuaChanged(decimal value)
     {
         RecalculatePayment();
@@ -1618,14 +2505,21 @@ public partial class MainWindowViewModel : ObservableObject
             _ => 0
         };
 
+        // Rời khỏi màn lập phiếu nhập thì đóng lại lịch đang mở
+        if (value != "Nhập hàng")
+            IsPhieuNhapCalendarOpen = false;
+
         OnPropertyChanged(nameof(IsTongQuanSelected));
         OnPropertyChanged(nameof(IsDataSectionSelected));
+        OnPropertyChanged(nameof(IsBaoCaoSectionSelected));
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
 
         _ = LoadSelectedSectionAsync(value);
     }
 
     public bool IsTongQuanSelected => SelectedMenu == "Tổng quan";
 
-    public bool IsDataSectionSelected => !IsTongQuanSelected;
+    // Báo cáo có vùng nội dung riêng nên không dùng chung TabControl dữ liệu
+    public bool IsDataSectionSelected => !IsTongQuanSelected && !IsBaoCaoSectionSelected;
 
 }
