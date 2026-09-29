@@ -2287,25 +2287,56 @@ LIMIT 500;
     // ==========================================
 
     /// <summary>
-    /// Sinh mã phiếu nhập tự động theo dạng PN260927-001,
-    /// cùng cơ chế sinh mã tuần tự như hóa đơn bán hàng.
+    /// Sinh mã phiếu nhập tự động dạng PN000001, PN000002, PN000003...
+    /// Số thứ tự lấy từ MAX của phần số trong các mã ĐÚNG ĐỊNH DẠNG:
+    ///   - Mã mới          : PN000001    (bỏ 2 ký tự "PN", phần còn lại "000001")
+    ///   - Mã cũ có ngày  : PN260929-001 (bỏ "PN", lấy đoạn sau dấu '-' cuối: "001")
+    /// Mọi mã lệch định dạng (NULL, rỗng, chứa chữ) bị loại bằng REGEXP nên dữ liệu
+    /// rác không làm sai/hỏng số thứ tự và không làm ứng dụng bị lỗi.
     /// </summary>
     public async Task<string> TaoMaPhieuNhapMoiAsync()
     {
         await using var connection = await OpenAsync();
-        var prefix = $"PN{DateTime.Now:yyMMdd}";
 
-        const string sql = """
+        // SUBSTRING(ma, 3) bỏ đúng 2 ký tự tiền tố "PN" (SQL đếm từ 1).
+        // SUBSTRING_INDEX(..., '-', -1) lấy đoạn sau dấu '-' cuối cùng để vẫn lấy
+        // đúng số thứ tự với mã cũ dạng PNyyMMdd-NNN.
+        //
+        // CAST(... AS SIGNED) để giá trị trả về luôn nằm trong kiểu long.
+        // Nếu dùng AS UNSIGNED, chuỗi bắt đầu bằng '-' sẽ ra số khổng lồ và làm
+        // ExecuteScalarAsync<long> ném exception.
+        const string maxSuffixSql = """
         SELECT COALESCE(
-            MAX(CAST(SUBSTRING(ma_phieu_nhap, 9) AS UNSIGNED)),
+            MAX(CAST(SUBSTRING_INDEX(SUBSTRING(TRIM(ma_phieu_nhap), 3), '-', -1) AS SIGNED)),
             0
-        ) + 1
+        )
         FROM phieu_nhap_hang
-        WHERE ma_phieu_nhap LIKE CONCAT(@Prefix, '-%');
+        WHERE TRIM(ma_phieu_nhap) REGEXP '^PN[0-9]{6,}(-[0-9]+)?$';
         """;
 
-        var nextNum = await connection.ExecuteScalarAsync<long>(sql, new { Prefix = prefix });
-        return $"{prefix}-{nextNum:D3}";
+        var maxSuffix = await connection.ExecuteScalarAsync<long?>(maxSuffixSql) ?? 0L;
+
+        // Database chưa có phiếu nào (hoặc mã toàn sai định dạng) => bắt đầu từ PN000001.
+        var nextNumber = maxSuffix > 0 ? maxSuffix + 1 : 1L;
+
+        // ma_phieu_nhap có UNIQUE KEY uk_pnh_ma: nếu mã vừa sinh trùng
+        // (ví dụ 2 máy cùng mở màn hình) thì tăng tiếp tới khi ra mã còn trống.
+        for (var i = 0; i < 100; i++)
+        {
+            var candidate = "PN" + nextNumber.ToString("D6", CultureInfo.InvariantCulture);
+
+            var daTonTai = await connection.ExecuteScalarAsync<int?>(
+                "SELECT 1 FROM phieu_nhap_hang WHERE ma_phieu_nhap = @Ma LIMIT 1;",
+                new { Ma = candidate });
+
+            if (daTonTai is null)
+                return candidate;
+
+            nextNumber++;
+        }
+
+        throw new InvalidOperationException(
+            "Không sinh được mã phiếu nhập: đã thử 100 lần liên tiếp mà mã vẫn bị trùng.");
     }
 
     public async Task<IReadOnlyList<PhieuNhapHang>> GetPhieuNhapHangAsync(
@@ -2449,6 +2480,13 @@ LIMIT 500;
 
         if (dongHopLe.Count == 0)
             throw new InvalidOperationException("Phiếu nhập chưa có hàng hóa nào hợp lệ.");
+
+        // Chặn ở tầng service: mã phiếu rỗng hoặc sai định dạng tuyệt đối không được
+        // ghi xuống phieu_nhap_hang (ràng buộc UNIQUE uk_pnh_ma chỉ bắt được mã rỗng).
+        if (string.IsNullOrWhiteSpace(phieu.MaPhieuNhap))
+            throw new InvalidOperationException("Mã phiếu nhập rỗng, không thể lưu phiếu nhập.");
+
+        phieu.MaPhieuNhap = phieu.MaPhieuNhap.Trim();
 
         var branchId = phieu.ChiNhanhId != 0
             ? phieu.ChiNhanhId
@@ -2857,6 +2895,241 @@ LIMIT 500;
             return 0;
 
         return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+    }
+
+    // ================================================================
+    // SỔ QUỸ - PHIẾU THU / PHIẾU CHI
+    // Database hiện có bảng `phieu_chi` (chưa có bảng `phieu_thu`),
+    // nên cả dãy mã PT và PC đều lấy số thứ tự lớn nhất từ `phieu_chi`.
+    // ================================================================
+
+    /// <summary>
+    /// Sinh mã phiếu sổ quỹ tự động: "PT0001", "PT0002"... hoặc "PC0001", "PC0002"...
+    /// Số thứ tự lấy từ MAX phần số của các mã ĐÚNG ĐỊNH DẠNG có cùng tiền tố
+    /// (không dùng COUNT(*) để tránh trùng khi dữ liệu bị xóa).
+    /// Mã NULL/rỗng/không đúng định dạng bị loại bằng REGEXP nên dữ liệu rác không làm hỏng số thứ tự.
+    /// Mọi lỗi kết nối đều được nuốt và trả về mã mặc định để ứng dụng không bị crash.
+    /// </summary>
+    public async Task<string> TaoMaPhieuQuyMoiAsync(string tienTo)
+    {
+        var prefix = string.IsNullOrWhiteSpace(tienTo)
+            ? "PT"
+            : tienTo.Trim().ToUpperInvariant();
+
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            // REGEXP loại bỏ mã rỗng / sai định dạng (VD "PCxxxx").
+            // Collation utf8mb4_unicode_ci nên 'pt0001' cũng khớp với 'PT0001'.
+            var maxSuffix = await connection.ExecuteScalarAsync<long?>(
+                """
+                SELECT COALESCE(MAX(CAST(SUBSTRING(TRIM(ma_phieu_chi), 3) AS SIGNED)), 0)
+                FROM phieu_chi
+                WHERE ma_phieu_chi LIKE CONCAT(@Prefix, '%')
+                  AND TRIM(ma_phieu_chi) REGEXP CONCAT('^', @Prefix, '[0-9]+$');
+                """,
+                new { Prefix = prefix }) ?? 0L;
+
+            // Chưa có phiếu nào (hoặc mã toàn sai định dạng) => bắt đầu từ 0001.
+            var nextNumber = maxSuffix > 0 ? maxSuffix + 1 : 1L;
+
+            // ma_phieu_chi có UNIQUE KEY: nếu mã vừa sinh trùng (2 máy cùng mở màn hình)
+            // thì tăng tiếp cho tới khi ra mã còn trống.
+            for (var i = 0; i < 100; i++)
+            {
+                var candidate = prefix + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
+
+                var daTonTai = await connection.ExecuteScalarAsync<int?>(
+                    "SELECT 1 FROM phieu_chi WHERE ma_phieu_chi = @Ma LIMIT 1;",
+                    new { Ma = candidate });
+
+                if (daTonTai is null)
+                    return candidate;
+
+                nextNumber++;
+            }
+
+            return prefix + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            // Không chặn người dùng vì lỗi mạng/database.
+            return prefix + "0001";
+        }
+    }
+
+    /// <summary>
+    /// Lấy danh sách phiếu của sổ quỹ theo mã phiếu (tìm một phần, không phân biệt hoa/thường)
+    /// kèm tổng số bản ghi để phân trang.
+    /// </summary>
+    public async Task<(IReadOnlyList<SoQuyGiaoDich> Items, int TongSoBanGhi)> GetSoQuyPhieuPagedAsync(
+        string? maPhieu,
+        int page,
+        int pageSize)
+    {
+        var tuKhoa = (maPhieu ?? "").Trim();
+
+        await using var connection = await OpenAsync();
+
+        const string countSql = """
+        SELECT COUNT(*)
+        FROM phieu_chi
+        WHERE (@MaPhieu = '' OR ma_phieu_chi LIKE @MaPhieu);
+        """;
+
+        var tongSoBanGhi = await connection.ExecuteScalarAsync<int>(
+            countSql,
+            new { MaPhieu = tuKhoa == "" ? "" : $"%{tuKhoa}%" });
+
+        if (tongSoBanGhi == 0)
+            return (Array.Empty<SoQuyGiaoDich>(), 0);
+
+        var safePage = page < 1 ? 1 : page;
+        var safePageSize = pageSize < 1 ? 10 : pageSize;
+        var offset = (safePage - 1) * safePageSize;
+
+        const string listSql = """
+        SELECT
+            pc.ma_phieu_chi AS MaPhieu,
+            pc.so_tien AS SoTien,
+            COALESCE(pc.noi_dung, '') AS NoiDung,
+            pc.thoi_gian_chi AS ThoiGian,
+            COALESCE(nd.ho_ten, '') AS NguoiThucHien
+        FROM phieu_chi pc
+        LEFT JOIN nguoi_dung nd ON nd.id = pc.nguoi_thuc_hien_id
+        WHERE (@MaPhieu = '' OR pc.ma_phieu_chi LIKE @MaPhieu)
+        ORDER BY pc.thoi_gian_chi DESC, pc.id DESC
+        LIMIT @Limit OFFSET @Offset;
+        """;
+
+        var rows = await connection.QueryAsync<SoQuyPhieuRow>(
+            listSql,
+            new
+            {
+                MaPhieu = tuKhoa == "" ? "" : $"%{tuKhoa}%",
+                Limit = safePageSize,
+                Offset = offset
+            });
+
+        var items = new List<SoQuyGiaoDich>(rows.Count());
+
+        foreach (var row in rows)
+        {
+            items.Add(new SoQuyGiaoDich
+            {
+                MaPhieu = row.MaPhieu ?? "",
+                // Phiếu thu và phiếu chi cùng nằm trong bảng phieu_chi,
+                // nên loại phiếu được suy ra từ tiền tố mã (PTxxxx / PCxxxx).
+                LaThu = (row.MaPhieu ?? "").StartsWith("PT", StringComparison.OrdinalIgnoreCase),
+                // noi_dung chứa "người nộp/nhận" nên ưu tiên; chỉ fallback sang
+                // tên nhân viên khi phiếu cũ không có nội dung.
+                NguoiNopNhan = string.IsNullOrWhiteSpace(row.NoiDung)
+                    ? (row.NguoiThucHien ?? "")
+                    : row.NoiDung!,
+                GiaTri = ToDecimal(row.SoTien),
+                ThoiGian = row.ThoiGian
+            });
+        }
+
+        return (items, tongSoBanGhi);
+    }
+
+    /// <summary>Dòng kết quả truy vấn sổ quỹ (chỉ dùng nội bộ DatabaseService).</summary>
+    private sealed class SoQuyPhieuRow
+    {
+        public string MaPhieu { get; set; } = "";
+        public decimal SoTien { get; set; }
+        public string NoiDung { get; set; } = "";
+        public DateTime ThoiGian { get; set; }
+        public string NguoiThucHien { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Lưu 1 phiếu thu (PTxxxx) hoặc phiếu chi (PCxxxx) của sổ quỹ.
+    /// Cột số <c>so_tien</c> luôn nhận giá trị decimal thô, không nhận chuỗi đã định dạng.
+    /// Không nuốt exception: lỗi UNIQUE/connection được ném ra để ViewModel hiển thị cho người dùng.
+    /// </summary>
+    public async Task LuuPhieuQuyAsync(
+        string maPhieu,
+        decimal soTien,
+        DateTime thoiGian,
+        string? nguoiThucHien,
+        string? ghiChu)
+    {
+        if (string.IsNullOrWhiteSpace(maPhieu))
+            throw new InvalidOperationException("Thiếu mã phiếu khi lưu sổ quỹ.");
+
+        if (soTien <= 0)
+            throw new InvalidOperationException("Số tiền phải lớn hơn 0.");
+
+        await using var connection = await OpenAsync();
+
+        // nguoi_thuc_hien_id là FK sang nguoi_dung: chỉ gán khi tìm thấy đúng người,
+        // nếu không thì để NULL (cột cho phép NULL) để không làm hỏng phiếu.
+        const string sql = """
+        INSERT INTO phieu_chi
+            (ma_phieu_chi, chi_nhanh_id, so_tien, phuong_thuc, noi_dung, thoi_gian_chi, nguoi_thuc_hien_id, trang_thai)
+        VALUES
+            (@MaPhieu, @ChiNhanhId, @SoTien, 'TIEN_MAT', @NoiDung, @ThoiGian, @NguoiThucHienId, 'HOAN_THANH');
+        """;
+
+        await connection.ExecuteAsync(sql, new
+        {
+            MaPhieu = maPhieu.Trim(),
+            ChiNhanhId = Session.CurrentUser?.ChiNhanhId ?? 1,
+            SoTien = soTien,
+            NoiDung = string.IsNullOrWhiteSpace(ghiChu) ? null : ghiChu.Trim(),
+            ThoiGian = thoiGian,
+            NguoiThucHienId = await ResolveNguoiThucHienIdAsync(connection, nguoiThucHien)
+        });
+    }
+
+    /// <summary>Tìm id của nhân viên theo tên, trả về null nếu không khớp.</summary>
+    private static async Task<uint?> ResolveNguoiThucHienIdAsync(MySqlConnection connection, string? hoTen)
+    {
+        if (string.IsNullOrWhiteSpace(hoTen))
+            return null;
+
+        var id = await connection.ExecuteScalarAsync<uint?>(
+            "SELECT id FROM nguoi_dung WHERE ho_ten = @HoTen LIMIT 1;",
+            new { HoTen = hoTen.Trim() });
+
+        return id;
+    }
+
+    /// <summary>
+    /// Tổng hợp số tiền sổ quỹ: tổng thu (mã PT) và tổng chi (mã PC).
+    /// </summary>
+    public async Task<(decimal TongThu, decimal TongChi)> GetSoQuyTongHopAsync()
+    {
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            const string sql = """
+            SELECT
+                COALESCE(SUM(CASE WHEN ma_phieu_chi LIKE 'PT%' THEN so_tien ELSE 0 END), 0) AS TongThu,
+                COALESCE(SUM(CASE WHEN ma_phieu_chi LIKE 'PC%' THEN so_tien ELSE 0 END), 0) AS TongChi
+            FROM phieu_chi;
+            """;
+
+            var tongHop = await connection.QueryFirstOrDefaultAsync<SoQuyTongHopRow>(sql);
+
+            return (tongHop?.TongThu ?? 0m, tongHop?.TongChi ?? 0m);
+        }
+        catch
+        {
+            // Tổng quỹ chỉ để hiển thị: lỗi truy vấn không được chặn màn hình.
+            return (0m, 0m);
+        }
+    }
+
+    /// <summary>Kết quả tổng hợp sổ quỹ (chỉ dùng nội bộ DatabaseService).</summary>
+    private sealed class SoQuyTongHopRow
+    {
+        public decimal TongThu { get; set; }
+        public decimal TongChi { get; set; }
     }
 }
 

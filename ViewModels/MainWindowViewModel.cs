@@ -2,10 +2,12 @@ using System.Collections.ObjectModel;
 using System.Threading;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
 using ShopHoa.Services;
 using ShopHoa.Views;
@@ -443,6 +445,11 @@ public partial class MainWindowViewModel : ObservableObject
                     // Thiếu bước này thì PhieuNhapMa rỗng => lưu phiếu sẽ lỗi
                     // "Duplicate entry '' for key 'uk_pnh_ma'".
                     await MoPhieuNhapHangAsync();
+                    break;
+
+                case "Sổ quỹ":
+                    await LoadSoQuyPhieuAsync();
+                    await LoadSoQuyTongHopAsync();
                     break;
 
                 case "Báo cáo":
@@ -1942,8 +1949,17 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            PhieuNhapMa = "LỖI-TẠO-MÃ";
-            StatusMessage = "Không thể tạo mã phiếu nhập tự động: " + ex.Message;
+            // Không nuốt lỗi: in ra console/debug để thấy đúng lỗi SQL/connection.
+            // Tuyệt đối không gán chuỗi tạm vào PhieuNhapMa vì màn hình sẽ lưu
+            // thẳng giá trị này xuống phieu_nhap_hang (làm hỏng dữ liệu mã phiếu).
+            Console.WriteLine("========== LỖI TẠO MÃ PHIẾU NHẬP ==========");
+            Console.WriteLine(ex.ToString());
+            Console.WriteLine("==========================================");
+
+            PhieuNhapMa = "";
+            StatusMessage =
+                "Không thể tạo mã phiếu nhập tự động: " + ex.Message
+                + " (xem console để biết chi tiết lỗi SQL/kết nối)";
         }
 
         RecalculatePhieuNhapTongTienHang();
@@ -2502,6 +2518,7 @@ public partial class MainWindowViewModel : ObservableObject
             "Hóa đơn" => 2,
             "Nhà cung cấp" => 3,
             "Nhập hàng" => 4,
+            "Sổ quỹ" => 5,
             _ => 0
         };
 
@@ -2522,4 +2539,524 @@ public partial class MainWindowViewModel : ObservableObject
     // Báo cáo có vùng nội dung riêng nên không dùng chung TabControl dữ liệu
     public bool IsDataSectionSelected => !IsTongQuanSelected && !IsBaoCaoSectionSelected;
 
+    // ================================================================
+    // SỔ QUỸ
+    //  - Tự sinh mã phiếu thu (PTxxxx) / phiếu chi (PCxxxx) khi mở form.
+    //  - Tìm kiếm theo mã phiếu (realtime) + phân trang theo kết quả tìm kiếm.
+    // ================================================================
+    private CancellationTokenSource? _soQuySearchCts;
+    private int _soQuyLoadVersion;
+
+    public ObservableCollection<SoQuyGiaoDich> SoQuyGiaoDichs { get; } = new();
+
+    public IReadOnlyList<int> SoQuyPageSizeOptions { get; } = [10, 15, 25, 50, 100];
+
+    [ObservableProperty] private string soQuySearchText = "";
+    [ObservableProperty] private int soQuyPageSize = 10;
+    [ObservableProperty] private int soQuyPage = 1;
+    [ObservableProperty] private int soQuyTotalCount;
+
+    // 4 thẻ tổng quan (đã định dạng sẵn để hiển thị)
+    [ObservableProperty] private string soQuyQuyDauKyText = "0 đ";
+    [ObservableProperty] private string soQuyTongThuText = "0 đ";
+    [ObservableProperty] private string soQuyTongChiText = "0 đ";
+    [ObservableProperty] private string soQuyTonQuyText = "0 đ";
+
+    /// <summary>true khi người dùng đang gõ từ khóa (dùng để đổi nội dung Empty State).</summary>
+    public bool IsSoQuyDangTimKiem => !string.IsNullOrWhiteSpace(SoQuySearchText);
+
+    public bool HasSoQuyData => SoQuyGiaoDichs.Count > 0;
+
+    public int SoQuyTotalPages =>
+        SoQuyPageSize <= 0
+            ? 0
+            : (int)Math.Ceiling(SoQuyTotalCount / (double)SoQuyPageSize);
+
+    public bool CanSoQuyTrangSau => SoQuyPage < SoQuyTotalPages;
+
+    public bool CanSoQuyTrangTruoc => SoQuyPage > 1;
+
+    /// <summary>Ví dụ: "1 - 3 trong 3 giao dịch"</summary>
+    public string SoQuyRangeText
+    {
+        get
+        {
+            if (SoQuyTotalCount == 0)
+                return "0 giao dịch";
+
+            var from = (SoQuyPage - 1) * SoQuyPageSize + 1;
+            var to = Math.Min(from + SoQuyPageSize - 1, SoQuyTotalCount);
+
+            return $"{from} - {to} trong {SoQuyTotalCount} giao dịch";
+        }
+    }
+
+    /// <summary>Nội dung Empty State: khác nhau giữa "chưa có phiếu nào" và "không tìm thấy phiếu phù hợp".</summary>
+    public string SoQuyEmptyStateText =>
+        IsSoQuyDangTimKiem
+            ? $"Không tìm thấy phiếu phù hợp với: \"{SoQuySearchText.Trim()}\""
+            : "Chưa có giao dịch nào trong sổ quỹ";
+
+    // ---------- Tìm kiếm realtime ----------
+
+    partial void OnSoQuySearchTextChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsSoQuyDangTimKiem));
+        OnPropertyChanged(nameof(SoQuyEmptyStateText));
+
+        // Lùi 300ms để không gọi database liên tục khi người dùng đang gõ.
+        var cts = new CancellationTokenSource();
+        _soQuySearchCts?.Cancel();
+        _soQuySearchCts = cts;
+
+        _ = DebounceSoQuySearchAsync(cts.Token);
+    }
+
+    private async Task DebounceSoQuySearchAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(300, token);
+
+            // Tìm kiếm luôn quay về trang 1.
+            SoQuyPage = 1;
+
+            await LoadSoQuyPhieuAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // Người dùng gõ tiếp => kết quả cũ bị huỷ, không cần làm gì.
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể tìm kiếm sổ quỹ: " + ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void XoaTimKiemSoQuy()
+    {
+        _soQuySearchCts?.Cancel();
+        SoQuySearchText = "";
+        SoQuyPage = 1;
+        _ = LoadSoQuyPhieuAsync();
+    }
+
+    // ---------- Phân trang ----------
+
+    partial void OnSoQuyPageSizeChanged(int value)
+    {
+        SoQuyPage = 1;
+        RaiseSoQuyPaginationChanged();
+        _ = LoadSoQuyPhieuAsync();
+    }
+
+    partial void OnSoQuyPageChanged(int value)
+    {
+        RaiseSoQuyPaginationChanged();
+        _ = LoadSoQuyPhieuAsync();
+    }
+
+    partial void OnSoQuyTotalCountChanged(int value) => RaiseSoQuyPaginationChanged();
+
+    private void RaiseSoQuyPaginationChanged()
+    {
+        OnPropertyChanged(nameof(SoQuyTotalPages));
+        OnPropertyChanged(nameof(SoQuyRangeText));
+        OnPropertyChanged(nameof(CanSoQuyTrangSau));
+        OnPropertyChanged(nameof(CanSoQuyTrangTruoc));
+    }
+
+    [RelayCommand]
+    private void SoQuyTrangDau() => SoQuyPage = 1;
+
+    [RelayCommand]
+    private void SoQuyTrangCuoi() => SoQuyPage = Math.Max(1, SoQuyTotalPages);
+
+    [RelayCommand]
+    private void SoQuyTrangSau()
+    {
+        if (CanSoQuyTrangSau)
+            SoQuyPage++;
+    }
+
+    [RelayCommand]
+    private void SoQuyTrangTruoc()
+    {
+        if (CanSoQuyTrangTruoc)
+            SoQuyPage--;
+    }
+
+    /// <summary>Nạp trang hiện tại của sổ quỹ theo từ khóa tìm kiếm đang gõ.</summary>
+    private async Task LoadSoQuyPhieuAsync()
+    {
+        var version = ++_soQuyLoadVersion;
+
+        try
+        {
+            var (items, tongSoBanGhi) = await _db.GetSoQuyPhieuPagedAsync(
+                SoQuySearchText,
+                SoQuyPage,
+                SoQuyPageSize);
+
+            // Bỏ qua kết quả cũ nếu người dùng vừa gõ thêm ký tự hoặc chuyển trang.
+            if (version != _soQuyLoadVersion)
+                return;
+
+            SoQuyGiaoDichs.Clear();
+            foreach (var item in items)
+                SoQuyGiaoDichs.Add(item);
+
+            // Trang có thể vượt quá tổng số trang sau khi vừa tìm kiếm.
+            if (SoQuyTotalPages > 0 && SoQuyPage > SoQuyTotalPages)
+                SoQuyPage = SoQuyTotalPages;
+
+            SoQuyTotalCount = tongSoBanGhi;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể tải sổ quỹ: " + ex.Message;
+        }
+    }
+
+    // ---------- Modal tạo phiếu thu / phiếu chi ----------
+    [ObservableProperty] private bool isSoQuyPhieuThuVisible;
+    [ObservableProperty] private bool isSoQuyPhieuChiVisible;
+    [ObservableProperty] private bool isSoQuyPhieuDangLuu;
+
+    [ObservableProperty] private string soQuyPhieuMa = "";
+    [ObservableProperty] private DateTime soQuyPhieuThoiGian = DateTime.Now;
+    [ObservableProperty] private string soQuyPhieuNguoiThucHien = "";
+    [ObservableProperty] private string soQuyPhieuDoiTuong = "";
+    [ObservableProperty] private string soQuyPhieuTenNguoi = "";
+    [ObservableProperty] private decimal soQuyPhieuSoTien;
+    [ObservableProperty] private string soQuyPhieuGhiChu = "";
+    [ObservableProperty] private bool soQuyPhieuHachToan = true;
+
+    public IReadOnlyList<string> SoQuyLoaiThuOptions { get; } =
+        ["Thu tiền mặt", "Thu công nợ", "Thu khác"];
+
+    public IReadOnlyList<string> SoQuyLoaiChiOptions { get; } =
+        ["Chi tiền mặt", "Chi công nợ", "Chi khác"];
+
+    [ObservableProperty] private string soQuyPhieuThuLoai = "Thu tiền mặt";
+
+    [ObservableProperty] private string soQuyPhieuChiLoai = "Chi tiền mặt";
+
+    // ================================================================
+    // VALIDATION FORM PHIẾU THU / PHIẾU CHI
+    // Chỉ hiển thị lỗi sau khi người dùng đã chạm vào ô hoặc đã bấm Lưu
+    // (SoQuyFormDaCham), nên form vừa mở không hiện lỗi.
+    // ================================================================
+
+    [ObservableProperty] private bool soQuyFormDaCham;
+
+    [ObservableProperty] private bool soQuyLoiMaPhieu;
+    [ObservableProperty] private bool soQuyLoiThoiGian;
+    [ObservableProperty] private bool soQuyLoiLoai;
+    [ObservableProperty] private bool soQuyLoiNguoiThucHien;
+    [ObservableProperty] private bool soQuyLoiTenNguoi;
+    [ObservableProperty] private bool soQuyLoiSoTien;
+
+    public string SoQuyLoiMaPhieuText => "Vui lòng tạo lại mã phiếu.";
+    public string SoQuyLoiThoiGianText => "Vui lòng nhập thời gian hợp lệ.";
+    public string SoQuyLoiLoaiText => "Vui lòng chọn loại phiếu.";
+    public string SoQuyLoiNguoiThucHienText => "Vui lòng nhập người thu.";
+    public string SoQuyLoiNguoiThucHienChiText => "Vui lòng nhập người chi.";
+    public string SoQuyLoiTenNguoiText => "Vui lòng nhập tên người nộp.";
+    public string SoQuyLoiTenNguoiChiText => "Vui lòng nhập tên người nhận.";
+    public string SoQuyLoiSoTienText => "Vui lòng nhập số tiền lớn hơn 0.";
+
+    /// <summary>Loại phiếu đang mở: true = phiếu thu, false = phiếu chi.</summary>
+    private bool DangTaoPhieuThu => IsSoQuyPhieuThuVisible;
+
+    // ---- Thuộc tính hiển thị (chỉ báo lỗi sau khi đã tương tác / bấm Lưu) ----
+
+    private static readonly IBrush VienMacMacDinh = new SolidColorBrush(Color.Parse("#D8E5E0"));
+    private static readonly IBrush VienMacLoi = new SolidColorBrush(Color.Parse("#F04438"));
+
+    public bool SoQuyHienLoiMaPhieu => SoQuyFormDaCham && SoQuyLoiMaPhieu;
+    public bool SoQuyHienLoiThoiGian => SoQuyFormDaCham && SoQuyLoiThoiGian;
+    public bool SoQuyHienLoiLoai => SoQuyFormDaCham && SoQuyLoiLoai;
+    public bool SoQuyHienLoiNguoiThucHien => SoQuyFormDaCham && SoQuyLoiNguoiThucHien;
+    public bool SoQuyHienLoiTenNguoi => SoQuyFormDaCham && SoQuyLoiTenNguoi;
+    public bool SoQuyHienLoiSoTien => SoQuyFormDaCham && SoQuyLoiSoTien;
+
+    public IBrush SoQuyVienMaPhieu => SoQuyHienLoiMaPhieu ? VienMacLoi : VienMacMacDinh;
+    public IBrush SoQuyVienThoiGian => SoQuyHienLoiThoiGian ? VienMacLoi : VienMacMacDinh;
+    public IBrush SoQuyVienLoai => SoQuyHienLoiLoai ? VienMacLoi : VienMacMacDinh;
+    public IBrush SoQuyVienNguoiThucHien => SoQuyHienLoiNguoiThucHien ? VienMacLoi : VienMacMacDinh;
+    public IBrush SoQuyVienTenNguoi => SoQuyHienLoiTenNguoi ? VienMacLoi : VienMacMacDinh;
+    public IBrush SoQuyVienSoTien => SoQuyHienLoiSoTien ? VienMacLoi : VienMacMacDinh;
+
+    public string SoQuyLoiNguoiThucHienHienThi =>
+        DangTaoPhieuThu ? SoQuyLoiNguoiThucHienText : SoQuyLoiNguoiThucHienChiText;
+
+    public string SoQuyLoiTenNguoiHienThi =>
+        DangTaoPhieuThu ? SoQuyLoiTenNguoiText : SoQuyLoiTenNguoiChiText;
+
+    /// <summary>Thời gian hiển thị dạng dd/MM/yyyy HH:mm, người dùng không tự nhập.</summary>
+    public string SoQuyPhieuThoiGianText =>
+        SoQuyPhieuThoiGian == default ? "" : SoQuyPhieuThoiGian.ToString("dd/MM/yyyy HH:mm");
+
+    /// <summary>
+    /// Gộp nội dung form để ghi vào cột noi_dung (kiểu text) của phiếu.
+    /// Bảng phieu_chi không có cột riêng cho "người nộp/nhận", nên tên người nộp/nhận
+    /// được đặt lên đầu để cột "NGƯỜI NỘP / NHẬN" của bảng sổ quỹ hiển thị đúng,
+    /// phần đối tượng/ghi chú nối phía sau.
+    /// </summary>
+    private string SoQuyNoiDungPhieu
+    {
+        get
+        {
+            var nguoi = (SoQuyPhieuTenNguoi ?? "").Trim();
+            var ghiChu = (SoQuyPhieuDoiTuong ?? "").Trim();
+            var note = (SoQuyPhieuGhiChu ?? "").Trim();
+
+            if (ghiChu.Length > 0)
+                note = note.Length > 0 ? $"{ghiChu} - {note}" : ghiChu;
+
+            if (note.Length == 0)
+                return nguoi;
+
+            return nguoi.Length > 0 ? $"{nguoi} - {note}" : note;
+        }
+    }
+
+    /// <summary>Số tiền không được âm (MoneyTextBox có thể trả về số âm nếu người dùng gõ "-").</summary>
+    partial void OnSoQuyPhieuSoTienChanged(decimal value)
+    {
+        if (value < 0)
+            SoQuyPhieuSoTien = 0;
+
+        SoQuyLoiSoTien = value <= 0;
+        RaiseSoQuyValidation();
+    }
+
+    partial void OnSoQuyPhieuNguoiThucHienChanged(string value)
+    {
+        SoQuyFormDaCham = true;
+        SoQuyLoiNguoiThucHien = string.IsNullOrWhiteSpace(value);
+        RaiseSoQuyValidation();
+    }
+
+    partial void OnSoQuyPhieuTenNguoiChanged(string value)
+    {
+        SoQuyFormDaCham = true;
+        SoQuyLoiTenNguoi = string.IsNullOrWhiteSpace(value);
+        RaiseSoQuyValidation();
+    }
+
+    partial void OnSoQuyPhieuMaChanged(string value)
+    {
+        SoQuyLoiMaPhieu = string.IsNullOrWhiteSpace(value);
+        RaiseSoQuyValidation();
+    }
+
+    partial void OnSoQuyPhieuThoiGianChanged(DateTime value)
+    {
+        SoQuyLoiThoiGian = value == default;
+        OnPropertyChanged(nameof(SoQuyPhieuThoiGianText));
+        RaiseSoQuyValidation();
+    }
+
+    partial void OnSoQuyPhieuThuLoaiChanged(string value)
+    {
+        SoQuyLoiLoai = string.IsNullOrWhiteSpace(value);
+        RaiseSoQuyValidation();
+    }
+
+    partial void OnSoQuyPhieuChiLoaiChanged(string value)
+    {
+        SoQuyLoiLoai = string.IsNullOrWhiteSpace(value);
+        RaiseSoQuyValidation();
+    }
+
+    partial void OnIsSoQuyPhieuThuVisibleChanged(bool value)
+    {
+        OnPropertyChanged(nameof(SoQuyLoiNguoiThucHienHienThi));
+        OnPropertyChanged(nameof(SoQuyLoiTenNguoiHienThi));
+    }
+
+    /// <summary>Báo lại toàn bộ thuộc tính hiển thị lỗi sau khi trạng thái validation đổi.</summary>
+    private void RaiseSoQuyValidation()
+    {
+        OnPropertyChanged(nameof(SoQuyHienLoiMaPhieu));
+        OnPropertyChanged(nameof(SoQuyHienLoiThoiGian));
+        OnPropertyChanged(nameof(SoQuyHienLoiLoai));
+        OnPropertyChanged(nameof(SoQuyHienLoiNguoiThucHien));
+        OnPropertyChanged(nameof(SoQuyHienLoiTenNguoi));
+        OnPropertyChanged(nameof(SoQuyHienLoiSoTien));
+        OnPropertyChanged(nameof(SoQuyVienMaPhieu));
+        OnPropertyChanged(nameof(SoQuyVienThoiGian));
+        OnPropertyChanged(nameof(SoQuyVienLoai));
+        OnPropertyChanged(nameof(SoQuyVienNguoiThucHien));
+        OnPropertyChanged(nameof(SoQuyVienTenNguoi));
+        OnPropertyChanged(nameof(SoQuyVienSoTien));
+    }
+
+    /// <summary>Kiểm tra toàn bộ trường bắt buộc. Trả về true khi dữ liệu hợp lệ.</summary>
+    private bool KiemTraFormPhieu(bool laPhieuThu)
+    {
+        var loai = laPhieuThu ? SoQuyPhieuThuLoai : SoQuyPhieuChiLoai;
+
+        SoQuyLoiMaPhieu = string.IsNullOrWhiteSpace(SoQuyPhieuMa);
+        SoQuyLoiThoiGian = SoQuyPhieuThoiGian == default;
+        SoQuyLoiLoai = string.IsNullOrWhiteSpace(loai);
+        SoQuyLoiNguoiThucHien = string.IsNullOrWhiteSpace(SoQuyPhieuNguoiThucHien);
+        SoQuyLoiTenNguoi = string.IsNullOrWhiteSpace(SoQuyPhieuTenNguoi);
+        SoQuyLoiSoTien = SoQuyPhieuSoTien <= 0;
+
+        RaiseSoQuyValidation();
+
+        return !SoQuyLoiMaPhieu
+               && !SoQuyLoiThoiGian
+               && !SoQuyLoiLoai
+               && !SoQuyLoiNguoiThucHien
+               && !SoQuyLoiTenNguoi
+               && !SoQuyLoiSoTien;
+    }
+
+    [RelayCommand]
+    private async Task LuuSoQuyPhieuThuAsync()
+    {
+        await LuuSoQuyPhieuAsync(true);
+    }
+
+    [RelayCommand]
+    private async Task LuuSoQuyPhieuChiAsync()
+    {
+        await LuuSoQuyPhieuAsync(false);
+    }
+
+    /// <summary>Lưu &amp; In: hiện dùng chung luồng lưu, chờ phần in phiếu.</summary>
+    [RelayCommand]
+    private Task LuuVaInSoQuyPhieuThuAsync() => LuuSoQuyPhieuAsync(true);
+
+    [RelayCommand]
+    private Task LuuVaInSoQuyPhieuChiAsync() => LuuSoQuyPhieuAsync(false);
+
+    private async Task LuuSoQuyPhieuAsync(bool laPhieuThu)
+    {
+        if (IsSoQuyPhieuDangLuu)
+            return;
+
+        // Bấm Lưu là bắt đầu hiển thị lỗi cho toàn bộ form.
+        SoQuyFormDaCham = true;
+
+        if (!KiemTraFormPhieu(laPhieuThu))
+        {
+            StatusMessage = laPhieuThu
+                ? "Không thể lưu phiếu thu: vui lòng kiểm tra các ô được đánh dấu đỏ."
+                : "Không thể lưu phiếu chi: vui lòng kiểm tra các ô được đánh dấu đỏ.";
+
+            return;
+        }
+
+        IsSoQuyPhieuDangLuu = true;
+
+        var tenLoai = laPhieuThu ? "thu" : "chi";
+
+        try
+        {
+            await _db.LuuPhieuQuyAsync(
+                SoQuyPhieuMa,
+                SoQuyPhieuSoTien,
+                SoQuyPhieuThoiGian,
+                SoQuyPhieuNguoiThucHien,
+                SoQuyNoiDungPhieu);
+
+            StatusMessage = $"Đã lưu phiếu {tenLoai} thành công.";
+
+            // Đóng modal rồi nạp lại danh sách + tổng hợp để thấy phiếu vừa lưu ngay.
+            ResetSoQuyPhieuForm();
+
+            await LoadSoQuyPhieuAsync();
+            await LoadSoQuyTongHopAsync();
+        }
+        catch (Exception ex)
+        {
+            // Không nuốt lỗi: in ra console để còn tra được chi tiết SQL/kết nối.
+            Console.WriteLine($"========== LỖI LƯU PHIẾU {tenLoai.ToUpperInvariant()} SỔ QUỸ ==========");
+            Console.WriteLine(ex.ToString());
+            Console.WriteLine("======================================================");
+
+            StatusMessage = $"Không thể lưu phiếu {tenLoai}. Vui lòng thử lại. "
+                            + $"(Chi tiết: {ex.Message})";
+        }
+        finally
+        {
+            IsSoQuyPhieuDangLuu = false;
+        }
+    }
+
+    /// <summary>Cập nhật 4 thẻ tổng quan của sổ quỹ (gọi sau khi lưu hoặc khi mở màn hình).</summary>
+    private async Task LoadSoQuyTongHopAsync()
+    {
+        try
+        {
+            var (tongThu, tongChi) = await _db.GetSoQuyTongHopAsync();
+
+            SoQuyTongThuText = FormatSoQuyTien(tongThu);
+            SoQuyTongChiText = FormatSoQuyTien(tongChi);
+
+            // Quỹ đầu kỳ do ngoài quyền hạn sổ quỹ quản lý: hiển thị 0 đ,
+            // tồn quỹ = tổng thu - tổng chi.
+            SoQuyQuyDauKyText = FormatSoQuyTien(0m);
+            SoQuyTonQuyText = FormatSoQuyTien(tongThu - tongChi);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể tải tổng hợp sổ quỹ: " + ex.Message;
+        }
+    }
+
+    private static string FormatSoQuyTien(decimal value) => MoneyInput.Format(value) + " đ";
+
+    [RelayCommand]
+    private async Task MoSoQuyPhieuThuAsync()
+    {
+        await MoSoQuyPhieuFormAsync("PT");
+
+        IsSoQuyPhieuThuVisible = true;
+    }
+
+    [RelayCommand]
+    private async Task MoSoQuyPhieuChiAsync()
+    {
+        await MoSoQuyPhieuFormAsync("PC");
+
+        IsSoQuyPhieuChiVisible = true;
+    }
+
+    [RelayCommand]
+    private void DongSoQuyPhieu() => ResetSoQuyPhieuForm();
+
+    /// <summary>Chuẩn bị form và tự sinh mã phiếu (PTxxxx / PCxxxx) cho người dùng.</summary>
+    private async Task MoSoQuyPhieuFormAsync(string tienTo)
+    {
+        ResetSoQuyPhieuForm();
+
+        // Thời gian lấy tự động, người dùng không phải nhập tay.
+        SoQuyPhieuThoiGian = DateTime.Now;
+
+        SoQuyPhieuMa = await _db.TaoMaPhieuQuyMoiAsync(tienTo);
+    }
+
+    private void ResetSoQuyPhieuForm()
+    {
+        IsSoQuyPhieuThuVisible = false;
+        IsSoQuyPhieuChiVisible = false;
+        SoQuyPhieuMa = "";
+        SoQuyPhieuTenNguoi = "";
+        SoQuyPhieuSoTien = 0m;
+        SoQuyPhieuGhiChu = "";
+        SoQuyPhieuDoiTuong = "";
+
+        // Mở lại form ở trạng thái sạch: không hiện lỗi cho tới khi người dùng thao tác.
+        SoQuyFormDaCham = false;
+        SoQuyLoiNguoiThucHien = false;
+        SoQuyLoiTenNguoi = false;
+        RaiseSoQuyValidation();
+    }
 }
