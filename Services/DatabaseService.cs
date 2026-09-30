@@ -11,6 +11,7 @@ public sealed class DatabaseService
 {
     private readonly DatabaseConfigService _configService;
     private bool? _hasPhieuNhapExtraColumns;
+    private bool? _hasBangTraHang;
 
     public DatabaseService()
     {
@@ -927,6 +928,474 @@ public sealed class DatabaseService
         if (affectedRows == 0)
             throw new InvalidOperationException("Khách hàng không tồn tại hoặc đã bị xóa.");
     }
+
+    /// <summary>
+    /// Kiểm tra bảng lưu phiếu trả hàng có tồn tại trong database hay không
+    /// (một số bản cài cũ chưa có bảng này). Kết quả được ghi nhớ để
+    /// không phải hỏi lại database ở mỗi lần tải danh sách.
+    /// </summary>
+    private async Task<bool> HasBangTraHangAsync()
+    {
+        if (_hasBangTraHang.HasValue)
+            return _hasBangTraHang.Value;
+
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            const string sql = """
+            SELECT COUNT(*)
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'phieu_tra_hang';
+            """;
+
+            var count = await connection.ExecuteScalarAsync<long>(sql);
+            _hasBangTraHang = count > 0;
+        }
+        catch
+        {
+            _hasBangTraHang = false;
+        }
+
+        return _hasBangTraHang.Value;
+    }
+
+    /// <summary>
+    /// Tổng tiền trả hàng của một khách hàng, tính theo biểu thức định danh
+    /// khách hàng đang có trong câu truy vấn gốc (ví dụ "kh.id" hoặc "@Id").
+    /// Nếu chưa có bảng trả hàng thì coi như không có giao dịch trả hàng nào,
+    /// không tự tạo số liệu.
+    /// </summary>
+    private static string TongTienTraHangSql(string idExpression, bool coBangTraHang)
+        => coBangTraHang
+            ? $"""
+               COALESCE(
+                   (
+                       SELECT SUM(pt.tong_tien_tra)
+                       FROM phieu_tra_hang pt
+                       WHERE pt.khach_hang_id = {idExpression}
+                         AND pt.trang_thai = 'HOAN_THANH'
+                   ),
+                   0
+               )
+               """
+            : "0";
+
+    /// <summary>
+    /// Ba cột tiền của bảng danh sách khách hàng, lấy đúng từ dữ liệu bán hàng,
+    /// công nợ và trả hàng. Dùng subquery tương quan theo kh.id nên chỉ tính
+    /// cho các dòng thuộc trang đang xem thay vì gom nhóm toàn bộ bảng.
+    /// </summary>
+    private static string TienTruongKhachHangSql(bool coBangTraHang)
+        => $"""
+            COALESCE(
+                (
+                    SELECT SUM(ls.ghi_no - ls.ghi_co)
+                    FROM lich_su_cong_no_khach_hang ls
+                    WHERE ls.khach_hang_id = kh.id
+                ),
+                (
+                    SELECT SUM(hdcn.con_no)
+                    FROM hoa_don_ban_hang hdcn
+                    WHERE hdcn.khach_hang_id = kh.id
+                      AND hdcn.trang_thai_hoa_don = 'HOAN_THANH'
+                ),
+                0
+            ) AS NoHienTai,
+            COALESCE(
+                (
+                    SELECT SUM(hb.khach_can_tra)
+                    FROM hoa_don_ban_hang hb
+                    WHERE hb.khach_hang_id = kh.id
+                      AND hb.trang_thai_hoa_don = 'HOAN_THANH'
+                ),
+                0
+            ) AS TongBan,
+            COALESCE(
+                (
+                    SELECT SUM(hb2.khach_can_tra)
+                    FROM hoa_don_ban_hang hb2
+                    WHERE hb2.khach_hang_id = kh.id
+                      AND hb2.trang_thai_hoa_don = 'HOAN_THANH'
+                ),
+                0
+            ) - {TongTienTraHangSql("kh.id", coBangTraHang)} AS TongBanTruTraHang
+            """;
+
+    /// <summary>
+    /// Lấy danh sách khách hàng theo trang cho màn hình "Danh sách khách hàng".
+    /// Chỉ đọc dữ liệu của trang hiện tại (LIMIT/OFFSET) kèm tổng số bản ghi,
+    /// nên giao diện vẫn mượt khi bảng có hàng nghìn khách hàng.
+    /// </summary>
+    /// <param name="dayDuThongTin">
+    /// false: lấy đúng các cột của bảng danh sách (mã, tên, điện thoại, email,
+    /// địa chỉ, nhóm, ngày tạo) kèm nợ hiện tại, tổng bán và tổng bán trừ trả hàng.
+    /// true: lấy đầy đủ mọi cột để dùng cho form nhập/sửa.
+    /// </param>
+    public async Task<(IReadOnlyList<KhachHang> Items, int TongSoBanGhi)> GetKhachHangPagedAsync(
+        string? search,
+        int page,
+        int pageSize,
+        bool dayDuThongTin = false)
+    {
+        var safePage = page < 1 ? 1 : page;
+        var safePageSize = pageSize < 1 ? 20 : pageSize;
+        var offset = (safePage - 1) * safePageSize;
+        var keyword = (search ?? "").Trim();
+
+        var coBangTraHang = await HasBangTraHangAsync();
+
+        const string countSql = """
+        SELECT COUNT(*)
+        FROM khach_hang kh
+        WHERE kh.trang_thai = 1
+          AND (
+                @Search = ''
+                OR kh.ma_khach_hang LIKE CONCAT('%', @Search, '%')
+                OR kh.ten_khach_hang LIKE CONCAT('%', @Search, '%')
+                OR kh.so_dien_thoai LIKE CONCAT('%', @Search, '%')
+              );
+        """;
+
+        var columns = dayDuThongTin
+            ? $"""
+                  kh.id AS Id,
+                  kh.ma_khach_hang AS MaKhachHang,
+                  kh.ten_khach_hang AS TenKhachHang,
+                  kh.loai_khach_hang AS LoaiKhachHang,
+                  kh.so_dien_thoai AS SoDienThoai,
+                  kh.ngay_sinh AS NgaySinh,
+                  kh.gioi_tinh AS GioiTinh,
+                  kh.email AS Email,
+                  kh.facebook AS Facebook,
+                  kh.dia_chi AS DiaChi,
+                  kh.phuong_xa AS PhuongXa,
+                  kh.quan_huyen AS QuanHuyen,
+                  kh.tinh_thanh AS TinhThanh,
+                  kh.nhom_khach_hang_id AS NhomKhachHangId,
+                  kh.ma_so_thue AS MaSoThue,
+                  kh.ten_nguoi_mua_hoa_don AS TenNguoiMuaHoaDon,
+                  kh.ten_cong_ty AS TenCongTy,
+                  kh.dia_chi_xuat_hoa_don AS DiaChiXuatHoaDon,
+                  kh.ghi_chu AS GhiChu,
+                  kh.ngay_tao AS NgayTao,
+                  kh.ngay_cap_nhat AS NgayCapNhat,
+                  nkh.ten_nhom AS NhomKhachHang
+              """
+            : $"""
+                  kh.id AS Id,
+                  kh.ma_khach_hang AS MaKhachHang,
+                  kh.ten_khach_hang AS TenKhachHang,
+                  kh.so_dien_thoai AS SoDienThoai,
+                  kh.email AS Email,
+                  COALESCE(
+                      NULLIF(TRIM(kh.dia_chi), ''),
+                      NULLIF(
+                          CONCAT_WS(
+                              ', ',
+                              NULLIF(TRIM(kh.phuong_xa), ''),
+                              NULLIF(TRIM(kh.quan_huyen), ''),
+                              NULLIF(TRIM(kh.tinh_thanh), '')
+                          ),
+                          ''
+                      )
+                  ) AS DiaChi,
+                  kh.ngay_tao AS NgayTao,
+                  nkh.ten_nhom AS NhomKhachHang,
+                  {TienTruongKhachHangSql(coBangTraHang)}
+              """;
+
+        var pageSql = $"""
+        SELECT
+            {columns}
+        FROM khach_hang kh
+        LEFT JOIN nhom_khach_hang nkh
+            ON nkh.id = kh.nhom_khach_hang_id
+        WHERE kh.trang_thai = 1
+          AND (
+                @Search = ''
+                OR kh.ma_khach_hang LIKE CONCAT('%', @Search, '%')
+                OR kh.ten_khach_hang LIKE CONCAT('%', @Search, '%')
+                OR kh.so_dien_thoai LIKE CONCAT('%', @Search, '%')
+              )
+        ORDER BY kh.ten_khach_hang, kh.id
+        LIMIT @PageSize OFFSET @Offset;
+        """;
+
+        await using var connection = await OpenAsync();
+
+        var parameters = new
+        {
+            Search = keyword,
+            PageSize = safePageSize,
+            Offset = offset
+        };
+
+        var tongSoBanGhi = await connection.ExecuteScalarAsync<int>(countSql, parameters);
+
+        if (tongSoBanGhi == 0)
+            return (Array.Empty<KhachHang>(), 0);
+
+        var items = (
+            await connection.QueryAsync<KhachHang>(pageSql, parameters)
+        ).AsList();
+
+        return (items, tongSoBanGhi);
+    }
+
+    /// <summary>Lấy đầy đủ thông tin một khách hàng để mở vùng chi tiết / form sửa.</summary>
+    public async Task<KhachHang?> GetKhachHangByIdAsync(uint customerId)
+    {
+        const string sql = """
+        SELECT
+            kh.id AS Id,
+            kh.ma_khach_hang AS MaKhachHang,
+            kh.ten_khach_hang AS TenKhachHang,
+            kh.loai_khach_hang AS LoaiKhachHang,
+            kh.so_dien_thoai AS SoDienThoai,
+            kh.ngay_sinh AS NgaySinh,
+            kh.gioi_tinh AS GioiTinh,
+            kh.email AS Email,
+            kh.facebook AS Facebook,
+            kh.dia_chi AS DiaChi,
+            kh.phuong_xa AS PhuongXa,
+            kh.quan_huyen AS QuanHuyen,
+            kh.tinh_thanh AS TinhThanh,
+            kh.nhom_khach_hang_id AS NhomKhachHangId,
+            kh.ma_so_thue AS MaSoThue,
+            kh.ten_nguoi_mua_hoa_don AS TenNguoiMuaHoaDon,
+            kh.ten_cong_ty AS TenCongTy,
+            kh.dia_chi_xuat_hoa_don AS DiaChiXuatHoaDon,
+            kh.ghi_chu AS GhiChu,
+            kh.ngay_tao AS NgayTao,
+            kh.ngay_cap_nhat AS NgayCapNhat,
+            nkh.ten_nhom AS NhomKhachHang
+        FROM khach_hang kh
+        LEFT JOIN nhom_khach_hang nkh
+            ON nkh.id = kh.nhom_khach_hang_id
+        WHERE kh.trang_thai = 1
+          AND kh.id = @Id;
+        """;
+
+        await using var connection = await OpenAsync();
+
+        return await connection.QueryFirstOrDefaultAsync<KhachHang>(
+            sql,
+            new { Id = customerId });
+    }
+
+    /// <summary>
+    /// Số liệu tổng quan cho thanh thống kê phía trên bảng danh sách khách hàng.
+    /// Tổng nợ và tổng bán tính đúng theo cùng cách với các cột tiền trong bảng
+    /// nên hai bên không mâu thuẫn nhau.
+    /// </summary>
+    public async Task<(int TongSoKhachHang, int SoKhachMoi, decimal TongNoHienTai, decimal TongBan)>
+        GetThongKeDanhSachKhachHangAsync(int soNgay = 30)
+    {
+        var sql = """
+        SELECT
+            COUNT(*) AS TongSoKhachHang,
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN kh.ngay_tao >= DATE_SUB(NOW(), INTERVAL @SoNgay DAY)
+                        THEN 1
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS SoKhachMoi,
+            COALESCE(
+                SUM(
+                    COALESCE(
+                        (
+                            SELECT SUM(ls.ghi_no - ls.ghi_co)
+                            FROM lich_su_cong_no_khach_hang ls
+                            WHERE ls.khach_hang_id = kh.id
+                        ),
+                        (
+                            SELECT SUM(hdcn.con_no)
+                            FROM hoa_don_ban_hang hdcn
+                            WHERE hdcn.khach_hang_id = kh.id
+                              AND hdcn.trang_thai_hoa_don = 'HOAN_THANH'
+                        ),
+                        0
+                    )
+                ),
+                0
+            ) AS TongNoHienTai,
+            COALESCE(
+                SUM(
+                    COALESCE(
+                        (
+                            SELECT SUM(hb.khach_can_tra)
+                            FROM hoa_don_ban_hang hb
+                            WHERE hb.khach_hang_id = kh.id
+                              AND hb.trang_thai_hoa_don = 'HOAN_THANH'
+                        ),
+                        0
+                    )
+                ),
+                0
+            ) AS TongBan
+        FROM khach_hang kh
+        WHERE kh.trang_thai = 1;
+        """;
+
+        await using var connection = await OpenAsync();
+
+        var row = await connection.QueryFirstOrDefaultAsync<ThongKeDanhSachKhachHang>(
+            sql,
+            new { SoNgay = soNgay < 1 ? 30 : soNgay });
+
+        return row is null
+            ? (0, 0, 0m, 0m)
+            : (row.TongSoKhachHang, row.SoKhachMoi, row.TongNoHienTai, row.TongBan);
+    }
+
+    /// <summary>Danh sách nhóm khách hàng đang hoạt động, dùng cho ComboBox trong form nhập/sửa.</summary>
+    public async Task<IReadOnlyList<NhomKhachHang>> GetNhomKhachHangAsync()
+    {
+        const string sql = """
+        SELECT
+            id AS Id,
+            ten_nhom AS TenNhom,
+            phan_tram_giam_gia AS PhanTramGiamGia,
+            trang_thai AS TrangThai
+        FROM nhom_khach_hang
+        WHERE trang_thai = 1
+        ORDER BY ten_nhom;
+        """;
+
+        await using var connection = await OpenAsync();
+
+        return (
+            await connection.QueryAsync<NhomKhachHang>(sql)
+        ).AsList();
+    }
+
+    /// <summary>
+    /// Lịch sử hóa đơn của một khách hàng (mới nhất trước).
+    /// Chỉ đọc tối đa <paramref name="gioiHan"/> dòng, không quét toàn bộ bảng hóa đơn.
+    /// </summary>
+    public async Task<IReadOnlyList<HoaDon>> GetLichSuMuaHangCuaKhachHangAsync(
+        uint customerId,
+        int gioiHan = 50)
+    {
+        var limit = gioiHan is < 1 or > 200 ? 50 : gioiHan;
+
+        const string sql = """
+        SELECT
+            hd.id AS Id,
+            hd.ma_hoa_don AS MaHoaDon,
+            hd.thoi_gian_ban AS ThoiGianBan,
+            COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
+            COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
+            hd.tong_tien_hang AS TongTienHang,
+            hd.giam_gia AS GiamGia,
+            hd.thu_khac AS ThuKhac,
+            hd.khach_can_tra AS KhachCanTra,
+            hd.khach_da_thanh_toan AS KhachDaThanhToan,
+            hd.con_no AS ConNo,
+            hd.trang_thai_thanh_toan AS TrangThaiThanhToan
+        FROM hoa_don_ban_hang hd
+        LEFT JOIN khach_hang kh
+            ON kh.id = hd.khach_hang_id
+        WHERE hd.khach_hang_id = @Id
+        ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
+        LIMIT @Limit;
+        """;
+
+        await using var connection = await OpenAsync();
+
+        return (
+            await connection.QueryAsync<HoaDon>(
+                sql,
+                new
+                {
+                    Id = customerId,
+                    Limit = limit
+                })
+        ).AsList();
+    }
+
+    /// <summary>
+    /// Tổng hợp tổng tiền đã mua và công nợ hiện tại của khách hàng.
+    /// Gộp số liệu từ hóa đơn, sổ cái công nợ và phiếu trả hàng trong cùng một
+    /// câu truy vấn. Các số tiền bán chỉ tính hóa đơn đã hoàn thành để khớp
+    /// với cột "Tổng bán" và "Tổng bán trừ trả hàng" ở bảng danh sách.
+    /// </summary>
+    public async Task<ThongKeMuaHangKhachHang> GetThongKeMuaHangCuaKhachHangAsync(uint customerId)
+    {
+        var coBangTraHang = await HasBangTraHangAsync();
+
+        const string sql = """
+        SELECT
+            (
+                SELECT COUNT(*)
+                FROM hoa_don_ban_hang
+                WHERE khach_hang_id = @Id
+                  AND trang_thai_hoa_don = 'HOAN_THANH'
+            ) AS SoHoaDon,
+            (
+                SELECT COALESCE(SUM(khach_can_tra), 0)
+                FROM hoa_don_ban_hang
+                WHERE khach_hang_id = @Id
+                  AND trang_thai_hoa_don = 'HOAN_THANH'
+            ) AS TongTienDaMua,
+            (
+                SELECT COALESCE(SUM(khach_da_thanh_toan), 0)
+                FROM hoa_don_ban_hang
+                WHERE khach_hang_id = @Id
+                  AND trang_thai_hoa_don = 'HOAN_THANH'
+            ) AS TongDaThanhToan,
+            (
+                SELECT COALESCE(SUM(con_no), 0)
+                FROM hoa_don_ban_hang
+                WHERE khach_hang_id = @Id
+                  AND trang_thai_hoa_don = 'HOAN_THANH'
+            ) AS TongConNoHoaDon,
+            (
+                SELECT COUNT(*)
+                FROM lich_su_cong_no_khach_hang
+                WHERE khach_hang_id = @Id
+            ) AS SoLanGhiCongNo,
+            (
+                SELECT COALESCE(SUM(ghi_no - ghi_co), 0)
+                FROM lich_su_cong_no_khach_hang
+                WHERE khach_hang_id = @Id
+            ) AS TongCongNoLichSu,
+            (
+                SELECT MAX(thoi_gian)
+                FROM lich_su_cong_no_khach_hang
+                WHERE khach_hang_id = @Id
+            ) AS LanGhiCongNoGanNhat
+        """;
+
+        var sqlDayDu = $"""
+            {sql},
+            COALESCE(
+                (
+                    SELECT SUM(hb3.khach_can_tra)
+                    FROM hoa_don_ban_hang hb3
+                    WHERE hb3.khach_hang_id = @Id
+                      AND hb3.trang_thai_hoa_don = 'HOAN_THANH'
+                ),
+                0
+            ) - {TongTienTraHangSql("@Id", coBangTraHang)} AS TongBanTruTraHang;
+        """;
+
+        await using var connection = await OpenAsync();
+
+        var thongKe = await connection.QueryFirstOrDefaultAsync<ThongKeMuaHangKhachHang>(
+                          sqlDayDu,
+                          new { Id = customerId })
+                      ?? new ThongKeMuaHangKhachHang();
+
+        return thongKe;
+    }
+
     public async Task<uint> ThemKhachHangAsync(KhachHang customer)
     {
         await using var connection = await OpenAsync();
@@ -995,7 +1464,7 @@ public sealed class DatabaseService
             @PhuongXa,
             @QuanHuyen,
             @TinhThanh,
-            NULL,
+            @NhomKhachHangId,
             @MaSoThue,
             @TenNguoiMuaHoaDon,
             @TenCongTy,
@@ -1025,6 +1494,7 @@ public sealed class DatabaseService
                 customer.PhuongXa,
                 customer.QuanHuyen,
                 customer.TinhThanh,
+                customer.NhomKhachHangId,
                 customer.MaSoThue,
                 customer.TenNguoiMuaHoaDon,
                 customer.TenCongTy,
@@ -1052,6 +1522,7 @@ public sealed class DatabaseService
             phuong_xa = @PhuongXa,
             quan_huyen = @QuanHuyen,
             tinh_thanh = @TinhThanh,
+            nhom_khach_hang_id = @NhomKhachHangId,
             ma_so_thue = @MaSoThue,
             ten_nguoi_mua_hoa_don = @TenNguoiMuaHoaDon,
             ten_cong_ty = @TenCongTy,

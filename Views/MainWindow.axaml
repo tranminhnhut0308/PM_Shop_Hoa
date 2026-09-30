@@ -168,6 +168,39 @@
       <Setter Property="BorderThickness" Value="1" />
     </Style>
 
+    <!-- DÒNG KHÁCH HÀNG: DI CHUỘT CÓ MÀU, TÁCH DÒNG MỎNG -->
+    <Style Selector="Border.customerRow">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Border.customerRow:pointerover">
+      <Setter Property="Background" Value="#F2F9F6" />
+    </Style>
+
+    <Style Selector="CheckBox.rowCheckBox">
+      <Setter Property="Width" Value="20" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="CheckBox.rowCheckBox /template/ Border#PART_ControlRoot">
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#A8BDB6" />
+      <Setter Property="BorderThickness" Value="1.2" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+
+    <Style Selector="CheckBox.rowCheckBox:pointerover /template/ Border#PART_ControlRoot">
+      <Setter Property="BorderBrush" Value="#087F6E" />
+    </Style>
+
+    <Style Selector="CheckBox.rowCheckBox:checked /template/ Border#PART_ControlRoot">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+    </Style>
+
     <Style Selector="DataGridColumnHeader">
       <Setter Property="Background" Value="#E5F2EE" />
       <Setter Property="Foreground" Value="#164B40" />
@@ -1360,7 +1393,7 @@
             <Border Grid.Column="1" Classes="card" Padding="18" Margin="0">
               <StackPanel>
                 <TextBlock Text="Khách hàng" Foreground="#61736E" />
-                <TextBlock Text="{Binding KhachHangs.Count}" FontSize="30" FontWeight="Bold"
+                <TextBlock Text="{Binding CustomerTotalCount}" FontSize="30" FontWeight="Bold"
                   Foreground="#163F38" Margin="0,8,0,2" />
                 <TextBlock Text="Trong hệ thống" FontSize="12" Foreground="#087F6E" />
               </StackPanel>
@@ -1789,270 +1822,564 @@
         </TabItem>
 
         <TabItem Header="Khách hàng">
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,14,16,0" RowSpacing="12">
-              <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-                <TextBox Classes="searchInput" Watermark="🔍 Tìm mã, tên hoặc số điện thoại..."
-                  Text="{Binding CustomerSearch, Mode=TwoWay}"
-                  TextChanged="OnCustomerSearchTextChanged"
-                  Margin="0,0,10,0" />
-                <Button Grid.Column="1" Classes="toolbar-action" Content="Tìm kiếm"
-                  Command="{Binding SearchCustomersCommand}"
-                  Margin="0,0,10,0" />
-                <Button Grid.Column="2" Classes="toolbar-action" Content="📁 Nhập file"
-                  Margin="0,0,10,0"
-                  Command="{Binding ThemKhachHangTuFileCommand}" />
-                <Button Grid.Column="3" Classes="toolbar-primary" Content="＋ Thêm mới"
-                  Margin="0"
-                  Command="{Binding ThemMoiKhachHangCommand}" />
-              </Grid>
+          <TabItem.Styles>
+            <Style Selector="Button.detailTab">
+              <Setter Property="Background" Value="Transparent" />
+              <Setter Property="Foreground" Value="#61736E" />
+              <Setter Property="BorderThickness" Value="0" />
+              <Setter Property="CornerRadius" Value="8" />
+              <Setter Property="Padding" Value="16,8" />
+              <Setter Property="FontSize" Value="13" />
+              <Setter Property="FontWeight" Value="SemiBold" />
+              <Setter Property="Margin" Value="0,0,6,0" />
+            </Style>
+            <Style Selector="Button.detailTab:pointerover">
+              <Setter Property="Background" Value="#E7F2EE" />
+              <Setter Property="Foreground" Value="#163F38" />
+            </Style>
+            <Style Selector="Button.detailTab.active">
+              <Setter Property="Background" Value="#087F6E" />
+              <Setter Property="Foreground" Value="White" />
+            </Style>
+            <Style Selector="Border.statBox">
+              <Setter Property="Background" Value="White" />
+              <Setter Property="BorderBrush" Value="#D9EAE4" />
+              <Setter Property="BorderThickness" Value="1" />
+              <Setter Property="CornerRadius" Value="10" />
+              <Setter Property="Padding" Value="14,10" />
+            </Style>
+          </TabItem.Styles>
 
-              <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="14">
-                <Border Classes="card" Padding="18" Margin="0">
-                  <StackPanel>
-                    <TextBlock Text="Tổng khách hàng" Foreground="#61736E" FontSize="12" />
-                    <TextBlock Text="{Binding KhachHangs.Count}" FontSize="28" FontWeight="Bold"
-                      Foreground="#163F38" Margin="0,8,0,0" />
-                  </StackPanel>
-                </Border>
+          <Grid RowDefinitions="Auto,Auto,*" Margin="0,14,16,0" RowSpacing="12">
 
-                <Border Grid.Column="1" Classes="card" Padding="18" Margin="0">
-                  <StackPanel>
-                    <TextBlock Text="Khách mới" Foreground="#61736E" FontSize="12" />
-                    <TextBlock Text="12" FontSize="28" FontWeight="Bold" Foreground="#163F38"
-                      Margin="0,8,0,0" />
-                  </StackPanel>
-                </Border>
-              </Grid>
+            <!-- 1. THANH CÔNG CỤ -->
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+              <TextBox Classes="searchInput" Height="38" VerticalAlignment="Top"
+                Watermark="🔍 Tìm theo mã, tên, số điện thoại..."
+                Text="{Binding CustomerSearch, Mode=TwoWay}"
+                TextChanged="OnCustomerSearchTextChanged"
+                Margin="0,0,10,0" />
+              <Button Grid.Column="1" Classes="toolbar-action" Content="Tìm kiếm"
+                Command="{Binding TimKiemKhachHangCommand}"
+                Margin="0,0,10,0" />
+              <Button Grid.Column="2" Classes="toolbar-action" Content="📁 Nhập file"
+                Margin="0,0,10,0"
+                Command="{Binding ThemKhachHangTuFileCommand}" />
+              <Button Grid.Column="3" Classes="toolbar-primary" Content="＋ Thêm mới"
+                Margin="0"
+                Command="{Binding ThemMoiKhachHangCommand}" />
+            </Grid>
 
-              <Border Grid.Row="2" Classes="card" Padding="0" Margin="0"
-                IsVisible="{Binding SelectedKhachHang, Converter={x:Static ObjectConverters.IsNull}}">
-                <Grid RowDefinitions="Auto,*">
-                  <Border Padding="16,14" BorderBrush="#E2ECE8" BorderThickness="0,0,0,1">
-                    <TextBlock Text="Danh sách khách hàng" FontWeight="SemiBold" FontSize="16"
-                      Foreground="#163F38" />
-                  </Border>
-
-                  <Grid Grid.Row="1" RowDefinitions="Auto,*">
-                    <Border Background="#E5F2EE" Padding="12,9">
-                      <Grid ColumnDefinitions="140,*,180,240,*,160">
-                        <TextBlock Text="Mã KH" FontWeight="SemiBold" Foreground="#164B40" />
-                        <TextBlock Grid.Column="1" Text="Tên khách hàng" FontWeight="SemiBold"
-                          Foreground="#164B40" />
-                        <TextBlock Grid.Column="2" Text="Điện thoại" FontWeight="SemiBold"
-                          Foreground="#164B40" />
-                        <TextBlock Grid.Column="3" Text="Email" FontWeight="SemiBold"
-                          Foreground="#164B40" />
-                        <TextBlock Grid.Column="4" Text="Địa chỉ" FontWeight="SemiBold"
-                          Foreground="#164B40" />
-                        <TextBlock Grid.Column="5" Text="Nhóm" FontWeight="SemiBold"
-                          Foreground="#164B40" />
-                      </Grid>
-                    </Border>
-
-                    <ListBox Grid.Row="1" ItemsSource="{Binding KhachHangs}"
-                      SelectedItem="{Binding SelectedKhachHang, Mode=TwoWay}"
-                      SelectionChanged="OnCustomerSelectionChanged"
-                      Background="Transparent" BorderThickness="0">
-                      <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="models:KhachHang">
-                          <Border BorderBrush="#E2ECE8" BorderThickness="0,0,0,1" Padding="12,10">
-                            <Grid ColumnDefinitions="140,*,180,240,*,160">
-                              <TextBlock Text="{Binding MaKhachHang}" Foreground="#263B35" />
-                              <TextBlock Grid.Column="1" Text="{Binding TenKhachHang}"
-                                Foreground="#263B35" />
-                              <TextBlock Grid.Column="2" Text="{Binding SoDienThoai}"
-                                Foreground="#52645E" />
-                              <TextBlock Grid.Column="3" Text="{Binding Email}" Foreground="#52645E" />
-                              <TextBlock Grid.Column="4" Text="{Binding DiaChi}"
-                                Foreground="#52645E" TextTrimming="CharacterEllipsis" />
-                              <TextBlock Grid.Column="5" Text="{Binding NhomKhachHang}"
-                                Foreground="#52645E" />
-                            </Grid>
-                          </Border>
-                        </DataTemplate>
-                      </ListBox.ItemTemplate>
-                    </ListBox>
-                  </Grid>
-                </Grid>
+            <!-- 2. THỐNG KÊ THẬT TỪ DATABASE -->
+            <Grid Grid.Row="1" ColumnDefinitions="*,*,*,*" ColumnSpacing="14">
+              <Border Classes="card" Padding="18" Margin="0">
+                <StackPanel>
+                  <TextBlock Text="Tổng khách hàng" Foreground="#61736E" FontSize="12" />
+                  <TextBlock Text="{Binding CustomerTotalCount}" FontSize="28" FontWeight="Bold"
+                    Foreground="#163F38" Margin="0,6,0,0" />
+                  <TextBlock Text="{Binding CustomerRangeText}" FontSize="12" Foreground="#087F6E"
+                    Margin="0,2,0,0" />
+                </StackPanel>
               </Border>
 
-              <Border Grid.Row="2" BorderBrush="#1D7A6D" BorderThickness="1.2" CornerRadius="8"
-                Padding="16" Margin="0" Background="#F8FBFA"
-                IsVisible="{Binding SelectedKhachHang, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <Grid>
-                  <Grid
-                    IsVisible="{Binding SelectedKhachHang, Converter={x:Static ObjectConverters.IsNull}}"
-                    VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,30">
-                    <TextBlock Text="Chọn khách hàng trong danh sách để xem chi tiết"
-                      Foreground="#61736E" FontSize="16" />
-                  </Grid>
+              <Border Grid.Column="1" Classes="card" Padding="18" Margin="0">
+                <StackPanel>
+                  <TextBlock Text="Khách hàng mới" Foreground="#61736E" FontSize="12" />
+                  <TextBlock Text="{Binding CustomerNewCount}" FontSize="28" FontWeight="Bold"
+                    Foreground="#163F38" Margin="0,6,0,0" />
+                  <TextBlock Text="Phát sinh trong 30 ngày gần nhất" FontSize="12"
+                    Foreground="#087F6E" Margin="0,2,0,0" />
+                </StackPanel>
+              </Border>
 
-                  <Grid
-                    IsVisible="{Binding SelectedKhachHang, Converter={x:Static ObjectConverters.IsNotNull}}"
-                    RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
-                    RowSpacing="10">
-                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
-                      <TextBlock Text="Thông tin" FontWeight="SemiBold" Foreground="#1E3B35"
-                        FontSize="15" />
-                      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10">
-                        <TextBlock Text="Lịch sử bán/trả hàng" Foreground="#61736E" FontSize="13" />
-                        <TextBlock Text="Nợ cần thu từ khách" Foreground="#61736E" FontSize="13" />
-                        <Button Content="← Danh sách" Classes="toolbar-action" Margin="12,0,0,0"
-                          Command="{Binding QuayLaiDanhSachKhachHangCommand}" />
-                      </StackPanel>
-                    </Grid>
+              <Border Grid.Column="2" Classes="card" Padding="18" Margin="0">
+                <StackPanel>
+                  <TextBlock Text="Nợ hiện tại" Foreground="#61736E" FontSize="12" />
+                  <TextBlock Text="{Binding CustomerTotalDebtText}" FontSize="24" FontWeight="Bold"
+                    Foreground="#B3261E" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="Tổng công nợ của toàn bộ khách hàng" FontSize="12"
+                    Foreground="#087F6E" Margin="0,2,0,0" />
+                </StackPanel>
+              </Border>
 
-                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
-                      <Border Width="54" Height="54" CornerRadius="27" Background="#B8DDF3"
-                        Margin="0,0,14,0">
-                        <TextBlock Text="H" FontSize="24" FontWeight="Bold" Foreground="#FFFFFF"
-                          HorizontalAlignment="Center" VerticalAlignment="Center" />
-                      </Border>
-                      <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding SelectedKhachHang.TenKhachHang}" FontSize="18"
-                          FontWeight="Bold" Foreground="#163F38" />
-                        <TextBlock Text="{Binding SelectedKhachHang.MaKhachHang}"
-                          Foreground="#61736E" FontSize="13" />
-                      </StackPanel>
-                      <TextBlock Grid.Column="2" Text="Chỉ nhận trung tâm" Foreground="#61736E"
-                        FontSize="12" VerticalAlignment="Center" />
-                    </Grid>
-
-                    <Grid Grid.Row="2" ColumnDefinitions="*,*,*" Margin="0,8,0,0">
-                      <StackPanel>
-                        <TextBlock Text="Mã khách hàng" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.MaKhachHang}"
-                          IsReadOnly="True"
-                          Background="#F1F5F3"
-                          Foreground="#6B7280"
-                          BorderBrush="#D8E5E0"
-                          BorderThickness="1"
-                          Margin="0,6,0,0" />
-                      </StackPanel>
-                      <StackPanel Grid.Column="1" Margin="14,0,14,0">
-                        <TextBlock Text="Tên khách hàng *" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.TenKhachHang}" Margin="0,6,0,0" />
-                      </StackPanel>
-                      <StackPanel Grid.Column="2">
-                        <TextBlock Text="Loại khách hàng" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.LoaiKhachHang}" Margin="0,6,0,0" />
-                      </StackPanel>
-                    </Grid>
-
-                    <Grid Grid.Row="3" ColumnDefinitions="*,*,*" Margin="0,0,0,0">
-                      <StackPanel>
-                        <TextBlock Text="Điện thoại" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.SoDienThoai}" Watermark="Chưa có"
-                          Margin="0,6,0,0" />
-                      </StackPanel>
-                      <StackPanel Grid.Column="1" Margin="14,0,14,0">
-                        <TextBlock Text="Ngày sinh" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding NgaySinhText, Mode=TwoWay}" Watermark="dd/MM/yyyy"
-                          Margin="0,6,0,0" />
-                      </StackPanel>
-                      <StackPanel Grid.Column="2">
-                        <TextBlock Text="Giới tính" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.GioiTinh}" Watermark="Chưa có"
-                          Margin="0,6,0,0" />
-                      </StackPanel>
-                    </Grid>
-
-                    <Grid Grid.Row="4" ColumnDefinitions="*,*" Margin="0,0,0,0">
-                      <StackPanel>
-                        <TextBlock Text="Email" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.Email}" Watermark="Chưa có"
-                          Margin="0,6,0,0" />
-                      </StackPanel>
-                      <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                        <TextBlock Text="Facebook" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.Facebook}" Watermark="Chưa có"
-                          Margin="0,6,0,0" />
-                      </StackPanel>
-                    </Grid>
-
-                    <Grid Grid.Row="5" ColumnDefinitions="*">
-                      <StackPanel>
-                        <TextBlock Text="Địa chỉ" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.DiaChi}" Watermark="Chưa có"
-                          Margin="0,6,0,0" />
-                      </StackPanel>
-                    </Grid>
-
-                    <Grid Grid.Row="6" ColumnDefinitions="*,*,*" Margin="0,0,0,0">
-                      <StackPanel>
-                        <TextBlock Text="Phường/Xã" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.PhuongXa}" Watermark="Chưa có"
-                          Margin="0,6,0,0" />
-                      </StackPanel>
-                      <StackPanel Grid.Column="1" Margin="14,0,14,0">
-                        <TextBlock Text="Quận/Huyện" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.QuanHuyen}" Watermark="Chưa có"
-                          Margin="0,6,0,0" />
-                      </StackPanel>
-                      <StackPanel Grid.Column="2">
-                        <TextBlock Text="Tỉnh/Thành" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.TinhThanh}" Watermark="Chưa có"
-                          Margin="0,6,0,0" />
-                      </StackPanel>
-                    </Grid>
-
-                    <Grid Grid.Row="7" ColumnDefinitions="*,*" Margin="0,0,0,0">
-                      <StackPanel>
-                        <TextBlock Text="Nhóm khách hàng" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.NhomKhachHang}"
-                          Watermark="Chưa có" Margin="0,6,0,0" />
-                      </StackPanel>
-                      <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                        <TextBlock Text="Mã số thuế" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.MaSoThue}" Watermark="Chưa có"
-                          Margin="0,6,0,0" />
-                      </StackPanel>
-                    </Grid>
-
-                    <Grid Grid.Row="8" ColumnDefinitions="*,*" Margin="0,0,0,0">
-                      <StackPanel>
-                        <TextBlock Text="Tên người mua hóa đơn" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.TenNguoiMuaHoaDon}"
-                          Watermark="Chưa có" Margin="0,6,0,0" />
-                      </StackPanel>
-                      <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                        <TextBlock Text="Tên công ty" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.TenCongTy}" Watermark="Chưa có"
-                          Margin="0,6,0,0" />
-                      </StackPanel>
-                    </Grid>
-
-                    <Grid Grid.Row="9" ColumnDefinitions="*">
-                      <StackPanel>
-                        <TextBlock Text="Địa chỉ xuất hóa đơn" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.DiaChiXuatHoaDon}"
-                          Watermark="Chưa có" Margin="0,6,0,0" />
-                      </StackPanel>
-                    </Grid>
-
-                    <Grid Grid.Row="10" Margin="0,8,0,0">
-                      <StackPanel>
-                        <TextBlock Text="Ghi chú" Foreground="#61736E" FontSize="12" />
-                        <TextBox Text="{Binding SelectedKhachHang.GhiChu}"
-                          Watermark="Chưa có ghi chú" Margin="0,6,0,0" />
-                      </StackPanel>
-                    </Grid>
-
-                    <Grid Grid.Row="11" ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,0">
-                      <Button Content="🗑 Xóa" Classes="toolbar-action" Margin="0"
-                        Command="{Binding XoaKhachHangCommand}" />
-                      <TextBlock Grid.Column="1" />
-                      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10">
-                        <Button Content="💾 Lưu" Classes="toolbar-primary" Margin="0"
-                          Command="{Binding LuuKhachHangCommand}" />
-                      </StackPanel>
-                    </Grid>
-                  </Grid>
-                </Grid>
+              <Border Grid.Column="3" Classes="card" Padding="18" Margin="0">
+                <StackPanel>
+                  <TextBlock Text="Tổng bán" Foreground="#61736E" FontSize="12" />
+                  <TextBlock Text="{Binding CustomerTotalSalesText}" FontSize="24" FontWeight="Bold"
+                    Foreground="#163F38" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="Tổng tiền bán của toàn bộ khách hàng" FontSize="12"
+                    Foreground="#087F6E" Margin="0,2,0,0" />
+                </StackPanel>
               </Border>
             </Grid>
-          </ScrollViewer>
+
+            <!-- 3. BẢNG KHÁCH HÀNG (DÒNG MỞ RỘNG NGAY DƯỚI DÒNG ĐÃ CHỌN) -->
+            <Border Grid.Row="2" Classes="card" Padding="0" Margin="0">
+              <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+
+                <!-- TIÊU ĐỀ BẢNG -->
+                <Border Padding="16,14" BorderBrush="#E2ECE8" BorderThickness="0,0,0,1"
+                  Background="#F1F8F5">
+                  <Grid ColumnDefinitions="40,120,*,150,150,160,190,40" ColumnSpacing="10">
+
+                    <CheckBox Grid.Column="0" Classes="rowCheckBox"
+                      IsChecked="{Binding IsAllCustomerRowsSelected, Mode=TwoWay}"
+                      IsEnabled="{Binding HasCustomerRows}"
+                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                      ToolTip.Tip="Chọn tất cả khách hàng trên trang này" />
+
+                    <TextBlock Grid.Column="1" Text="MÃ KHÁCH HÀNG" FontWeight="SemiBold"
+                      Foreground="#164B40" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="TÊN KHÁCH HÀNG" FontWeight="SemiBold"
+                      Foreground="#164B40" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3" Text="ĐIỆN THOẠI" FontWeight="SemiBold"
+                      Foreground="#164B40" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="4" Text="NỢ HIỆN TẠI" FontWeight="SemiBold"
+                      Foreground="#164B40" FontSize="12" VerticalAlignment="Center"
+                      HorizontalAlignment="Right" TextAlignment="Right" />
+                    <TextBlock Grid.Column="5" Text="TỔNG BÁN" FontWeight="SemiBold"
+                      Foreground="#164B40" FontSize="12" VerticalAlignment="Center"
+                      HorizontalAlignment="Right" TextAlignment="Right" />
+                    <TextBlock Grid.Column="6" Text="TỔNG BÁN TRỪ TRẢ HÀNG" FontWeight="SemiBold"
+                      Foreground="#164B40" FontSize="12" VerticalAlignment="Center"
+                      HorizontalAlignment="Right" TextAlignment="Right" />
+                  </Grid>
+                </Border>
+
+                <!-- ĐANG TẢI -->
+                <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="3"
+                  Foreground="#087F6E" Background="Transparent"
+                  IsVisible="{Binding IsLoadingCustomers}" />
+
+                <!-- DANH SÁCH RỖNG -->
+                <StackPanel Grid.Row="2" IsVisible="{Binding IsCustomerListEmpty}"
+                  Margin="0,40,0,40" Spacing="8">
+                  <TextBlock Text="👤" FontSize="34" HorizontalAlignment="Center"
+                    Foreground="#C3D6D0" />
+                  <TextBlock Text="{Binding CustomerEmptyText}" FontSize="16" FontWeight="SemiBold"
+                    Foreground="#163F38" HorizontalAlignment="Center" />
+                  <TextBlock Text="{Binding CustomerEmptyHint}"
+                    Foreground="#61736E" FontSize="13" HorizontalAlignment="Center" />
+                </StackPanel>
+
+                <!-- CÁC DÒNG KHÁCH HÀNG -->
+                <ItemsControl Grid.Row="3" ItemsSource="{Binding CustomerRows}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:KhachHangRowViewModel">
+                      <Border Classes="customerRow" BorderBrush="#EDF3F1" BorderThickness="0,0,0,1"
+                        PointerPressed="OnCustomerRowPointerPressed">
+
+                        <StackPanel>
+
+                          <!-- DÒNG CHÍNH -->
+                          <Grid ColumnDefinitions="40,120,*,150,150,160,190,40" ColumnSpacing="10"
+                            Height="54">
+
+                            <CheckBox Grid.Column="0" Classes="rowCheckBox"
+                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                              ToolTip.Tip="Chọn khách hàng này" />
+
+                            <TextBlock Grid.Column="1" Text="{Binding MaKhachHang}" FontSize="12"
+                              Foreground="#667A74" VerticalAlignment="Center"
+                              TextTrimming="CharacterEllipsis" />
+
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="9"
+                              VerticalAlignment="Center">
+                              <Border Width="30" Height="30" CornerRadius="15"
+                                Background="#E3F2ED" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding ChuCaiDau}" FontSize="12" FontWeight="Bold"
+                                  Foreground="#087F6E" HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
+                              </Border>
+                              <TextBlock Text="{Binding TenKhachHang}" FontSize="13" FontWeight="SemiBold"
+                                Foreground="#163F38" VerticalAlignment="Center"
+                                TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Column="3" Text="{Binding SoDienThoai}" FontSize="12"
+                              Foreground="#344B45" VerticalAlignment="Center"
+                              TextTrimming="CharacterEllipsis" />
+
+                            <TextBlock Grid.Column="4" Text="{Binding NoHienTaiText}" FontSize="12"
+                              Foreground="#163F38" VerticalAlignment="Center"
+                              HorizontalAlignment="Right" TextAlignment="Right"
+                              FontWeight="SemiBold" />
+
+                            <TextBlock Grid.Column="5" Text="{Binding TongBanText}" FontSize="12"
+                              Foreground="#344B45" VerticalAlignment="Center"
+                              HorizontalAlignment="Right" TextAlignment="Right" />
+
+                            <TextBlock Grid.Column="6" Text="{Binding TongBanTruTraHangText}" FontSize="12"
+                              Foreground="#344B45" VerticalAlignment="Center"
+                              HorizontalAlignment="Right" TextAlignment="Right" />
+
+                            <TextBlock Grid.Column="7" Text="{Binding KyHieuMoRong}" FontSize="11"
+                              Foreground="#087F6E" VerticalAlignment="Center"
+                              HorizontalAlignment="Center" />
+                          </Grid>
+
+                          <!-- VÙNG CHI TIẾT MỞ RỘNG -->
+                          <Border Name="DetailPanel" IsVisible="{Binding IsExpanded}"
+                            Background="#F3F8F6" BorderBrush="#D9EAE4"
+                            BorderThickness="0,1,0,0" Padding="18,16">
+
+                            <StackPanel Spacing="14">
+
+                              <!-- TÊN + NÚT SỬA / XÓA -->
+                              <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="14">
+                                <Border Width="42" Height="42" CornerRadius="21" Background="#087F6E">
+                                  <TextBlock Text="{Binding Detail.ChuCaiDau}" Foreground="White"
+                                    FontSize="16" FontWeight="Bold"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                  <TextBlock Text="{Binding Detail.TenKhachHang}" FontSize="18"
+                                    FontWeight="Bold" Foreground="#163F38" />
+                                  <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                    <TextBlock Text="{Binding MaKhachHang}" FontSize="12"
+                                      Foreground="#667A74" />
+                                    <TextBlock Text="•" FontSize="12" Foreground="#B4C4BF" />
+                                    <TextBlock Text="{Binding SoDienThoai}" FontSize="12"
+                                      Foreground="#667A74" />
+                                    <TextBlock Text="•" FontSize="12" Foreground="#B4C4BF" />
+                                    <TextBlock Text="{Binding Detail.NhomKhachHang}" FontSize="12"
+                                      Foreground="#087F6E" />
+                                  </StackPanel>
+                                </StackPanel>
+
+                                <Button Grid.Column="2" Classes="toolbar-action" Content="✏ Sửa"
+                                  Margin="0,0,8,0" Command="{Binding SuaCommand}" />
+                                <Button Grid.Column="3" Classes="toolbar-action" Content="🗑 Xóa"
+                                  Margin="0" Command="{Binding XoaCommand}" />
+                              </Grid>
+
+                              <!-- ĐANG TẢI CHI TIẾT -->
+                              <ProgressBar IsIndeterminate="True" Height="4" Foreground="#087F6E"
+                                Background="Transparent" IsVisible="{Binding Detail.IsLoading}" />
+
+                              <!-- Ô THỐNG KÊ NHANH (BẤM ĐỂ MỞ TAB TƯƠNG ỨNG) -->
+                              <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+
+                                <Border Grid.Column="0" Classes="statBox" Tag="lichsu"
+                                  PointerPressed="OnCustomerSummaryPressed">
+                                  <StackPanel>
+                                    <TextBlock Text="Tổng chi tiêu" FontSize="11" Foreground="#61736E" />
+                                    <TextBlock Text="{Binding Detail.TongTienDaMuaText}" FontSize="17"
+                                      FontWeight="Bold" Foreground="#163F38" Margin="0,3,0,0" />
+                                  </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="1" Classes="statBox" Tag="lichsu"
+                                  PointerPressed="OnCustomerSummaryPressed">
+                                  <StackPanel>
+                                    <TextBlock Text="Đã thanh toán" FontSize="11" Foreground="#61736E" />
+                                    <TextBlock Text="{Binding Detail.TongDaThanhToanText}" FontSize="17"
+                                      FontWeight="Bold" Foreground="#087F6E" Margin="0,3,0,0" />
+                                  </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="2" Classes="statBox" Tag="congno"
+                                  PointerPressed="OnCustomerSummaryPressed">
+                                  <StackPanel>
+                                    <TextBlock Text="Công nợ hiện tại" FontSize="11" Foreground="#61736E" />
+                                    <TextBlock Text="{Binding Detail.TongCongNoText}" FontSize="17"
+                                      FontWeight="Bold" Foreground="#D64545" Margin="0,3,0,0" />
+                                  </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="3" Classes="statBox" Tag="lichsu"
+                                  PointerPressed="OnCustomerSummaryPressed">
+                                  <StackPanel>
+                                    <TextBlock Text="Số hóa đơn" FontSize="11" Foreground="#61736E" />
+                                    <TextBlock Text="{Binding Detail.SoHoaDonText}" FontSize="17"
+                                      FontWeight="Bold" Foreground="#163F38" Margin="0,3,0,0" />
+                                  </StackPanel>
+                                </Border>
+
+                              </Grid>
+
+                              <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="Tổng bán trừ trả hàng" FontSize="11"
+                                  Foreground="#61736E" />
+                                <TextBlock Text="{Binding Detail.TongBanTruTraHangText}" FontSize="11"
+                                  Foreground="#087F6E" FontWeight="SemiBold" />
+                              </StackPanel>
+
+                              <!-- TAB: THÔNG TIN / LỊCH SỬ MUA HÀNG / CÔNG NỢ -->
+                              <StackPanel Orientation="Horizontal">
+                                <Button Classes="detailTab" Content="Thông tin"
+                                  Classes.active="{Binding Detail.IsTabThongTin}"
+                                  Command="{Binding Detail.ChonTabCommand}"
+                                  CommandParameter="thongtin" />
+                                <Button Classes="detailTab" Content="Lịch sử mua hàng"
+                                  Classes.active="{Binding Detail.IsTabLichSuMuaHang}"
+                                  Command="{Binding Detail.ChonTabCommand}"
+                                  CommandParameter="lichsu" />
+                                <Button Classes="detailTab" Content="Công nợ"
+                                  Classes.active="{Binding Detail.IsTabCongNo}"
+                                  Command="{Binding Detail.ChonTabCommand}"
+                                  CommandParameter="congno" />
+                              </StackPanel>
+
+                              <!-- TAB 1: THÔNG TIN -->
+                              <Grid IsVisible="{Binding Detail.IsTabThongTin}"
+                                RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                                RowSpacing="10">
+
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                                  <StackPanel>
+                                    <TextBlock Text="Số điện thoại" Foreground="#61736E" FontSize="12" />
+                                    <TextBlock Text="{Binding Detail.SoDienThoai}" FontSize="13"
+                                      Foreground="#263B35" Margin="0,4,0,0" />
+                                  </StackPanel>
+                                  <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Email" Foreground="#61736E" FontSize="12" />
+                                    <TextBlock Text="{Binding Detail.Email}" FontSize="13"
+                                      Foreground="#263B35" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                  </StackPanel>
+                                  <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Facebook" Foreground="#61736E" FontSize="12" />
+                                    <TextBlock Text="{Binding Detail.Facebook}" FontSize="13"
+                                      Foreground="#263B35" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                  </StackPanel>
+                                </Grid>
+
+                                <StackPanel Grid.Row="1">
+                                  <TextBlock Text="Địa chỉ" Foreground="#61736E" FontSize="12" />
+                                  <TextBlock Text="{Binding Detail.DiaChiDayDu}" FontSize="13"
+                                    Foreground="#263B35" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
+
+                                <Grid Grid.Row="2" ColumnDefinitions="*,*,*,*" ColumnSpacing="14">
+                                  <StackPanel>
+                                    <TextBlock Text="Loại khách hàng" Foreground="#61736E" FontSize="12" />
+                                    <TextBlock Text="{Binding Detail.LoaiKhachHangHienThi}" FontSize="13"
+                                      Foreground="#263B35" Margin="0,4,0,0" />
+                                  </StackPanel>
+                                  <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Giới tính" Foreground="#61736E" FontSize="12" />
+                                    <TextBlock Text="{Binding Detail.GioiTinh}" FontSize="13"
+                                      Foreground="#263B35" Margin="0,4,0,0" />
+                                  </StackPanel>
+                                  <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Ngày sinh" Foreground="#61736E" FontSize="12" />
+                                    <TextBlock Text="{Binding Detail.NgaySinhText}" FontSize="13"
+                                      Foreground="#263B35" Margin="0,4,0,0" />
+                                  </StackPanel>
+                                  <StackPanel Grid.Column="3">
+                                    <TextBlock Text="Ngày tạo" Foreground="#61736E" FontSize="12" />
+                                    <TextBlock Text="{Binding Detail.NgayTaoText}" FontSize="13"
+                                      Foreground="#263B35" Margin="0,4,0,0" />
+                                  </StackPanel>
+                                </Grid>
+
+                                <Grid Grid.Row="3" ColumnDefinitions="*,*" ColumnSpacing="14">
+                                  <StackPanel>
+                                    <TextBlock Text="Mã số thuế" Foreground="#61736E" FontSize="12" />
+                                    <TextBlock Text="{Binding Detail.MaSoThue}" FontSize="13"
+                                      Foreground="#263B35" Margin="0,4,0,0" />
+                                  </StackPanel>
+                                  <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Tên công ty" Foreground="#61736E" FontSize="12" />
+                                    <TextBlock Text="{Binding Detail.TenCongTy}" FontSize="13"
+                                      Foreground="#263B35" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                  </StackPanel>
+                                </Grid>
+
+                                <Grid Grid.Row="4" ColumnDefinitions="*,*" ColumnSpacing="14">
+                                  <StackPanel>
+                                    <TextBlock Text="Người mua hóa đơn" Foreground="#61736E" FontSize="12" />
+                                    <TextBlock Text="{Binding Detail.TenNguoiMuaHoaDon}" FontSize="13"
+                                      Foreground="#263B35" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                  </StackPanel>
+                                  <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Địa chỉ xuất hóa đơn" Foreground="#61736E" FontSize="12" />
+                                    <TextBlock Text="{Binding Detail.DiaChiXuatHoaDon}" FontSize="13"
+                                      Foreground="#263B35" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                  </StackPanel>
+                                </Grid>
+
+                                <StackPanel Grid.Row="5">
+                                  <TextBlock Text="Ghi chú" Foreground="#61736E" FontSize="12" />
+                                  <TextBlock Text="{Binding Detail.GhiChu}" FontSize="13"
+                                    Foreground="#263B35" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
+
+                              </Grid>
+
+                              <!-- TAB 2: LỊCH SỬ MUA HÀNG -->
+                              <StackPanel IsVisible="{Binding Detail.IsTabLichSuMuaHang}" Spacing="10">
+
+                                <TextBlock Text="Danh sách hóa đơn của khách hàng"
+                                  Foreground="#61736E" FontSize="12" />
+
+                                <TextBlock Text="{Binding Detail.LichSuMuaHangRongText}"
+                                  IsVisible="{Binding !Detail.HasLichSuMuaHang}"
+                                  Foreground="#98A2B3" FontSize="13" Margin="0,10,0,0" />
+
+                                <ItemsControl ItemsSource="{Binding Detail.HoaDons}"
+                                  IsVisible="{Binding Detail.HasLichSuMuaHang}">
+                                  <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:HoaDon">
+                                      <Border BorderBrush="#E2ECE8" BorderThickness="0,0,0,1"
+                                        Padding="0,9">
+                                        <Grid ColumnDefinitions="170,150,*,120,120,120" ColumnSpacing="10">
+                                          <TextBlock Text="{Binding MaHoaDon}" FontSize="12"
+                                            FontWeight="SemiBold" Foreground="#163F38"
+                                            VerticalAlignment="Center" />
+                                          <TextBlock Grid.Column="1" Text="{Binding ThoiGianBanText}"
+                                            FontSize="12" Foreground="#667A74"
+                                            VerticalAlignment="Center" />
+                                          <TextBlock Grid.Column="2" Text="{Binding TenKhachHang}"
+                                            FontSize="12" Foreground="#344B45"
+                                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                          <TextBlock Grid.Column="3"
+                                            Text="{Binding KhachCanTra, StringFormat={}{0:N0} đ}"
+                                            FontSize="12" FontWeight="SemiBold" Foreground="#087F6E"
+                                            HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                          <TextBlock Grid.Column="4"
+                                            Text="{Binding KhachDaThanhToan, StringFormat={}{0:N0} đ}"
+                                            FontSize="12" Foreground="#344B45"
+                                            HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                          <TextBlock Grid.Column="5"
+                                            Text="{Binding ConNo, StringFormat={}{0:N0} đ}"
+                                            FontSize="12" FontWeight="SemiBold" Foreground="#D64545"
+                                            HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                        </Grid>
+                                      </Border>
+                                    </DataTemplate>
+                                  </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                              </StackPanel>
+
+                              <!-- TAB 3: CÔNG NỢ -->
+                              <StackPanel IsVisible="{Binding Detail.IsTabCongNo}" Spacing="12">
+
+                                <Border Classes="statBox" Background="White"
+                                  IsVisible="{Binding Detail.HasCongNoData}">
+                                  <Grid ColumnDefinitions="*,*,*" ColumnSpacing="14">
+                                    <StackPanel>
+                                      <TextBlock Text="Tổng tiền đã mua" FontSize="11"
+                                        Foreground="#61736E" />
+                                      <TextBlock Text="{Binding Detail.TongTienDaMuaText}" FontSize="18"
+                                        FontWeight="Bold" Foreground="#163F38" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                      <TextBlock Text="Đã thanh toán" FontSize="11"
+                                        Foreground="#61736E" />
+                                      <TextBlock Text="{Binding Detail.TongDaThanhToanText}" FontSize="18"
+                                        FontWeight="Bold" Foreground="#087F6E" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                      <TextBlock Text="Còn nợ" FontSize="11" Foreground="#61736E" />
+                                      <TextBlock Text="{Binding Detail.TongCongNoText}" FontSize="18"
+                                        FontWeight="Bold" Foreground="#D64545" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                  </Grid>
+                                </Border>
+
+                                <TextBlock Text="{Binding Detail.CongNoRongText}"
+                                  IsVisible="{Binding !Detail.HasCongNoData}"
+                                  Foreground="#98A2B3" FontSize="13" />
+
+                                <StackPanel IsVisible="{Binding Detail.HasCongNoData}" Spacing="4">
+                                  <TextBlock Text="{Binding Detail.NguonCongNoText}" FontSize="12"
+                                    Foreground="#61736E" />
+                                  <TextBlock Text="{Binding Detail.SoLanGhiCongNoText}" FontSize="12"
+                                    Foreground="#667A74" />
+                                  <TextBlock FontSize="12" Foreground="#667A74"
+                                    Text="{Binding Detail.LanGhiCongNoText, StringFormat='Lần ghi công nợ gần nhất: {0}'}" />
+                                </StackPanel>
+
+                              </StackPanel>
+
+                            </StackPanel>
+
+                          </Border>
+
+                        </StackPanel>
+
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- PHÂN TRANG -->
+                <Border Grid.Row="4" Padding="16,12" BorderBrush="#E2ECE8" BorderThickness="0,1,0,0">
+                  <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="16">
+
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                      <TextBlock Text="Số dòng mỗi trang:" FontSize="12" Foreground="#61736E"
+                        VerticalAlignment="Center" />
+                      <ComboBox Name="CustomerPageSizeBox" Width="72" Height="30" FontSize="12"
+                        SelectedIndex="1" HorizontalAlignment="Left"
+                        SelectionChanged="OnCustomerPageSizeChanged">
+                        <ComboBoxItem Content="15" />
+                        <ComboBoxItem Content="20" />
+                        <ComboBoxItem Content="50" />
+                        <ComboBoxItem Content="100" />
+                      </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                      VerticalAlignment="Center"
+                      IsVisible="{Binding HasSelectedCustomerRows}">
+                      <TextBlock Text="{Binding CustomerSelectedCountText}" FontSize="12"
+                        Foreground="#087F6E" FontWeight="SemiBold" VerticalAlignment="Center" />
+                      <Button Classes="toolbar-action" Content="Bỏ chọn" Padding="10,4"
+                        FontSize="11" Margin="0" VerticalAlignment="Center"
+                        Command="{Binding BoChonTatCaCustomerRowsCommand}" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="2" Text="{Binding CustomerRangeText}" FontSize="12"
+                      Foreground="#163F38" FontWeight="SemiBold" VerticalAlignment="Center"
+                      HorizontalAlignment="Center" />
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                      VerticalAlignment="Center">
+
+                      <Button Classes="toolbar-action" Content="⏮" Width="34" Height="30"
+                        Padding="0" FontSize="12" ToolTip.Tip="Về trang đầu" Margin="0"
+                        Command="{Binding CustomerTrangDauCommand}" />
+
+                      <Button Classes="toolbar-action" Content="◀" Width="34" Height="30"
+                        Padding="0" FontSize="11" ToolTip.Tip="Trang trước" Margin="0"
+                        IsEnabled="{Binding CanCustomerTrangTruoc}"
+                        Command="{Binding CustomerTrangTruocCommand}" />
+
+                      <Border Background="#087F6E" CornerRadius="8" MinWidth="38" Height="30"
+                        Padding="10,0">
+                        <TextBlock Text="{Binding CustomerPage}" Foreground="White" FontWeight="Bold"
+                          FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+
+                      <TextBlock Text="trên" FontSize="12" Foreground="#61736E"
+                        VerticalAlignment="Center" />
+
+                      <TextBlock Text="{Binding CustomerTotalPages}" FontSize="12" Foreground="#163F38"
+                        FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0" />
+
+                      <Button Classes="toolbar-action" Content="▶" Width="34" Height="30"
+                        Padding="0" FontSize="11" ToolTip.Tip="Trang sau" Margin="0"
+                        IsEnabled="{Binding CanCustomerTrangSau}"
+                        Command="{Binding CustomerTrangSauCommand}" />
+
+                      <Button Classes="toolbar-action" Content="⏭" Width="34" Height="30"
+                        Padding="0" FontSize="12" ToolTip.Tip="Về trang cuối" Margin="0"
+                        Command="{Binding CustomerTrangCuoiCommand}" />
+
+                    </StackPanel>
+
+                  </Grid>
+                </Border>
+
+              </Grid>
+            </Border>
+
+          </Grid>
         </TabItem>
 
         <TabItem Header="Hóa đơn">

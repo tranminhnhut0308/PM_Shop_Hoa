@@ -1,5 +1,7 @@
 namespace ShopHoa.Models;
 
+using System.Globalization;
+
 public sealed class HoaDon
 {
     public uint Id { get; set; }
@@ -25,4 +27,23 @@ public sealed class HoaDon
     public decimal ConNo { get; set; }
 
     public string TrangThaiThanhToan { get; set; } = "";
+
+    // ============================================================
+    // THÔNG TIN CHỈ DÙNG CHO GIAO DIỆN
+    // ============================================================
+
+    /// <summary>Định dạng dd/MM/yyyy HH:mm cho cột "Thời gian".</summary>
+    public string ThoiGianBanText =>
+        ThoiGianBan.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+
+    public string TrangThaiThanhToanHienThi => TrangThaiThanhToan switch
+    {
+        "DA_THANH_TOAN" => "Đã thanh toán",
+        "CONG_NO" => "Còn công nợ",
+        "HUY" => "Đã hủy",
+        _ => string.IsNullOrWhiteSpace(TrangThaiThanhToan) ? "Chưa có" : TrangThaiThanhToan
+    };
+
+    /// <summary>Hóa đơn này còn dư nợ (dùng để tô màu cảnh báo).</summary>
+    public bool ConNoDuong => ConNo > 0;
 }

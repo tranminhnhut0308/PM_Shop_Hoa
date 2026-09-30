@@ -11,7 +11,6 @@ using ShopHoa.Helpers;
 using ShopHoa.Models;
 using ShopHoa.Services;
 using ShopHoa.Views;
-using Avalonia.Controls;
 using System.Globalization;
 
 namespace ShopHoa.ViewModels;
@@ -19,8 +18,9 @@ namespace ShopHoa.ViewModels;
 public partial class MainWindowViewModel : ObservableObject
 {
     private readonly DatabaseService _db = new();
-    private CancellationTokenSource? _saleCustomerSearchCts;
-    private int _saleCustomerSearchVersion;
+    private CancellationTokenSource? _customerSearchCts;
+    private int _customerLoadVersion;
+    private Task? _customerLoadTask;
     public Window? OwnerWindow { get; set; }
     private bool _customersLoaded;
     private bool _invoicesLoaded;
@@ -45,7 +45,10 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _sortByPrice;
 
     public ObservableCollection<SanPham> SanPhams { get; } = new();
-    public ObservableCollection<KhachHang> KhachHangs { get; } = new();
+
+    /// <summary>Các dòng khách hàng của trang hiện tại (đã phân trang).</summary>
+    public ObservableCollection<KhachHangRowViewModel> CustomerRows { get; } = new();
+
     public ObservableCollection<HoaDon> HoaDons { get; } = new();
     public ObservableCollection<NhaCungCap> NhaCungCaps { get; } = new();
     public ObservableCollection<SanPham> ProductSearchResults { get; } = new();
@@ -72,15 +75,184 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private string trangThaiThanhToan = "";
     [ObservableProperty] private string saleDiscountMode = "Số tiền";
-    [ObservableProperty] private KhachHang? selectedKhachHang;
     [ObservableProperty] private NhaCungCap? selectedNhaCungCap;
     [ObservableProperty] private KhachHang? selectedSaleCustomer;
-    [ObservableProperty] private string ngaySinhText = "";
 
-    partial void OnSelectedKhachHangChanged(KhachHang? value)
+    // =========================================================
+    // DANH SÁCH KHÁCH HÀNG: PHÂN TRANG + MỞ RỘNG CHI TIẾT
+    // =========================================================
+
+    /// <summary>Trang đang xem (bắt đầu từ 1).</summary>
+    [ObservableProperty] private int customerPage = 1;
+
+    /// <summary>Số khách hàng hiển thị trên một trang.</summary>
+    [ObservableProperty] private int customerPageSize = 20;
+
+    /// <summary>Tổng số khách hàng khớp điều kiện tìm kiếm (trên toàn database).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CustomerTotalPages))]
+    [NotifyPropertyChangedFor(nameof(CustomerRangeText))]
+    [NotifyPropertyChangedFor(nameof(CanCustomerTrangTruoc))]
+    [NotifyPropertyChangedFor(nameof(CanCustomerTrangSau))]
+    [NotifyPropertyChangedFor(nameof(HasCustomerRows))]
+    [NotifyPropertyChangedFor(nameof(IsCustomerListEmpty))]
+    private int customerTotalCount;
+
+    /// <summary>Số khách hàng mới phát sinh trong 30 ngày gần nhất.</summary>
+    [ObservableProperty] private int customerNewCount;
+
+    /// <summary>Tổng nợ hiện tại của toàn bộ khách hàng (cùng cách tính với cột tiền trong bảng).</summary>
+    [ObservableProperty] private decimal customerTotalDebt;
+
+    /// <summary>Tổng tiền bán của toàn bộ khách hàng.</summary>
+    [ObservableProperty] private decimal customerTotalSales;
+
+    /// <summary>Checkbox "chọn tất cả" của bảng danh sách.</summary>
+    [ObservableProperty] private bool isAllCustomerRowsSelected;
+
+    /// <summary>Đang áp trạng thái "chọn tất cả" xuống các dòng, tránh cập nhật ngược.</summary>
+    private bool _dangApDungChonTatCa;
+
+    [ObservableProperty] private bool isLoadingCustomers;
+
+    /// <summary>Id của khách hàng đang mở vùng chi tiết. null = không có khách hàng nào đang mở.</summary>
+    [ObservableProperty] private uint? selectedCustomerId;
+
+    /// <summary>Dòng khách hàng đang mở chi tiết.</summary>
+    [ObservableProperty] private KhachHangRowViewModel? selectedCustomer;
+
+    public int CustomerTotalPages =>
+        CustomerPageSize <= 0
+            ? 0
+            : (int)Math.Ceiling(CustomerTotalCount / (double)CustomerPageSize);
+
+    /// <summary>Ví dụ: "1 - 20 trong 742 khách hàng".</summary>
+    public string CustomerRangeText
     {
-        NgaySinhText = value?.NgaySinh?.ToString("dd/MM/yyyy") ?? "";
+        get
+        {
+            if (CustomerTotalCount == 0)
+                return "0 khách hàng";
+
+            var from = (CustomerPage - 1) * CustomerPageSize + 1;
+            var to = Math.Min(from + CustomerPageSize - 1, CustomerTotalCount);
+
+            return $"{from} - {to} trong {CustomerTotalCount:N0} khách hàng";
+        }
     }
+
+    public bool HasCustomerRows => CustomerRows.Count > 0;
+
+    public bool IsCustomerListEmpty => CustomerRows.Count == 0;
+
+    /// <summary>Thông báo khi danh sách rỗng, thay đổi theo từ khóa đang tìm.</summary>
+    public string CustomerEmptyText =>
+        string.IsNullOrWhiteSpace(CustomerSearch)
+            ? "Chưa có khách hàng nào trong hệ thống"
+            : $"Không tìm thấy khách hàng với từ khóa \"{CustomerSearch.Trim()}\"";
+
+    public string CustomerEmptyHint =>
+        string.IsNullOrWhiteSpace(CustomerSearch)
+            ? "Bấm “＋ Thêm mới” để tạo khách hàng đầu tiên."
+            : "Thử từ khóa khác hoặc xóa nội dung ô tìm kiếm.";
+
+    partial void OnCustomerSearchChanged(string value)
+    {
+        OnPropertyChanged(nameof(CustomerEmptyText));
+        OnPropertyChanged(nameof(CustomerEmptyHint));
+    }
+
+    public bool CanCustomerTrangTruoc => CustomerPage > 1;
+
+    public bool CanCustomerTrangSau => CustomerPage < CustomerTotalPages;
+
+    public string CustomerTotalDebtText => MoneyInput.Format(CustomerTotalDebt) + " đ";
+
+    public string CustomerTotalSalesText => MoneyInput.Format(CustomerTotalSales) + " đ";
+
+    /// <summary>Số khách hàng đang được tick trên trang hiện tại.</summary>
+    public int CustomerSelectedCount => CustomerRows.Count(row => row.IsSelected);
+
+    public string CustomerSelectedCountText =>
+        CustomerSelectedCount == 0
+            ? "Chưa chọn khách hàng nào"
+            : $"Đã chọn {CustomerSelectedCount:N0} khách hàng";
+
+    public bool HasSelectedCustomerRows => CustomerSelectedCount > 0;
+
+    /// <summary>
+    /// Khi người dùng tick ô "chọn tất cả" ở tiêu đề bảng thì áp dụng
+    /// trạng thái đó cho tất cả dòng của trang đang xem.
+    /// </summary>
+    partial void OnIsAllCustomerRowsSelectedChanged(bool value)
+    {
+        if (_dangApDungChonTatCa || CustomerRows.Count == 0)
+            return;
+
+        // Cờ này tránh việc từng dòng báo lại ngược lại làm đảo trạng thái
+        // của ô "chọn tất cả" giữa chừng lúc đang áp dụng.
+        _dangApDungChonTatCa = true;
+
+        try
+        {
+            foreach (var row in CustomerRows)
+                row.IsSelected = value;
+        }
+        finally
+        {
+            _dangApDungChonTatCa = false;
+        }
+
+        CapNhatTrangThaiChonCustomer();
+    }
+
+    /// <summary>Tick/bỏ tick toàn bộ khách hàng của trang đang xem.</summary>
+    [RelayCommand]
+    private void ChonTatCaCustomerRows()
+        => IsAllCustomerRowsSelected = !IsAllCustomerRowsSelected;
+
+    /// <summary>Bỏ tick toàn bộ khách hàng đang chọn.</summary>
+    [RelayCommand]
+    private void BoChonTatCaCustomerRows()
+    {
+        foreach (var row in CustomerRows)
+            row.IsSelected = false;
+
+        IsAllCustomerRowsSelected = false;
+        CapNhatTrangThaiChonCustomer();
+    }
+
+    private void CapNhatTrangThaiChonCustomer()
+    {
+        OnPropertyChanged(nameof(CustomerSelectedCount));
+        OnPropertyChanged(nameof(CustomerSelectedCountText));
+        OnPropertyChanged(nameof(HasSelectedCustomerRows));
+    }
+
+    /// <summary>Khách hàng đang mở chi tiết (dạng model, phục vụ nghiệp vụ).</summary>
+    public KhachHang? ExpandedCustomer => SelectedCustomer?.Customer;
+
+    partial void OnCustomerPageChanged(int value)
+    {
+        OnPropertyChanged(nameof(CustomerTotalPages));
+        OnPropertyChanged(nameof(CustomerRangeText));
+        OnPropertyChanged(nameof(CanCustomerTrangTruoc));
+        OnPropertyChanged(nameof(CanCustomerTrangSau));
+    }
+
+    partial void OnCustomerPageSizeChanged(int value)
+    {
+        if (CustomerPage != 1)
+            CustomerPage = 1;
+
+        OnPropertyChanged(nameof(CustomerTotalPages));
+        OnPropertyChanged(nameof(CustomerRangeText));
+        OnPropertyChanged(nameof(CanCustomerTrangTruoc));
+        OnPropertyChanged(nameof(CanCustomerTrangSau));
+    }
+
+    partial void OnSelectedCustomerChanged(KhachHangRowViewModel? value)
+        => OnPropertyChanged(nameof(ExpandedCustomer));
 
     [RelayCommand]
     private void ChonKhachHangBan(KhachHang? customer)
@@ -116,40 +288,231 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Tìm kiếm khách hàng (nút "Tìm kiếm"): luôn quay về trang đầu.
+    /// </summary>
     [RelayCommand]
     private async Task TimKiemKhachHangAsync()
     {
-        await SearchCustomersAsync();
+        CustomerPage = 1;
+
+        await LoadCustomersAsync();
+    }
+
+    /// <summary>
+    /// Tải lại trang đầu sau khi người dùng đổi số bản ghi mỗi trang.
+    /// </summary>
+    public Task TaiLaiDanhSachKhachHangAsync() => TimKiemKhachHangAsync();
+
+    /// <summary>
+    /// Tìm kiếm realtime khi người dùng gõ: chống debounce 350ms
+    /// để không gọi database liên tục.
+    /// </summary>
+    public void TimKiemKhachHangTuDong()
+    {
+        _customerSearchCts?.Cancel();
+        _customerSearchCts?.Dispose();
+        _customerSearchCts = new CancellationTokenSource();
+        var token = _customerSearchCts.Token;
+
+        _ = DebounceCustomerSearchAsync(token);
+    }
+
+    private async Task DebounceCustomerSearchAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(350, token);
+
+            if (token.IsCancellationRequested)
+                return;
+
+            await TimKiemKhachHangAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // Người dùng gõ tiếp -> huỷ lần tìm kiếm cũ
+        }
+    }
+
+    // =========================================================
+    // MỞ / ĐÓNG VÙNG CHI TIẾT NGAY DƯỚI DÒNG
+    // =========================================================
+
+    /// <summary>
+    /// Người dùng click vào một dòng khách hàng:
+    /// click khác dòng đang mở -> chuyển sang dòng mới (đóng dòng cũ, mở dòng mới);
+    /// click đúng dòng đang mở -> đóng lại. Chỉ một khách hàng mở tại một thời điểm.
+    /// </summary>
+    [RelayCommand]
+    private async Task MoRongDongKhachHangAsync(KhachHangRowViewModel? row)
+    {
+        if (row is null)
+            return;
+
+        if (SelectedCustomerId == row.CustomerId)
+        {
+            DongChiTietKhachHang();
+
+            StatusMessage = "Đã đóng chi tiết khách hàng";
+
+            return;
+        }
+
+        await MoChiTietKhachHangAsync(row);
+    }
+
+    private async Task MoChiTietKhachHangAsync(KhachHangRowViewModel row)
+    {
+        // Đóng vùng chi tiết của khách hàng đang mở trước (nếu có)
+        if (SelectedCustomer is not null && SelectedCustomer.CustomerId != row.CustomerId)
+        {
+            SelectedCustomer.IsExpanded = false;
+            SelectedCustomer.Detail = null;
+        }
+
+        SelectedCustomer = row;
+        SelectedCustomerId = row.CustomerId;
+        row.IsExpanded = true;
+
+        var detail = row.Detail ?? new KhachHangDetailViewModel();
+        row.Detail = detail;
+        detail.SelectedTab = "thongtin";
+        detail.IsLoading = true;
+
+        StatusMessage = $"Đang tải chi tiết {row.TenKhachHang}...";
+
+        try
+        {
+            // Chỉ đọc đúng dữ liệu của khách hàng đang xem
+            var full = await _db.GetKhachHangByIdAsync(row.CustomerId);
+
+            if (full is null)
+            {
+                detail.IsLoading = false;
+                StatusMessage = "Không tìm thấy khách hàng trong database";
+
+                return;
+            }
+
+            if (SelectedCustomerId != row.CustomerId)
+                return;
+
+            row.NapLai(full);
+            detail.Customer = full;
+
+            var historyTask = _db.GetLichSuMuaHangCuaKhachHangAsync(row.CustomerId);
+            var statsTask = _db.GetThongKeMuaHangCuaKhachHangAsync(row.CustomerId);
+
+            await Task.WhenAll(historyTask, statsTask);
+
+            if (SelectedCustomerId != row.CustomerId)
+                return;
+
+            detail.NapLichSuMuaHang(await historyTask);
+            detail.ThongKe = await statsTask;
+            detail.IsLoading = false;
+
+            StatusMessage = full.TenKhachHang;
+        }
+        catch (Exception ex)
+        {
+            detail.IsLoading = false;
+            StatusMessage = "Không thể tải chi tiết khách hàng: " + ex.Message;
+        }
+    }
+
+    private void DongChiTietKhachHang()
+    {
+        if (SelectedCustomer is not null)
+        {
+            SelectedCustomer.IsExpanded = false;
+            SelectedCustomer.Detail = null;
+        }
+
+        SelectedCustomer = null;
+        SelectedCustomerId = null;
+    }
+
+    // =========================================================
+    // PHÂN TRANG DANH SÁCH KHÁCH HÀNG
+    // =========================================================
+
+    [RelayCommand]
+    private async Task CustomerTrangDauAsync()
+    {
+        CustomerPage = 1;
+
+        await LoadCustomersAsync();
+    }
+
+    [RelayCommand]
+    private async Task CustomerTrangCuoiAsync()
+    {
+        CustomerPage = Math.Max(1, CustomerTotalPages);
+
+        await LoadCustomersAsync();
+    }
+
+    [RelayCommand]
+    private async Task CustomerTrangTruocAsync()
+    {
+        if (CustomerPage > 1)
+            CustomerPage--;
+
+        await LoadCustomersAsync();
+    }
+
+    [RelayCommand]
+    private async Task CustomerTrangSauAsync()
+    {
+        if (CustomerPage < CustomerTotalPages)
+            CustomerPage++;
+
+        await LoadCustomersAsync();
     }
 
     [RelayCommand]
     private async Task ThemMoiKhachHangAsync()
     {
+        if (OwnerWindow is null)
+            return;
+
         try
         {
             var maKhachHangMoi = await _db.TaoMaKhachHangMoiAsync();
 
-            SelectedKhachHang = new KhachHang
-            {
-                Id = 0,
-                MaKhachHang = maKhachHangMoi,
-                TenKhachHang = "",
-                LoaiKhachHang = "CA_NHAN",
-                NhomKhachHang = "Cá nhân",
-                TrangThai = true
-            };
+            var editor = new KhachHangEditorWindow(
+                new KhachHang
+                {
+                    Id = 0,
+                    MaKhachHang = maKhachHangMoi,
+                    TenKhachHang = "",
+                    LoaiKhachHang = "CA_NHAN",
+                    TrangThai = true
+                },
+                await LoadNhomKhachHangOptionsAsync(),
+                isEditMode: false);
 
-            NgaySinhText = "";
+            if (!await editor.ShowDialog<bool>(OwnerWindow))
+                return;
 
-            StatusMessage =
-                $"Đang tạo khách hàng mới - mã {maKhachHangMoi}";
+            var newId = await _db.ThemKhachHangAsync(editor.Customer);
+
+            editor.Customer.Id = newId;
+
+            // Khách mới tên không rỗng, có thể nằm ở trang khác -> tải lại trang đầu
+            CustomerPage = 1;
+            await LoadCustomersAsync();
+
+            StatusMessage = $"Đã thêm khách hàng: {editor.Customer.TenKhachHang}";
         }
         catch (Exception ex)
         {
-            StatusMessage =
-                "Không thể tạo mã khách hàng tự động: " + ex.Message;
+            StatusMessage = "Không thể thêm khách hàng: " + ex.Message;
         }
     }
+
     [RelayCommand]
     private async Task ThemKhachHangTuFileAsync()
     {
@@ -230,6 +593,7 @@ public partial class MainWindowViewModel : ObservableObject
                     replaceExisting));
 
             StatusMessage = "⏳ Đang làm mới danh sách khách hàng...";
+            CustomerPage = 1;
             await LoadCustomersAsync();
 
             StatusMessage = replaceExisting && duplicateCustomers.Count > 0
@@ -262,37 +626,126 @@ public partial class MainWindowViewModel : ObservableObject
              existing.SoDienThoai.Equals(phone, StringComparison.OrdinalIgnoreCase)));
     }
 
+    /// <summary>
+    /// Nút "Chỉnh sửa" ở cuối vùng chi tiết: mở form sửa khách hàng đang chọn.
+    /// Sau khi lưu chỉ refresh lại đúng dòng đó, không tải lại cả ứng dụng.
+    /// </summary>
     [RelayCommand]
-    private void QuayLaiDanhSachKhachHang()
+    private async Task SuaKhachHangAsync(KhachHangRowViewModel? row)
     {
-        SelectedKhachHang = null;
-        StatusMessage = "Đã quay lại danh sách khách hàng";
-    }
-
-    [RelayCommand]
-    private async Task XoaKhachHangAsync()
-    {
-        if (SelectedKhachHang is null)
+        if (row is null || OwnerWindow is null)
             return;
 
-        var customer = SelectedKhachHang;
-        var confirmed = await ShowConfirmationAsync(
-            "Xóa khách hàng",
-            $"Bạn có chắc muốn xóa khách hàng \"{customer.TenKhachHang}\" không? Khách hàng sẽ không còn hiển thị trong danh sách.");
+        var customer = await _db.GetKhachHangByIdAsync(row.CustomerId);
 
-        if (!confirmed)
+        if (customer is null)
+        {
+            StatusMessage = "Không tìm thấy khách hàng để sửa";
+
+            return;
+        }
+
+        var editor = new KhachHangEditorWindow(
+            customer,
+            await LoadNhomKhachHangOptionsAsync(),
+            isEditMode: true);
+
+        if (!await editor.ShowDialog<bool>(OwnerWindow))
             return;
 
         try
         {
-            await _db.XoaKhachHangAsync(customer.Id);
-            KhachHangs.Remove(customer);
-            SaleCustomerSuggestions.Remove(customer);
+            await _db.CapNhatKhachHangAsync(editor.Customer);
 
-            if (SelectedSaleCustomer?.Id == customer.Id)
+            // Refresh đúng dòng vừa sửa, vùng chi tiết vẫn mở
+            var updated = await _db.GetKhachHangByIdAsync(row.CustomerId);
+
+            if (updated is null)
+            {
+                await LoadCustomersAsync();
+
+                return;
+            }
+
+            row.NapLai(updated);
+
+            if (row.Detail is not null)
+                row.Detail.Customer = updated;
+
+            StatusMessage = $"Đã cập nhật khách hàng: {updated.TenKhachHang}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể cập nhật khách hàng: " + ex.Message;
+        }
+    }
+
+    private async Task<IReadOnlyList<NhomKhachHang>> LoadNhomKhachHangOptionsAsync()
+    {
+        try
+        {
+            return await _db.GetNhomKhachHangAsync();
+        }
+        catch
+        {
+            return Array.Empty<NhomKhachHang>();
+        }
+    }
+
+    /// <summary>
+    /// Nút "Xóa" ở cuối vùng chi tiết: xác nhận trước, xóa xong cập nhật
+    /// danh sách ngay mà không tải lại toàn bộ ứng dụng.
+    /// </summary>
+    [RelayCommand]
+    private async Task XoaKhachHangAsync(KhachHangRowViewModel? row)
+    {
+        if (row is null)
+            return;
+
+        var customer = row.Customer;
+
+        var confirmed = await ShowConfirmationAsync(
+            "Xóa khách hàng",
+            $"Bạn có chắc muốn xóa khách hàng \"{row.TenKhachHang}\" không? Khách hàng sẽ không còn hiển thị trong danh sách.");
+
+        if (!confirmed)
+            return;
+
+        var customerId = row.CustomerId;
+
+        try
+        {
+            await _db.XoaKhachHangAsync(customerId);
+
+            var suggestion = SaleCustomerSuggestions
+                .FirstOrDefault(item => item.Id == customerId);
+
+            if (suggestion is not null)
+                SaleCustomerSuggestions.Remove(suggestion);
+
+            if (SelectedSaleCustomer?.Id == customerId)
                 ChonKhachLe();
 
-            SelectedKhachHang = null;
+            if (SelectedCustomerId == customerId)
+                DongChiTietKhachHang();
+
+            CustomerRows.Remove(row);
+            CustomerTotalCount = Math.Max(0, CustomerTotalCount - 1);
+            CustomerNewCount = Math.Max(0, CustomerNewCount - 1);
+
+            OnPropertyChanged(nameof(HasCustomerRows));
+            OnPropertyChanged(nameof(IsCustomerListEmpty));
+            OnPropertyChanged(nameof(CustomerRangeText));
+            OnPropertyChanged(nameof(CanCustomerTrangSau));
+
+            // Trang cuối vừa bị rỗng -> lùi về trang trước để không bị trang trắng
+            if (CustomerRows.Count == 0 && CustomerPage > 1)
+            {
+                CustomerPage--;
+
+                await LoadCustomersAsync();
+            }
+
             StatusMessage = $"Đã xóa khách hàng {customer.TenKhachHang}";
         }
         catch (Exception ex)
@@ -301,80 +754,6 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
-    private async Task LuuKhachHangAsync()
-    {
-        if (SelectedKhachHang is null)
-        {
-            await ShowMessageAsync(
-                "Thông báo",
-                "Vui lòng tạo hoặc chọn khách hàng trước khi lưu.");
-            return;
-        }
-
-        var customer = SelectedKhachHang;
-
-        // Chỉ bắt buộc TÊN khách hàng
-        if (string.IsNullOrWhiteSpace(customer.TenKhachHang))
-        {
-            await ShowMessageAsync(
-                "Thiếu thông tin",
-                "Vui lòng nhập tên khách hàng trước khi lưu.");
-            return;
-        }
-
-        // Ngày sinh không bắt buộc.
-        // Nếu có nhập thì phải đúng định dạng.
-        if (!string.IsNullOrWhiteSpace(NgaySinhText))
-        {
-            if (!DateTime.TryParse(NgaySinhText, out var birthday))
-            {
-                await ShowMessageAsync(
-                    "Thông tin không hợp lệ",
-                    "Ngày sinh không hợp lệ.\nVui lòng nhập theo dạng dd/MM/yyyy.");
-                return;
-            }
-
-            customer.NgaySinh = birthday;
-        }
-        else
-        {
-            customer.NgaySinh = null;
-        }
-
-        try
-        {
-            if (customer.Id == 0)
-            {
-                var newId = await _db.ThemKhachHangAsync(customer);
-
-                customer.Id = newId;
-
-                if (!KhachHangs.Contains(customer))
-                    KhachHangs.Add(customer);
-
-                SelectedKhachHang = customer;
-
-                await ShowMessageAsync(
-                    "Thành công",
-                    $"Đã thêm khách hàng:\n{customer.TenKhachHang}");
-            }
-            else
-            {
-                await _db.CapNhatKhachHangAsync(customer);
-
-                await ShowMessageAsync(
-                    "Thành công",
-                    $"Đã cập nhật khách hàng:\n{customer.TenKhachHang}");
-            }
-        }
-        catch (Exception ex)
-        {
-            await ShowMessageAsync(
-                "Lỗi",
-                "Không thể lưu khách hàng:\n" + ex.Message);
-        }
-    }
     private bool _isInitialized;
 
     // =========================================================
@@ -591,13 +970,140 @@ public partial class MainWindowViewModel : ObservableObject
         await Task.WhenAll(customersTask, invoicesTask, suppliersTask);
     }
 
+    /// <summary>
+    /// Tải trang khách hàng hiện tại.
+    /// Chỉ đọc đúng dữ liệu của trang đang xem (LIMIT/OFFSET) nên không bị nghẽn
+    /// khi database có hàng nghìn khách hàng.
+    /// </summary>
     private async Task LoadCustomersAsync()
     {
-        var customers = await _db.GetKhachHangAsync();
+        // Chờ lần tải đang chạy xong để không bỏ sót từ khóa tìm kiếm mới nhất
+        if (_customerLoadTask is { IsCompleted: false })
+        {
+            try
+            {
+                await _customerLoadTask;
+            }
+            catch
+            {
+                // Lỗi của lần tải trước đã được báo trong hàm bên trong
+            }
+        }
 
-        KhachHangs.Clear();
-        foreach (var item in customers)
-            KhachHangs.Add(item);
+        _customerLoadTask = LoadCustomersCoreAsync();
+
+        await _customerLoadTask;
+    }
+
+    private async Task LoadCustomersCoreAsync()
+    {
+        IsLoadingCustomers = true;
+
+        // Version guard: bỏ qua kết quả của lần tải cũ nếu người dùng đã tìm/chuyển trang mới
+        var version = ++_customerLoadVersion;
+
+        try
+        {
+            var page = CustomerPage;
+            var (items, tongSoBanGhi) = await _db.GetKhachHangPagedAsync(
+                CustomerSearch,
+                page,
+                CustomerPageSize);
+
+            if (version != _customerLoadVersion)
+                return;
+
+            var totalPages = CustomerPageSize <= 0
+                ? 0
+                : (int)Math.Ceiling(tongSoBanGhi / (double)CustomerPageSize);
+
+            // Trang vượt quá số trang thực tế (ví dụ sau khi tìm kiếm) -> quay về trang cuối
+            if (items.Count == 0 && totalPages > 0 && page > totalPages)
+            {
+                CustomerPage = totalPages;
+
+                await LoadCustomersCoreAsync();
+
+                return;
+            }
+
+            // Danh sách được dựng lại từ đầu nên đóng vùng chi tiết cũ,
+            // tránh trạng thái "đang mở" trỏ vào dòng không còn tồn tại.
+            if (SelectedCustomer is not null)
+                DongChiTietKhachHang();
+
+            CustomerRows.Clear();
+
+            foreach (var item in items)
+            {
+                var row = new KhachHangRowViewModel(item, this);
+
+                row.PropertyChanged += OnCustomerRowPropertyChanged;
+
+                CustomerRows.Add(row);
+            }
+
+            // Sang trang mới thì bỏ các tick cũ để không chọn nhầm sang khách hàng khác.
+            IsAllCustomerRowsSelected = false;
+            CapNhatTrangThaiChonCustomer();
+
+            CustomerTotalCount = tongSoBanGhi;
+
+            var thongKeTask = _db.GetThongKeDanhSachKhachHangAsync();
+
+            var thongKe = await thongKeTask;
+
+            CustomerNewCount = thongKe.SoKhachMoi;
+            CustomerTotalDebt = thongKe.TongNoHienTai;
+            CustomerTotalSales = thongKe.TongBan;
+
+            OnPropertyChanged(nameof(CustomerTotalDebtText));
+            OnPropertyChanged(nameof(CustomerTotalSalesText));
+            OnPropertyChanged(nameof(HasCustomerRows));
+            OnPropertyChanged(nameof(IsCustomerListEmpty));
+            OnPropertyChanged(nameof(CustomerRangeText));
+            OnPropertyChanged(nameof(CanCustomerTrangTruoc));
+            OnPropertyChanged(nameof(CanCustomerTrangSau));
+
+            _customersLoaded = true;
+
+            StatusMessage = CustomerRows.Count == 0
+                ? (string.IsNullOrWhiteSpace(CustomerSearch)
+                    ? "Chưa có khách hàng nào trong hệ thống"
+                    : "Không tìm thấy khách hàng phù hợp")
+                : $"{CustomerRangeText} - trang {CustomerPage}/{Math.Max(1, totalPages)}";
+        }
+        catch (Exception ex)
+        {
+            if (version == _customerLoadVersion)
+                StatusMessage = "Không thể tải danh sách khách hàng: " + ex.Message;
+        }
+        finally
+        {
+            if (version == _customerLoadVersion)
+                IsLoadingCustomers = false;
+        }
+    }
+
+    /// <summary>
+    /// Khi người dùng tick một dòng thì checkbox "chọn tất cả" và số khách hàng
+    /// đang chọn phải cập nhật theo.
+    /// </summary>
+    private void OnCustomerRowPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(KhachHangRowViewModel.IsSelected))
+            return;
+
+        if (_dangApDungChonTatCa)
+            return;
+
+        var chonTatCa = CustomerRows.Count > 0
+                        && CustomerRows.All(row => row.IsSelected);
+
+        if (chonTatCa != IsAllCustomerRowsSelected)
+            IsAllCustomerRowsSelected = chonTatCa;
+
+        CapNhatTrangThaiChonCustomer();
     }
 
     private async Task LoadInvoicesAsync()
@@ -1120,23 +1626,6 @@ public partial class MainWindowViewModel : ObservableObject
             StatusMessage = "Không thể tìm khách hàng: " + ex.Message;
         }
     }
-    [RelayCommand]
-    private async Task SearchCustomersAsync()
-    {
-        try
-        {
-            var customers = await _db.GetKhachHangAsync(CustomerSearch);
-
-            KhachHangs.Clear();
-            foreach (var item in customers)
-                KhachHangs.Add(item);
-
-            _customersLoaded = true;
-            StatusMessage = $"Tìm thấy {KhachHangs.Count} khách hàng";
-        }
-        catch (Exception ex) { StatusMessage = ex.Message; }
-    }
-
     [RelayCommand]
     private async Task SearchInvoicesAsync()
     {

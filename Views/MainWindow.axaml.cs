@@ -3,12 +3,12 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using ShopHoa.ViewModels;
-
 namespace ShopHoa.Views;
 
 public partial class MainWindow : Window
@@ -236,25 +236,105 @@ public partial class MainWindow : Window
         viewModel.TimKiemBaoCaoPhieuNhapTuDong();
     }
 
-    private void OnCustomerSearchTextChanged(object? sender, TextChangedEventArgs e)    {        if (DataContext is not MainWindowViewModel viewModel)
+    private void OnCustomerSearchTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
             return;
 
         var text = (sender as TextBox)?.Text ?? string.Empty;
         viewModel.CustomerSearch = text;
 
-        if (viewModel.SearchCustomersCommand.CanExecute(text))
-        {
-            _ = viewModel.SearchCustomersCommand.ExecuteAsync(text);
-        }
+        // Tìm kiếm realtime: ViewModel tự debounce 350ms
+        // để không gọi database liên tục khi người dùng gõ.
+        viewModel.TimKiemKhachHangTuDong();
     }
 
-    private void OnCustomerSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    private void OnCustomerPageSizeChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel viewModel)
             return;
 
-        viewModel.SelectedKhachHang =
-            (sender as ListBox)?.SelectedItem as ShopHoa.Models.KhachHang;
+        if (sender is not ComboBox comboBox)
+            return;
+
+        if (!int.TryParse(comboBox.SelectedItem?.ToString(), out var pageSize) || pageSize <= 0)
+            return;
+
+        // Bỏ qua khi giá trị không đổi (kể cả lúc giao diện vừa khởi tạo)
+        if (viewModel.CustomerPageSize == pageSize)
+            return;
+
+        // ViewModel tự quay về trang 1 khi đổi số bản ghi mỗi trang
+        viewModel.CustomerPageSize = pageSize;
+
+        _ = viewModel.TaiLaiDanhSachKhachHangAsync();
+    }
+
+    /// <summary>
+    /// Click vào dòng khách hàng: mở / đóng / chuyển vùng chi tiết ngay dưới dòng đó.
+    /// Bấm bên trong vùng chi tiết hoặc lên nút bấm thì không đóng/mở lại dòng.
+    /// </summary>
+    private void OnCustomerRowPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+            return;
+
+        var row = TimDongKhachHang(e.Source as StyledElement, out var benTrongChiTiet);
+
+        if (row is null || benTrongChiTiet)
+            return;
+
+        viewModel.MoRongDongKhachHangCommand.Execute(row);
+    }
+
+    /// <summary>
+    /// Click vào bảng thống kê (tổng chi tiêu / công nợ): mở đúng tab tương ứng
+    /// của vùng chi tiết đang mở.
+    /// </summary>
+    private void OnCustomerSummaryPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        var tab = (sender as Control)?.Tag?.ToString();
+
+        if (viewModel.ExpandedCustomer is null)
+            return;
+
+        // Mở đúng tab của vùng chi tiết đang mở
+        viewModel.SelectedCustomer?.Detail?.ChonTabCommand.Execute(
+            tab == "congno" ? "congno" : "lichsu");
+    }
+
+    /// <summary>
+    /// Đi từ phần tử được bấm lên trên để tìm dòng khách hàng chứa nó.
+    /// Báo thêm nếu phần tử nằm bên trong vùng chi tiết đã mở.
+    /// </summary>
+    private static KhachHangRowViewModel? TimDongKhachHang(
+        StyledElement? element,
+        out bool benTrongChiTiet)
+    {
+        benTrongChiTiet = false;
+
+        while (element is not null)
+        {
+            if (element.Name == "DetailPanel")
+                benTrongChiTiet = true;
+
+            // Không coi thao tác bấm nút bên trong dòng là mở/đóng dòng
+            if (element is Button or ComboBox or TextBox or Avalonia.Controls.Primitives.ToggleButton)
+                benTrongChiTiet = true;
+
+            if (element.DataContext is KhachHangRowViewModel row)
+                return row;
+
+            element = element.Parent as StyledElement;
+        }
+
+        return null;
     }
 
     // ============================================================
