@@ -920,15 +920,15 @@
             Padding="10"
             Margin="0,14,0,14">
 
-            <!-- Giao diện hiển thị Avatar + Tên admin -->
+            <!-- Giao diện hiển thị Avatar + Tên người đang đăng nhập -->
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Width="34" Height="34" Background="#D8F0E9" CornerRadius="17">
-                <TextBlock Text="A" Foreground="#087F6E" FontWeight="Bold"
+                <TextBlock Text="{Binding ChuiChuCaiHienThi}" Foreground="#087F6E" FontWeight="Bold"
                   HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Border>
               <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="admin" Foreground="White" FontWeight="SemiBold" />
-                <TextBlock Text="Quản trị viên" Foreground="#D8F0E9" FontSize="11" />
+                <TextBlock Text="{Binding HoTenHienThi}" Foreground="White" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding VaiTroHienThi}" Foreground="#D8F0E9" FontSize="11" />
               </StackPanel>
               <!-- Ký hiệu mũi tên gợi ý có menu -->
               <TextBlock Grid.Column="2" Text="▲" FontSize="9" Foreground="#D8F0E9"
@@ -953,6 +953,21 @@
                         <TextBlock Text="⚙" FontSize="14" Foreground="#087F6E"
                           VerticalAlignment="Center" />
                         <TextBlock Text="Cài đặt danh mục" FontSize="13" Foreground="#263B35"
+                          VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+
+                    <!-- Mục Đăng xuất -->
+                    <Button Background="Transparent"
+                      BorderThickness="0"
+                      HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Left"
+                      Padding="10,8"
+                      Click="LogoutButton_OnClick">
+                      <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="⏻" FontSize="14" Foreground="#C94A3D"
+                          VerticalAlignment="Center" />
+                        <TextBlock Text="Đăng xuất" FontSize="13" Foreground="#263B35"
                           VerticalAlignment="Center" />
                       </StackPanel>
                     </Button>
@@ -1309,7 +1324,7 @@
           <Border Classes="card" Padding="22" Background="#EAF9F5" Margin="0">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24">
               <StackPanel>
-                <TextBlock Text="Chào mừng trở lại, admin" FontSize="22" FontWeight="Bold"
+                <TextBlock Text="{Binding ChaoMungNguoiDung}" FontSize="22" FontWeight="Bold"
                   Foreground="#163F38" />
                 <TextBlock
                   Text="Tất cả hoạt động bán hàng được tổng hợp tại đây để bạn theo dõi nhanh hơn."
@@ -2628,7 +2643,7 @@
                   <Button Grid.Column="1"
                     Classes="toolbar-primary"
                     Content="＋  Thêm hàng hóa"
-                    Command="{Binding TimKiemSanPhamNhapCommand}"
+                    Command="{Binding ThemSanPhamCommand}"
                     CommandParameter="{Binding ImportProductSearch}"
                     VerticalAlignment="Stretch" />
                 </Grid>

@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
 using ShopHoa.Services;
 using ShopHoa.Views;
@@ -12,17 +13,20 @@ namespace ShopHoa.ViewModels;
 public partial class LoginViewModel : ObservableObject
 {
     private readonly DatabaseService _db = new();
+    private readonly LoginCredentialStore _store = new();
 
     public LoginViewModel()
     {
         _ = KiemTraKetNoiAsync();
     }
 
+    // Không có tài khoản nào gắn cứng trong source.
+    // Tên đăng nhập chỉ được điền lại khi người dùng đã bật "Ghi nhớ đăng nhập".
     [ObservableProperty]
-    private string tenDangNhap = "admin";
+    private string tenDangNhap = "";
 
     [ObservableProperty]
-    private string matKhau = "123456";
+    private string matKhau = "";
 
     [ObservableProperty]
     private bool dangXuLy;
@@ -35,6 +39,12 @@ public partial class LoginViewModel : ObservableObject
 
     [ObservableProperty]
     private string trangThaiKetNoi = "Đang kiểm tra kết nối...";
+
+    /// <summary>
+    /// Hiện nút "Xóa thông tin đã ghi nhớ" khi máy đang có credential lưu.
+    /// </summary>
+    [ObservableProperty]
+    private bool coThongTinDaGhiNho;
 
     // =========================================================
     // KIỂM TRA DATABASE
@@ -52,10 +62,124 @@ public partial class LoginViewModel : ObservableObject
         {
             TrangThaiKetNoi = "Chưa kết nối MariaDB";
 
-            Console.WriteLine("========== DATABASE CONNECTION ERROR ==========");
-            Console.WriteLine(ex.ToString());
-            Console.WriteLine("================================================");
+            SafeLog.WriteError("DATABASE CONNECTION ERROR", ex);
         }
+    }
+
+    // =========================================================
+    // GHI NHỚ ĐĂNG NHẬP
+    // =========================================================
+
+    /// <summary>
+    /// Được LoginWindow gọi khi cửa sổ vừa mở.
+    /// Điền lại tên đăng nhập đã lưu và nếu có credential hợp lệ
+    /// thì khôi phục phiên đăng nhập luôn.
+    /// Trả về true nghĩa là đã vào thẳng MainWindow.
+    /// </summary>
+    public async Task<bool> PhucHoiPhienDaGhiNhoAsync(Window? loginWindow)
+    {
+        var remembered = _store.Load();
+
+        CoThongTinDaGhiNho = remembered is not null;
+
+        if (remembered is null)
+        {
+            TrangThaiKetNoi = "Đang chờ đăng nhập...";
+            return false;
+        }
+
+        // Điền lại tên đăng nhập dù có khôi phục được phiên hay không.
+        TenDangNhap = remembered.TenDangNhap;
+
+        // Máy đang có credential đã lưu -> tick lại checkbox cho khớp.
+        GhiNhoDangNhap = true;
+
+        var secret = SecretProtector.Unprotect(remembered.MatKhauDaMaHoa);
+
+        if (string.IsNullOrEmpty(secret))
+        {
+            // Dữ liệu hỏng hoặc không thuộc về máy này -> dọn dẹp.
+            _store.Clear();
+
+            CoThongTinDaGhiNho = false;
+
+            TrangThaiKetNoi = "Thông tin ghi nhớ không hợp lệ. Vui lòng đăng nhập lại.";
+            return false;
+        }
+
+        DangXuLy = true;
+        ThongBao = "";
+        TrangThaiKetNoi = "Đang khôi phục phiên đăng nhập...";
+
+        try
+        {
+            // Vẫn phải xác thực lại với database, tuyệt đối không tin file đã lưu.
+            var user = await _db.DangNhapAsync(remembered.TenDangNhap, secret);
+
+            if (user is null)
+            {
+                // Mật khẩu đã đổi / tài khoản bị khoá -> xoá credential,
+                // tránh thử lại sai mỗi lần mở app.
+                _store.Clear();
+
+                CoThongTinDaGhiNho = false;
+
+                GhiNhoDangNhap = false;
+
+                ThongBao =
+                    "Thông tin đăng nhập đã lưu không còn đúng. " +
+                    "Vui lòng đăng nhập lại.";
+
+                TrangThaiKetNoi = "Đăng nhập lại bằng tài khoản của bạn.";
+
+                return false;
+            }
+
+            Session.SetCurrentUser(user);
+
+            _ = _db.CapNhatLanDangNhapCuoiAsync(user.Id);
+
+            ThongBao = "";
+            TrangThaiKetNoi = "Đăng nhập thành công.";
+
+            return MoGiaoDienChinh(loginWindow);
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("DATABASE AUTO LOGIN ERROR", ex);
+
+            ThongBao =
+                "Không thể kết nối database.\n" +
+                SafeLog.Redact(ex.Message);
+
+            TrangThaiKetNoi = "Lỗi kết nối MariaDB.";
+
+            return false;
+        }
+        finally
+        {
+            DangXuLy = false;
+        }
+    }
+
+    /// <summary>
+    /// Lưu hoặc xoá credential theo trạng thái checkbox hiện tại.
+    /// </summary>
+    private void CapNhatGhiNhoDangNhap(
+        string tenDangNhap,
+        string matKhau)
+    {
+        if (!GhiNhoDangNhap)
+        {
+            _store.Clear();
+
+            CoThongTinDaGhiNho = false;
+            return;
+        }
+
+        var saved = _store.Save(tenDangNhap, matKhau);
+
+        CoThongTinDaGhiNho = saved;
     }
 
     // =========================================================
@@ -68,15 +192,19 @@ public partial class LoginViewModel : ObservableObject
         if (DangXuLy)
             return;
 
-        if (string.IsNullOrWhiteSpace(TenDangNhap))
+        var tenDangNhap = TenDangNhap?.Trim() ?? "";
+
+        if (string.IsNullOrWhiteSpace(tenDangNhap))
         {
             ThongBao = "Vui lòng nhập tên đăng nhập.";
+            TenDangNhap = "";
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(MatKhau))
+        if (string.IsNullOrEmpty(MatKhau))
         {
             ThongBao = "Vui lòng nhập mật khẩu.";
+            MatKhau = "";
             return;
         }
 
@@ -87,17 +215,19 @@ public partial class LoginViewModel : ObservableObject
         try
         {
             // =====================================================
-            // ĐĂNG NHẬP TRỰC TIẾP TỪ DATABASE
+            // XÁC THỰC TRỰC TIẾP TỪ DATABASE (BCrypt)
+            // Không có tài khoản gắn cứng, không có đường tắt.
             // =====================================================
 
             var user = await _db.DangNhapAsync(
-                TenDangNhap.Trim(),
+                tenDangNhap,
                 MatKhau);
 
             if (user is null)
             {
                 ThongBao = "Tên đăng nhập hoặc mật khẩu không đúng.";
                 TrangThaiKetNoi = "Kết nối database thành công.";
+                MatKhau = "";
                 return;
             }
 
@@ -105,10 +235,16 @@ public partial class LoginViewModel : ObservableObject
             // LƯU USER HIỆN TẠI
             // =====================================================
 
-            Session.CurrentUser = user;
+            Session.SetCurrentUser(user);
 
             // Cập nhật thời gian đăng nhập
             _ = _db.CapNhatLanDangNhapCuoiAsync(user.Id);
+
+            // Ghi nhớ hoặc xoá thông tin đăng nhập
+            CapNhatGhiNhoDangNhap(tenDangNhap, MatKhau);
+
+            // Không giữ mật khẩu dạng rõ trong bộ nhớ ViewModel
+            MatKhau = "";
 
             TrangThaiKetNoi = "Đăng nhập thành công.";
             ThongBao = "";
@@ -117,47 +253,69 @@ public partial class LoginViewModel : ObservableObject
             // MỞ MAIN WINDOW
             // =====================================================
 
-            try
+            if (!MoGiaoDienChinh(loginWindow))
             {
-                var mainWindow = new MainWindow();
-
-                mainWindow.Show();
-
-                loginWindow?.Close();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("========== MAIN WINDOW ERROR ==========");
-                Console.WriteLine(ex.ToString());
-                Console.WriteLine("=======================================");
-
                 ThongBao =
-                    "Đăng nhập thành công nhưng không thể mở giao diện chính.\n" +
-                    ex.Message;
+                    "Đăng nhập thành công nhưng không thể mở giao diện chính.";
 
-                TrangThaiKetNoi =
-                    "Lỗi khi mở MainWindow.";
-
-                return;
+                TrangThaiKetNoi = "Lỗi khi mở MainWindow.";
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine("========== DATABASE LOGIN ERROR ==========");
-            Console.WriteLine(ex.ToString());
-            Console.WriteLine("==========================================");
+            SafeLog.WriteError("DATABASE LOGIN ERROR", ex);
 
             ThongBao =
                 "Không thể kết nối database.\n" +
-                ex.Message;
+                SafeLog.Redact(ex.Message);
 
-            TrangThaiKetNoi =
-                "Lỗi kết nối MariaDB.";
+            TrangThaiKetNoi = "Lỗi kết nối MariaDB.";
         }
         finally
         {
             DangXuLy = false;
         }
+    }
+
+    /// <summary>
+    /// Mở MainWindow và đóng cửa sổ đăng nhập.
+    /// Trả về false nếu không mở được.
+    /// </summary>
+    private bool MoGiaoDienChinh(Window? loginWindow)
+    {
+        try
+        {
+            var mainWindow = new MainWindow();
+
+            mainWindow.Show();
+
+            loginWindow?.Close();
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("MAIN WINDOW ERROR", ex);
+
+            return false;
+        }
+    }
+
+    // =========================================================
+    // XÓA THÔNG TIN ĐĂNG NHẬP ĐÃ GHI NHỚ
+    // =========================================================
+
+    [RelayCommand]
+    private void XoaThongTinDaGhiNho()
+    {
+        _store.Clear();
+
+        CoThongTinDaGhiNho = false;
+        GhiNhoDangNhap = false;
+        MatKhau = "";
+
+        ThongBao = "";
+        TrangThaiKetNoi = "Đã xoá thông tin đăng nhập đã ghi nhớ.";
     }
 
     // =========================================================
@@ -192,7 +350,6 @@ public partial class LoginViewModel : ObservableObject
         MatKhau = "";
         ThongBao = "";
 
-        TrangThaiKetNoi =
-            "Đang chờ đăng nhập...";
+        TrangThaiKetNoi = "Đang chờ đăng nhập...";
     }
 }

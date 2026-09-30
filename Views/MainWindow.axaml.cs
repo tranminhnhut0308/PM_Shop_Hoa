@@ -40,6 +40,16 @@ public partial class MainWindow : Window
         // Tải lại danh sách nhóm hàng & ĐVT trong ViewModel nếu cần
         // viewModel.ReloadProductOptions();
     }
+
+    private async void LogoutButton_OnClick(
+        object? sender,
+        RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        await viewModel.DangXuatCommand.ExecuteAsync(null);
+    }
     private void OnSaleSearchTextChanged(object? sender, TextChangedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel viewModel)

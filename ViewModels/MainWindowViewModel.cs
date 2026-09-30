@@ -377,8 +377,104 @@ public partial class MainWindowViewModel : ObservableObject
     }
     private bool _isInitialized;
 
+    // =========================================================
+    // THÔNG TIN NGƯỜI DÙNG ĐANG ĐĂNG NHẬP
+    // Lấy từ Session, không gắn cứng tài khoản nào trong giao diện.
+    // =========================================================
+
+    public string TenDangNhapHienThi =>
+        string.IsNullOrWhiteSpace(Session.CurrentUser?.TenDangNhap)
+            ? "Chưa đăng nhập"
+            : Session.CurrentUser!.TenDangNhap;
+
+    public string HoTenHienThi =>
+        string.IsNullOrWhiteSpace(Session.CurrentUser?.HoTen)
+            ? TenDangNhapHienThi
+            : Session.CurrentUser!.HoTen;
+
+    public string VaiTroHienThi =>
+        string.IsNullOrWhiteSpace(Session.CurrentUser?.VaiTro)
+            ? "Nhân viên"
+            : Session.CurrentUser!.VaiTro;
+
+    public string ChuiChuCaiHienThi
+    {
+        get
+        {
+            var name = Session.CurrentUser is null
+                ? ""
+                : (Session.CurrentUser.HoTen ?? "").Trim();
+
+            if (string.IsNullOrEmpty(name))
+            {
+                name = Session.CurrentUser?.TenDangNhap?.Trim() ?? "";
+            }
+
+            if (string.IsNullOrEmpty(name))
+                return "?";
+
+            return name[..1].ToUpperInvariant();
+        }
+    }
+
+    public string ChaoMungNguoiDung =>
+        $"Chào mừng trở lại, {HoTenHienThi}";
+
+    public bool DaDangNhap => Session.IsLoggedIn;
+
+    // =========================================================
+    // ĐĂNG XUẤT
+    // =========================================================
+
+    /// <summary>
+    /// Kết thúc phiên hiện tại rồi mở lại cửa sổ đăng nhập.
+    ///
+    /// - Không đụng tới database nên tài khoản vẫn còn nguyên.
+    /// - Xoá thông tin đăng nhập đã ghi nhớ để lần sau mở app
+    ///   KHÔNG tự động đăng nhập lại (đúng như Chrome/Firefox).
+    ///   Checkbox "Ghi nhớ đăng nhập" vẫn được giữ, chỉ mất credential.
+    /// </summary>
+    [RelayCommand]
+    private async Task DangXuatAsync()
+    {
+        if (Session.IsLoggedIn &&
+            OwnerWindow is not null)
+        {
+            var confirm = new ConfirmationWindow(
+                "Đăng xuất",
+                "Bạn có chắc chắn muốn đăng xuất?",
+                "Đăng xuất",
+                "Hủy");
+
+            var confirmed = await confirm.ShowDialog<bool>(OwnerWindow);
+
+            if (!confirmed)
+                return;
+        }
+
+        Session.Logout();
+
+        new LoginCredentialStore().Clear();
+
+        if (OwnerWindow is not null)
+        {
+            var loginWindow = new LoginWindow();
+
+            loginWindow.Show();
+
+            OwnerWindow.Close();
+        }
+    }
+
     public async Task InitializeAsync()
     {
+        OnPropertyChanged(nameof(TenDangNhapHienThi));
+        OnPropertyChanged(nameof(HoTenHienThi));
+        OnPropertyChanged(nameof(VaiTroHienThi));
+        OnPropertyChanged(nameof(ChuiChuCaiHienThi));
+        OnPropertyChanged(nameof(ChaoMungNguoiDung));
+        OnPropertyChanged(nameof(DaDangNhap));
+
         if (_isInitialized)
             return;
 
