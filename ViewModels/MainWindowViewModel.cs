@@ -98,6 +98,14 @@ public partial class MainWindowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsCustomerListEmpty))]
     private int customerTotalCount;
 
+    /// <summary>
+    /// Tổng số khách hàng đang có trong hệ thống, không phụ thuộc từ khóa tìm kiếm.
+    /// Đây là con số hiển thị trên thẻ "Tổng khách hàng".
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CustomerRangeText))]
+    private int customerAllCount;
+
     /// <summary>Số khách hàng mới phát sinh trong 30 ngày gần nhất.</summary>
     [ObservableProperty] private int customerNewCount;
 
@@ -126,16 +134,26 @@ public partial class MainWindowViewModel : ObservableObject
             ? 0
             : (int)Math.Ceiling(CustomerTotalCount / (double)CustomerPageSize);
 
-    /// <summary>Ví dụ: "1 - 20 trong 742 khách hàng".</summary>
+    /// <summary>
+    /// Ví dụ không tìm kiếm: "1 - 20 trong 850 khách hàng".
+    /// Khi đang tìm kiếm: "1 - 20 trong 29 khách hàng tìm theo \"Thủy\" (tổng 850)".
+    /// </summary>
     public string CustomerRangeText
     {
         get
         {
+            var dangTimKiem = !string.IsNullOrWhiteSpace(CustomerSearch);
+
             if (CustomerTotalCount == 0)
-                return "0 khách hàng";
+                return dangTimKiem
+                    ? $"0 khách hàng tìm theo \"{CustomerSearch.Trim()}\" (tổng {CustomerAllCount:N0})"
+                    : "0 khách hàng";
 
             var from = (CustomerPage - 1) * CustomerPageSize + 1;
             var to = Math.Min(from + CustomerPageSize - 1, CustomerTotalCount);
+
+            if (dangTimKiem)
+                return $"{from} - {to} trong {CustomerTotalCount:N0} khách hàng tìm theo \"{CustomerSearch.Trim()}\" (tổng {CustomerAllCount:N0})";
 
             return $"{from} - {to} trong {CustomerTotalCount:N0} khách hàng";
         }
@@ -546,21 +564,22 @@ public partial class MainWindowViewModel : ObservableObject
             StatusMessage = $"⏳ Đã chọn file \"{file.Name}\". Đang đọc dữ liệu...";
             await Task.Yield();
 
-            var customersFromFile = await Task.Run(() =>
-                _db.ParseKhachHangFromFile(file.Path.LocalPath));
+            var doc = await Task.Run(() => _db.DocKhachHangTuFile(file.Path.LocalPath));
 
-            if (customersFromFile.Count == 0)
+            if (doc.KhachHangs.Count == 0)
             {
                 StatusMessage = $"❌ File \"{file.Name}\" không có dữ liệu khách hàng hợp lệ.";
                 return;
             }
 
-            StatusMessage = $"⏳ Đã đọc {customersFromFile.Count:N0} khách hàng. Đang kiểm tra dữ liệu trùng...";
+            StatusMessage =
+                $"⏳ Đã đọc {doc.SoDongExcel:N0} dòng, hợp lệ {doc.SoKhachHangHopLe:N0} khách hàng. Đang kiểm tra dữ liệu trùng...";
             await Task.Yield();
 
-            var existingCustomers = await _db.GetKhachHangAsync();
-            var duplicateCustomers = customersFromFile
-                .Where(customer => IsDuplicateCustomer(customer, existingCustomers))
+            // Chỉ nạp mã và số điện thoại đang có để đếm trùng, không tải cả danh sách lên giao diện.
+            var existingKeys = await _db.LayKhoaTrungKhopKhachHangAsync();
+            var duplicateCustomers = doc.KhachHangs
+                .Where(customer => IsDuplicateCustomer(customer, existingKeys))
                 .ToList();
 
             bool replaceExisting = false;
@@ -581,24 +600,40 @@ public partial class MainWindowViewModel : ObservableObject
             }
             else
             {
-                StatusMessage = $"⏳ Không có khách hàng trùng. Đang nhập {customersFromFile.Count:N0} khách hàng...";
+                StatusMessage = $"⏳ Không có khách hàng trùng. Đang nhập {doc.SoKhachHangHopLe:N0} khách hàng...";
             }
 
             await Task.Yield();
 
-            var importedCount = await Task.Run(() =>
-                _db.ImportKhachHangTuFileAsync(
-                    file.Path.LocalPath,
-                    customersFromFile,
-                    replaceExisting));
+            var result = await Task.Run(() =>
+                _db.ImportKhachHangTuFileAsync(file.Path.LocalPath, doc, replaceExisting));
 
             StatusMessage = "⏳ Đang làm mới danh sách khách hàng...";
+
+            // Xóa từ khóa tìm kiếm còn sót lại để thẻ "Tổng khách hàng" và bảng
+            // hiển thị đúng toàn bộ khách hàng sau khi nhập.
+            CustomerSearch = string.Empty;
             CustomerPage = 1;
             await LoadCustomersAsync();
 
-            StatusMessage = replaceExisting && duplicateCustomers.Count > 0
-                ? $"✅ Đã nhập {importedCount:N0} khách hàng và thay thế {duplicateCustomers.Count:N0} dữ liệu trùng."
-                : $"✅ Đã nhập {importedCount:N0} khách hàng từ file \"{file.Name}\".";
+            var thongBao = new System.Text.StringBuilder();
+            thongBao.Append($"✅ {file.Name}: đọc {result.SoDongExcel:N0} dòng, "
+                            + $"thêm mới {result.SoThemMoi:N0}, cập nhật {result.SoCapNhat:N0}");
+
+            if (result.SoBoQua > 0)
+                thongBao.Append($", giữ nguyên {result.SoBoQua:N0}");
+
+            thongBao.Append($", lỗi {result.SoLoi:N0}");
+
+            if (result.SoNhomKhachHangKhongKhop > 0)
+                thongBao.Append($" | {result.SoNhomKhachHangKhongKhop:N0} nhóm khách hàng chưa có trong phần mềm");
+
+            if (result.SoNguoiTaoKhongKhop > 0)
+                thongBao.Append($" | {result.SoNguoiTaoKhongKhop:N0} người tạo chưa có tài khoản");
+
+            thongBao.Append($" ({result.ThoiGian.TotalSeconds:F1}s)");
+
+            StatusMessage = thongBao.ToString();
         }
         catch (Exception ex)
         {
@@ -610,20 +645,15 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    private static bool IsDuplicateCustomer(
-        KhachHang customer,
-        IReadOnlyList<KhachHang> existingCustomers)
+    private static bool IsDuplicateCustomer(KhachHang customer, IReadOnlySet<string> existingKeys)
     {
         var code = customer.MaKhachHang?.Trim();
         var phone = customer.SoDienThoai?.Trim();
 
-        return existingCustomers.Any(existing =>
-            (!string.IsNullOrWhiteSpace(code) &&
-             !string.IsNullOrWhiteSpace(existing.MaKhachHang) &&
-             existing.MaKhachHang.Equals(code, StringComparison.OrdinalIgnoreCase)) ||
-            (!string.IsNullOrWhiteSpace(phone) &&
-             !string.IsNullOrWhiteSpace(existing.SoDienThoai) &&
-             existing.SoDienThoai.Equals(phone, StringComparison.OrdinalIgnoreCase)));
+        if (!string.IsNullOrWhiteSpace(code) && existingKeys.Contains("ma:" + code))
+            return true;
+
+        return !string.IsNullOrWhiteSpace(phone) && existingKeys.Contains("dt:" + phone);
     }
 
     /// <summary>
@@ -731,6 +761,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             CustomerRows.Remove(row);
             CustomerTotalCount = Math.Max(0, CustomerTotalCount - 1);
+            CustomerAllCount = Math.Max(0, CustomerAllCount - 1);
             CustomerNewCount = Math.Max(0, CustomerNewCount - 1);
 
             OnPropertyChanged(nameof(HasCustomerRows));
@@ -1053,6 +1084,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             var thongKe = await thongKeTask;
 
+            CustomerAllCount = thongKe.TongSoKhachHang;
             CustomerNewCount = thongKe.SoKhachMoi;
             CustomerTotalDebt = thongKe.TongNoHienTai;
             CustomerTotalSales = thongKe.TongBan;

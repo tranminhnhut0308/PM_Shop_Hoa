@@ -1393,7 +1393,7 @@
             <Border Grid.Column="1" Classes="card" Padding="18" Margin="0">
               <StackPanel>
                 <TextBlock Text="Khách hàng" Foreground="#61736E" />
-                <TextBlock Text="{Binding CustomerTotalCount}" FontSize="30" FontWeight="Bold"
+                <TextBlock Text="{Binding CustomerAllCount}" FontSize="30" FontWeight="Bold"
                   Foreground="#163F38" Margin="0,8,0,2" />
                 <TextBlock Text="Trong hệ thống" FontSize="12" Foreground="#087F6E" />
               </StackPanel>
@@ -1875,7 +1875,7 @@
               <Border Classes="card" Padding="18" Margin="0">
                 <StackPanel>
                   <TextBlock Text="Tổng khách hàng" Foreground="#61736E" FontSize="12" />
-                  <TextBlock Text="{Binding CustomerTotalCount}" FontSize="28" FontWeight="Bold"
+                  <TextBlock Text="{Binding CustomerAllCount}" FontSize="28" FontWeight="Bold"
                     Foreground="#163F38" Margin="0,6,0,0" />
                   <TextBlock Text="{Binding CustomerRangeText}" FontSize="12" Foreground="#087F6E"
                     Margin="0,2,0,0" />

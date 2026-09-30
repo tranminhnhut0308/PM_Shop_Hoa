@@ -191,7 +191,7 @@ public sealed partial class KhachHangDetailViewModel : ObservableObject
         ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongBanTruTraHang);
 
     public string TongCongNoText =>
-        ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongCongNo);
+        ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongConNoHienTai);
 
     public string SoHoaDonText =>
         ThongKe is null ? ChuaCo : $"{ThongKe.SoHoaDon:N0} hóa đơn";
@@ -220,7 +220,7 @@ public sealed partial class KhachHangDetailViewModel : ObservableObject
         }
     }
 
-    public bool CongNoDuong => (ThongKe?.TongCongNo ?? 0) > 0;
+    public bool CongNoDuong => (ThongKe?.TongConNoHienTai ?? 0) > 0;
 
     private static string HienThi(string? value)
         => string.IsNullOrWhiteSpace(value) ? ChuaCo : value.Trim();

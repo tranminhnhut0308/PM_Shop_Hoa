@@ -12,6 +12,9 @@ public sealed class ThongKeMuaHangKhachHang
     /// <summary>Tổng tiền khách phải trả trên các hóa đơn.</summary>
     public decimal TongTienDaMua { get; set; }
 
+    /// <summary>Tổng tiền khách phải trả trên các hóa đơn, chưa cộng dữ liệu file KiotViet.</summary>
+    public decimal TongTienDaMuaHoaDon { get; set; }
+
     /// <summary>Tổng tiền bán trừ các phiếu trả hàng đã hoàn thành.</summary>
     public decimal TongBanTruTraHang { get; set; }
 
@@ -20,6 +23,9 @@ public sealed class ThongKeMuaHangKhachHang
 
     /// <summary>Tổng nợ còn lại tính từ hóa đơn (hoa_don_ban_hang.con_no).</summary>
     public decimal TongConNoHoaDon { get; set; }
+
+    /// <summary>Nợ hiện tại đúng như cột "Nợ hiện tại" của bảng danh sách.</summary>
+    public decimal TongConNoHienTai { get; set; }
 
     /// <summary>Số lần ghi công nợ trong lịch sử công nợ khách hàng.</summary>
     public int SoLanGhiCongNo { get; set; }

@@ -12,6 +12,7 @@ public sealed class DatabaseService
     private readonly DatabaseConfigService _configService;
     private bool? _hasPhieuNhapExtraColumns;
     private bool? _hasBangTraHang;
+    private bool? _coCotDuLieuKiotViet;
 
     public DatabaseService()
     {
@@ -983,48 +984,129 @@ public sealed class DatabaseService
             : "0";
 
     /// <summary>
-    /// Ba cột tiền của bảng danh sách khách hàng, lấy đúng từ dữ liệu bán hàng,
-    /// công nợ và trả hàng. Dùng subquery tương quan theo kh.id nên chỉ tính
-    /// cho các dòng thuộc trang đang xem thay vì gom nhóm toàn bộ bảng.
+    /// Ba biểu thức tiền của một khách hàng, dùng chung cho bảng danh sách,
+    /// thanh thống kê và vùng chi tiết để ba nơi luôn hiển thị cùng một số.
+    /// Ưu tiên số tiền đã nhập từ file KiotViet, không có thì tính từ
+    /// dữ liệu bán hàng, công nợ và trả hàng của phần mềm.
     /// </summary>
-    private static string TienTruongKhachHangSql(bool coBangTraHang)
-        => $"""
+    private static (string NoHienTai, string TongBan, string TongBanTruTraHang) TaoBieuThucTienKhachHang(
+        bool coBangTraHang,
+        string idExpression,
+        bool coCotKiotViet)
+    {
+        var tienNoiBo = $"""
             COALESCE(
                 (
                     SELECT SUM(ls.ghi_no - ls.ghi_co)
                     FROM lich_su_cong_no_khach_hang ls
-                    WHERE ls.khach_hang_id = kh.id
+                    WHERE ls.khach_hang_id = {idExpression}
                 ),
                 (
                     SELECT SUM(hdcn.con_no)
                     FROM hoa_don_ban_hang hdcn
-                    WHERE hdcn.khach_hang_id = kh.id
+                    WHERE hdcn.khach_hang_id = {idExpression}
                       AND hdcn.trang_thai_hoa_don = 'HOAN_THANH'
                 ),
                 0
-            ) AS NoHienTai,
+            )
+            """;
+
+        var tienBanNoiBo = $"""
             COALESCE(
                 (
                     SELECT SUM(hb.khach_can_tra)
                     FROM hoa_don_ban_hang hb
-                    WHERE hb.khach_hang_id = kh.id
+                    WHERE hb.khach_hang_id = {idExpression}
                       AND hb.trang_thai_hoa_don = 'HOAN_THANH'
                 ),
                 0
-            ) AS TongBan,
-            COALESCE(
-                (
-                    SELECT SUM(hb2.khach_can_tra)
-                    FROM hoa_don_ban_hang hb2
-                    WHERE hb2.khach_hang_id = kh.id
-                      AND hb2.trang_thai_hoa_don = 'HOAN_THANH'
-                ),
-                0
-            ) - {TongTienTraHangSql("kh.id", coBangTraHang)} AS TongBanTruTraHang
+            )
             """;
 
+        var tienBanTruTraNoiBo =
+            $"""
+             {tienBanNoiBo} - {TongTienTraHangSql(idExpression, coBangTraHang)}
+             """;
+
+        if (!coCotKiotViet)
+            return (tienNoiBo, tienBanNoiBo, tienBanTruTraNoiBo);
+
+        return (
+            $"CASE WHEN kh.co_du_lieu_kiotviet = 1 THEN kh.no_can_thu_hien_tai ELSE {tienNoiBo} END",
+            $"CASE WHEN kh.co_du_lieu_kiotviet = 1 THEN kh.tong_ban ELSE {tienBanNoiBo} END",
+            $"CASE WHEN kh.co_du_lieu_kiotviet = 1 THEN kh.tong_ban_tru_tra_hang ELSE {tienBanTruTraNoiBo} END");
+    }
+
     /// <summary>
-    /// Lấy danh sách khách hàng theo trang cho màn hình "Danh sách khách hàng".
+    /// Ba cột tiền của bảng danh sách khách hàng, dùng subquery tương quan theo
+    /// kh.id nên chỉ tính cho các dòng thuộc trang đang xem thay vì gom nhóm toàn bảng.
+    /// </summary>
+    private static string TienTruongKhachHangSql(bool coBangTraHang, bool coCotKiotViet)
+    {
+        var tien = TaoBieuThucTienKhachHang(coBangTraHang, "kh.id", coCotKiotViet);
+
+        return $"""
+                {tien.NoHienTai} AS NoHienTai,
+                {tien.TongBan} AS TongBan,
+                {tien.TongBanTruTraHang} AS TongBanTruTraHang
+                """;
+    }
+
+    /// <summary>
+    /// Bảo đảm bảng khach_hang có đủ ba cột phục vụ việc nhập từ file KiotViet.
+    /// Các cột này được thêm một lần duy nhất, không đụng tới dữ liệu sẵn có:
+    /// co_du_lieu_kiotviet đánh dấu bản ghi có số tiền lấy từ file,
+    /// nguoi_tao_ten giữ tên người tạo ghi trong file, ngay_nhap_excel để truy vết.
+    /// Nếu thêm không được (database cũ, không đủ quyền) thì phần mềm vẫn chạy
+    /// bình thường và chỉ dùng số tiền tính từ hóa đơn, công nợ, trả hàng.
+    /// </summary>
+    private async Task<bool> DamBaoCotDuLieuKiotVietAsync()
+    {
+        if (_coCotDuLieuKiotViet.HasValue)
+            return _coCotDuLieuKiotViet.Value;
+
+        const string kiemTraSql = """
+            SELECT COLUMN_NAME
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'khach_hang'
+              AND COLUMN_NAME IN ('co_du_lieu_kiotviet', 'nguoi_tao_ten', 'ngay_nhap_excel');
+            """;
+
+        // Thêm từng cột một vì bảng cũ có thể đã có sẵn một trong ba cột.
+        var cotCanThem = new (string Ten, string DinhNghia)[]
+        {
+            ("co_du_lieu_kiotviet", "TINYINT(1) NOT NULL DEFAULT 0"),
+            ("nguoi_tao_ten", "VARCHAR(150) NULL"),
+            ("ngay_nhap_excel", "DATETIME NULL")
+        };
+
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            var daCo = (await connection.QueryAsync<string>(kiemTraSql)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (ten, dinhNghia) in cotCanThem)
+            {
+                if (daCo.Contains(ten))
+                    continue;
+
+                await connection.ExecuteAsync($"ALTER TABLE khach_hang ADD COLUMN {ten} {dinhNghia};");
+            }
+
+            _coCotDuLieuKiotViet = true;
+        }
+        catch
+        {
+            // Không thêm được cột thì dùng số liệu tính từ hóa đơn, công nợ, trả hàng.
+            _coCotDuLieuKiotViet = false;
+        }
+
+        return _coCotDuLieuKiotViet.Value;
+    }
+
+    /// <summary>Lấy danh sách khách hàng theo trang cho màn hình "Danh sách khách hàng".
     /// Chỉ đọc dữ liệu của trang hiện tại (LIMIT/OFFSET) kèm tổng số bản ghi,
     /// nên giao diện vẫn mượt khi bảng có hàng nghìn khách hàng.
     /// </summary>
@@ -1045,6 +1127,7 @@ public sealed class DatabaseService
         var keyword = (search ?? "").Trim();
 
         var coBangTraHang = await HasBangTraHangAsync();
+        var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
 
         const string countSql = """
         SELECT COUNT(*)
@@ -1103,7 +1186,7 @@ public sealed class DatabaseService
                   ) AS DiaChi,
                   kh.ngay_tao AS NgayTao,
                   nkh.ten_nhom AS NhomKhachHang,
-                  {TienTruongKhachHangSql(coBangTraHang)}
+                  {TienTruongKhachHangSql(coBangTraHang, coCotKiotViet)}
               """;
 
         var pageSql = $"""
@@ -1187,13 +1270,18 @@ public sealed class DatabaseService
 
     /// <summary>
     /// Số liệu tổng quan cho thanh thống kê phía trên bảng danh sách khách hàng.
-    /// Tổng nợ và tổng bán tính đúng theo cùng cách với các cột tiền trong bảng
-    /// nên hai bên không mâu thuẫn nhau.
+    /// Tổng khách hàng, khách hàng mới, tổng nợ và tổng bán đều tính thẳng từ
+    /// database với đúng biểu thức tiền mà bảng danh sách đang hiển thị, nên
+    /// thẻ thống kê không bao giờ lệch với tổng các dòng trong bảng.
     /// </summary>
     public async Task<(int TongSoKhachHang, int SoKhachMoi, decimal TongNoHienTai, decimal TongBan)>
         GetThongKeDanhSachKhachHangAsync(int soNgay = 30)
     {
-        var sql = """
+        var coBangTraHang = await HasBangTraHangAsync();
+        var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
+        var tien = TaoBieuThucTienKhachHang(coBangTraHang, "kh.id", coCotKiotViet);
+
+        var sql = $"""
         SELECT
             COUNT(*) AS TongSoKhachHang,
             COALESCE(
@@ -1206,39 +1294,8 @@ public sealed class DatabaseService
                 ),
                 0
             ) AS SoKhachMoi,
-            COALESCE(
-                SUM(
-                    COALESCE(
-                        (
-                            SELECT SUM(ls.ghi_no - ls.ghi_co)
-                            FROM lich_su_cong_no_khach_hang ls
-                            WHERE ls.khach_hang_id = kh.id
-                        ),
-                        (
-                            SELECT SUM(hdcn.con_no)
-                            FROM hoa_don_ban_hang hdcn
-                            WHERE hdcn.khach_hang_id = kh.id
-                              AND hdcn.trang_thai_hoa_don = 'HOAN_THANH'
-                        ),
-                        0
-                    )
-                ),
-                0
-            ) AS TongNoHienTai,
-            COALESCE(
-                SUM(
-                    COALESCE(
-                        (
-                            SELECT SUM(hb.khach_can_tra)
-                            FROM hoa_don_ban_hang hb
-                            WHERE hb.khach_hang_id = kh.id
-                              AND hb.trang_thai_hoa_don = 'HOAN_THANH'
-                        ),
-                        0
-                    )
-                ),
-                0
-            ) AS TongBan
+            COALESCE(SUM({tien.NoHienTai}), 0) AS TongNoHienTai,
+            COALESCE(SUM({tien.TongBan}), 0) AS TongBan
         FROM khach_hang kh
         WHERE kh.trang_thai = 1;
         """;
@@ -1322,15 +1379,17 @@ public sealed class DatabaseService
 
     /// <summary>
     /// Tổng hợp tổng tiền đã mua và công nợ hiện tại của khách hàng.
-    /// Gộp số liệu từ hóa đơn, sổ cái công nợ và phiếu trả hàng trong cùng một
-    /// câu truy vấn. Các số tiền bán chỉ tính hóa đơn đã hoàn thành để khớp
-    /// với cột "Tổng bán" và "Tổng bán trừ trả hàng" ở bảng danh sách.
+    /// Các số tiền lấy đúng theo cùng quy tắc với bảng danh sách: ưu tiên số tiền
+    /// đã nhập từ file KiotViet, không có thì tính từ hóa đơn, sổ cái công nợ và
+    /// phiếu trả hàng. Hóa đơn chỉ tính loại đã hoàn thành.
     /// </summary>
     public async Task<ThongKeMuaHangKhachHang> GetThongKeMuaHangCuaKhachHangAsync(uint customerId)
     {
         var coBangTraHang = await HasBangTraHangAsync();
+        var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
+        var tien = TaoBieuThucTienKhachHang(coBangTraHang, "kh.id", coCotKiotViet);
 
-        const string sql = """
+        var sql = $"""
         SELECT
             (
                 SELECT COUNT(*)
@@ -1343,7 +1402,7 @@ public sealed class DatabaseService
                 FROM hoa_don_ban_hang
                 WHERE khach_hang_id = @Id
                   AND trang_thai_hoa_don = 'HOAN_THANH'
-            ) AS TongTienDaMua,
+            ) AS TongTienDaMuaHoaDon,
             (
                 SELECT COALESCE(SUM(khach_da_thanh_toan), 0)
                 FROM hoa_don_ban_hang
@@ -1370,26 +1429,20 @@ public sealed class DatabaseService
                 SELECT MAX(thoi_gian)
                 FROM lich_su_cong_no_khach_hang
                 WHERE khach_hang_id = @Id
-            ) AS LanGhiCongNoGanNhat
-        """;
-
-        var sqlDayDu = $"""
-            {sql},
-            COALESCE(
-                (
-                    SELECT SUM(hb3.khach_can_tra)
-                    FROM hoa_don_ban_hang hb3
-                    WHERE hb3.khach_hang_id = @Id
-                      AND hb3.trang_thai_hoa_don = 'HOAN_THANH'
-                ),
-                0
-            ) - {TongTienTraHangSql("@Id", coBangTraHang)} AS TongBanTruTraHang;
+            ) AS LanGhiCongNoGanNhat,
+            -- Số tiền hiển thị: khi có dữ liệu file KiotViet thì lấy từ file,
+            -- ngược lại lấy từ hóa đơn/sổ cái/trả hàng như trước.
+            {tien.TongBan} AS TongTienDaMua,
+            {tien.NoHienTai} AS TongConNoHienTai,
+            {tien.TongBanTruTraHang} AS TongBanTruTraHang
+        FROM khach_hang kh
+        WHERE kh.id = @Id;
         """;
 
         await using var connection = await OpenAsync();
 
         var thongKe = await connection.QueryFirstOrDefaultAsync<ThongKeMuaHangKhachHang>(
-                          sqlDayDu,
+                          sql,
                           new { Id = customerId })
                       ?? new ThongKeMuaHangKhachHang();
 
@@ -1537,181 +1590,512 @@ public sealed class DatabaseService
             throw new InvalidOperationException("Khách hàng không tồn tại hoặc đã bị xóa.");
     }
 
-    public async Task<int> ImportKhachHangTuFileAsync(string filePath)
-        => await ImportKhachHangTuFileAsync(filePath, null, false);
+    /// <summary>Tên bảng khách hàng, dùng để sinh câu lệnh SQL.</summary>
+    private const string BangKhachHang = "khach_hang";
 
-    public async Task<int> ImportKhachHangTuFileAsync(
+    /// <summary>Bảng tạm dùng để cập nhật hàng loạt khách hàng.</summary>
+    private const string BangTamCapNhat = "tmp_nhap_khach_hang";
+
+    /// <summary>
+    /// Các cột được ghi khi nhập từ file, đúng thứ tự với <see cref="GiaTriDongNhap"/>.
+    /// Gồm cả những cột lấy từ file KiotViet: khu vực giao hàng, người tạo,
+    /// ngày giao dịch cuối và ba cột tiền.
+    /// </summary>
+    private const string CotNhapKhachHang = """
+        ma_khach_hang, ten_khach_hang, loai_khach_hang, so_dien_thoai, ngay_sinh, gioi_tinh,
+        email, facebook, dia_chi, phuong_xa, quan_huyen, tinh_thanh, nhom_khach_hang_id,
+        ma_so_thue, ten_nguoi_mua_hoa_don, ten_cong_ty, dia_chi_xuat_hoa_don, ghi_chu,
+        chi_nhanh_tao, khu_vuc_giao_hang, nguoi_tao_ten, nguoi_tao_id, ngay_giao_dich_cuoi,
+        ngay_nhap_excel, co_du_lieu_kiotviet, no_can_thu_hien_tai, tong_ban,
+        tong_ban_tru_tra_hang, trang_thai, ngay_tao, ngay_cap_nhat
+        """;
+
+    /// <summary>
+    /// Giá trị tương ứng với từng cột trong <see cref="CotNhapKhachHang"/>.
+    /// Ngày tạo lấy theo file, khi file không có thì dùng thời điểm nhập.
+    /// </summary>
+    private const string GiaTriDongNhap = """
+        @MaKhachHang, @TenKhachHang, @LoaiKhachHang, @SoDienThoai, @NgaySinh, @GioiTinh,
+        @Email, @Facebook, @DiaChi, @PhuongXa, @QuanHuyen, @TinhThanh, @NhomKhachHangId,
+        @MaSoThue, @TenNguoiMuaHoaDon, @TenCongTy, @DiaChiXuatHoaDon, @GhiChu,
+        @ChiNhanhTao, @KhuVucGiaoHang, @NguoiTaoTen, @NguoiTaoId, @NgayGiaoDichCuoi,
+        @NgayNhapExcel, @CoDuLieuKiotViet, @NoCanThuHienTai, @TongBan,
+        @TongBanTruTraHang, @TrangThai, COALESCE(@NgayTao, NOW()), @NgayCapNhat
+        """;
+
+    /// <summary>
+    /// Lấy về tập khóa "ma:" + mã khách hàng và "dt:" + số điện thoại đang có,
+    /// chỉ để đếm khách hàng trùng trước khi nhập file. Không tải danh sách
+    /// khách hàng lên giao diện.
+    /// </summary>
+    public async Task<IReadOnlySet<string>> LayKhoaTrungKhopKhachHangAsync()
+    {
+        const string sql = """
+        SELECT ma_khach_hang AS MaKhachHang, so_dien_thoai AS SoDienThoai
+        FROM khach_hang;
+        """;
+
+        await using var connection = await OpenAsync();
+
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in (await connection.QueryAsync<DongKhachHangTonTai>(sql)).AsList())
+        {
+            if (!string.IsNullOrWhiteSpace(row.MaKhachHang))
+                keys.Add("ma:" + row.MaKhachHang.Trim());
+
+            if (!string.IsNullOrWhiteSpace(row.SoDienThoai))
+                keys.Add("dt:" + row.SoDienThoai.Trim());
+        }
+
+        return keys;
+    }
+
+    /// <summary>Nhập danh sách khách hàng từ file, tự đọc file và ghi log đầy đủ.</summary>
+    public async Task<KetQuaImportKhachHang> ImportKhachHangTuFileAsync(
         string filePath,
-        IReadOnlyCollection<KhachHang>? customersOverride,
+        bool replaceExisting = false)
+        => await ImportKhachHangTuFileAsync(filePath, DocKhachHangTuFile(filePath), replaceExisting);
+
+    /// <summary>
+    /// Nhập danh sách khách hàng đã đọc từ file.
+    /// Khách hàng đã tồn tại (trùng mã, hoặc trùng số điện thoại) được cập nhật
+    /// nếu <paramref name="replaceExisting"/> = true, ngược lại được giữ nguyên.
+    /// Không bao giờ xóa khách hàng nào không có trong file.
+    /// </summary>
+    public async Task<KetQuaImportKhachHang> ImportKhachHangTuFileAsync(
+        string filePath,
+        KetQuaDocKhachHang doc,
         bool replaceExisting = false)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
 
-        if (!File.Exists(filePath))
-            throw new FileNotFoundException("Không tìm thấy file danh sách khách hàng.", filePath);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-        var customers = customersOverride ?? ParseKhachHangFromFile(filePath);
+        var result = new KetQuaImportKhachHang
+        {
+            TenFile = doc.TenFile,
+            SoDongExcel = doc.SoDongExcel,
+            SoKhachHangHopLe = doc.SoKhachHangHopLe,
+            SoLoi = doc.SoDongLoi
+        };
 
-        if (customers.Count == 0)
-            return 0;
+        if (doc.KhachHangs.Count == 0)
+        {
+            result.DanhSachLoi = doc.DanhSachLoi.Take(20).ToList();
+            result.SoLoi = doc.SoDongLoi;
+            result.ThoiGian = stopwatch.Elapsed;
+            GhiLogNhapKhachHang(result);
 
-        const string sql = """
-            INSERT INTO khach_hang
-            (
-                ma_khach_hang,
-                ten_khach_hang,
-                loai_khach_hang,
-                so_dien_thoai,
-                ngay_sinh,
-                gioi_tinh,
-                email,
-                facebook,
-                dia_chi,
-                phuong_xa,
-                quan_huyen,
-                tinh_thanh,
-                nhom_khach_hang_id,
-                ma_so_thue,
-                ten_nguoi_mua_hoa_don,
-                ten_cong_ty,
-                dia_chi_xuat_hoa_don,
-                ghi_chu,
-                trang_thai,
-                ngay_tao,
-                ngay_cap_nhat
-            )
-            VALUES
-            (
-                @MaKhachHang,
-                @TenKhachHang,
-                @LoaiKhachHang,
-                @SoDienThoai,
-                @NgaySinh,
-                @GioiTinh,
-                @Email,
-                @Facebook,
-                @DiaChi,
-                @PhuongXa,
-                @QuanHuyen,
-                @TinhThanh,
-                NULL,
-                @MaSoThue,
-                @TenNguoiMuaHoaDon,
-                @TenCongTy,
-                @DiaChiXuatHoaDon,
-                @GhiChu,
-                @TrangThai,
-                NOW(),
-                NOW()
-            );
-            """;
+            return result;
+        }
+
+        await DamBaoCotDuLieuKiotVietAsync();
 
         await using var connection = await OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
 
-        var importedCount = 0;
-        foreach (var customer in customers)
+        // Nạp sẵn khách hàng đang có, nhóm khách hàng và tài khoản để tra cứu trong
+        // bộ nhớ, tránh hỏi database 849 lần cho 849 dòng.
+        var byCode = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        var byPhone = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in (await connection.QueryAsync<DongKhachHangTonTai>(
+            """
+            SELECT
+                id AS Id,
+                ma_khach_hang AS MaKhachHang,
+                so_dien_thoai AS SoDienThoai
+            FROM khach_hang;
+            """,
+            transaction: transaction)).AsList())
+        {
+            if (!string.IsNullOrWhiteSpace(row.MaKhachHang))
+                byCode[row.MaKhachHang.Trim()] = row.Id;
+
+            if (!string.IsNullOrWhiteSpace(row.SoDienThoai))
+                byPhone[row.SoDienThoai.Trim()] = row.Id;
+        }
+
+        var nhomKhachHang = await TaiDanhSachTenAsync(
+            connection,
+            transaction,
+            "SELECT id AS Id, ten_nhom AS Ten FROM nhom_khach_hang;");
+        var nguoiDung = await TaiDanhSachTenAsync(
+            connection,
+            transaction,
+            """
+            SELECT
+                id AS Id,
+                CONCAT_WS(' ', NULLIF(ho_ten, ''), NULLIF(ten_dang_nhap, '')) AS Ten
+            FROM nguoi_dung;
+            """);
+
+        var now = DateTime.Now;
+        var rowsToInsert = new List<DongNhapKhachHang>(doc.KhachHangs.Count);
+        var rowsToUpdate = new List<DongNhapKhachHang>();
+        var errors = new List<string>();
+        var seenCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var customer in doc.KhachHangs)
         {
             if (string.IsNullOrWhiteSpace(customer.TenKhachHang))
+            {
+                result.SoLoi++;
                 continue;
+            }
 
-            var normalizedCustomer = customer;
-            if (string.IsNullOrWhiteSpace(normalizedCustomer.MaKhachHang))
-                normalizedCustomer.MaKhachHang = GenerateCustomerCode();
+            var ma = (customer.MaKhachHang ?? "").Trim();
 
-            normalizedCustomer.LoaiKhachHang = string.IsNullOrWhiteSpace(normalizedCustomer.LoaiKhachHang)
-                ? "CA_NHAN"
-                : normalizedCustomer.LoaiKhachHang;
+            if (ma.Length == 0)
+            {
+                ma = GenerateCustomerCode();
+                customer.MaKhachHang = ma;
+            }
 
-            normalizedCustomer.TrangThai = true;
+            // File đã có mã lặp thì chỉ giữ dòng đầu tiên.
+            if (!seenCodes.Add(ma))
+            {
+                result.SoBoQua++;
+                errors.Add($"Mã '{ma}' bị lặp trong file, bỏ qua dòng lặp");
+                continue;
+            }
 
-            const string findSql = """
-                SELECT id
-                FROM khach_hang
-                WHERE trang_thai = 1
-                  AND (
-                        ma_khach_hang = @MaKhachHang
-                        OR (
-                            NULLIF(TRIM(@SoDienThoai), '') IS NOT NULL
-                            AND so_dien_thoai = @SoDienThoai
-                        )
-                  )
-                LIMIT 1;
-                """;
+            var existingId = byCode.TryGetValue(ma, out var idTheoMa)
+                ? idTheoMa
+                : ResolveIdTheoSoDienThoai(customer.SoDienThoai, byPhone);
 
-            var existingId = await connection.ExecuteScalarAsync<uint?>(
-                findSql,
-                new
-                {
-                    normalizedCustomer.MaKhachHang,
-                    normalizedCustomer.SoDienThoai
-                });
+            var row = new DongNhapKhachHang
+            {
+                MaKhachHang = ma,
+                TenKhachHang = customer.TenKhachHang.Trim(),
+                LoaiKhachHang = string.IsNullOrWhiteSpace(customer.LoaiKhachHang)
+                    ? "CA_NHAN"
+                    : customer.LoaiKhachHang,
+                SoDienThoai = CleanText(customer.SoDienThoai),
+                NgaySinh = customer.NgaySinh,
+                GioiTinh = CleanText(customer.GioiTinh),
+                Email = CleanText(customer.Email),
+                Facebook = CleanText(customer.Facebook),
+                DiaChi = CleanText(customer.DiaChi),
+                PhuongXa = CleanText(customer.PhuongXa),
+                QuanHuyen = CleanText(customer.QuanHuyen),
+                TinhThanh = CleanText(customer.TinhThanh),
+                MaSoThue = CleanText(customer.MaSoThue),
+                TenNguoiMuaHoaDon = CleanText(customer.TenNguoiMuaHoaDon),
+                TenCongTy = CleanText(customer.TenCongTy),
+                DiaChiXuatHoaDon = CleanText(customer.DiaChiXuatHoaDon),
+                GhiChu = CleanText(customer.GhiChu),
+                KhuVucGiaoHang = CleanText(customer.KhuVucGiaoHang),
+                ChiNhanhTao = CleanText(customer.ChiNhanhTao),
+                NhomKhachHangTen = CleanText(customer.NhomKhachHang),
+                NguoiTaoTen = CleanText(customer.NguoiTaoTen),
+                NgayGiaoDichCuoi = customer.NgayGiaoDichCuoi,
+                NgayTao = customer.NgayTao,
+                NgayCapNhat = now,
+                NgayNhapExcel = now,
+                TrangThai = customer.TrangThai,
+                NoCanThuHienTai = customer.NoCanThuHienTaiExcel ?? 0m,
+                TongBan = customer.TongBanExcel ?? 0m,
+                TongBanTruTraHang = customer.TongBanTruTraHangExcel ?? 0m,
+                CoDuLieuKiotViet = customer.NoCanThuHienTaiExcel.HasValue
+                                    || customer.TongBanExcel.HasValue
+                                    || customer.TongBanTruTraHangExcel.HasValue
+            };
+
+            if (!string.IsNullOrWhiteSpace(row.NhomKhachHangTen))
+            {
+                if (nhomKhachHang.TryGetValue(row.NhomKhachHangTen, out var nhomId))
+                    row.NhomKhachHangId = nhomId;
+                else
+                    result.SoNhomKhachHangKhongKhop++;
+            }
+
+            if (!string.IsNullOrWhiteSpace(row.NguoiTaoTen))
+            {
+                if (nguoiDung.TryGetValue(row.NguoiTaoTen, out var nguoiId))
+                    row.NguoiTaoId = nguoiId;
+                else
+                    result.SoNguoiTaoKhongKhop++;
+            }
 
             if (existingId.HasValue)
             {
                 if (!replaceExisting)
+                {
+                    result.SoBoQua++;
                     continue;
+                }
 
-                const string updateSql = """
-                    UPDATE khach_hang
-                    SET ma_khach_hang = @MaKhachHang,
-                        ten_khach_hang = @TenKhachHang,
-                        loai_khach_hang = @LoaiKhachHang,
-                        so_dien_thoai = @SoDienThoai,
-                        ngay_sinh = @NgaySinh,
-                        gioi_tinh = @GioiTinh,
-                        email = @Email,
-                        facebook = @Facebook,
-                        dia_chi = @DiaChi,
-                        phuong_xa = @PhuongXa,
-                        quan_huyen = @QuanHuyen,
-                        tinh_thanh = @TinhThanh,
-                        ma_so_thue = @MaSoThue,
-                        ten_nguoi_mua_hoa_don = @TenNguoiMuaHoaDon,
-                        ten_cong_ty = @TenCongTy,
-                        dia_chi_xuat_hoa_don = @DiaChiXuatHoaDon,
-                        ghi_chu = @GhiChu,
-                        trang_thai = 1,
-                        ngay_cap_nhat = NOW()
-                    WHERE id = @Id;
-                    """;
-
-                await connection.ExecuteAsync(
-                    updateSql,
-                    new
-                    {
-                        Id = existingId.Value,
-                        normalizedCustomer.MaKhachHang,
-                        normalizedCustomer.TenKhachHang,
-                        normalizedCustomer.LoaiKhachHang,
-                        normalizedCustomer.SoDienThoai,
-                        normalizedCustomer.NgaySinh,
-                        normalizedCustomer.GioiTinh,
-                        normalizedCustomer.Email,
-                        normalizedCustomer.Facebook,
-                        normalizedCustomer.DiaChi,
-                        normalizedCustomer.PhuongXa,
-                        normalizedCustomer.QuanHuyen,
-                        normalizedCustomer.TinhThanh,
-                        normalizedCustomer.MaSoThue,
-                        normalizedCustomer.TenNguoiMuaHoaDon,
-                        normalizedCustomer.TenCongTy,
-                        normalizedCustomer.DiaChiXuatHoaDon,
-                        normalizedCustomer.GhiChu
-                    });
-
-                importedCount++;
+                row.Id = existingId.Value;
+                rowsToUpdate.Add(row);
+                result.SoCapNhat++;
                 continue;
             }
 
-            await connection.ExecuteAsync(sql, normalizedCustomer);
-            importedCount++;
+            rowsToInsert.Add(row);
+            result.SoThemMoi++;
         }
 
-        return importedCount;
+        foreach (var batch in Chunk(rowsToInsert, 200))
+            await connection.ExecuteAsync(InsertKhachHangSql("khach_hang"), batch, transaction);
+
+        if (rowsToUpdate.Count > 0)
+            await CapNhatNhieuKhachHangAsync(connection, transaction, rowsToUpdate);
+
+        await transaction.CommitAsync();
+
+        errors.InsertRange(0, doc.DanhSachLoi);
+        result.DanhSachLoi = errors.Take(20).ToList();
+        result.ThoiGian = stopwatch.Elapsed;
+
+        GhiLogNhapKhachHang(result);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Câu lệnh ghi một lô khách hàng. Khi ghi vào bảng tạm phải kèm cột id
+    /// để còn nối được với đúng khách hàng đang cần cập nhật.
+    /// </summary>
+    private static string InsertKhachHangSql(string table, bool gheKhoaChinh = false)
+    {
+        var cot = gheKhoaChinh ? $"id, {CotNhapKhachHang}" : CotNhapKhachHang;
+        var giaTri = gheKhoaChinh ? $"@Id, {GiaTriDongNhap}" : GiaTriDongNhap;
+
+        return $"""
+            INSERT INTO {table}
+            (
+                {cot}
+            )
+            VALUES
+            (
+                {giaTri}
+            );
+            """;
+    }
+
+    /// <summary>
+    /// Cập nhật hàng loạt qua bảng tạm, để 849 dòng chỉ tốn vài câu lệnh thay vì
+    /// 849 lần gọi database. Ngày tạo và nhóm/người tạo chỉ bị ghi đè khi file thật sự có dữ liệu.
+    /// </summary>
+    private async Task CapNhatNhieuKhachHangAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        IReadOnlyCollection<DongNhapKhachHang> rows)
+    {
+        await connection.ExecuteAsync(
+            $"CREATE TEMPORARY TABLE IF NOT EXISTS {BangTamCapNhat} LIKE {BangKhachHang};",
+            transaction: transaction);
+
+        await connection.ExecuteAsync(
+            $"DELETE FROM {BangTamCapNhat};",
+            transaction: transaction);
+
+        foreach (var batch in Chunk(rows, 200))
+        {
+            await connection.ExecuteAsync(
+                InsertKhachHangSql(BangTamCapNhat, gheKhoaChinh: true),
+                batch,
+                transaction);
+        }
+
+        var cot = CotNhapKhachHang
+            .Split(',')
+            .Select(column => column.Trim())
+            .Where(column => column.Length > 0
+                             && column is not ("ngay_tao" or "ngay_cap_nhat" or "nhom_khach_hang_id" or "nguoi_tao_id"))
+            .Select(column => $"kh.{column} = tmp.{column}")
+            .ToList();
+
+        cot.Add("kh.nhom_khach_hang_id = COALESCE(tmp.nhom_khach_hang_id, kh.nhom_khach_hang_id)");
+        cot.Add("kh.nguoi_tao_id = COALESCE(tmp.nguoi_tao_id, kh.nguoi_tao_id)");
+        cot.Add("kh.ngay_tao = COALESCE(tmp.ngay_tao, kh.ngay_tao)");
+        cot.Add("kh.ngay_cap_nhat = NOW()");
+
+        await connection.ExecuteAsync(
+            $"""
+             UPDATE {BangKhachHang} kh
+             INNER JOIN {BangTamCapNhat} tmp ON tmp.id = kh.id
+             SET {string.Join(", ", cot)};
+             DROP TEMPORARY TABLE IF EXISTS {BangTamCapNhat};
+             """,
+            transaction: transaction);
+    }
+
+    /// <summary>
+    /// Nạp danh sách tên kèm khóa để tra cứu khi nhập. Nếu bảng không tồn tại
+    /// thì trả về danh sách rỗng, không làm hỏng việc nhập.
+    /// </summary>
+    private static async Task<Dictionary<string, uint>> TaiDanhSachTenAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        string sql)
+    {
+        var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            foreach (var row in (await connection.QueryAsync<DongTen>(sql, transaction: transaction)).AsList()))
+            {
+                var ten = (row.Ten ?? "").Trim();
+
+                if (ten.Length == 0)
+                    continue;
+
+                // Tên trong file KiotViet có thể là "Phương Khánh" hoặc "Khách lẻ",
+                // nên phải giữ nguyên cả tên chứ không tách từng từ.
+                result.TryAdd(ten, row.Id);
+                result.TryAdd(NormalizeHeaderKey(ten), row.Id);
+            }
+        }
+        catch
+        {
+            // Bảng tra cứu không tồn tại thì bỏ qua phần này.
+        }
+
+        return result;
+    }
+
+    private static uint? ResolveIdTheoSoDienThoai(
+        string? soDienThoai,
+        IReadOnlyDictionary<string, uint> byPhone)
+        => !string.IsNullOrWhiteSpace(soDienThoai) && byPhone.TryGetValue(soDienThoai.Trim(), out var id)
+            ? id
+            : null;
+
+    private static string? CleanText(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static IEnumerable<List<T>> Chunk<T>(IReadOnlyCollection<T> source, int size)
+    {
+        var chunk = new List<T>(Math.Min(size, source.Count));
+
+        foreach (var item in source)
+        {
+            chunk.Add(item);
+
+            if (chunk.Count < size)
+                continue;
+
+            yield return chunk;
+            chunk = [];
+        }
+
+        if (chunk.Count > 0)
+            yield return chunk;
+    }
+
+    /// <summary>
+    /// Ghi log kết quả nhập ra tệp trong thư mục dữ liệu ứng dụng để tra cứu được
+    /// khi có sự cố, không ảnh hưởng tới việc chạy của ứng dụng.
+    /// </summary>
+    private void GhiLogNhapKhachHang(KetQuaImportKhachHang result)
+    {
+        var dong = $"[NHAP KHACH HANG] {result.ThongBaoTatCa}";
+
+        if (result.SoNhomKhachHangKhongKhop > 0)
+            dong += $" | nhóm khách hàng không khớp: {result.SoNhomKhachHangKhongKhop}";
+
+        if (result.SoNguoiTaoKhongKhop > 0)
+            dong += $" | người tạo không khớp tài khoản: {result.SoNguoiTaoKhongKhop}";
+
+        GhiLog(dong);
+
+        foreach (var loi in result.DanhSachLoi)
+            GhiLog($"[NHAP KHACH HANG] LỖI {result.TenFile}: {loi}");
+    }
+
+    private void GhiLog(string message)
+    {
+        try
+        {
+            var thuMuc = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ShopHoa",
+                "logs");
+
+            Directory.CreateDirectory(thuMuc);
+
+            var tenTep = $"nhap-khach-hang-{DateTime.Now:yyyyMMdd}.log";
+
+            File.AppendAllText(
+                Path.Combine(thuMuc, tenTep),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Không ghi được log thì bỏ qua, không được làm hỏng luồng nhập.
+        }
+    }
+
+    /// <summary>Một dòng khách hàng sẵn có trong database, dùng để tìm khách hàng trùng.</summary>
+    private sealed class DongKhachHangTonTai
+    {
+        public uint Id { get; set; }
+        public string? MaKhachHang { get; set; }
+        public string? SoDienThoai { get; set; }
+    }
+
+    /// <summary>Một dòng chỉ có khóa và tên, dùng cho bảng nhóm khách hàng và người dùng.</summary>
+    private sealed class DongTen
+    {
+        public uint Id { get; set; }
+        public string? Ten { get; set; }
+    }
+
+    /// <summary>
+    /// Một dòng khách hàng sẽ ghi xuống database, đúng thứ tự cột trong
+    /// <see cref="CotNhapKhachHang"/>. Các cột tiền lấy từ file KiotViet.
+    /// </summary>
+    private sealed class DongNhapKhachHang
+    {
+        public uint Id { get; set; }
+        public string MaKhachHang { get; set; } = "";
+        public string TenKhachHang { get; set; } = "";
+        public string LoaiKhachHang { get; set; } = "CA_NHAN";
+        public string? SoDienThoai { get; set; }
+        public DateTime? NgaySinh { get; set; }
+        public string? GioiTinh { get; set; }
+        public string? Email { get; set; }
+        public string? Facebook { get; set; }
+        public string? DiaChi { get; set; }
+        public string? PhuongXa { get; set; }
+        public string? QuanHuyen { get; set; }
+        public string? TinhThanh { get; set; }
+        public uint? NhomKhachHangId { get; set; }
+        public string? MaSoThue { get; set; }
+        public string? TenNguoiMuaHoaDon { get; set; }
+        public string? TenCongTy { get; set; }
+        public string? DiaChiXuatHoaDon { get; set; }
+        public string? GhiChu { get; set; }
+        public string? ChiNhanhTao { get; set; }
+        public string? KhuVucGiaoHang { get; set; }
+        public string? NguoiTaoTen { get; set; }
+        public uint? NguoiTaoId { get; set; }
+        public DateTime? NgayGiaoDichCuoi { get; set; }
+        public DateTime? NgayNhapExcel { get; set; }
+        public bool CoDuLieuKiotViet { get; set; }
+        public decimal NoCanThuHienTai { get; set; }
+        public decimal TongBan { get; set; }
+        public decimal TongBanTruTraHang { get; set; }
+        public bool TrangThai { get; set; }
+        public DateTime? NgayTao { get; set; }
+        public DateTime NgayCapNhat { get; set; }
+
+        /// <summary>Tên nhóm trong file, chỉ dùng để tra cứu rồi bỏ đi.</summary>
+        public string? NhomKhachHangTen { get; set; }
     }
 
     public List<KhachHang> ParseKhachHangFromFile(string filePath)
+        => DocKhachHangTuFile(filePath).KhachHangs.ToList();
+
+    /// <summary>
+    /// Đọc file danh sách khách hàng và trả về kèm số liệu thống kê để ghi log:
+    /// tổng số dòng trong file, số dòng hợp lệ và chi tiết các dòng bị loại.
+    /// </summary>
+    public KetQuaDocKhachHang DocKhachHangTuFile(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
@@ -1720,10 +2104,36 @@ public sealed class DatabaseService
             throw new FileNotFoundException("Không tìm thấy file danh sách khách hàng.", filePath);
 
         var rows = ReadCustomerRowsFromFile(filePath);
-        return rows
-            .Select(MapRowToKhachHang)
-            .Where(customer => !string.IsNullOrWhiteSpace(customer.TenKhachHang) || !string.IsNullOrWhiteSpace(customer.MaKhachHang))
-            .ToList();
+        var customers = new List<KhachHang>(rows.Count);
+        var errors = new List<string>();
+        var soDongLoi = 0;
+
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var customer = MapRowToKhachHang(rows[index]);
+
+            if (string.IsNullOrWhiteSpace(customer.TenKhachHang))
+            {
+                soDongLoi++;
+
+                if (errors.Count < 20)
+                    errors.Add($"Dòng {index + 2}: thiếu tên khách hàng");
+
+                continue;
+            }
+
+            customers.Add(customer);
+        }
+
+        return new KetQuaDocKhachHang
+        {
+            TenFile = Path.GetFileName(filePath),
+            SoDongExcel = rows.Count,
+            SoKhachHangHopLe = customers.Count,
+            SoDongLoi = soDongLoi,
+            DanhSachLoi = errors,
+            KhachHangs = customers
+        };
     }
 
     private static List<Dictionary<string, string>> ReadCustomerRowsFromFile(string filePath)
@@ -1773,7 +2183,7 @@ public sealed class DatabaseService
             for (var index = 0; index < headers.Count; index++)
             {
                 var header = headers[index];
-                var value = row.Cell(firstHeaderColumn + index).GetFormattedString().Trim();
+                var value = DocGiaTriOTheoKieu(row.Cell(firstHeaderColumn + index));
 
                 if (!string.IsNullOrWhiteSpace(header) || !string.IsNullOrWhiteSpace(value))
                     hasAnyValue = true;
@@ -1805,6 +2215,26 @@ public sealed class DatabaseService
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Lấy giá trị ô theo đúng kiểu dữ liệu thay vì lấy chuỗi đã định dạng.
+    /// Cần thiết vì file KiotViet định dạng tiền theo kiểu "195,000" và ngày theo
+    /// kiểu "30/09/2026": đọc chuỗi định dạng sẽ làm sai số tiền (văn hóa Việt
+    /// dùng dấu phẩy làm dấu thập phân). Giá trị số/ngày được chuyển sang
+    /// chuỗi theo quy ước bất biến để ParseSoTien/ParseNgayTaiFile đọc đúng.
+    /// </summary>
+    private static string DocGiaTriOTheoKieu(IXLCell cell)
+    {
+        return cell.Value.Type switch
+        {
+            XLDataType.Number => cell.GetDouble().ToString("0.###############", CultureInfo.InvariantCulture),
+            XLDataType.DateTime => cell.GetDateTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+            XLDataType.TimeSpan => cell.GetTimeSpan().ToString("c", CultureInfo.InvariantCulture),
+            XLDataType.Boolean => cell.GetBoolean() ? "1" : "0",
+            XLDataType.Blank => string.Empty,
+            _ => cell.GetString().Trim()
+        };
     }
 
     private static List<Dictionary<string, string>> ReadCsvRows(string filePath)
@@ -1872,37 +2302,46 @@ public sealed class DatabaseService
         return null;
     }
 
+    /// <summary>
+    /// Chuyển một dòng đã đọc từ file thành khách hàng.
+    /// Mọi cột đều tìm theo TÊN CỘT (đã bỏ dấu và chữ thường), không theo vị trí,
+    /// nên thứ tự cột trong file không ảnh hưởng kết quả.
+    /// </summary>
     private static KhachHang MapRowToKhachHang(Dictionary<string, string> row)
     {
         var customer = new KhachHang
         {
-            MaKhachHang = GetCellValue(row, "ma_khach_hang", "mã khách hàng", "ma khach hang", "customer code", "customer_code") ?? string.Empty,
-            TenKhachHang = GetCellValue(row, "ten_khach_hang", "tên khách hàng", "ten khach hang", "customer name", "name") ?? string.Empty,
-            LoaiKhachHang = GetCellValue(row, "loai_khach_hang", "loại khách hàng", "loai khach hang", "customer type") ?? "CA_NHAN",
-            SoDienThoai = GetCellValue(row, "so_dien_thoai", "số điện thoại", "dien thoai", "phone", "sdt"),
+            MaKhachHang = GetCellValue(row, "ma_khach_hang", "mã khách hàng", "ma khach hang", "mã khách hàng", "customer code", "customer_code", "mã", "mã khách hàng") ?? string.Empty,
+            TenKhachHang = GetCellValue(row, "ten_khach_hang", "tên khách hàng", "ten khach hang", "customer name", "name", "tên", "tên khách hàng") ?? string.Empty,
+            LoaiKhachHang = ChuanHoaLoaiKhachHang(GetCellValue(row, "loai_khach_hang", "loại khách hàng", "loai khach hang", "customer type", "loại khách", "loai khach", "loại")),
+            SoDienThoai = GetCellValue(row, "so_dien_thoai", "số điện thoại", "so dien thoai", "dien thoai", "điện thoại", "phone", "sdt", "đt", "số điện thoại"),
             Email = GetCellValue(row, "email"),
             Facebook = GetCellValue(row, "facebook"),
-            DiaChi = GetCellValue(row, "dia_chi", "địa chỉ", "dia chi", "address"),
-            PhuongXa = GetCellValue(row, "phuong_xa", "phường/xã", "phuong xa", "ward"),
+            DiaChi = GetCellValue(row, "dia_chi", "địa chỉ", "dia chi", "address", "địa chỉ"),
+            PhuongXa = GetCellValue(row, "phuong_xa", "phường/xã", "phuong xa", "ward", "phường xã"),
             QuanHuyen = GetCellValue(row, "quan_huyen", "quận/huyện", "quan huyen", "district"),
             TinhThanh = GetCellValue(row, "tinh_thanh", "tỉnh/thành", "tinh thanh", "province"),
-            NhomKhachHang = GetCellValue(row, "nhom_khach_hang", "nhóm khách hàng", "nhom khach hang", "group"),
-            MaSoThue = GetCellValue(row, "ma_so_thue", "mã số thuế", "ma so thue", "tax code"),
+            NhomKhachHang = GetCellValue(row, "nhom_khach_hang", "nhóm khách hàng", "nhom khach hang", "group", "nhóm", "nhom"),
+            MaSoThue = GetCellValue(row, "ma_so_thue", "mã số thuế", "ma so thue", "tax code", "mst"),
             TenNguoiMuaHoaDon = GetCellValue(row, "ten_nguoi_mua_hoa_don", "tên người mua hóa đơn", "nguoi mua hoa don"),
             TenCongTy = GetCellValue(row, "ten_cong_ty", "tên công ty", "cong ty"),
             DiaChiXuatHoaDon = GetCellValue(row, "dia_chi_xuat_hoa_don", "địa chỉ xuất hóa đơn", "dia chi xuat hoa don"),
-            GhiChu = GetCellValue(row, "ghi_chu", "ghi chú", "note")
+            GhiChu = GetCellValue(row, "ghi_chu", "ghi chú", "note", "chú thích"),
+            KhuVucGiaoHang = GetCellValue(row, "khu_vuc_giao_hang", "khu vuc giao hang", "khu vực", "khu vuc", "khu vực giao hàng"),
+            ChiNhanhTao = GetCellValue(row, "chi_nhanh_tao", "chi nhánh tạo", "chi nhanh tao", "chi nhánh", "chi nhanh"),
+            NguoiTaoTen = GetCellValue(row, "nguoi_tao", "người tạo", "nguoi tao", "nguoi_tao", "người tạo"),
+            NgayGiaoDichCuoi = ParseNgayTaiFile(GetCellValue(row, "ngay_giao_dich_cuoi", "ngày giao dịch cuối", "ngay giao dich cuoi", "ngày giao dịch cuối cùng", "ngay giao dich gan nhat", "last transaction")),
+            NgayTao = ParseNgayTaiFile(GetCellValue(row, "ngay_tao", "ngày tạo", "ngay tao", "created at", "ngày tạo")),
+            NoCanThuHienTaiExcel = ParseSoTien(GetCellValue(row, "no_can_thu_hien_tai", "nợ cần thu hiện tại", "no can thu hien tai", "nợ hiện tại", "no hien tai", "nợ cần thu")),
+            TongBanExcel = ParseSoTien(GetCellValue(row, "tong_ban", "tổng bán", "tong ban", "tổng bán")),
+            TongBanTruTraHangExcel = ParseSoTien(GetCellValue(row, "tong_ban_tru_tra_hang", "tổng bán trừ trả hàng", "tong ban tru tra hang", "tổng bán trừ trả", "tong ban tru tra")),
+            GioiTinh = GetCellValue(row, "gioi_tinh", "giới tính", "gender", "sex", "gioi tinh"),
+            NgaySinh = ParseNgayTaiFile(GetCellValue(row, "ngay_sinh", "ngày sinh", "ngay sinh", "birthday", "dob"))
         };
 
-        if (!string.IsNullOrWhiteSpace(GetCellValue(row, "ngay_sinh", "ngày sinh", "birthday", "dob")))
-        {
-            var value = GetCellValue(row, "ngay_sinh", "ngày sinh", "birthday", "dob");
-            if (DateTime.TryParse(value, out var parsedDate))
-                customer.NgaySinh = parsedDate;
-        }
-
-        if (!string.IsNullOrWhiteSpace(GetCellValue(row, "gioi_tinh", "giới tính", "gender", "sex")))
-            customer.GioiTinh = GetCellValue(row, "gioi_tinh", "giới tính", "gender", "sex");
+        var trangThai = ParseTrangThai(GetCellValue(row, "trang_thai", "trạng thái", "trang thai", "status", "active", "trạng thái"));
+        if (trangThai.HasValue)
+            customer.TrangThai = trangThai.Value;
 
         if (string.IsNullOrWhiteSpace(customer.MaKhachHang))
             customer.MaKhachHang = GenerateCustomerCode();
@@ -1911,6 +2350,130 @@ public sealed class DatabaseService
             customer.LoaiKhachHang = "CA_NHAN";
 
         return customer;
+    }
+
+    /// <summary>
+    /// Chuẩn hóa loại khách hàng. File KiotViet ghi "Cá nhân" (sai chính tả),
+    /// phần mềm dùng mã "CA_NHAN"/"DOAN".
+    /// </summary>
+    private static string ChuanHoaLoaiKhachHang(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "CA_NHAN";
+
+        var normalized = NormalizeHeaderKey(value);
+
+        return normalized switch
+        {
+            "ca_nhan" or "ca_nhan_hang" or "khach_le" or "ca_nhan_" or "canhan" => "CA_NHAN",
+            "do_an" or "doanh_nghiep" or "dn" or "khach_doanh_nghiep" or "to_chuc" => "DOAN",
+            _ => value.Trim().ToUpperInvariant()
+        };
+    }
+
+    /// <summary>
+    /// Đọc số tiền từ ô. Giá trị đọc từ file Excel đã là chuỗi số theo quy ước
+    /// bất biến, còn dữ liệu CSV có thể là "195.000", "195,000" hoặc "1.234,56".
+    /// </summary>
+    private static decimal? ParseSoTien(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var text = value.Trim()
+            .Replace("\u00A0", "")
+            .Replace(" ", "")
+            .Replace("₫", "")
+            .Replace("đ", "")
+            .Replace("Đ", "");
+
+        if (text.Length == 0)
+            return null;
+
+        if (decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var invariantValue))
+            return invariantValue;
+
+        var hasComma = text.Contains(',');
+        var hasDot = text.Contains('.');
+        var lastSeparator = hasComma && hasDot
+            ? (text.LastIndexOf(',') > text.LastIndexOf('.') ? ',' : '.')
+            : hasComma ? ',' : '.';
+
+        var cleaned = new StringBuilder(text.Length);
+
+        for (var index = 0; index < text.Length; index++)
+        {
+            var character = text[index];
+
+            if (char.IsDigit(character))
+            {
+                cleaned.Append(character);
+                continue;
+            }
+
+            // Dấu trừ ở đầu là dấu âm, các ký tự khác bị bỏ qua.
+            if (character == '-' && cleaned.Length == 0)
+                cleaned.Append(character);
+            else if (character == lastSeparator)
+            {
+                var digitsAfter = 0;
+
+                for (var scan = index + 1; scan < text.Length && char.IsDigit(text[scan]); scan++)
+                    digitsAfter++;
+
+                var isDecimalSeparator = digitsAfter is > 0 and < 3;
+
+                if (isDecimalSeparator)
+                    cleaned.Append('.');
+            }
+        }
+
+        var normalized = cleaned.ToString();
+
+        return decimal.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    /// <summary>
+    /// Đọc ngày từ ô. Chấp nhận cả chuỗi không dấu phân cách do Excel sinh ra
+    /// ("2026-09-30 12:37:50"), dạng Việt Nam ("30/09/2026") và dạng quốc tế.
+    /// </summary>
+    private static DateTime? ParseNgayTaiFile(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var text = value.Trim();
+
+        if (DateTime.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var invariantValue))
+            return invariantValue;
+
+        if (DateTime.TryParse(text, CultureInfo.GetCultureInfo("vi-VN"), out var vietnameseValue))
+            return vietnameseValue;
+
+        return DateTime.TryParse(text, out var fallback) ? fallback : null;
+    }
+
+    /// <summary>Đọc trạng thái: 1/0, Có/Không, Active/Inactive, Đang hoạt động...</summary>
+    private static bool? ParseTrangThai(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var text = value.Trim();
+        var normalized = NormalizeHeaderKey(text);
+
+        return normalized switch
+        {
+            "1" or "co" or "true" or "yes" or "y" or "active" or "dang_hoat_dong" or "bat_dau" => true,
+            "0" or "khong" or "false" or "no" or "n" or "inactive" or "ngung_hoat_dong" => false,
+            _ => null
+        };
     }
 
     public async Task<IReadOnlyList<HoaDon>> GetHoaDonAsync(
