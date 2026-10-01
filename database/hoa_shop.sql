@@ -559,7 +559,7 @@ CREATE TABLE `san_pham` (
   `hinh_anh` text COLLATE utf8mb4_unicode_ci,
   `co_ban_truc_tiep` tinyint(1) NOT NULL DEFAULT '1',
   `trang_thai` tinyint(1) NOT NULL DEFAULT '1',
-  `ngay_tao` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `ngay_tao` datetime DEFAULT CURRENT_TIMESTAMP,
   `ngay_cap_nhat` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

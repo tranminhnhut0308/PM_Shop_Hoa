@@ -1617,9 +1617,9 @@ public partial class MainWindowViewModel : ObservableObject
                 FileTypeFilter =
                 [
                     new FilePickerFileType("Excel / CSV")
-                {
-                    Patterns = ["*.xlsx", "*.xls", "*.csv"]
-                }
+                    {
+                        Patterns = ["*.xlsx", "*.xls", "*.csv"]
+                    }
                 ]
             });
 
@@ -1631,113 +1631,328 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        KetQuaImportSanPham? ketQua = null;
+
         try
         {
-            // BẬT LOADING
             IsImporting = true;
-            ImportStatus = $"Đang chuẩn bị nhập file \"{file.Name}\"...";
+            ImportStatus = $"Đang đọc dữ liệu từ file \"{file.Name}\"...";
             StatusMessage = ImportStatus;
 
-            // Cho giao diện có thời gian hiển thị loading
             await Task.Delay(100);
 
-            ImportStatus = "Đang đọc dữ liệu từ file Excel...";
-            StatusMessage = ImportStatus;
-
-            var productsFromFile =
-                _db.ParseProductsFromFile(file.Path.LocalPath);
+// 1. ĐỌC FILE — đọc hết mọi dòng, không giới hạn 20/30/50/100 dòng.
+            // Dòng đọc lỗi không bị loại âm thầm mà được giữ lại để báo trong kết quả.
+            var productsFromFile = _db.ParseProductsFromFile(file.Path.LocalPath, out var loiDocFile);
+            var tongSoDongTrongFile = productsFromFile.Count + loiDocFile.Count;
 
             if (productsFromFile.Count == 0)
             {
-                StatusMessage =
-                    $"File \"{file.Name}\" không có dữ liệu sản phẩm hợp lệ để nhập.";
-                return;
-            }
-
-            ImportStatus =
-                $"Đã đọc {productsFromFile.Count:N0} sản phẩm. Đang kiểm tra dữ liệu trùng...";
-
-            StatusMessage = ImportStatus;
-
-            await Task.Delay(100);
-
-            var existingProducts = await _db.GetSanPhamAsync();
-
-            var duplicateProducts = productsFromFile
-                .Where(product => IsDuplicateProduct(product, existingProducts))
-                .Take(5)
-                .ToList();
-
-            if (duplicateProducts.Count > 0)
-            {
-                // TẮT LOADING trước khi hiện hộp thoại
                 IsImporting = false;
 
-                var shouldKeepExisting = await ShowConfirmationAsync(
-                    "Sản phẩm trùng",
-                    $"Phát hiện {duplicateProducts.Count} sản phẩm trong file đã tồn tại trong kho. " +
-                    "Bạn muốn giữ dữ liệu hiện có và bỏ qua các sản phẩm trùng này?",
-                    "Giữ dữ liệu cũ",
-                    "Bỏ qua nhập file");
-
-                if (!shouldKeepExisting)
+                // Vẫn phải báo cáo nếu mọi dòng đều lỗi, không phải chỉ nói "không có dữ liệu".
+                var ketQuaLoi = new KetQuaImportSanPham
                 {
-                    StatusMessage = "Đã bỏ qua nhập file vì phát hiện sản phẩm trùng.";
-                    return;
-                }
+                    TenFile = file.Name,
+                    TongSoDongExcel = tongSoDongTrongFile,
+                    SoLoi = loiDocFile.Count
+                };
 
-                // BẬT LẠI LOADING sau khi người dùng chọn
-                IsImporting = true;
-                ImportStatus = "Đang loại bỏ các sản phẩm bị trùng...";
-                StatusMessage = ImportStatus;
+                ketQuaLoi.LoiDong.AddRange(loiDocFile);
 
-                await Task.Delay(100);
+                if (OwnerWindow is not null && loiDocFile.Count > 0)
+                    await KetQuaImportWindow.ShowAsync(OwnerWindow, ketQuaLoi);
+                else
+                    await ShowConfirmationAsync(
+                        "File không có dữ liệu",
+                        $"File \"{file.Name}\" không có sản phẩm hợp lệ nào để nhập.",
+                        "Đã hiểu",
+                        "Đóng");
 
-                productsFromFile = productsFromFile
-                    .Where(product => !IsDuplicateProduct(product, existingProducts))
-                    .ToList();
-            }
-
-            if (productsFromFile.Count == 0)
-            {
-                StatusMessage =
-                    "Tất cả sản phẩm trong file đều trùng với dữ liệu hiện có.";
                 return;
             }
 
-            ImportStatus =
-                $"Đang nhập {productsFromFile.Count:N0} sản phẩm vào database...";
-
+            ImportStatus = $"Đã đọc {tongSoDongTrongFile:N0} dòng"
+                + (loiDocFile.Count > 0 ? $", trong đó {loiDocFile.Count:N0} dòng lỗi" : "")
+                + ". Đang kiểm tra trùng...";
             StatusMessage = ImportStatus;
 
             await Task.Delay(100);
 
-            var importedCount =
-                await _db.ImportSanPhamTuFileAsync(
-                    file.Path.LocalPath,
-                    productsFromFile);
+            // 2. PHÁT HIỆN TRÙNG — khóa chính là MÃ HÀNG, kiểm tra thêm MÃ VẠCH.
+            var sanPhamTrung = await _db.TimSanPhamTrungAsync(productsFromFile);
 
-            ImportStatus = "Đang cập nhật lại danh sách hàng hóa...";
+            var quyetDinh = await HoiQuyetDinhSanPhamTrungAsync(
+                productsFromFile,
+                sanPhamTrung);
+
+            if (quyetDinh == XuLySanPhamTrung.Huy)
+            {
+                IsImporting = false;
+                StatusMessage = "Đã hủy nhập file. Không có dữ liệu nào được thay đổi.";
+                return;
+            }
+
+            // 3. LẬP DANH SÁCH THAO TÁC cho từng dòng
+            var danhSachHang = new List<HangNhapSanPham>(productsFromFile.Count);
+            var thongTinTrung = TaoDanhSachHangNhap(
+                productsFromFile,
+                sanPhamTrung,
+                quyetDinh,
+                danhSachHang);
+
+            var soGhi = danhSachHang.Count(h => h.hanDong is HanDong.ThemMoi or HanDong.ThayThe);
+
+if (soGhi == 0)
+            {
+                IsImporting = false;
+
+                var soGiu = danhSachHang.Count(h => h.hanDong == HanDong.GiuCu);
+                StatusMessage =
+                    $"Đã giữ nguyên {soGiu:N0} sản phẩm trùng, không ghi thêm dữ liệu nào.";
+
+                // Vẫn phải báo các dòng lỗi khi đọc file, nếu không người dùng
+                // không biết vì sao tổng số dòng không khớp với số sản phẩm nhập.
+                var ketQuaGiu = new KetQuaImportSanPham
+                {
+                    TenFile = file.Name,
+                    TongSoDongExcel = tongSoDongTrongFile,
+                    SoGiuCu = soGiu,
+                    SoLoi = loiDocFile.Count
+                };
+
+                ketQuaGiu.LoiDong.AddRange(loiDocFile);
+
+                if (OwnerWindow is not null && loiDocFile.Count > 0)
+                    await KetQuaImportWindow.ShowAsync(OwnerWindow, ketQuaGiu);
+
+                return;
+            }
+
+            // 4. GHI XUỐNG DATABASE trong một transaction
+            ImportStatus = $"Đang nhập {soGhi:N0} sản phẩm vào database...";
+            StatusMessage = ImportStatus;
+
+            await Task.Delay(100);
+
+ketQua = await _db.ImportSanPhamAsync(
+                file.Name,
+                danhSachHang,
+                tongSoDongTrongFile,
+                loiDocFile);
+
+            // Số giữ cũ do người dùng quyết định, không phải do database ghi.
+            ketQua.SoGiuCu = thongTinTrung.SoGiuCu;
+
+            // 5. RELOAD LẠI TỪ DATABASE, không chỉ thêm vào collection tạm.
+            ImportStatus = "Đang tải lại danh sách hàng hóa từ database...";
             StatusMessage = ImportStatus;
 
             await Task.Delay(100);
 
             await RefreshProductsAsync();
-
-            StatusMessage = importedCount > 0
-                ? $"Đã nhập thành công {importedCount:N0} sản phẩm từ file \"{file.Name}\"."
-                : $"File \"{file.Name}\" không có dữ liệu sản phẩm hợp lệ để nhập.";
         }
         catch (Exception ex)
         {
-            StatusMessage =
-                "Không thể nhập hàng loạt từ file: " + ex.Message;
+            StatusMessage = "Không thể nhập hàng loạt từ file: " + ex.Message;
         }
         finally
         {
-            // LUÔN TẮT LOADING
             IsImporting = false;
         }
+
+        // 6. BÁO CÁO KẾT QUẢ cho người dùng
+        if (ketQua is not null && OwnerWindow is not null)
+        {
+            StatusMessage = ketQua.DaRollback
+                ? "Nhập file thất bại, đã rollback toàn bộ."
+                : $"Nhập xong: thêm mới {ketQua.SoThemMoi:N0}, "
+                  + $"thay thế {ketQua.SoThayThe:N0}, giữ cũ {ketQua.SoGiuCu:N0}, "
+                  + $"lỗi {ketQua.SoLoi:N0}.";
+
+            await KetQuaImportWindow.ShowAsync(OwnerWindow, ketQua);
+        }
+    }
+
+    /// <summary>
+    /// Hỏi người dùng xử lý sản phẩm trùng: giữ cũ / thay thế / hủy.
+    /// Trả về lựa chọn, hoặc null nếu không có gì trùng.
+    /// </summary>
+    private async Task<XuLySanPhamTrung?> HoiQuyetDinhSanPhamTrungAsync(
+        IReadOnlyList<SanPham> productsFromFile,
+        IReadOnlyList<SanPham> sanPhamDaCo)
+    {
+        if (OwnerWindow is null || sanPhamDaCo.Count == 0)
+            return null;
+
+        var danhSachTrung = TaoDanhSachSanPhamTrung(productsFromFile, sanPhamDaCo);
+
+        if (danhSachTrung.Count == 0)
+            return null;
+
+        // Tắt loading để hộp thoại hiện được trên UI thread.
+        IsImporting = false;
+        await Task.Delay(50);
+
+        return await SanPhamTrungWindow.ShowAsync(OwnerWindow, danhSachTrung);
+    }
+
+    /// <summary>
+    /// Ghép từng sản phẩm trong file với bản ghi đang có trong database.
+    /// Mã hàng là khóa chính; mã vạch chỉ dùng khi không trùng mã hàng.
+    /// Cố tình không so tên hàng vì hai món khác tên dễ bị trùng tên.
+    /// </summary>
+    private static List<SanPhamTrung> TaoDanhSachSanPhamTrung(
+        IReadOnlyList<SanPham> productsFromFile,
+        IReadOnlyList<SanPham> sanPhamDaCo)
+    {
+        var theoMaSanPham = new Dictionary<string, SanPham>(StringComparer.OrdinalIgnoreCase);
+        var theoMaVach = new Dictionary<string, SanPham>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sanPham in sanPhamDaCo)
+        {
+            var maSanPham = sanPham.MaSanPham?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(maSanPham) && !theoMaSanPham.ContainsKey(maSanPham))
+                theoMaSanPham[maSanPham] = sanPham;
+
+            var maVach = sanPham.MaVach?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(maVach) && !theoMaVach.ContainsKey(maVach))
+                theoMaVach[maVach] = sanPham;
+        }
+
+        var result = new List<SanPhamTrung>();
+        var daThem = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var product in productsFromFile)
+        {
+            var maSanPham = product.MaSanPham?.Trim();
+            var maVach = product.MaVach?.Trim();
+
+            SanPham? cu = null;
+            var lyDo = string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(maSanPham)
+                && theoMaSanPham.TryGetValue(maSanPham, out var theoMa))
+            {
+                cu = theoMa;
+                lyDo = "Mã hàng";
+            }
+            else if (!string.IsNullOrWhiteSpace(maVach)
+                     && theoMaVach.TryGetValue(maVach, out var theoVach))
+            {
+                cu = theoVach;
+                lyDo = "Mã vạch";
+            }
+
+            if (cu is null)
+                continue;
+
+            // Sản phẩm trùng cả mã hàng lẫn mã vạch chỉ báo một lần.
+            if (!daThem.Add(cu.Id.ToString()))
+                continue;
+
+            result.Add(new SanPhamTrung
+            {
+                SanPhamCu = cu,
+                SanPhamMoi = product,
+                SoDongExcel = product.SoDongExcel,
+                LyDoTrung = lyDo
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Biến danh sách sản phẩm đọc từ file thành danh sách quyết định cho từng dòng:
+    /// thêm mới / thay thế / giữ cũ.
+    /// </summary>
+    private static (int SoGiuCu, List<SanPhamTrung> DanhSachTrung) TaoDanhSachHangNhap(
+        IReadOnlyList<SanPham> productsFromFile,
+        IReadOnlyList<SanPham> sanPhamDaCo,
+        XuLySanPhamTrung? quyetDinh,
+        List<HangNhapSanPham> danhSachHang)
+    {
+        var theoMaSanPham = new Dictionary<string, SanPham>(StringComparer.OrdinalIgnoreCase);
+        var theoMaVach = new Dictionary<string, SanPham>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sanPham in sanPhamDaCo)
+        {
+            var maSanPham = sanPham.MaSanPham?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(maSanPham) && !theoMaSanPham.ContainsKey(maSanPham))
+                theoMaSanPham[maSanPham] = sanPham;
+
+            var maVach = sanPham.MaVach?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(maVach) && !theoMaVach.ContainsKey(maVach))
+                theoMaVach[maVach] = sanPham;
+        }
+
+        var thayThe = quyetDinh == XuLySanPhamTrung.ThayTheBangExcel;
+        var danhSachTrung = new List<SanPhamTrung>();
+        var soGiuCu = 0;
+
+        foreach (var product in productsFromFile)
+        {
+            var maSanPham = product.MaSanPham?.Trim();
+            var maVach = product.MaVach?.Trim();
+
+            SanPham? cu = null;
+
+            if (!string.IsNullOrWhiteSpace(maSanPham)
+                && theoMaSanPham.TryGetValue(maSanPham, out var theoMa))
+            {
+                cu = theoMa;
+            }
+            else if (!string.IsNullOrWhiteSpace(maVach)
+                     && theoMaVach.TryGetValue(maVach, out var theoVach))
+            {
+                cu = theoVach;
+            }
+
+            if (cu is null)
+            {
+                danhSachHang.Add(new HangNhapSanPham(product, product.SoDongExcel));
+                continue;
+            }
+
+            if (thayThe)
+            {
+                danhSachHang.Add(new HangNhapSanPham(
+                    product,
+                    product.SoDongExcel,
+                    cu.Id,
+                    cu,
+                    HanDong.ThayThe));
+            }
+            else
+            {
+                soGiuCu++;
+                danhSachTrung.Add(new SanPhamTrung
+                {
+                    SanPhamCu = cu,
+                    SanPhamMoi = product,
+                    SoDongExcel = product.SoDongExcel,
+                    LyDoTrung = string.Equals(cu.MaSanPham?.Trim(), maSanPham,
+                        StringComparison.OrdinalIgnoreCase)
+                        ? "Mã hàng"
+                        : "Mã vạch"
+                });
+
+                // Giữ cũ: KHÔNG UPDATE, giữ nguyên toàn bộ dữ liệu database.
+                danhSachHang.Add(new HangNhapSanPham(
+                    product,
+                    product.SoDongExcel,
+                    cu.Id,
+                    cu,
+                    HanDong.GiuCu));
+            }
+        }
+
+        return (soGiuCu, danhSachTrung);
     }
     /// <summary>
     /// Tải lại danh sách hàng hóa theo từ khóa đang gõ.
@@ -1947,6 +2162,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private static bool IsDuplicateProduct(SanPham product, IReadOnlyList<SanPham> existingProducts)
     {
+        // Còn dùng cho luồng nhập KHÁCH HÀNG, giữ nguyên logic cũ ở đây.
         var trimmedMaSanPham = product.MaSanPham.Trim();
         var trimmedMaVach = product.MaVach?.Trim();
         var trimmedTenSanPham = product.TenSanPham.Trim();

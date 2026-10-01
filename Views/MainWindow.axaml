@@ -1976,9 +1976,10 @@
                               VerticalAlignment="Center"
                               TextTrimming="CharacterEllipsis" />
 
-                            <!-- THỜI GIAN TẠO -->
+                            <!-- THỜI GIAN TẠO: lấy đúng ngày giờ trong database (kể cả khi nhập từ Excel).
+                                 Ô không có dữ liệu thì để trống, không hiện 01/01/0001. -->
                             <TextBlock Grid.Column="10"
-                              Text="{Binding NgayTao, StringFormat={}{0:dd/MM/yyyy HH:mm}}"
+                              Text="{Binding NgayTao, StringFormat={}{0:dd/MM/yyyy HH:mm}, TargetNullValue=''}"
                               Foreground="#667085"
                               FontSize="13"
                               VerticalAlignment="Center" />

@@ -1,3 +1,4 @@
+using System.Data;
 using System.Globalization;
 using System.Text;
 using ClosedXML.Excel;
@@ -13,6 +14,7 @@ public sealed class DatabaseService
     private bool? _hasPhieuNhapExtraColumns;
     private bool? _hasBangTraHang;
     private bool? _coCotDuLieuKiotViet;
+    private bool? _cotNgayTaoSanPhamChoPhepNull;
 
     public DatabaseService()
     {
@@ -240,20 +242,15 @@ public sealed class DatabaseService
         var whereSql = dieuKien.Length == 0 ? "" : "WHERE " + dieuKien;
 
         // Khớp chính xác mã hàng / mã vạch thì đưa lên đầu, tên hàng bắt đầu bằng
-        // từ khóa thì kế sau, còn lại sắp theo tên hàng.
+        // từ khóa thì kế sau, còn lại sắp theo tên hàng. Điều kiện này so sánh trên
+        // biểu thức đã chuẩn hóa y hệt điều kiện lọc ở trên.
         var orderSql = dieuKien.Length == 0
             ? "ORDER BY sp.ten_san_pham, sp.id"
-            : """
-              ORDER BY
-                  CASE
-                      WHEN sp.ma_san_pham = @Search THEN 0
-                      WHEN sp.ma_vach = @Search THEN 1
-                      WHEN sp.ten_san_pham LIKE CONCAT(@S0, '%') THEN 2
-                      ELSE 3
-                  END,
-                  sp.ten_san_pham,
-                  sp.id
-              """;
+            : TaoDieuKienSapXepTimKiemSanPham(
+                keyword,
+                "sp.ma_san_pham",
+                "sp.ma_vach",
+                "sp.ten_san_pham");
 
         parameters.Add("PageSize", safePageSize);
         parameters.Add("Offset", offset);
@@ -324,13 +321,144 @@ public sealed class DatabaseService
     }
 
     /// <summary>
+    /// Các cặp ký tự tiếng Việt cần bỏ dấu khi so sánh tìm kiếm.
+    /// Đặt "đ"/"Đ" lên đầu vì đây là ký tự duy nhất mà chính collation
+    /// utf8mb4_unicode_ci của MySQL/MariaDB KHÔNG coi là bằng "d"/"D"
+    /// (đã kiểm tra trên MariaDB 10.1: <c>'đ' = 'd'</c> trả về FALSE).
+    /// </summary>
+    private static readonly (string CoDau, string KhongDau)[] BangChuanHoaTiengViet =
+    [
+        ("đ", "d"), ("Đ", "D"),
+        ("á", "a"), ("à", "a"), ("ả", "a"), ("ã", "a"), ("ạ", "a"),
+        ("â", "a"), ("ấ", "a"), ("ầ", "a"), ("ẩ", "a"), ("ẫ", "a"), ("ậ", "a"),
+        ("ă", "a"), ("ắ", "a"), ("ằ", "a"), ("ẳ", "a"), ("ẵ", "a"), ("ặ", "a"),
+        ("é", "e"), ("è", "e"), ("ẻ", "e"), ("ẽ", "e"), ("ẹ", "e"),
+        ("ê", "e"), ("ế", "e"), ("ề", "e"), ("ể", "e"), ("ễ", "e"), ("ệ", "e"),
+        ("í", "i"), ("ì", "i"), ("ỉ", "i"), ("ĩ", "i"), ("ị", "i"),
+        ("ó", "o"), ("ò", "o"), ("ỏ", "o"), ("õ", "o"), ("ọ", "o"),
+        ("ô", "o"), ("ố", "o"), ("ồ", "o"), ("ổ", "o"), ("ỗ", "o"), ("ộ", "o"),
+        ("ơ", "o"), ("ớ", "o"), ("ờ", "o"), ("ở", "o"), ("ỡ", "o"), ("ợ", "o"),
+        ("ú", "u"), ("ù", "u"), ("ủ", "u"), ("ũ", "u"), ("ụ", "u"),
+        ("ư", "u"), ("ứ", "u"), ("ừ", "u"), ("ử", "u"), ("ữ", "u"), ("ự", "u"),
+        ("ý", "y"), ("ỳ", "y"), ("ỷ", "y"), ("ỹ", "y"), ("ỵ", "y")
+    ];
+
+    /// <summary>
+    /// Biểu thức SQL chuẩn hóa một cột về dạng "chữ thường không dấu" để so sánh.
+    /// <para>
+    /// MySQL/MariaDB không có hàm bỏ dấu sẵn có, và collation utf8mb4_unicode_ci dù
+    /// bỏ được hầu hết dấu thì vẫn KHÔNG bỏ được "đ" — nên gõ "cuc mau don trang"
+    /// sẽ không tìm ra "Cúc mẫu đơn trắng". Chuỗi REPLACE ở đây bỏ dấu cả "đ"
+    /// lẫn các dấu còn lại, để việc tìm kiếm không phụ thuộc collation của server.
+    /// </para>
+    /// <para>
+    /// Cột rỗng/NULL trả về chuỗi rỗng nên không bao giờ loại mất sản phẩm.
+    /// Biểu thức được dựng sẵn một lần cho mỗi tên cột vì nó là hằng số.
+    /// </para>
+    /// </summary>
+    private static string BieuThucChuanHoaSql(string cot)
+        => "COALESCE(" + ChuoiReplaceBoDau($"LOWER({cot})") + ", '')";
+
+    /// <summary>Quy đổi ký tự có dấu thành ký tự gốc, bọc trong COALESCE để NULL thành chuỗi rỗng.</summary>
+    private static string ChuoiReplaceBoDau(string bieuThuc)
+    {
+        foreach (var (coDau, khongDau) in BangChuanHoaTiengViet)
+            bieuThuc = $"REPLACE({bieuThuc}, '{coDau}', '{khongDau}')";
+
+        return bieuThuc;
+    }
+
+    /// <summary>
+    /// Chuẩn hóa từ khóa ở C# theo ĐÚNG quy tắc mà biểu thức SQL áp dụng cho cột:
+    /// hạ chữ thường, bỏ dấu tiếng Việt (kể cả đ/Đ), gộp mọi kiểu khoảng trắng
+    /// (space, tab, xuống dòng, khoảng trắng không ngắt dòng NBSP, ...) thành một
+    /// dấu cách rồi cắt bỏ khoảng trắng đầu/cuối.
+    /// <para>
+    /// Hai vế dùng chung một quy tắc nên kết quả không còn phụ thuộc collation,
+    /// người dùng gõ "Cúc mẫu đơn trắng hàng A" hay "cuc mau don trang hang a"
+    /// đều ra cùng một danh sách.
+    /// </para>
+    /// </summary>
+    private static string ChuauHoaTuKhoa(string? keyword)
+    {
+        if (string.IsNullOrWhiteSpace(keyword))
+            return string.Empty;
+
+        // FormD tách chữ có dấu thành chữ gốc + dấu phụ, bỏ dấu phụ đi là xong.
+        var khongDau = keyword.Trim().Normalize(NormalizationForm.FormD);
+
+        var builder = new StringBuilder(khongDau.Length);
+
+foreach (var character in khongDau)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
+                continue;
+
+            if (char.IsWhiteSpace(character))
+                builder.Append(' ');
+            else if (character == 'đ')
+                builder.Append('d');
+            else if (character == 'Đ')
+                builder.Append('D');
+            else
+                builder.Append(char.ToLowerInvariant(character));
+        }
+
+        return string.Join(' ', builder.ToString().Split(
+            ' ',
+            StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    /// <summary>
+    /// Tách từ khóa đã chuẩn hóa thành các từ cần có trong sản phẩm.
+    /// Mọi ký tự không phải chữ/số (dấu phẩy, gạch nối, ngoặc, dấu chấm câu)
+    /// đều bị coi là ranh giới để "Cúc mẫu, đơn trắng" vẫn ra kết quả đúng.
+    /// </summary>
+    private static string[] TachTuKhoa(string? keyword)
+    {
+        var chuanHoa = ChuauHoaTuKhoa(keyword);
+
+        if (chuanHoa.Length == 0)
+            return [];
+
+        var tokens = new List<string>();
+        var builder = new StringBuilder();
+
+        foreach (var character in chuanHoa)
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                builder.Append(character);
+                continue;
+            }
+
+            if (builder.Length > 0)
+            {
+                tokens.Add(builder.ToString());
+                builder.Clear();
+            }
+        }
+
+        if (builder.Length > 0)
+            tokens.Add(builder.ToString());
+
+        return [.. tokens.Distinct(StringComparer.Ordinal)];
+    }
+
+    /// <summary>
     /// Dựng điều kiện tìm kiếm hàng hóa và gắn các tham số vào
     /// <paramref name="parameters"/>.
-    /// Từ khóa được tách thành từng từ, mỗi từ phải xuất hiện trong một trong các cột
-    /// được tìm, các từ nối với nhau bằng AND.
+    /// Từ khóa được tách thành từng từ, mỗi từ phải xuất hiện trong một trong các
+    /// cột được tìm, các từ nối với nhau bằng AND (giữ được ý cũ: gõ "Hồng mua bên"
+    /// vẫn ra sản phẩm "hồng ( mua bên VL )" dù hai từ không nối liền nhau).
     /// <para>
-    /// Các cột dùng collation utf8mb4_unicode_ci nên MySQL không phân biệt hoa/thường
-    /// và không phân biệt dấu: gõ "Hong mua ben" vẫn ra "hồng ( mua bên VL )".
+    /// Cả từ khóa lẫn cột đều được chuẩn hóa về chữ thường không dấu trước khi
+    /// so sánh, nên không phân biệt hoa/thường, không phân biệt dấu tiếng Việt
+    /// (kể cả đ/Đ) và không phụ thuộc collation của server.
+    /// </para>
+    /// <para>
+    /// Mã vạch và các cột khác có thể NULL vẫn được giữ lại: COALESCE đưa NULL
+    /// thành chuỗi rỗng nên sản phẩm thiếu mã vạch không bị loại vì lý do đó.
     /// </para>
     /// Trả về chuỗi rỗng khi không có từ khóa để người gọi tự ghép vào WHERE.
     /// </summary>
@@ -341,18 +469,16 @@ public sealed class DatabaseService
         string cotMaVach,
         string cotTenHang)
     {
-        parameters.Add("Search", keyword);
+        parameters.Add("Search", ChuauHoaTuKhoa(keyword));
 
-        var tokens = keyword
-            .Split(
-                ' ',
-                StringSplitOptions.RemoveEmptyEntries
-                | StringSplitOptions.TrimEntries)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+        var tokens = TachTuKhoa(keyword);
 
         if (tokens.Length == 0)
             return "";
+
+        var maHang = BieuThucChuanHoaSql(cotMaHang);
+        var maVach = BieuThucChuanHoaSql(cotMaVach);
+        var tenHang = BieuThucChuanHoaSql(cotTenHang);
 
         var dieuKien = new List<string>(tokens.Length);
 
@@ -360,16 +486,38 @@ public sealed class DatabaseService
         {
             parameters.Add($"S{i}", tokens[i]);
 
-            dieuKien.Add($"""
-                (
-                    COALESCE({cotMaHang}, '') LIKE CONCAT('%', @S{i}, '%')
-                    OR COALESCE({cotMaVach}, '') LIKE CONCAT('%', @S{i}, '%')
-                    OR {cotTenHang} LIKE CONCAT('%', @S{i}, '%')
-                )
-                """);
+            dieuKien.Add($"({maHang} LIKE CONCAT('%', @S{i}, '%')"
+                         + $" OR {maVach} LIKE CONCAT('%', @S{i}, '%')"
+                         + $" OR {tenHang} LIKE CONCAT('%', @S{i}, '%'))");
         }
 
         return string.Join(" AND ", dieuKien);
+    }
+
+    /// <summary>
+    /// Điều kiện sắp xếp khi đang tìm kiếm: mã hàng/mã vạch khớp chính xác đưa lên
+    /// đầu, tên hàng bắt đầu bằng từ khóa kế sau, còn lại sắp theo tên hàng.
+    /// So sánh cũng dùng biểu thức chuẩn hóa để không lệch với điều kiện lọc.
+    /// </summary>
+    private static string TaoDieuKienSapXepTimKiemSanPham(
+        string keyword,
+        string cotMaHang,
+        string cotMaVach,
+        string cotTenHang)
+    {
+        var tokens = TachTuKhoa(keyword);
+
+        return $"""
+            ORDER BY
+                CASE
+                    WHEN {BieuThucChuanHoaSql(cotMaHang)} = @Search THEN 0
+                    WHEN {BieuThucChuanHoaSql(cotMaVach)} = @Search THEN 1
+                    WHEN {BieuThucChuanHoaSql(cotTenHang)} LIKE CONCAT(@S0, '%') THEN 2
+                    ELSE 3
+                END,
+                sp.ten_san_pham,
+                sp.id
+            """;
     }
 
     /// <summary>
@@ -630,70 +778,595 @@ public sealed class DatabaseService
             new { Id = productId });
     }
 
-    public async Task<int> ImportSanPhamTuFileAsync(string filePath)
-        => await ImportSanPhamTuFileAsync(filePath, null);
-
-    public async Task<int> ImportSanPhamTuFileAsync(string filePath, IReadOnlyCollection<SanPham>? productsOverride)
+    /// <summary>
+    /// Đưa ký tự xuống dòng trong SQL về dạng LF.
+    /// <para>
+    /// Cần thiết vì các hằng SQL viết dạng raw string literal giữ nguyên CRLF của file
+    /// nguồn. MariaDB chấp nhận CR trong danh sách cột của INSERT (nằm trong ngoặc
+    /// tròn) nhưng lại báo lỗi cú pháp khi CR xuất hiện trong mệnh đề SET — mỗi lần
+    /// thay thế sản phẩm trùng đều hỏng vì lý do này.
+    /// </para>
+    /// </summary>
+    private static string ChuanHoaDongMoiSql(string sql)
     {
-        if (string.IsNullOrWhiteSpace(filePath))
-            throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
+        return sql.Replace("\r\n", "\n").Replace('\r', '\n');
+    }
 
-        if (!File.Exists(filePath))
-            throw new FileNotFoundException("Không tìm thấy file danh sách hàng hóa.", filePath);
+    /// <summary>Cột của bảng san_pham được ghi khi nhập từ file, dùng chung cho INSERT và UPDATE.</summary>
+    private const string CotNhapSanPham = """
+        ma_san_pham,
+        ma_vach,
+        ten_san_pham,
+        nhom_san_pham_id,
+        don_vi_tinh_id,
+        thuong_hieu_id,
+        gia_ban,
+        gia_von,
+        ton_toi_thieu,
+        ton_toi_da,
+        vi_tri_kho,
+        mo_ta,
+        ghi_chu,
+        hinh_anh,
+        co_ban_truc_tiep,
+        trang_thai,
+        loai_hang_excel,
+        nhom_hang_3_cap_excel,
+        ton_kho_excel,
+        khach_dat,
+        du_kien_het_hang,
+        ma_dvt_co_ban,
+        quy_doi,
+        thuoc_tinh,
+        ma_hh_lien_quan,
+        trong_luong,
+        dang_kinh_doanh,
+        hang_thanh_phan,
+        mau_ghi_chu
+        """;
 
-        var products = productsOverride ?? ParseProductsFromFile(filePath);
+    private const string GiaTriNhapSanPham = """
+        @MaSanPham,
+        @MaVach,
+        @TenSanPham,
+        @NhomSanPhamId,
+        @DonViTinhId,
+        @ThuongHieuId,
+        @GiaBan,
+        @GiaVon,
+        @TonToiThieu,
+        @TonToiDa,
+        @ViTriKho,
+        @MoTa,
+        @GhiChu,
+        @HinhAnh,
+        @DuocBanTrucTiep,
+        @DangKinhDoanh,
+        @LoaiHang,
+        @NhomHangBaCap,
+        @TonKhoExcel,
+        @KhachDat,
+        @DuKienHetHang,
+        @MaDvtCoBan,
+        @QuyDoi,
+        @ThuocTinh,
+        @MaHhLienQuan,
+        @TrongLuong,
+        @DangKinhDoanhExcel,
+        @HangThanhPhan,
+        @MauGhiChu
+        """;
 
-        if (products.Count == 0)
-            return 0;
+    /// <summary>
+    /// Cặp "cột = tham số" cho mệnh đề SET của UPDATE, sinh ra từ chính
+    /// <see cref="CotNhapSanPham"/> và <see cref="GiaTriNhapSanPham"/>.
+    /// <para>
+    /// UPDATE không dùng lại được danh sách cột trần của INSERT: "SET ma_san_pham,
+    /// ma_vach, ..." là cú pháp sai, phải là "SET ma_san_pham = @MaSanPham,
+    /// ma_vach = @MaVach, ...". Sinh tự động từ hai danh sách trên để hai bên
+    /// không thể lệch nhau — lệch chỗ này là mọi lần thay thế sản phẩm trùng đều hỏng.
+    /// </para>
+    /// </summary>
+    private static readonly string CapNhatNhapSanPham = TaoCapNhatNhapSanPham();
+
+    private static string TaoCapNhatNhapSanPham()
+    {
+        var cot = CotNhapSanPham.Split(
+            ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var giaTri = GiaTriNhapSanPham.Split(
+            ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (cot.Length != giaTri.Length)
+            throw new InvalidOperationException(
+                $"Danh sách cột ({cot.Length}) và danh sách giá trị ({giaTri.Length}) "
+                + "của phép nhập sản phẩm không khớp nhau.");
+
+        return ChuanHoaDongMoiSql(
+            string.Join(",\n", cot.Zip(giaTri, (c, v) => $"{c} = {v}")));
+    }
+
+    /// <summary>Độ dài tối đa của các cột varchar trong bảng san_pham (được xác nhận từ schema).</summary>
+    private const int DoDaiToiDaTenSanPham = 255;
+    private const int DoDaiToiDaMaSanPham = 50;
+    private const int DoDaiToiDaMaVach = 100;
+    private const int DoDaiToiDaViTriKho = 100;
+    private const int DoDaiToiDaDuKienHetHang = 100;
+    private const int DoDaiToiDaLoaiHang = 100;
+    private const int DoDaiToiDaMaHhLienQuan = 100;
+    private const int DoDaiToiDaMaDvtCoBan = 50;
+    private const int DoDaiToiDaNhomHangBaCap = 255;
+
+    /// <summary>
+    /// Tra cứu sản phẩm trùng trong database theo MÃ HÀNG (khóa chính) và MÃ VẠCH.
+    /// <para>
+    /// Cố tình KHÔNG so tên hàng: hai món hàng khác nhau rất dễ trùng tên, coi tên là
+    /// khóa trùng sẽ âm thầm bỏ sót sản phẩm hợp lệ.
+    /// </para>
+    /// <para>
+    /// Truy vấn chạy trên database với danh sách mã cần tra cứu, không tải toàn bộ
+    /// bảng về bộ nhớ, nên vẫn nhanh khi file có hàng nghìn dòng.
+    /// </para>
+    /// </summary>
+    public async Task<IReadOnlyList<SanPham>> TimSanPhamTrungAsync(
+        IReadOnlyCollection<SanPham> productsFromFile)
+    {
+        var maSanPhamList = productsFromFile
+            .Select(p => p.MaSanPham?.Trim())
+            .Where(ma => !string.IsNullOrWhiteSpace(ma))
+            .Select(ma => ma!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var maVachList = productsFromFile
+            .Select(p => p.MaVach?.Trim())
+            .Where(ma => !string.IsNullOrWhiteSpace(ma))
+            .Select(ma => ma!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (maSanPhamList.Length == 0 && maVachList.Length == 0)
+            return [];
+
+        // Tự dựng danh sách tham số cho mệnh đề IN thay vì đưa cả mảng vào một tham số.
+        // (Dapper coi mảng là một giá trị duy nhất nên SQL sẽ thành IN (('a','b'))
+        // và MariaDB báo "Operand should contain 1 column".)
+        var parameters = new DynamicParameters();
+        var dieuKien = new List<string>();
+
+        if (maSanPhamList.Length > 0)
+        {
+            var ten = "MaSanPham";
+            var danhSach = new List<string>(maSanPhamList.Length);
+
+            for (var i = 0; i < maSanPhamList.Length; i++)
+            {
+                parameters.Add(ten + i, maSanPhamList[i]);
+                danhSach.Add("@" + ten + i);
+            }
+
+            dieuKien.Add($"sp.ma_san_pham IN ({string.Join(", ", danhSach)})");
+        }
+
+        if (maVachList.Length > 0)
+        {
+            var ten = "MaVach";
+            var danhSach = new List<string>(maVachList.Length);
+
+            for (var i = 0; i < maVachList.Length; i++)
+            {
+                parameters.Add(ten + i, maVachList[i]);
+                danhSach.Add("@" + ten + i);
+            }
+
+            dieuKien.Add($"sp.ma_vach IN ({string.Join(", ", danhSach)})");
+        }
 
         const string sql = """
-            INSERT INTO san_pham
-            (
-                ma_san_pham,
-                ma_vach,
-                ten_san_pham,
-                gia_ban,
-                gia_von,
-                ton_toi_thieu,
-                ton_toi_da,
-                khach_dat,
-                vi_tri_kho,
-                mo_ta,
-                ghi_chu,
-                co_ban_truc_tiep,
-                trang_thai
-            )
-            VALUES
-            (
-                @MaSanPham,
-                @MaVach,
-                @TenSanPham,
-                @GiaBan,
-                @GiaVon,
-                @TonToiThieu,
-                @TonToiDa,
-                @KhachDat,
-                @ViTriKho,
-                @MoTa,
-                @GhiChu,
-                @DuocBanTrucTiep,
-                @DangKinhDoanh
-            );
+            SELECT
+                sp.id AS Id,
+                sp.ma_san_pham AS MaSanPham,
+                sp.ma_vach AS MaVach,
+                COALESCE(NULLIF(TRIM(sp.ten_san_pham), ''), sp.ma_san_pham) AS TenSanPham,
+                sp.gia_ban AS GiaBan,
+                sp.gia_von AS GiaVon,
+                sp.ton_kho_excel AS TonKhoExcel,
+                sp.ngay_tao AS NgayTao
+            FROM san_pham sp
+            WHERE
             """;
 
         await using var connection = await OpenAsync();
 
-        var importedCount = 0;
-        foreach (var product in products)
+        return (await connection.QueryAsync<SanPham>(
+                sql + " " + string.Join(" OR ", dieuKien),
+                parameters))
+            .AsList();
+    }
+
+    /// <summary>
+    /// Ghi danh sách sản phẩm xuống database trong MỘT transaction.
+    /// <list type="bullet">
+    /// <item>Chưa có trong database -> INSERT bản ghi mới.</item>
+    /// <item>Đã có và người dùng chọn thay thế -> UPDATE đúng bản ghi cũ, không tạo bản ghi mới.</item>
+    /// <item>Đã có và người dùng chọn giữ -> không ghi gì.</item>
+    /// <item>Dòng lỗi -> ghi nhận lỗi và tiếp tục dòng sau, không làm hỏng cả lượt nhập.</item>
+    /// </list>
+    /// Nếu xảy ra lỗi nghiêm trọng (mất kết nối, bảng không tồn tại...) thì rollback
+    /// toàn bộ để database không bị để lại trạng thái nhập dở dang.
+    /// </summary>
+    /// <summary>
+    /// Ghi danh sách sản phẩm xuống database trong một transaction.
+    /// </summary>
+    /// <param name="tenFile">Tên file, chỉ để hiển thị trong báo cáo.</param>
+    /// <param name="danhSachHang">Danh sách thao tác đã được quyết định cho từng dòng.</param>
+    /// <param name="tongSoDongExcel">Tổng số dòng dữ liệu có trong file.</param>
+    /// <param name="loiDocFile">
+    /// Các dòng đã lỗi ngay khi đọc file (không đọc được ô, thiếu cả mã lẫn tên).
+    /// Được gộp vào báo cáo để không có dòng nào của file biến mất im lặng.
+    /// </param>
+    public async Task<KetQuaImportSanPham> ImportSanPhamAsync(
+        string tenFile,
+        IReadOnlyList<HangNhapSanPham> danhSachHang,
+        int tongSoDongExcel,
+        IReadOnlyCollection<LoiDongNhap>? loiDocFile = null)
+    {
+        var ketQua = new KetQuaImportSanPham
         {
-            await connection.ExecuteAsync(sql, product);
-            importedCount++;
+            TenFile = tenFile,
+            TongSoDongExcel = tongSoDongExcel
+        };
+
+        if (loiDocFile is { Count: > 0 })
+        {
+            ketQua.LoiDong.AddRange(loiDocFile.OrderBy(l => l.SoDongExcel));
+            ketQua.SoLoi += loiDocFile.Count;
         }
 
-        return importedCount;
+        var canGhi = danhSachHang
+            .Where(h => h.hanDong is HanDong.ThemMoi or HanDong.ThayThe)
+            .ToList();
+
+        // Người dùng chọn giữ hết sản phẩm trùng thì không mở transaction.
+        if (canGhi.Count == 0)
+            return ketQua;
+
+        // san_pham.ngay_tao mặc định là NOT NULL DEFAULT CURRENT_TIMESTAMP, nên nếu
+        // không gửi cột này thì MySQL tự điền ngày LÚC NHẬP, làm sai lịch sử.
+        // Cho phép cột nhận NULL để ghi đúng NULL khi ô "Thời gian tạo" trong
+        // Excel trống (không có dữ liệu cũ thì không bịa ra ngày giả).
+        var ghiDuLieuNgayTao = await DamBaoCotNgayTaoSanPhamAsync();
+
+        if (!ghiDuLieuNgayTao)
+            ketQua.CanhBao.Add(
+                "Không sửa được cột ngay_tao để cho phép NULL: những dòng không có "
+                + "'Thời gian tạo' trong file sẽ nhận ngày lúc nhập. Cần cấp quyền ALTER "
+                + "trên bảng san_pham để sửa.");
+
+        var insertSql = ChuanHoaDongMoiSql($"""
+            INSERT INTO san_pham
+            (
+                {CotNhapSanPham}{(ghiDuLieuNgayTao ? ",\n                ngay_tao" : "")}
+            )
+            VALUES
+            (
+                {GiaTriNhapSanPham}{(ghiDuLieuNgayTao ? ",\n                @NgayTao" : "")}
+            );
+            """);
+
+        // Khi thay thế: ngày tạo lấy từ Excel nếu file có, còn không thì GIỮ NGUYÊN
+        // ngày đang có trong database — tuyệt đối không dùng DateTime.Now.
+        var updateSql = ChuanHoaDongMoiSql($"""
+            UPDATE san_pham
+            SET {CapNhatNhapSanPham},
+                ngay_cap_nhat = NOW()
+                {(ghiDuLieuNgayTao ? ", ngay_tao = COALESCE(@NgayTao, ngay_tao)" : string.Empty)}
+            WHERE id = @Id;
+            """);
+
+        await using var connection = await OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var thuongHieuTheoTen = await LoadDanhMucThamChieuAsync(connection, transaction, "thuong_hieu", "ten_thuong_hieu");
+            var donViTinhTheoTen = await LoadDanhMucThamChieuAsync(connection, transaction, "don_vi_tinh", "ten_don_vi");
+            var donViTinhTheoMa = await LoadDanhMucThamChieuAsync(connection, transaction, "don_vi_tinh", "ma_don_vi");
+            var nhomSanPhamTheoTen = await LoadDanhMucThamChieuAsync(connection, transaction, "nhom_san_pham", "ten_nhom");
+
+            for (var index = 0; index < canGhi.Count; index++)
+            {
+                var hang = canGhi[index];
+
+                // SAVEPOINT cho từng dòng: một dòng hỏng (ví dụ trùng mã vạch) chỉ
+                // bị loại riêng, không mất các dòng đã ghi trước đó và không phá vỡ
+                // transaction chung.
+                var savepoint = $"sp_nhap_{index}";
+                await connection.ExecuteAsync($"SAVEPOINT {savepoint};", transaction: transaction);
+
+                var canhBao = new List<string>();
+
+                try
+                {
+                    var parameters = BuildParametersNhapSanPham(
+                        hang.SanPham,
+                        thuongHieuTheoTen,
+                        donViTinhTheoTen,
+                        donViTinhTheoMa,
+                        nhomSanPhamTheoTen,
+                        canhBao);
+
+                    foreach (var dong in canhBao)
+                    {
+                        if (!ketQua.CanhBao.Contains(dong))
+                            ketQua.CanhBao.Add(dong);
+                    }
+
+                    var sql = hang.hanDong == HanDong.ThemMoi ? insertSql : updateSql;
+
+                    if (hang.hanDong == HanDong.ThayThe)
+                    {
+                        if (hang.IdTrongDatabase is null)
+                            throw new InvalidOperationException("Thiếu id sản phẩm đã tồn tại để thay thế.");
+
+                        parameters.Add("Id", hang.IdTrongDatabase.Value);
+                    }
+
+                    await connection.ExecuteAsync(sql, parameters, transaction);
+
+                    if (hang.hanDong == HanDong.ThemMoi)
+                        ketQua.SoThemMoi++;
+                    else
+                        ketQua.SoThayThe++;
+                }
+                catch (Exception ex)
+                {
+                    await connection.ExecuteAsync($"ROLLBACK TO SAVEPOINT {savepoint};", transaction: transaction);
+                    ketQua.SoLoi++;
+                    ketQua.LoiDong.Add(new LoiDongNhap(
+                        hang.SoDongExcel,
+                        hang.SanPham.MaSanPham,
+                        hang.SanPham.TenSanPham,
+                        MoTaLoiNhap(ex)));
+                }
+            }
+
+            await transaction.CommitAsync();
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            ketQua.DaRollback = true;
+            ketQua.SoThemMoi = 0;
+            ketQua.SoThayThe = 0;
+            ketQua.LoiDong.Add(new LoiDongNhap(0, null, null,
+                "Lỗi nghiêm trọng, đã rollback toàn bộ lượt nhập: " + MoTaLoiNhap(ex)));
+        }
+
+        return ketQua;
+    }
+
+    /// <summary>Chuyển lỗi MySQL thành thông báo dễ hiểu cho người dùng.</summary>
+    private static string MoTaLoiNhap(Exception ex)
+    {
+        if (ex is MySqlException mySql)
+        {
+            return mySql.Number switch
+            {
+                1062 => $"trùng khóa duy nhất ({mySql.Message}). Kiểm tra lại mã hàng/mã vạch.",
+                1406 => $"giá trị quá dài so với độ dài cột ({mySql.Message}).",
+                1048 => $"thiếu giá trị bắt buộc ({mySql.Message}).",
+                1452 => $"không tìm thấy bản ghi tham chiếu ({mySql.Message}).",
+                _ => $"lỗi cơ sở dữ liệu {mySql.Number}: {mySql.Message}"
+            };
+        }
+
+        return ex.Message;
+    }
+
+    /// <summary>
+    /// Nạp bảng danh mục (thương hiệu / đơn vị tính / nhóm hàng) để tra id theo tên.
+    /// Bảng rỗng hoặc không tồn tại thì trả về từ điển rỗng, lúc đó cột id tương ứng
+    /// được để NULL — dòng vẫn nhập bình thường.
+    /// </summary>
+    private static async Task<Dictionary<string, uint>> LoadDanhMucThamChieuAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        string tenBang,
+        string cotTen)
+    {
+        var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var rows = await connection.QueryAsync<(uint Id, string Ten)>(
+                $"SELECT id AS Id, {cotTen} AS Ten FROM {tenBang};",
+                transaction: transaction);
+
+            foreach (var row in rows)
+            {
+                var key = row.Ten?.Trim();
+
+                if (!string.IsNullOrWhiteSpace(key) && !result.ContainsKey(key))
+                    result[key] = row.Id;
+            }
+        }
+        catch (MySqlException)
+        {
+            // Không có bảng danh mục: bỏ qua, không làm hỏng lượt nhập.
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gom tham số cho INSERT/UPDATE. Các cột không bắt buộc được để NULL/rỗng bình
+    /// thường, và giá trị vượt độ dài cột varchar được cắt lại kèm cảnh báo thay vì
+    /// làm hỏng cả dòng.
+    /// </summary>
+    private static DynamicParameters BuildParametersNhapSanPham(
+        SanPham product,
+        Dictionary<string, uint> thuongHieuTheoTen,
+        Dictionary<string, uint> donViTinhTheoTen,
+        Dictionary<string, uint> donViTinhTheoMa,
+        Dictionary<string, uint> nhomSanPhamTheoTen,
+        List<string> canhBao)
+    {
+
+        uint? TraTheoTen(Dictionary<string, uint> dic, string? ten)
+        {
+            var key = ten?.Trim();
+
+            if (string.IsNullOrWhiteSpace(key))
+                return null;
+
+            return dic.TryGetValue(key, out var id) ? id : null;
+        }
+
+        string? Cat(string? value, int doDaiToiDa, string tenCot)
+        {
+            var trimmed = value?.Trim();
+
+            if (string.IsNullOrWhiteSpace(trimmed))
+                return null;
+
+            if (trimmed.Length <= doDaiToiDa)
+                return trimmed;
+
+            canhBao.Add(
+                $"Cột \"{tenCot}\" dài {trimmed.Length} ký tự, đã cắt còn {doDaiToiDa} ký tự cho vừa độ dài cột.");
+
+            return trimmed[..doDaiToiDa];
+        }
+
+        var maSanPham = Cat(product.MaSanPham, DoDaiToiDaMaSanPham, "Mã hàng") ?? string.Empty;
+        var maVach = Cat(product.MaVach, DoDaiToiDaMaVach, "Mã vạch");
+
+        // ma_vach có UNIQUE index. Nhiều dòng không có mã vạch thì ghi NULL (MySQL cho
+        // phép nhiều NULL trong UNIQUE); để chuỗi rỗng sẽ khiến chỉ một dòng được nhập
+        // rồi các dòng sau báo trùng.
+        var parameters = new DynamicParameters();
+        parameters.Add("MaSanPham", maSanPham, DbType.String);
+        parameters.Add("MaVach", maVach, DbType.String);
+        parameters.Add("TenSanPham", Cat(product.TenSanPham, DoDaiToiDaTenSanPham, "Tên hàng") ?? maSanPham, DbType.String);
+        parameters.Add("NhomSanPhamId", TraTheoTen(nhomSanPhamTheoTen, product.NhomHangBaCap), DbType.Int32);
+        parameters.Add("DonViTinhId",
+            TraTheoTen(donViTinhTheoMa, product.MaDvtCoBan)
+            ?? TraTheoTen(donViTinhTheoTen, product.TenDonViTinh),
+            DbType.Int32);
+        parameters.Add("ThuongHieuId", TraTheoTen(thuongHieuTheoTen, product.ThuongHieu), DbType.Int32);
+        parameters.Add("GiaBan", product.GiaBan);
+        parameters.Add("GiaVon", product.GiaVon);
+        parameters.Add("TonToiThieu", product.TonToiThieu);
+        parameters.Add("TonToiDa", product.TonToiDa);
+        parameters.Add("ViTriKho", Cat(product.ViTriKho, DoDaiToiDaViTriKho, "Vị trí"), DbType.String);
+        parameters.Add("MoTa", BlankToNull(product.MoTa), DbType.String);
+        parameters.Add("GhiChu", BlankToNull(product.GhiChu), DbType.String);
+        parameters.Add("HinhAnh", BlankToNull(product.HinhAnh), DbType.String);
+        parameters.Add("DuocBanTrucTiep", product.DuocBanTrucTiep);
+        parameters.Add("DangKinhDoanh", product.DangKinhDoanh);
+        parameters.Add("LoaiHang", Cat(product.LoaiHang, DoDaiToiDaLoaiHang, "Loại hàng"), DbType.String);
+        parameters.Add("NhomHangBaCap", Cat(product.NhomHangBaCap, DoDaiToiDaNhomHangBaCap, "Nhóm hàng(3 Cấp)"), DbType.String);
+        parameters.Add("TonKhoExcel", product.TonKhoExcel);
+        parameters.Add("KhachDat", product.KhachDat);
+        parameters.Add("DuKienHetHang", Cat(product.DuKienHetHang, DoDaiToiDaDuKienHetHang, "Dự kiến hết hàng"), DbType.String);
+        parameters.Add("MaDvtCoBan", Cat(product.MaDvtCoBan, DoDaiToiDaMaDvtCoBan, "Mã ĐVT Cơ bản"), DbType.String);
+        parameters.Add("QuyDoi", product.QuyDoi <= 0 ? 1m : product.QuyDoi);
+        parameters.Add("ThuocTinh", BlankToNull(product.ThuocTinh), DbType.String);
+        parameters.Add("MaHhLienQuan", Cat(product.MaHhLienQuan, DoDaiToiDaMaHhLienQuan, "Mã HH Liên quan"), DbType.String);
+        parameters.Add("TrongLuong", product.TrongLuong, DbType.Decimal);
+        parameters.Add("DangKinhDoanhExcel", product.DangKinhDoanh);
+        parameters.Add("HangThanhPhan", BlankToNull(product.HangThanhPhan), DbType.String);
+        parameters.Add("MauGhiChu", BlankToNull(product.MauGhiChu), DbType.String);
+        parameters.Add("NgayTao", product.NgayTao, DbType.DateTime);
+
+        return parameters;
+    }
+
+    private static string? BlankToNull(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    /// <summary>
+    /// Bảo đảm <c>san_pham.ngay_tao</c> cho phép giá trị NULL.
+    /// <para>
+    /// Cột này được khai báo <c>NOT NULL DEFAULT CURRENT_TIMESTAMP</c>, nên khi
+    /// nhập hàng từ file mà ô "Thời gian tạo" bị trống, MySQL sẽ tự điền ngày
+    /// lúc nhập — đúng cái lỗi làm sai dữ liệu lịch sử. Sửa thành
+    /// <c>DATETIME NULL DEFAULT CURRENT_TIMESTAMP</c>:
+    /// nhập tay sản phẩm mới (bỏ trống cột) vẫn nhận ngày tạo = thời điểm thêm,
+    /// còn nhập từ file thì ghi đúng giá trị trong file hoặc NULL.
+    /// </para>
+    /// <para>
+    /// Chạy một lần duy nhất rồi ghi nhớ kết quả, không đụng tới dữ liệu sẵn có.
+    /// Nếu database không cho sửa (thiếu quyền) thì phần mềm vẫn chạy, chỉ không
+    /// ghi cột ngay_tao khi nhập từ file.
+    /// </para>
+    /// </summary>
+    private async Task<bool> DamBaoCotNgayTaoSanPhamAsync()
+    {
+        if (_cotNgayTaoSanPhamChoPhepNull.HasValue)
+            return _cotNgayTaoSanPhamChoPhepNull.Value;
+
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            const string kiemTraSql = """
+                SELECT IS_NULLABLE
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'san_pham'
+                  AND COLUMN_NAME = 'ngay_tao';
+                """;
+
+            var isNullable = await connection.ExecuteScalarAsync<string>(kiemTraSql);
+
+            if (string.IsNullOrWhiteSpace(isNullable))
+            {
+                // Không đọc được cột (bảng thiếu / không đủ quyền): giữ nguyên
+                // định nghĩa cũ thay vì đoán.
+                _cotNgayTaoSanPhamChoPhepNull = false;
+            }
+            else if (!isNullable.Equals("YES", StringComparison.OrdinalIgnoreCase))
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE san_pham MODIFY COLUMN ngay_tao DATETIME NULL DEFAULT CURRENT_TIMESTAMP;");
+
+                _cotNgayTaoSanPhamChoPhepNull = true;
+            }
+            else
+            {
+                _cotNgayTaoSanPhamChoPhepNull = true;
+            }
+        }
+        catch
+        {
+            _cotNgayTaoSanPhamChoPhepNull = false;
+        }
+
+        return _cotNgayTaoSanPhamChoPhepNull.Value;
     }
 
     public List<SanPham> ParseProductsFromFile(string filePath)
+    {
+        return ParseProductsFromFile(filePath, out _);
+    }
+
+    /// <summary>
+    /// Đọc danh sách hàng hóa từ file và trả về kèm các dòng không đọc được.
+    /// <para>
+    /// Dòng thiếu mã hàng/tên không được âm thầm loại bỏ — nếu không, người dùng
+    /// thấy báo cáo "736 dòng" trong khi file có 740 dòng mà không biết 4 dòng đó
+    /// đã mất ở đâu. Dòng không đọc được được trả về qua <paramref name="loiDocFile"/>
+    /// để đưa vào báo cáo lỗi của lượt nhập.
+    /// </para>
+    /// </summary>
+    public List<SanPham> ParseProductsFromFile(
+        string filePath,
+        out List<LoiDongNhap> loiDocFile)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
@@ -701,14 +1374,59 @@ public sealed class DatabaseService
         if (!File.Exists(filePath))
             throw new FileNotFoundException("Không tìm thấy file danh sách hàng hóa.", filePath);
 
+        loiDocFile = [];
         var rows = ReadProductRowsFromFile(filePath);
-        return rows
-            .Select(MapRowToProduct)
-            .Where(product => !string.IsNullOrWhiteSpace(product.TenSanPham))
-            .ToList();
+
+        // Đọc HẾT mọi dòng trong file. Chỉ dòng không có bất kỳ dữ liệu nào mới bị
+        // loại; một dòng thiếu mã vạch / thương hiệu / mô tả / hình ảnh / nhà cung
+        // cấp vẫn là dòng hợp lệ và phải được giữ lại.
+        var products = new List<SanPham>(rows.Count);
+
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var dong = rows[index];
+
+            SanPham product;
+
+            try
+            {
+                product = MapRowToProduct(dong.GiaTri, dong.SoDongExcel);
+            }
+            catch (Exception ex)
+            {
+                // Lỗi đọc một dòng không được làm hỏng cả lượt nhập: ghi nhận
+                // dòng lỗi rồi tiếp tục dòng tiếp theo.
+                loiDocFile.Add(new LoiDongNhap(
+                    dong.SoDongExcel,
+                    GetFirstString(ChuanHoaTieuDe(dong.GiaTri), "mahang", "masanpham", "ma_san_pham"),
+                    null,
+                    "Không đọc được dữ liệu của dòng: " + MoTaLoiNhap(ex)));
+
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(product.MaSanPham)
+                && string.IsNullOrWhiteSpace(product.TenSanPham))
+            {
+                loiDocFile.Add(new LoiDongNhap(
+                    dong.SoDongExcel,
+                    null,
+                    null,
+                    "Dòng không có mã hàng lẫn tên sản phẩm nên không tạo được sản phẩm."));
+
+                continue;
+            }
+
+            products.Add(product);
+        }
+
+        return products;
     }
 
-    private static List<Dictionary<string, string>> ReadProductRowsFromFile(string filePath)
+    /// <summary>Một dòng đọc từ file kèm số thứ tự dòng trong file, để báo lỗi chính xác.</summary>
+    private sealed record DongFile(int SoDongExcel, Dictionary<string, string> GiaTri);
+
+    private static List<DongFile> ReadProductRowsFromFile(string filePath)
     {
         var extension = Path.GetExtension(filePath).Trim().ToLowerInvariant();
 
@@ -721,7 +1439,7 @@ public sealed class DatabaseService
         throw new NotSupportedException("File không được hỗ trợ. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV.");
     }
 
-    private static List<Dictionary<string, string>> ReadExcelProductRows(string filePath)
+    private static List<DongFile> ReadExcelProductRows(string filePath)
     {
         using var workbook = new XLWorkbook(filePath);
         var worksheet = workbook.Worksheets.FirstOrDefault() ??
@@ -736,8 +1454,10 @@ public sealed class DatabaseService
         foreach (var cell in firstRow.Cells())
             headers.Add(cell.GetString().Trim());
 
-        var result = new List<Dictionary<string, string>>();
+        var result = new List<DongFile>();
 
+        // Duyệt từ dòng 2 đến dòng cuối cùng của sheet: không giới hạn số dòng,
+        // nên file 737 dòng thì đọc đủ 736 dòng dữ liệu.
         for (var rowNumber = 2; rowNumber <= lastRow; rowNumber++)
         {
             var row = worksheet.Row(rowNumber);
@@ -747,7 +1467,7 @@ public sealed class DatabaseService
             for (var index = 0; index < headers.Count; index++)
             {
                 var header = headers[index];
-                var value = row.Cell(index + 1).GetString().Trim();
+                var value = DocGiaTriOTheoKieuSanPham(row.Cell(index + 1));
 
                 if (!string.IsNullOrWhiteSpace(header) || !string.IsNullOrWhiteSpace(value))
                     hasAnyValue = true;
@@ -757,20 +1477,52 @@ public sealed class DatabaseService
             }
 
             if (hasAnyValue)
-                result.Add(values);
+                result.Add(new DongFile(rowNumber, values));
         }
 
         return result;
     }
 
-    private static List<Dictionary<string, string>> ReadCsvProductRows(string filePath)
+    /// <summary>
+    /// Đọc một ô của file danh sách hàng hóa.
+    /// <para>
+    /// Ô ngày giờ PHẢI lấy theo kiểu dữ liệu (XLDataType.DateTime) chứ không lấy
+    /// chuỗi định dạng của ô: "20/09/2026 21:00" trong Excel là một DateTime thật
+    /// (định dạng chỉ là cách hiển thị), đọc theo chuỗi sẽ phụ thuộc vào format ô
+    /// và có thể mất giờ/phút. DateTime của Excel là giá trị không múi giờ nên
+    /// chuyển thẳng ra chuỗi "yyyy-MM-dd HH:mm:ss" — không có bước đổi múi giờ
+    /// nào và không tự đổi sang ngày hiện tại.
+    /// </para>
+    /// <para>
+    /// Số / chữ / boolean / ô trống vẫn giữ đúng cách đọc cũ (GetString) để không
+    /// đổi hành vi của các cột khác trong file.
+    /// </para>
+    /// </summary>
+    private static string DocGiaTriOTheoKieuSanPham(IXLCell cell)
+    {
+        return cell.Value.Type switch
+        {
+            XLDataType.DateTime => cell.GetDateTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+            XLDataType.TimeSpan => cell.GetTimeSpan().ToString("c", CultureInfo.InvariantCulture),
+            XLDataType.Blank => string.Empty,
+
+            // Ô lỗi công thức (#DIV/0!, #VALUE!...) lấy nội dung lỗi làm chuỗi
+            // thay vì để GetString() ném exception, vì một ô hỏng trong file
+            // không được làm hỏng cả 736 dòng còn lại.
+            XLDataType.Error => cell.Value.GetError().ToString(),
+
+            _ => cell.GetString().Trim()
+        };
+    }
+
+    private static List<DongFile> ReadCsvProductRows(string filePath)
     {
         var lines = File.ReadAllLines(filePath);
         if (lines.Length < 2)
             return [];
 
         var headers = ParseCsvLine(lines[0]);
-        var result = new List<Dictionary<string, string>>();
+        var result = new List<DongFile>();
 
         for (var index = 1; index < lines.Length; index++)
         {
@@ -795,7 +1547,7 @@ public sealed class DatabaseService
             }
 
             if (hasAnyValue)
-                result.Add(row);
+                result.Add(new DongFile(index + 1, row));
         }
 
         return result;
@@ -838,39 +1590,81 @@ public sealed class DatabaseService
         return result;
     }
 
-    private static SanPham MapRowToProduct(Dictionary<string, string> rawRow)
+    /// <summary>
+    /// Đưa các tên cột trong file về dạng đã chuẩn hóa để tra cứu theo tên cột
+    /// mà code dùng (sau <see cref="NormalizeHeader"/>). Cột trùng nhau sau khi
+    /// chuẩn hóa thì giữ giá trị đầu tiên, tránh lỗi "key đã tồn tại".
+    /// </summary>
+    private static Dictionary<string, string> ChuanHoaTieuDe(Dictionary<string, string> rawRow)
     {
-        var normalizedRow = rawRow
+        return rawRow
             .Where(entry => !string.IsNullOrWhiteSpace(entry.Key))
+            .GroupBy(entry => NormalizeHeader(entry.Key), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
-                entry => NormalizeHeader(entry.Key),
-                entry => entry.Value ?? string.Empty,
+                group => group.Key,
+                group => group.First().Value ?? string.Empty,
                 StringComparer.OrdinalIgnoreCase);
+    }
 
-        var maSanPham = GetFirstString(normalizedRow, "mahang", "masanpham", "mach", "macode") ?? GenerateProductCode();
+    private static SanPham MapRowToProduct(Dictionary<string, string> rawRow, int soDongExcel = 0)
+    {
+        var normalizedRow = ChuanHoaTieuDe(rawRow);
+
+        var maSanPham = GetFirstString(normalizedRow, "mahang", "masanpham", "mach", "macode");
         var tenSanPham = GetFirstString(normalizedRow, "tenhang", "tensanpham", "ten", "name", "sanpham", "san_pham")
             ?? GetAnyNonEmptyValue(normalizedRow, "mahang", "masanpham", "mavach", "giaban", "giavon");
 
+        // Không có mã hàng thì để trống thay vì tự sinh mã theo giờ nhập: mã sinh tự động
+        // (SP-yyyyMMdd-HHmmssfff) mỗi lần nhập là một sản phẩm khác, khiến cùng một
+        // món hàng bị nhân bản mỗi lần nhập lại file. Việc sinh mã được đưa sang
+        // thao tác tạo sản phẩm thủ công, nơi người dùng thực sự cần mã mới.
         var product = new SanPham
         {
-            MaSanPham = maSanPham,
+            SoDongExcel = soDongExcel,
+            MaSanPham = maSanPham ?? string.Empty,
             MaVach = GetFirstString(normalizedRow, "mavach", "barcode", "ma_vach"),
-            TenSanPham = tenSanPham ?? maSanPham,
+            TenSanPham = tenSanPham ?? maSanPham ?? string.Empty,
             GiaBan = ParseDecimal(GetFirstString(normalizedRow, "giaban", "giabanhang", "price", "dongia"), 0m),
             GiaVon = ParseDecimal(GetFirstString(normalizedRow, "giavon", "giavonhang", "cost"), 0m),
             TonKhoExcel = ParseDecimal(GetFirstString(normalizedRow, "tonkho", "tonkhoexcel", "soluongton"), 0m),
             TonToiThieu = ParseDecimal(GetFirstString(normalizedRow, "tontoithieu", "tonthieunhat", "tonthieu"), 0m),
             TonToiDa = ParseDecimal(GetFirstString(normalizedRow, "tontoida", "tonlonnhat", "tonmax"), 0m),
             KhachDat = ParseDecimal(GetFirstString(normalizedRow, "khdat", "khachdat", "soluongdat"), 0m),
+            // "Thời gian tạo"/"Ngày tạo" phải lấy đúng từ file. Không có giá trị
+            // hợp lệ thì để NULL (xem DamBaoCotNgayTaoSanPhamAsync) chứ không
+            // gán DateTime.Now, nếu không sản phẩm khôi phục từ dữ liệu cũ sẽ bị
+            // đổi thành ngày lúc nhập và sai lịch sử.
+            NgayTao = ParseNgayTaiFileSanPham(GetFirstString(
+                normalizedRow,
+                "thoigiantao",
+                "thoigiantaohang",
+                "ngaytao",
+                "ngaytaohang",
+                "createdat",
+                "createddate",
+                "datecreated",
+                "timecreated")),
             DuKienHetHang = GetFirstString(normalizedRow, "dukienhethang", "du_kien_het_hang", "het_hang"),
             DonViTinh = GetFirstString(normalizedRow, "dvt", "donvitinh", "don_vi_tinh"),
+            TenDonViTinh = GetFirstString(normalizedRow, "dvt", "donvitinh", "don_vi_tinh"),
             LoaiHang = GetFirstString(normalizedRow, "loaihang", "loaihangexcel", "loai"),
-            NhomHangBaCap = GetFirstString(normalizedRow, "nhomhang3cap", "nhomhang3capexcel", "nhomhang"),
+            NhomHangBaCap = GetFirstString(normalizedRow, "nhomhang3cap", "nhomhang3capexcel", "nhomhang3cap"),
             ViTriKho = GetFirstString(normalizedRow, "vitri", "vitrikho", "vitri_kho"),
             DangKinhDoanh = ParseBoolean(GetFirstString(normalizedRow, "dangkinhdoanh", "trangthai", "status"), true),
             DuocBanTrucTiep = ParseBoolean(GetFirstString(normalizedRow, "duocbanchirectiep", "duocbantructiep", "bantructiep"), true),
             MoTa = GetFirstString(normalizedRow, "mota", "mo_ta"),
-            GhiChu = GetFirstString(normalizedRow, "ghichu", "ghi_chu")
+            GhiChu = GetFirstString(normalizedRow, "ghichu", "ghi_chu"),
+            // Header thực tế là "Hình ảnh (url1,url2...)"; sau khi chuẩn hóa
+            // ngoặc bị bỏ nên cần thử cả dạng có và không có phần trong ngoặc.
+            HinhAnh = GetFirstString(normalizedRow, "hinhanh", "hinh", "hinh_anh", "hinh_anh_url", "hinhanhurl1url2"),
+            ThuongHieu = GetFirstString(normalizedRow, "thuonghieu", "thuong_hieu", "brand"),
+            MaDvtCoBan = GetFirstString(normalizedRow, "madvtcoban", "ma_dvt_co_ban"),
+            QuyDoi = ParseDecimal(GetFirstString(normalizedRow, "quydoi", "quy_doi"), 1m),
+            ThuocTinh = GetFirstString(normalizedRow, "thuocTinh", "thuoc_tinh"),
+            MaHhLienQuan = GetFirstString(normalizedRow, "mahhlienquan", "ma_hh_lien_quan"),
+            TrongLuong = ParseNullableDecimal(GetFirstString(normalizedRow, "trongluong", "trong_luong")),
+            HangThanhPhan = GetFirstString(normalizedRow, "hangthanhphan", "hang_thanh_phan"),
+            MauGhiChu = GetFirstString(normalizedRow, "maughichu", "mau_ghi_chu")
         };
 
         return product;
@@ -921,6 +1715,24 @@ public sealed class DatabaseService
         return defaultValue;
     }
 
+    /// <summary>
+    /// Giống <see cref="ParseDecimal"/> nhưng trả về null khi ô trống hoặc không đọc
+    /// được số, để phân biệt "không có dữ liệu" với giá trị 0.
+    /// </summary>
+    private static decimal? ParseNullableDecimal(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var normalized = value.Replace(".", "")
+            .Replace(",", ".")
+            .Replace(" ", string.Empty);
+
+        return decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
     private static bool ParseBoolean(string? value, bool defaultValue)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -933,6 +1745,125 @@ public sealed class DatabaseService
         return normalized is "1" or "yes" or "y" or "co" or "đúng" ? true : defaultValue;
     }
 
+    /// <summary>
+    /// Đọc ô "Thời gian tạo" / "Ngày tạo" của file danh sách hàng hóa.
+    /// <para>
+    /// Danh sách định dạng là CỐ ĐỊNH, không nhờ vào văn hóa của máy. Nếu để
+    /// <c>DateTime.TryParse</c> với văn hóa InvariantCulture chạy trước thì
+    /// "05/09/2026" sẽ bị hiểu theo thứ tự tháng/ngày của văn hóa Mỹ, ra
+    /// 9 tháng 5 — lệch so với 5 tháng 9 mà người dùng nhìn thấy trong file.
+    /// </para>
+    /// <para>
+    /// Ô trống hoặc không nhận ra được thì trả về NULL — không bao giờ trả về
+    /// ngày hiện tại, để người dùng biết dữ liệu cũ không có giá trị này.
+    /// </para>
+    /// </summary>
+    private static DateTime? ParseNgayTaiFileSanPham(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        // Excel không lưu múi giờ: bỏ hậu tố Z / +07:00 nếu có để giữ đúng
+        // giờ ghi trong ô, tuyệt đối không đổi theo múi giờ của máy.
+        var text = BoHauToMuiGio(value.Trim());
+
+        if (text.Length == 0)
+            return null;
+
+        string[] dinhDang =
+        [
+            "yyyy-MM-dd",
+            "yyyy-MM-dd HH:mm",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-ddTHH:mm",
+            "yyyy-MM-ddTHH:mm:ss",
+            "yyyy/MM/dd HH:mm",
+            "yyyy/MM/dd HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy HH:mm",
+            "dd-MM-yyyy",
+            "dd-MM-yyyy HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "d/M/yyyy",
+            "d/M/yyyy HH:mm",
+            "d/M/yyyy HH:mm:ss"
+        ];
+
+        if (DateTime.TryParseExact(
+                text,
+                dinhDang,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var ngay))
+        {
+            return new DateTime(
+                ngay.Year,
+                ngay.Month,
+                ngay.Day,
+                ngay.Hour,
+                ngay.Minute,
+                ngay.Second,
+                DateTimeKind.Unspecified);
+        }
+
+        // Ô ngày bị Excel/CSV lưu thành số serial (46287 = 20/09/2026).
+        if (double.TryParse(
+                text,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var serial)
+            && serial is > 1 and <= 2958465)
+        {
+            return DateTime.FromOADate(serial);
+        }
+
+        return ParseNgayTaiFile(text);
+    }
+
+    /// <summary>
+    /// Bỏ hậu tố múi giờ (Z, +07:00, -05:00) ở cuối chuỗi ngày giờ để giữ nguyên
+    /// giờ ghi trong file, không chuyển đổi theo múi giờ của máy.
+    /// </summary>
+    private static string BoHauToMuiGio(string value)
+    {
+        if (value.EndsWith("Z", StringComparison.OrdinalIgnoreCase))
+            return value[..^1].TrimEnd();
+
+        for (var index = value.Length - 1; index > 0; index--)
+        {
+            var character = value[index];
+
+            if (character is '+' or '-')
+            {
+                var phanCuoi = value[index..];
+
+                if (phanCuoi.Length is 6 or 5
+                    && phanCuoi[1] is >= '0' and <= '9'
+                    && phanCuoi[2] is >= '0' and <= '9'
+                    && (phanCuoi.Length == 5 || phanCuoi[3] == ':'))
+                {
+                    return value[..index].TrimEnd();
+                }
+
+                break;
+            }
+
+            if (!char.IsDigit(character) && character != ':')
+                break;
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// Chuẩn hóa tên cột để so khớp giữa tên cột trong file và tên cột trong code.
+    /// Bỏ dấu, hạ chữ thường và loại bỏ mọi ký tự phân tách/đặc biệt, kể cả dấu
+    /// ngoặc — vì file thực tế có cột "Nhóm hàng(3 Cấp)" và "Hình ảnh (url1,url2...)"
+    /// mà không bỏ ngoặc thì tên cột không bao giờ khớp được với khoá tra cứu.
+    /// </summary>
     private static string NormalizeHeader(string value)
     {
         var normalized = value
@@ -943,18 +1874,15 @@ public sealed class DatabaseService
 
         foreach (var character in normalized)
         {
-            var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(character);
-            if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
+                continue;
+
+            // Chỉ giữ lại chữ và số; bỏ hết dấu câu, ngoặc, khoảng trắng.
+            if (char.IsLetterOrDigit(character))
                 builder.Append(char.ToLowerInvariant(character));
         }
 
-        return builder
-            .ToString()
-            .Replace("_", string.Empty)
-            .Replace("-", string.Empty)
-            .Replace(" ", string.Empty)
-            .Replace(".", string.Empty)
-            .Replace("/", string.Empty);
+        return builder.ToString();
     }
 
     private static string GenerateProductCode()

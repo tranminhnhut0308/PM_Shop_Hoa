@@ -35,6 +35,43 @@ public sealed partial class SanPham : ObservableObject
     public string? MoTa { get; set; }
     public string? GhiChu { get; set; }
 
+    // =========================================================
+    // CỘT LẤY TỪ FILE EXCEL DANH SÁCH HÀNG HÓA
+    // Các cột này có trong bảng san_pham nhưng trước đây đọc vào rồi bị bỏ,
+    // nên dữ liệu nhập từ file không đầy đủ. Không cột nào trong nhóm này
+    // được coi là bắt buộc: đều có thể để NULL/rỗng mà dòng vẫn hợp lệ.
+    // =========================================================
+
+    /// <summary>Cột "Mã ĐVT Cơ bản" của file Excel.</summary>
+    public string? MaDvtCoBan { get; set; }
+
+    /// <summary>Cột "Quy đổi" của file Excel (mặc định 1).</summary>
+    public decimal QuyDoi { get; set; } = 1m;
+
+    /// <summary>Cột "Thuộc tính".</summary>
+    public string? ThuocTinh { get; set; }
+
+    /// <summary>Cột "Mã HH Liên quan".</summary>
+    public string? MaHhLienQuan { get; set; }
+
+    /// <summary>Cột "Trọng lượng".</summary>
+    public decimal? TrongLuong { get; set; }
+
+    /// <summary>Cột "Hàng thành phần".</summary>
+    public string? HangThanhPhan { get; set; }
+
+    /// <summary>Cột "Mẫu ghi chú".</summary>
+    public string? MauGhiChu { get; set; }
+
+    /// <summary>Tên thương hiệu lấy từ file; sẽ tra thành <see cref="ThuongHieuId"/> khi nhập.</summary>
+    public string? ThuongHieu { get; set; }
+
+    /// <summary>Tên đơn vị tính lấy từ cột "ĐVT"; sẽ tra thành <see cref="DonViTinhId"/> khi nhập.</summary>
+    public string? TenDonViTinh { get; set; }
+
+    /// <summary>Số dòng trong file Excel, dùng để báo lỗi cho người dùng.</summary>
+    public int SoDongExcel { get; set; }
+
     [ObservableProperty]
     private string? hinhAnh;
 
