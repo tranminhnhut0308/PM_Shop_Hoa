@@ -2779,6 +2779,9 @@
                   Command="{Binding RefreshSuppliersCommand}" />
                 <Button Classes="toolbar-action" Content="📁 Nhập file" Margin="0"
                   Command="{Binding ThemNhaCungCapTuFileCommand}" />
+                <Button Classes="toolbar-action" Content="📤 Xuất file" Margin="0"
+                  Command="{Binding XuatFileNhaCungCapCommand}"
+                  ToolTip.Tip="Xuất toàn bộ danh sách nhà cung cấp đang xem ra file Excel" />
                 <Button Classes="toolbar-primary" Content="＋ Thêm nhà cung cấp" Margin="0"
                   Command="{Binding ThemNhaCungCapCommand}" />
               </StackPanel>
@@ -2905,7 +2908,7 @@
             </Border>
 
             <!-- 4. THỐNG KÊ THẬT TỪ DATABASE -->
-            <Grid Grid.Row="3" ColumnDefinitions="*,*,*,*" ColumnSpacing="14">
+            <Grid Grid.Row="3" ColumnDefinitions="*,*,*,*,*" ColumnSpacing="14">
 
               <Border Classes="card" Padding="18" Margin="0">
                 <StackPanel>
@@ -2940,6 +2943,17 @@
 
               <Border Grid.Column="3" Classes="card" Padding="18" Margin="0">
                 <StackPanel>
+                  <TextBlock Text="Tổng mua" Foreground="#61736E" FontSize="12" />
+                  <TextBlock Text="{Binding SupplierTotalPurchaseText}" FontSize="24"
+                    FontWeight="Bold" Foreground="#087F6E" Margin="0,6,0,0"
+                    TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="Theo file danh sách / phiếu nhập" FontSize="12"
+                    Foreground="#087F6E" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </Border>
+
+              <Border Grid.Column="4" Classes="card" Padding="18" Margin="0">
+                <StackPanel>
                   <TextBlock Text="Đang chọn" Foreground="#61736E" FontSize="12" />
                   <TextBlock Text="{Binding SupplierSelectedCount}" FontSize="28"
                     FontWeight="Bold" Foreground="#163F38" Margin="0,6,0,0" />
@@ -2951,12 +2965,19 @@
 
             <!-- 5. BẢNG NHÀ CUNG CẤP (DÒNG MỞ RỘNG NGAY DƯỚI DÒNG ĐÃ CHỌN) -->
             <Border Grid.Row="4" Classes="card" Padding="0" Margin="0">
-              <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+              <!--
+                Hàng: 0 = tiêu đề bảng, 1 = thanh tải, 2 = vùng danh sách,
+                3 = phân trang.
+                Empty State nằm CHUNG hàng 2 với danh sách (không phải một hàng
+                Auto riêng) để nó nằm giữa đúng khu vực danh sách và khi bị ẩn
+                thì không còn chiếm bất kỳ khoảng không nào.
+              -->
+              <Grid RowDefinitions="Auto,Auto,*,Auto">
 
                 <!-- TIÊU ĐỀ BẢNG -->
                 <Border Padding="16,14" BorderBrush="#E2ECE8" BorderThickness="0,0,0,1"
                   Background="#F1F8F5">
-                  <Grid ColumnDefinitions="40,110,*,150,150,*,140,40" ColumnSpacing="10">
+                  <Grid ColumnDefinitions="40,110,*,140,150,*,130,140,40" ColumnSpacing="10">
 
                     <CheckBox Grid.Column="0" Classes="rowCheckBox"
                       IsChecked="{Binding IsAllSupplierRowsSelected, Mode=TwoWay}"
@@ -2974,10 +2995,13 @@
                       Foreground="#164B40" FontSize="12" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="5" Text="ĐỊA CHỈ" FontWeight="SemiBold"
                       Foreground="#164B40" FontSize="12" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="6" Text="CÒN NỢ" FontWeight="SemiBold"
+                    <TextBlock Grid.Column="6" Text="TỔNG MUA" FontWeight="SemiBold"
                       Foreground="#164B40" FontSize="12" VerticalAlignment="Center"
                       HorizontalAlignment="Right" />
-                    <TextBlock Grid.Column="7" Text="" />
+                    <TextBlock Grid.Column="7" Text="CÒN NỢ" FontWeight="SemiBold"
+                      Foreground="#164B40" FontSize="12" VerticalAlignment="Center"
+                      HorizontalAlignment="Right" />
+                    <TextBlock Grid.Column="8" Text="" />
                   </Grid>
                 </Border>
 
@@ -2986,19 +3010,27 @@
                   Foreground="#087F6E" Background="Transparent"
                   IsVisible="{Binding IsLoadingSuppliers}" />
 
-                <!-- DANH SÁCH RỖNG -->
+                <!--
+                  DANH SÁCH RỖNG: đặt chung hàng 2 với ItemsControl bên dưới.
+                  Hai phần loại trừ nhau theo IsSupplierListEmpty, nên khi có dữ liệu
+                  vùng này bị ẩn hoàn toàn và danh sách hiện ngay dưới tiêu đề.
+                -->
                 <StackPanel Grid.Row="2" IsVisible="{Binding IsSupplierListEmpty}"
-                  Margin="0,40,0,40" Spacing="8">
+                  VerticalAlignment="Center" HorizontalAlignment="Center"
+                  Margin="24" Spacing="8">
                   <TextBlock Text="🏭" FontSize="34" HorizontalAlignment="Center"
                     Foreground="#C3D6D0" />
                   <TextBlock Text="{Binding SupplierRongText}" FontSize="16"
-                    FontWeight="SemiBold" Foreground="#163F38" HorizontalAlignment="Center" />
+                    FontWeight="SemiBold" Foreground="#163F38" HorizontalAlignment="Center"
+                    TextWrapping="Wrap" TextAlignment="Center" />
                   <TextBlock Text="{Binding SupplierRongHint}" Foreground="#61736E"
-                    FontSize="13" HorizontalAlignment="Center" />
+                    FontSize="13" HorizontalAlignment="Center" TextWrapping="Wrap"
+                    TextAlignment="Center" />
                 </StackPanel>
 
                 <!-- CÁC DÒNG NHÀ CUNG CẤP -->
-                <ItemsControl Grid.Row="3" ItemsSource="{Binding SupplierRows}">
+                <ItemsControl Grid.Row="2" ItemsSource="{Binding SupplierRows}"
+                  IsVisible="{Binding HasSupplierRows}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:NhaCungCapRowViewModel">
                       <Border Classes="customerRow" BorderBrush="#EDF3F1" BorderThickness="0,0,0,1"
@@ -3007,7 +3039,7 @@
                         <StackPanel>
 
                           <!-- DÒNG CHÍNH -->
-                          <Grid ColumnDefinitions="40,110,*,150,150,*,140,40"
+                          <Grid ColumnDefinitions="40,110,*,140,150,*,130,140,40"
                             ColumnSpacing="10" Height="54">
 
                             <CheckBox Grid.Column="0" Classes="rowCheckBox"
@@ -3044,7 +3076,12 @@
                               Foreground="#52645E" VerticalAlignment="Center"
                               TextTrimming="CharacterEllipsis" />
 
-                            <Border Grid.Column="6" CornerRadius="6" Padding="8,3"
+                            <TextBlock Grid.Column="6" Text="{Binding TongMuaText}"
+                              FontSize="12" Foreground="#344B45" VerticalAlignment="Center"
+                              HorizontalAlignment="Right"
+                              TextTrimming="CharacterEllipsis" />
+
+                            <Border Grid.Column="7" CornerRadius="6" Padding="8,3"
                               HorizontalAlignment="Right" VerticalAlignment="Center"
                               Background="{Binding ConNoBackground}">
                               <TextBlock Text="{Binding ConNoText}" FontSize="12"
@@ -3052,7 +3089,7 @@
                                 Foreground="{Binding ConNoForeground}" />
                             </Border>
 
-                            <TextBlock Grid.Column="7" Text="{Binding KyHieuMoRong}" FontSize="11"
+                            <TextBlock Grid.Column="8" Text="{Binding KyHieuMoRong}" FontSize="11"
                               Foreground="#087F6E" VerticalAlignment="Center"
                               HorizontalAlignment="Center" />
                           </Grid>
@@ -3108,9 +3145,9 @@
                                 <Border Grid.Column="0" Classes="statBox" Tag="lichsu"
                                   PointerPressed="OnSupplierSummaryPressed">
                                   <StackPanel>
-                                    <TextBlock Text="Tổng tiền đã nhập" FontSize="11"
+                                    <TextBlock Text="Tổng tiền đã mua" FontSize="11"
                                       Foreground="#61736E" />
-                                    <TextBlock Text="{Binding Detail.TongTienNhapText}"
+                                    <TextBlock Text="{Binding Detail.TongMuaText}"
                                       FontSize="17" FontWeight="Bold" Foreground="#163F38"
                                       Margin="0,3,0,0" />
                                   </StackPanel>
@@ -3291,20 +3328,20 @@
                                 <Border Classes="statBox" Background="White"
                                   IsVisible="{Binding Detail.HasCongNoData}">
                                   <Grid ColumnDefinitions="*,*,*" ColumnSpacing="14">
-                                    <StackPanel>
-                                      <TextBlock Text="Tổng tiền đã nhập" FontSize="11"
-                                        Foreground="#61736E" />
-                                      <TextBlock Text="{Binding Detail.TongTienNhapText}"
-                                        FontSize="18" FontWeight="Bold" Foreground="#163F38"
-                                        Margin="0,3,0,0" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1">
-                                      <TextBlock Text="Đã thanh toán" FontSize="11"
-                                        Foreground="#61736E" />
-                                      <TextBlock Text="{Binding Detail.TongDaThanhToanText}"
-                                        FontSize="18" FontWeight="Bold" Foreground="#087F6E"
-                                        Margin="0,3,0,0" />
-                                    </StackPanel>
+<StackPanel>
+                                       <TextBlock Text="Tổng tiền đã mua" FontSize="11"
+                                         Foreground="#61736E" />
+                                       <TextBlock Text="{Binding Detail.TongMuaText}"
+                                         FontSize="18" FontWeight="Bold" Foreground="#163F38"
+                                         Margin="0,3,0,0" />
+                                     </StackPanel>
+                                     <StackPanel Grid.Column="1">
+                                       <TextBlock Text="Đã thanh toán" FontSize="11"
+                                         Foreground="#61736E" />
+                                       <TextBlock Text="{Binding Detail.TongDaThanhToanText}"
+                                         FontSize="18" FontWeight="Bold" Foreground="#087F6E"
+                                         Margin="0,3,0,0" />
+                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
                                       <TextBlock Text="Còn nợ" FontSize="11"
                                         Foreground="#61736E" />
@@ -3386,7 +3423,7 @@
                 </ItemsControl>
 
                 <!-- PHÂN TRANG -->
-                <Border Grid.Row="4" Padding="16,12" BorderBrush="#E2ECE8"
+                <Border Grid.Row="3" Padding="16,12" BorderBrush="#E2ECE8"
                   BorderThickness="0,1,0,0">
                   <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="16">
 

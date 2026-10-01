@@ -77,6 +77,18 @@ public sealed partial class NhaCungCapRowViewModel : ObservableObject
     /// <summary>Công nợ đã định dạng kèm đơn vị "đ".</summary>
     public string ConNoText => MoneyInput.Format(Supplier.ConNo) + " đ";
 
+    /// <summary>Tổng tiền đã mua của nhà cung cấp.</summary>
+    public decimal TongMua => Supplier.TongMua;
+
+    /// <summary>Tổng tiền đã mua trừ trả hàng của nhà cung cấp.</summary>
+    public decimal TongMuaTruTraHang => Supplier.TongMuaTruTraHang;
+
+    /// <summary>Tổng tiền đã mua đã định dạng kèm đơn vị "đ".</summary>
+    public string TongMuaText => MoneyInput.Format(Supplier.TongMua) + " đ";
+
+    /// <summary>Tổng tiền đã mua trừ trả hàng đã định dạng kèm đơn vị "đ".</summary>
+    public string TongMuaTruTraHangText => MoneyInput.Format(Supplier.TongMuaTruTraHang) + " đ";
+
     /// <summary>Nhà cung cấp đang còn nợ hay không (dùng để tô màu cảnh báo).</summary>
     public bool CoConNo => Supplier.ConNo > 0;
 

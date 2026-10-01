@@ -27,19 +27,46 @@ public sealed class ThongKeTaiChinhNhaCungCap
     /// <summary>Thời điểm ghi công nợ gần nhất, null nếu chưa có phát sinh.</summary>
     public DateTime? LanGhiCongNoGanNhat { get; set; }
 
+    /// <summary>Nhà cung cấp có số tiền lấy từ file danh sách không.</summary>
+    public bool CoDuLieuKiotViet { get; set; }
+
+    /// <summary>Nợ cần trả hiện tại ghi trong file danh sách (null nếu file không có).</summary>
+    public decimal? NoCanTraHienTaiExcel { get; set; }
+
+    /// <summary>Tổng mua ghi trong file danh sách (null nếu file không có).</summary>
+    public decimal? TongMuaExcel { get; set; }
+
+    /// <summary>Tổng mua trừ trả hàng ghi trong file danh sách (null nếu file không có).</summary>
+    public decimal? TongMuaTruTraHangExcel { get; set; }
+
     /// <summary>Hệ thống đã có dữ liệu tài chính cho nhà cung cấp này chưa.</summary>
     public bool CoDuLieu =>
-        SoPhieuNhap > 0
+        CoDuLieuKiotViet
+        || SoPhieuNhap > 0
         || SoLanGhiCongNo > 0
         || TongTienNhap > 0
         || TongDaThanhToan > 0
         || TongCongNoHienTai > 0;
 
     /// <summary>
-    /// Công nợ hiện tại: ưu tiên số dư từ sổ cái công nợ (đúng như cột
-    /// "Còn nợ" của bảng danh sách), khi chưa có sổ cái thì lấy tổng nợ
-    /// còn lại trên các phiếu nhập hàng.
+    /// Công nợ hiện tại: khi có dữ liệu từ file danh sách thì lấy đúng số trong
+    /// file (giống cột "Còn nợ" của bảng), chưa có thì ưu tiên sổ cái công nợ,
+    /// cuối cùng mới lấy tổng nợ còn lại trên các phiếu nhập hàng.
     /// </summary>
     public decimal TongCongNoHienTai =>
-        SoLanGhiCongNo > 0 ? TongCongNoLichSu : TongConNoPhieuNhap;
+        CoDuLieuKiotViet && NoCanTraHienTaiExcel.HasValue
+            ? NoCanTraHienTaiExcel.Value
+            : SoLanGhiCongNo > 0 ? TongCongNoLichSu : TongConNoPhieuNhap;
+
+    /// <summary>Tổng tiền đã mua: ưu tiên số trong file danh sách.</summary>
+    public decimal TongMua =>
+        CoDuLieuKiotViet && TongMuaExcel.HasValue
+            ? TongMuaExcel.Value
+            : TongTienNhap;
+
+    /// <summary>Tổng tiền đã mua trừ trả hàng: ưu tiên số trong file danh sách.</summary>
+    public decimal TongMuaTruTraHang =>
+        CoDuLieuKiotViet && TongMuaTruTraHangExcel.HasValue
+            ? TongMuaTruTraHangExcel.Value
+            : TongMua;
 }

@@ -2166,33 +2166,38 @@ public partial class MainWindowViewModel : ObservableObject
                 // Tắt loading trước khi hiện hộp thoại
                 IsImporting = false;
 
-                var keepGoing = await ShowConfirmationAsync(
+                var shouldUpdate = await ShowConfirmationAsync(
                     "Nhà cung cấp bị trùng",
                     $"Phát hiện {duplicateCount:N0} nhà cung cấp trong file " +
                     $"đã tồn tại trong database.\n\n" +
-                    "Nếu tiếp tục, các mã nhà cung cấp bị trùng sẽ được bỏ qua. " +
-                    "Các nhà cung cấp mới vẫn được nhập.",
-                    "Tiếp tục nhập",
-                    "Hủy");
-
-                if (!keepGoing)
-                {
-                    StatusMessage = "Đã hủy nhập file nhà cung cấp.";
-                    return;
-                }
+                    "\"Cập nhật dữ liệu\" sẽ ghi đè thông tin (kèm số tiền đã mua, " +
+                    "công nợ) theo đúng file. Ngược lại các mã bị trùng sẽ được bỏ qua " +
+                    "và chỉ những nhà cung cấp mới được nhập.",
+                    "Cập nhật dữ liệu",
+                    "Bỏ qua nhà cung cấp trùng");
 
                 IsImporting = true;
 
-                ImportStatus = "Đang loại bỏ dữ liệu nhà cung cấp bị trùng...";
-                StatusMessage = ImportStatus;
+                if (shouldUpdate)
+                {
+                    ImportStatus = "Đang cập nhật dữ liệu nhà cung cấp bị trùng...";
+                    StatusMessage = ImportStatus;
 
-                await Task.Yield();
+                    await Task.Yield();
+                }
+                else
+                {
+                    ImportStatus = "Đang loại bỏ dữ liệu nhà cung cấp bị trùng...";
+                    StatusMessage = ImportStatus;
 
-                suppliersFromFile = suppliersFromFile
-                    .Where(x =>
-                        string.IsNullOrWhiteSpace(x.MaNhaCungCap) ||
-                        !existingCodes.Contains(x.MaNhaCungCap.Trim()))
-                    .ToList();
+                    await Task.Yield();
+
+                    suppliersFromFile = suppliersFromFile
+                        .Where(x =>
+                            string.IsNullOrWhiteSpace(x.MaNhaCungCap) ||
+                            !existingCodes.Contains(x.MaNhaCungCap.Trim()))
+                        .ToList();
+                }
             }
 
             if (suppliersFromFile.Count == 0)
@@ -2220,15 +2225,16 @@ public partial class MainWindowViewModel : ObservableObject
                 _db.ImportNhaCungCapTuFileAsync(
                     file.Path.LocalPath,
                     suppliersFromFile,
-                    progress));
+                    progress,
+                    capNhatNhaCungCapDaTonTai: true));
 
             ImportStatus = "Đang cập nhật danh sách nhà cung cấp...";
             StatusMessage = ImportStatus;
 
             await LoadSuppliersAsync();
 
-            StatusMessage = ketQua.SoThemMoi > 0
-                ? $"✅ Đã nhập thành công {ketQua.SoThemMoi:N0} nhà cung cấp từ file \"{file.Name}\". {ketQua.ThongBaoTatCa}"
+            StatusMessage = (ketQua.SoThemMoi > 0 || ketQua.SoCapNhat > 0)
+                ? $"✅ Đã nhập thành công {ketQua.SoThemMoi:N0}, cập nhật {ketQua.SoCapNhat:N0} nhà cung cấp từ file \"{file.Name}\". {ketQua.ThongBaoTatCa}"
                 : $"⚠️ Không có nhà cung cấp mới nào được nhập. {ketQua.ThongBaoTatCa}";
 
             if (ketQua.SoTrungTenVaDienThoai > 0)

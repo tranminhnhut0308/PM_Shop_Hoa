@@ -13,6 +13,7 @@ public sealed class DatabaseService
     private bool? _hasPhieuNhapExtraColumns;
     private bool? _hasBangTraHang;
     private bool? _coCotDuLieuKiotViet;
+    private bool? _coCotDuLieuKiotVietNhaCungCap;
 
     public DatabaseService()
     {
@@ -945,7 +946,7 @@ public sealed class DatabaseService
         {
             var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(character);
             if (unicodeCategory != UnicodeCategory.NonSpacingMark)
-                builder.Append(char.ToLowerInvariant(character));
+                builder.Append(FoldDangDe(char.ToLowerInvariant(character)));
         }
 
         return builder
@@ -1228,6 +1229,129 @@ public sealed class DatabaseService
         }
 
         return _coCotDuLieuKiotViet.Value;
+    }
+
+    /// <summary>
+    /// Bảo đảm bảng nha_cung_cap có đủ các cột phục vụ việc nhập từ file danh sách
+    /// nhà cung cấp. Đây là cột MỐI theo đúng cách đã làm với bảng khach_hang:
+    /// <list type="bullet">
+    /// <item>co_du_lieu_kiotviet đánh dấu bản ghi có số tiền lấy từ file,
+    /// nguoi_tao_ten giữ người tạo ghi trong file, ngay_nhap_excel để truy vết;</item>
+    /// <item>no_can_tra_hien_tai, tong_mua, tong_mua_tru_tra_hang lưu ba cột tiền
+    /// của file, không có cột này thì không thể giữ số liệu sau khi nhập;</item>
+    /// <item>khu_vuc, so_cccd, nhom_nha_cung_cap_ten, ten_cong_ty lưu các cột chữ
+    /// còn lại của file mà bảng cũ chưa có chỗ để lưu.</item>
+    /// </list>
+    /// Các cột được thêm một lần duy nhất, không đụng tới dữ liệu sẵn có. Nếu thêm
+    /// không được (database cũ, không đủ quyền) thì phần mềm vẫn chạy bình thường
+    /// và chỉ dùng số tiền tính từ phiếu nhập hàng và sổ cái công nợ.
+    /// </summary>
+    private async Task<bool> DamBaoCotDuLieuKiotVietNhaCungCapAsync()
+    {
+        if (_coCotDuLieuKiotVietNhaCungCap.HasValue)
+            return _coCotDuLieuKiotVietNhaCungCap.Value;
+
+        const string kiemTraSql = """
+            SELECT COLUMN_NAME
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'nha_cung_cap'
+              AND COLUMN_NAME IN (
+                  'co_du_lieu_kiotviet', 'nguoi_tao_ten', 'ngay_nhap_excel',
+                  'no_can_tra_hien_tai', 'tong_mua', 'tong_mua_tru_tra_hang',
+                  'khu_vuc', 'so_cccd', 'nhom_nha_cung_cap_ten', 'ten_cong_ty'
+              );
+            """;
+
+        // Thêm từng cột một vì bảng cũ có thể đã có sẵn một trong các cột này.
+        var cotCanThem = new (string Ten, string DinhNghia)[]
+        {
+            ("co_du_lieu_kiotviet", "TINYINT(1) NOT NULL DEFAULT 0"),
+            ("nguoi_tao_ten", "VARCHAR(150) NULL"),
+            ("ngay_nhap_excel", "DATETIME NULL"),
+            ("no_can_tra_hien_tai", "DECIMAL(15,2) NULL"),
+            ("tong_mua", "DECIMAL(15,2) NULL"),
+            ("tong_mua_tru_tra_hang", "DECIMAL(15,2) NULL"),
+            ("khu_vuc", "VARCHAR(100) NULL"),
+            ("so_cccd", "VARCHAR(50) NULL"),
+            ("nhom_nha_cung_cap_ten", "VARCHAR(150) NULL"),
+            ("ten_cong_ty", "VARCHAR(200) NULL")
+        };
+
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            var daCo = (await connection.QueryAsync<string>(kiemTraSql))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (ten, dinhNghia) in cotCanThem)
+            {
+                if (daCo.Contains(ten))
+                    continue;
+
+                await connection.ExecuteAsync(
+                    $"ALTER TABLE nha_cung_cap ADD COLUMN {ten} {dinhNghia};");
+            }
+
+            _coCotDuLieuKiotVietNhaCungCap = true;
+        }
+        catch
+        {
+            // Không thêm được cột thì dùng số liệu tính từ phiếu nhập hàng, sổ cái công nợ.
+            _coCotDuLieuKiotVietNhaCungCap = false;
+        }
+
+        return _coCotDuLieuKiotVietNhaCungCap.Value;
+    }
+
+    /// <summary>
+    /// Ba biểu thức tiền của một nhà cung cấp, dùng chung cho bảng danh sách,
+    /// thanh thống kê, bộ lọc công nợ và vùng chi tiết để ba nơi luôn hiển thị
+    /// cùng một số. Ưu tiên số tiền đã nhập từ file danh sách, không có thì
+    /// tính từ dữ liệu nhập hàng và công nợ của phần mềm.
+    /// </summary>
+    private static (string NoHienTai, string TongMua, string TongMuaTruTraHang)
+        TaoBieuThucTienNhaCungCap(string idExpression, bool coCotKiotViet)
+    {
+        // Sổ cái công nợ là nguồn công nợ chính, giống hệt cột "Còn nợ" và
+        // cột "Công nợ hiện tại" của vùng chi tiết.
+        var tienNoiBo = $"""
+            COALESCE(
+                (
+                    SELECT SUM(ls.ghi_no - ls.ghi_co)
+                    FROM lich_su_cong_no_nha_cung_cap ls
+                    WHERE ls.nha_cung_cap_id = {idExpression}
+                ),
+                0
+            )
+            """;
+
+        // Tổng mua lấy từ các phiếu nhập hàng đã hoàn thành.
+        var tienMuaNoiBo = $"""
+            COALESCE(
+                (
+                    SELECT SUM(p.tong_tien_nhap)
+                    FROM phieu_nhap_hang p
+                    WHERE p.nha_cung_cap_id = {idExpression}
+                      AND p.trang_thai = 'HOAN_THANH'
+                ),
+                0
+            )
+            """;
+
+        // Phần mềm chưa có phiếu trả hàng cho nhà cung cấp, nên tổng mua trừ trả
+        // hàng tính từ nội bộ bằng chính tổng mua. Khi có dữ liệu file thì lấy
+        // số của file vì file đã trừ sẵn các phiếu trả hàng.
+        var tienMuaTruTraNoiBo = tienMuaNoiBo;
+
+        if (!coCotKiotViet)
+            return (tienNoiBo, tienMuaNoiBo, tienMuaTruTraNoiBo);
+
+        return (
+            $"CASE WHEN ncc.co_du_lieu_kiotviet = 1 THEN ncc.no_can_tra_hien_tai ELSE {tienNoiBo} END",
+            $"CASE WHEN ncc.co_du_lieu_kiotviet = 1 THEN ncc.tong_mua ELSE {tienMuaNoiBo} END",
+            $"CASE WHEN ncc.co_du_lieu_kiotviet = 1 THEN ncc.tong_mua_tru_tra_hang ELSE {tienMuaTruTraNoiBo} END");
     }
 
     /// <summary>Lấy danh sách khách hàng theo trang cho màn hình "Danh sách khách hàng".
@@ -2420,13 +2544,28 @@ public sealed class DatabaseService
                 continue;
 
             if (char.IsLetterOrDigit(character) || character == '_')
-                builder.Append(char.ToLowerInvariant(character));
+                builder.Append(FoldDangDe(char.ToLowerInvariant(character)));
             else if (char.IsWhiteSpace(character) || character == '-' || character == '/' || character == '.')
                 builder.Append('_');
         }
 
         return builder.ToString().Replace("__", "_").Trim('_');
     }
+
+    /// <summary>
+    /// Đưa chữ "Đ" (U+0110) và "đ" về "d"/"d".
+    /// Hai ký tự này không có dạng phân rã chuẩn nên FormD giữ nguyên chúng,
+    /// khiến tiêu đề "Điện thoại" hoá thành "đien_thoai" và không khớp với
+    /// danh sách tên cột viết bằng chữ "d" thông thường. Ô "Điện thoại" và
+    /// "Địa chỉ" trong file Excel sẽ bị bỏ qua nếu thiếu bước gộp này.
+    /// </summary>
+    private static char FoldDangDe(char character)
+        => character switch
+        {
+            'đ' => 'd',
+            'Đ' => 'd',
+            _ => character
+        };
 
     private static string? GetCellValue(Dictionary<string, string> row, params string[] candidates)
     {
@@ -3000,26 +3139,12 @@ LIMIT 500;
     {
         await using var connection = await OpenAsync();
 
-        const string sql = """
+        var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
+
+        var sql = $"""
         SELECT
-            ncc.id AS Id,
-            ncc.ma_nha_cung_cap AS MaNhaCungCap,
-            ncc.ten_nha_cung_cap AS TenNhaCungCap,
-            ncc.so_dien_thoai AS SoDienThoai,
-            ncc.email AS Email,
-            ncc.dia_chi AS DiaChi,
-            ncc.phuong_xa AS PhuongXa,
-            ncc.quan_huyen AS QuanHuyen,
-            ncc.tinh_thanh AS TinhThanh,
-            ncc.ma_so_thue AS MaSoThue,
-            ncc.nguoi_lien_he AS NguoiLienHe,
-            ncc.ghi_chu AS GhiChu,
-            ncc.trang_thai AS TrangThai,
-            ncc.ngay_tao AS NgayTao,
-            COALESCE(v.con_no, 0) AS ConNo
+        {TaoDanhSachCotNhaCungCap(coCotKiotViet)}
         FROM nha_cung_cap ncc
-        LEFT JOIN vw_cong_no_nha_cung_cap v
-            ON v.id = ncc.id
         WHERE ncc.trang_thai = 1
           AND (
                 @Search = ''
@@ -3053,17 +3178,23 @@ LIMIT 500;
     /// <summary>
     /// Mệnh đề FROM dùng chung cho cả truy vấn lấy trang và truy vấn đếm/thống kê,
     /// để danh sách và các thẻ thống kê luôn nói về cùng một tập nhà cung cấp.
-    /// Công nợ lấy đúng từ sổ cái công nợ (vw_cong_no_nha_cung_cap) như cột
-    /// "Còn nợ" đang hiển thị.
+    /// Công nợ, tổng mua và tổng mua trừ trả hàng đều lấy từ cùng một biểu thức
+    /// trong <see cref="TaoBieuThucTienNhaCungCap"/> nên không cần JOIN bảng view.
     /// </summary>
     private const string NhaCungCapFrom = """
     FROM nha_cung_cap ncc
-    LEFT JOIN vw_cong_no_nha_cung_cap v
-    ON v.id = ncc.id
     """;
 
-    /// <summary>Danh sách cột của bảng nhà cung cấp, dùng chung cho nhiều câu SQL.</summary>
-    private const string NhaCungCapColumns = """
+    /// <summary>
+    /// Danh sách cột của bảng nhà cung cấp, dùng chung cho nhiều câu SQL.
+    /// Ba cột tiền dùng đúng biểu thức mà bộ lọc và thẻ thống kê đang dùng nên
+    /// số tiền hiển thị ở mọi nơi luôn khớp nhau.
+    /// </summary>
+    private static string TaoDanhSachCotNhaCungCap(bool coCotKiotViet)
+    {
+        var tien = TaoBieuThucTienNhaCungCap("ncc.id", coCotKiotViet);
+
+        return $"""
             ncc.id AS Id,
             ncc.ma_nha_cung_cap AS MaNhaCungCap,
             ncc.ten_nha_cung_cap AS TenNhaCungCap,
@@ -3078,14 +3209,37 @@ LIMIT 500;
             ncc.ghi_chu AS GhiChu,
             ncc.trang_thai AS TrangThai,
             ncc.ngay_tao AS NgayTao,
-            COALESCE(v.con_no, 0) AS ConNo
+            COALESCE({tien.NoHienTai}, 0) AS ConNo,
+            COALESCE({tien.TongMua}, 0) AS TongMua,
+            COALESCE({tien.TongMuaTruTraHang}, 0) AS TongMuaTruTraHang
+            """;
+    }
+
+    /// <summary>
+    /// Các cột lấy từ file danh sách (đã lưu xuống database) dành cho truy vấn
+    /// chi tiết một nhà cung cấp. Không dùng cho bảng danh sách vì chỉ cần ba
+    /// cột tiền đã được tính sẵn trong <see cref="TaoDanhSachCotNhaCungCap"/>.
+    /// </summary>
+    private static string TaoDanhSachCotFileNhaCungCap() => """
+            ncc.co_du_lieu_kiotviet AS CoDuLieuKiotViet,
+            ncc.nguoi_tao_ten AS NguoiTaoTen,
+            ncc.ngay_nhap_excel AS NgayNhapExcel,
+            ncc.khu_vuc AS KhuVuc,
+            ncc.so_cccd AS SoCccd,
+            ncc.nhom_nha_cung_cap_ten AS NhomNhaCungCapTen,
+            ncc.ten_cong_ty AS TenCongTy,
+            ncc.no_can_tra_hien_tai AS NoCanTraHienTaiExcel,
+            ncc.tong_mua AS TongMuaExcel,
+            ncc.tong_mua_tru_tra_hang AS TongMuaTruTraHangExcel
     """;
 
     /// <summary>
     /// Sinh mệnh đề WHERE từ bộ lọc. Mọi điều kiện đều là tham số hóa nên an toàn
     /// với dấu nháy trong từ khóa, và đều được đẩy xuống MySQL xử lý.
+    /// Lọc công nợ dùng chính biểu thức công nợ của bảng danh sách để người
+    /// dùng không lọc ra một danh sách mà cột "Còn nợ" lại hiển thị khác.
     /// </summary>
-    private static string TaoDieuKienNhaCungCap(BoLocNhaCungCap loc)
+    private static string TaoDieuKienNhaCungCap(BoLocNhaCungCap loc, string bieuThucConNo)
     {
         var dieuKien = new StringBuilder();
 
@@ -3117,12 +3271,12 @@ LIMIT 500;
         // Trạng thái công nợ: tất cả / còn nợ / không còn nợ.
         dieuKien.Append(
             " AND (@CongNoMode = 0"
-            + " OR (@CongNoMode = 1 AND COALESCE(v.con_no, 0) > 0)"
-            + " OR (@CongNoMode = 2 AND COALESCE(v.con_no, 0) <= 0))");
+            + $" OR (@CongNoMode = 1 AND COALESCE({bieuThucConNo}, 0) > 0)"
+            + $" OR (@CongNoMode = 2 AND COALESCE({bieuThucConNo}, 0) <= 0))");
 
         // Khoảng công nợ.
-        dieuKien.Append(" AND (@ConNoTu IS NULL OR COALESCE(v.con_no, 0) >= @ConNoTu)");
-        dieuKien.Append(" AND (@ConNoDen IS NULL OR COALESCE(v.con_no, 0) <= @ConNoDen)");
+        dieuKien.Append($" AND (@ConNoTu IS NULL OR COALESCE({bieuThucConNo}, 0) >= @ConNoTu)");
+        dieuKien.Append($" AND (@ConNoDen IS NULL OR COALESCE({bieuThucConNo}, 0) <= @ConNoDen)");
 
         return dieuKien.ToString();
     }
@@ -3175,7 +3329,9 @@ LIMIT 500;
 
         await using var connection = await OpenAsync();
 
-        var dieuKien = TaoDieuKienNhaCungCap(loc);
+        var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
+        var bieuThucConNo = TaoBieuThucTienNhaCungCap("ncc.id", coCotKiotViet).NoHienTai;
+        var dieuKien = TaoDieuKienNhaCungCap(loc, bieuThucConNo);
         var thamSo = TaoThamSoNhaCungCap(loc);
 
         var countSql = $"""
@@ -3191,7 +3347,7 @@ LIMIT 500;
 
         var pageSql = $"""
         SELECT
-        {NhaCungCapColumns}
+        {TaoDanhSachCotNhaCungCap(coCotKiotViet)}
         {NhaCungCapFrom}
         WHERE {dieuKien}
         ORDER BY ncc.ten_nha_cung_cap, ncc.id
@@ -3208,6 +3364,39 @@ LIMIT 500;
     }
 
     /// <summary>
+    /// Lấy TOÀN BỘ nhà cung cấp khớp bộ lọc để xuất file Excel, không phân trang.
+    ///
+    /// Cố tình dùng chung <see cref="TaoDieuKienNhaCungCap"/> và chung bộ cột
+    /// tiền với truy vấn lấy danh sách trên màn hình, nên số tiền xuất ra file
+    /// luôn khớp với thẻ thống kê và cột "Tổng mua"/"Còn nợ" đang hiển thị.
+    /// Không có LIMIT/OFFSET nên xuất 48 dòng khi trang đang xem 20 dòng.
+    /// </summary>
+    public async Task<IReadOnlyList<NhaCungCap>> GetAllNhaCungCapForExportAsync(
+        BoLocNhaCungCap loc)
+    {
+        loc ??= new BoLocNhaCungCap();
+
+        await using var connection = await OpenAsync();
+
+        var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
+        var bieuThucConNo = TaoBieuThucTienNhaCungCap("ncc.id", coCotKiotViet).NoHienTai;
+        var dieuKien = TaoDieuKienNhaCungCap(loc, bieuThucConNo);
+
+        var sql = $"""
+        SELECT
+        {TaoDanhSachCotNhaCungCap(coCotKiotViet)},
+        {TaoDanhSachCotFileNhaCungCap()}
+        {NhaCungCapFrom}
+        WHERE {dieuKien}
+        ORDER BY ncc.ten_nha_cung_cap, ncc.id;
+        """;
+
+        return (
+            await connection.QueryAsync<NhaCungCap>(sql, TaoThamSoNhaCungCap(loc))
+        ).AsList();
+    }
+
+    /// <summary>
     /// Thống kê phía trên bảng nhà cung cấp. Cùng bộ lọc với truy vấn lấy danh
     /// sách nên khi đổi bộ lọc thì cả bảng lẫn thống kê cùng cập nhật.
     /// </summary>
@@ -3216,13 +3405,17 @@ LIMIT 500;
     {
         loc ??= new BoLocNhaCungCap();
 
+        var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
+        var tien = TaoBieuThucTienNhaCungCap("ncc.id", coCotKiotViet);
+        var dieuKien = TaoDieuKienNhaCungCap(loc, tien.NoHienTai);
+
         var sql = $"""
         SELECT
             COUNT(*) AS TongSoNhaCungCap,
             COALESCE(
                 SUM(
                     CASE
-                        WHEN COALESCE(v.con_no, 0) > 0 THEN 1
+                        WHEN COALESCE({tien.NoHienTai}, 0) > 0 THEN 1
                         ELSE 0
                     END
                 ),
@@ -3231,14 +3424,16 @@ LIMIT 500;
             COALESCE(
                 SUM(
                     CASE
-                        WHEN COALESCE(v.con_no, 0) > 0 THEN COALESCE(v.con_no, 0)
+                        WHEN COALESCE({tien.NoHienTai}, 0) > 0 THEN COALESCE({tien.NoHienTai}, 0)
                         ELSE 0
                     END
                 ),
                 0
-            ) AS TongCongNo
+            ) AS TongCongNo,
+            COALESCE(SUM(COALESCE({tien.TongMua}, 0)), 0) AS TongMua,
+            COALESCE(SUM(COALESCE({tien.TongMuaTruTraHang}, 0)), 0) AS TongMuaTruTraHang
         {NhaCungCapFrom}
-        WHERE {TaoDieuKienNhaCungCap(loc)};
+        WHERE {dieuKien};
         """;
 
         await using var connection = await OpenAsync();
@@ -3253,9 +3448,12 @@ LIMIT 500;
     /// <summary>Lấy đầy đủ thông tin một nhà cung cấp để mở vùng chi tiết / form sửa.</summary>
     public async Task<NhaCungCap?> GetNhaCungCapByIdAsync(uint supplierId)
     {
+        var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
+
         var sql = $"""
         SELECT
-        {NhaCungCapColumns}
+        {TaoDanhSachCotNhaCungCap(coCotKiotViet)},
+        {TaoDanhSachCotFileNhaCungCap()}
         {NhaCungCapFrom}
         WHERE ncc.trang_thai = 1
           AND ncc.id = @Id;
@@ -3386,6 +3584,8 @@ LIMIT 500;
             congNoSql,
             thamSo) ?? new NhaCungCapCongNoTongHopRow();
 
+        var nhacCungCap = await GetNhaCungCapByIdAsync(supplierId);
+
         return new ThongKeTaiChinhNhaCungCap
         {
             SoPhieuNhap = phieu.SoPhieuNhap,
@@ -3394,7 +3594,11 @@ LIMIT 500;
             TongConNoPhieuNhap = phieu.TongConNoPhieuNhap,
             SoLanGhiCongNo = congNo.SoLanGhiCongNo,
             TongCongNoLichSu = congNo.TongCongNoLichSu,
-            LanGhiCongNoGanNhat = congNo.LanGhiCongNoGanNhat
+            LanGhiCongNoGanNhat = congNo.LanGhiCongNoGanNhat,
+            CoDuLieuKiotViet = nhacCungCap?.CoDuLieuKiotViet == true,
+            NoCanTraHienTaiExcel = nhacCungCap?.NoCanTraHienTaiExcel,
+            TongMuaExcel = nhacCungCap?.TongMuaExcel,
+            TongMuaTruTraHangExcel = nhacCungCap?.TongMuaTruTraHangExcel
         };
     }
 
@@ -3460,47 +3664,51 @@ LIMIT 500;
 
     public async Task<uint> ThemNhaCungCapAsync(NhaCungCap supplier)
     {
+        var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
+
         await using var connection = await OpenAsync();
 
-        const string sql = """
-        INSERT INTO nha_cung_cap
-        (
-            ma_nha_cung_cap,
-            ten_nha_cung_cap,
-            so_dien_thoai,
-            email,
-            dia_chi,
-            phuong_xa,
-            quan_huyen,
-            tinh_thanh,
-            ma_so_thue,
-            nguoi_lien_he,
-            ghi_chu,
-            chi_nhanh_id,
-            trang_thai,
-            ngay_tao,
-            ngay_cap_nhat
-        )
-        VALUES
-        (
-            @MaNhaCungCap,
-            @TenNhaCungCap,
-            @SoDienThoai,
-            @Email,
-            @DiaChi,
-            @PhuongXa,
-            @QuanHuyen,
-            @TinhThanh,
-            @MaSoThue,
-            @NguoiLienHe,
-            @GhiChu,
-            @ChiNhanhId,
-            1,
-            NOW(),
-            NOW()
-        );
-        SELECT LAST_INSERT_ID();
-        """;
+        // Bản đầy đủ ghi cả các cột lấy từ file danh sách nhà cung cấp. Nếu bảng
+        // cũ không thêm được cột thì dùng bản rút gọn như trước để vẫn nhập được.
+        var sql = coCotKiotViet
+            ? """
+            INSERT INTO nha_cung_cap
+            (
+                ma_nha_cung_cap, ten_nha_cung_cap, so_dien_thoai, email, dia_chi,
+                phuong_xa, quan_huyen, tinh_thanh, ma_so_thue, nguoi_lien_he, ghi_chu,
+                chi_nhanh_id, trang_thai,
+                ngay_tao, ngay_cap_nhat,
+                co_du_lieu_kiotviet, nguoi_tao_ten, ngay_nhap_excel,
+                no_can_tra_hien_tai, tong_mua, tong_mua_tru_tra_hang,
+                khu_vuc, so_cccd, nhom_nha_cung_cap_ten, ten_cong_ty
+            )
+            VALUES
+            (
+                @MaNhaCungCap, @TenNhaCungCap, @SoDienThoai, @Email, @DiaChi,
+                @PhuongXa, @QuanHuyen, @TinhThanh, @MaSoThue, @NguoiLienHe, @GhiChu,
+                @ChiNhanhId, @TrangThai,
+                COALESCE(@NgayTao, NOW()), NOW(),
+                @CoDuLieuKiotViet, @NguoiTaoTen, @NgayNhapExcel,
+                @NoCanTraHienTaiExcel, @TongMuaExcel, @TongMuaTruTraHangExcel,
+                @KhuVuc, @SoCccd, @NhomNhaCungCapTen, @TenCongTy
+            );
+            SELECT LAST_INSERT_ID();
+            """
+            : """
+            INSERT INTO nha_cung_cap
+            (
+                ma_nha_cung_cap, ten_nha_cung_cap, so_dien_thoai, email, dia_chi,
+                phuong_xa, quan_huyen, tinh_thanh, ma_so_thue, nguoi_lien_he, ghi_chu,
+                chi_nhanh_id, trang_thai, ngay_tao, ngay_cap_nhat
+            )
+            VALUES
+            (
+                @MaNhaCungCap, @TenNhaCungCap, @SoDienThoai, @Email, @DiaChi,
+                @PhuongXa, @QuanHuyen, @TinhThanh, @MaSoThue, @NguoiLienHe, @GhiChu,
+                @ChiNhanhId, @TrangThai, COALESCE(@NgayTao, NOW()), NOW()
+            );
+            SELECT LAST_INSERT_ID();
+            """;
 
         return await connection.ExecuteScalarAsync<uint>(
             sql,
@@ -3517,6 +3725,18 @@ LIMIT 500;
                 supplier.MaSoThue,
                 supplier.NguoiLienHe,
                 supplier.GhiChu,
+                supplier.TrangThai,
+                supplier.NgayTao,
+                supplier.CoDuLieuKiotViet,
+                supplier.NguoiTaoTen,
+                supplier.NgayNhapExcel,
+                supplier.NoCanTraHienTaiExcel,
+                supplier.TongMuaExcel,
+                supplier.TongMuaTruTraHangExcel,
+                supplier.KhuVuc,
+                supplier.SoCccd,
+                supplier.NhomNhaCungCapTen,
+                supplier.TenCongTy,
                 ChiNhanhId = Session.CurrentUser?.ChiNhanhId
             });
     }
@@ -3546,6 +3766,47 @@ LIMIT 500;
             throw new InvalidOperationException("Nhà cung cấp không tồn tại hoặc đã bị xóa.");
     }
 
+    /// <summary>
+    /// Cập nhật nhà cung cấp với đầy đủ dữ liệu đọc từ file danh sách, bao gồm
+    /// ba cột tiền, người tạo, ngày tạo và các cột chữ còn lại. Chỉ dùng cho
+    /// bước cập nhật khi nhập file, không dùng cho form sửa (form sửa không
+    /// được phép xoá số tiền lấy từ file).
+    /// </summary>
+    public async Task CapNhatNhaCungCapTuFileAsync(NhaCungCap supplier)
+    {
+        await using var connection = await OpenAsync();
+
+        const string sql = """
+        UPDATE nha_cung_cap
+        SET ten_nha_cung_cap = @TenNhaCungCap,
+            so_dien_thoai = @SoDienThoai,
+            email = @Email,
+            dia_chi = @DiaChi,
+            phuong_xa = @PhuongXa,
+            quan_huyen = @QuanHuyen,
+            tinh_thanh = @TinhThanh,
+            ma_so_thue = @MaSoThue,
+            nguoi_lien_he = @NguoiLienHe,
+            ghi_chu = @GhiChu,
+            khu_vuc = @KhuVuc,
+            so_cccd = @SoCccd,
+            nhom_nha_cung_cap_ten = @NhomNhaCungCapTen,
+            ten_cong_ty = @TenCongTy,
+            trang_thai = @TrangThai,
+            co_du_lieu_kiotviet = @CoDuLieuKiotViet,
+            nguoi_tao_ten = @NguoiTaoTen,
+            ngay_nhap_excel = @NgayNhapExcel,
+            no_can_tra_hien_tai = @NoCanTraHienTaiExcel,
+            tong_mua = @TongMuaExcel,
+            tong_mua_tru_tra_hang = @TongMuaTruTraHangExcel,
+            ngay_tao = COALESCE(@NgayTao, ngay_tao),
+            ngay_cap_nhat = NOW()
+        WHERE ma_nha_cung_cap = @MaNhaCungCap;
+        """;
+
+        await connection.ExecuteAsync(sql, supplier);
+    }
+
     public async Task XoaNhaCungCapAsync(uint supplierId)
     {
         await using var connection = await OpenAsync();
@@ -3567,12 +3828,15 @@ LIMIT 500;
     /// <summary>
     /// Nhập danh sách nhà cung cấp từ file và trả về báo cáo chi tiết để
     /// người dùng biết chính xác tổng số dòng, số thành công, số bỏ qua và số lỗi.
-    /// Mã trùng với database hoặc trùng ngay trong file đều được bỏ qua an toàn.
+    /// Mã trùng với database hoặc trùng ngay trong file đều được bỏ qua an toàn,
+    /// trừ khi <paramref name="capNhatNhaCungCapDaTonTai"/> = true: khi đó nhà cung
+    /// cấp có mã đã có trong database được cập nhật lại bằng dữ liệu của file.
     /// </summary>
     public async Task<KetQuaImportNhaCungCap> ImportNhaCungCapTuFileAsync(
         string filePath,
         IReadOnlyCollection<NhaCungCap>? suppliersOverride,
-        IProgress<int>? progress)
+        IProgress<int>? progress,
+        bool capNhatNhaCungCapDaTonTai = false)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
@@ -3581,6 +3845,11 @@ LIMIT 500;
             throw new FileNotFoundException("Không tìm thấy file danh sách nhà cung cấp.", filePath);
 
         var suppliers = suppliersOverride ?? ParseNhaCungCapFromFile(filePath);
+
+        // Khi chọn cập nhật nhà cung cấp đã có, bảo đảm các cột lưu dữ liệu từ
+        // file đã tồn tại trước khi UPDATE, nếu không toàn bộ file sẽ bị lỗi.
+        if (capNhatNhaCungCapDaTonTai)
+            await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
 
         var result = new KetQuaImportNhaCungCap
         {
@@ -3638,7 +3907,23 @@ LIMIT 500;
             if (maDaDung.Contains(ma))
             {
                 // Mã đã có trong database.
-                result.SoTrungMa++;
+                if (capNhatNhaCungCapDaTonTai)
+                {
+                    try
+                    {
+                        await CapNhatNhaCungCapTuFileAsync(supplier);
+                        result.SoCapNhat++;
+                    }
+                    catch (Exception ex)
+                    {
+                        result.SoLoi++;
+                        GhiLoi(result, $"Dòng {i + 2} ({ma}): {ex.Message}");
+                    }
+                }
+                else
+                {
+                    result.SoTrungMa++;
+                }
             }
             else if (!maDaDung.Add(ma))
             {
@@ -3931,6 +4216,17 @@ LIMIT 500;
     }
     private static NhaCungCap MapRowToNhaCungCap(Dictionary<string, string> row)
     {
+        var noCanTra = ParseSoTien(
+            GetCellValue(row, "no_can_tra_hien_tai", "nợ cần trả hiện tại", "no can tra hien tai", "nợ hiện tại", "no hien tai", "nợ cần trả"));
+        var tongMua = ParseSoTien(
+            GetCellValue(row, "tong_mua", "tổng mua", "tong mua"));
+        var tongMuaTruTraHang = ParseSoTien(
+            GetCellValue(row, "tong_mua_tru_tra_hang", "tổng mua trừ trả hàng", "tong mua tru tra hang", "tổng mua trừ trả", "tong mua tru tra"));
+
+        var trangThai = ParseBoolean(
+            GetCellValue(row, "trang_thai", "trạng thái", "trang thai", "status"),
+            true);
+
         var supplier = new NhaCungCap
         {
             MaNhaCungCap = GetCellValue(row, "ma_nha_cung_cap", "mã nhà cung cấp", "ma ncc", "supplier code") ?? string.Empty,
@@ -3944,7 +4240,18 @@ LIMIT 500;
             MaSoThue = GetCellValue(row, "ma_so_thue", "mã số thuế", "ma so thue", "tax code"),
             NguoiLienHe = GetCellValue(row, "nguoi_lien_he", "người liên hệ", "lien he", "contact"),
             GhiChu = GetCellValue(row, "ghi_chu", "ghi chú", "note"),
-            TrangThai = true
+            KhuVuc = GetCellValue(row, "khu_vuc", "khu vực", "khu vuc", "region"),
+            SoCccd = GetCellValue(row, "so_cmnd_cccd", "số cmnd/cccd", "so cmnd cccd", "cmnd", "cccd"),
+            NhomNhaCungCapTen = GetCellValue(row, "nhom_nha_cung_cap", "nhóm nhà cung cấp", "nhom ncc", "nhóm"),
+            TenCongTy = GetCellValue(row, "cong_ty", "công ty", "ten cong ty"),
+            NguoiTaoTen = GetCellValue(row, "nguoi_tao", "người tạo", "nguoi tao", "nguoi_tao_ten"),
+            NgayTao = ParseNgayTaiFile(GetCellValue(row, "ngay_tao", "ngày tạo", "ngay tao")),
+            NgayNhapExcel = DateTime.Now,
+            TrangThai = trangThai,
+            NoCanTraHienTaiExcel = noCanTra,
+            TongMuaExcel = tongMua,
+            TongMuaTruTraHangExcel = tongMuaTruTraHang,
+            CoDuLieuKiotViet = noCanTra.HasValue || tongMua.HasValue || tongMuaTruTraHang.HasValue
         };
 
         if (string.IsNullOrWhiteSpace(supplier.MaNhaCungCap))
