@@ -3272,7 +3272,7 @@ LIMIT 500;
         dieuKien.Append(
             " AND (@CongNoMode = 0"
             + $" OR (@CongNoMode = 1 AND COALESCE({bieuThucConNo}, 0) > 0)"
-            + $" OR (@CongNoMode = 2 AND COALESCE({bieuThucConNo}, 0) <= 0))");
+            + $" OR (@CongNoMode = 2 AND COALESCE({bieuThucConNo}, 0) = 0))");
 
         // Khoảng công nợ.
         dieuKien.Append($" AND (@ConNoTu IS NULL OR COALESCE({bieuThucConNo}, 0) >= @ConNoTu)");

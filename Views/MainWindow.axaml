@@ -16,6 +16,7 @@
 
   <Window.Resources>
     <converters:ThousandsSeparatorConverter x:Key="ThousandsSeparatorConverter" />
+    <converters:LuaChonRadioConverter x:Key="LuaChonRadioConverter" />
   </Window.Resources>
 
   <Window.Styles>
@@ -2762,7 +2763,7 @@
         </TabItem>
 
         <TabItem Header="Nhà cung cấp">
-          <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" Margin="0,14,16,0" RowSpacing="12">
+          <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,14,16,0" RowSpacing="12">
 
             <!-- 1. TIÊU ĐỀ & NÚT THAO TÁC -->
             <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
@@ -2800,115 +2801,67 @@
                 ToolTip.Tip="Tìm nhà cung cấp ngay với từ khóa đang gõ" />
 
               <Button Grid.Column="2" Classes="toolbar-action" Margin="0"
-                Command="{Binding ToggleSupplierFilterCommand}"
-                ToolTip.Tip="Mở/đóng bộ lọc nâng cao">
+                x:Name="SupplierFilterButton"
+                ToolTip.Tip="Lọc nhà cung cấp theo tình trạng công nợ">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <TextBlock Text="⚙" />
                   <TextBlock Text="{Binding SupplierFilterButtonText}" />
                   <TextBlock Text="{Binding SupplierFilterArrowText}" />
                 </StackPanel>
+
+                <!--
+                  BỘ LỌC NẰM TRONG FLYOUT CỦA CHÍNH NÚT NÀY
+                  Nổi phía trên bảng dữ liệu, không chiếm hàng nào trong layout
+                  chính nên đóng lại thì khu vực tìm kiếm giữ nguyên chiều cao.
+                  Flyout tự đóng khi bấm ra ngoài. Nội dung nằm trong Popup nên
+                  không sinh field trong code-behind.
+                -->
+                <Button.Flyout>
+                  <Flyout Placement="BottomEdgeAlignedRight"
+                    Opened="OnSupplierFilterFlyoutOpened"
+                    Closed="OnSupplierFilterFlyoutClosed">
+                    <Border Background="#F1F8F5" BorderBrush="#D9EAE4" BorderThickness="1"
+                      CornerRadius="10" Padding="14" Width="240"
+                      BoxShadow="0 8 20 #30000000">
+                      <StackPanel Spacing="10">
+
+                        <TextBlock Text="Tình trạng công nợ" FontSize="12"
+                          FontWeight="SemiBold" Foreground="#163F38" />
+
+                        <StackPanel Spacing="2">
+                          <RadioButton GroupName="SupplierCongNo"
+                            Content="Tất cả" FontSize="13" Padding="0,6"
+                            IsChecked="{Binding SupplierCongNoFilter, Mode=TwoWay, Converter={StaticResource LuaChonRadioConverter}, ConverterParameter=tatca}" />
+                          <RadioButton GroupName="SupplierCongNo"
+                            Content="Còn nợ" FontSize="13" Padding="0,6"
+                            IsChecked="{Binding SupplierCongNoFilter, Mode=TwoWay, Converter={StaticResource LuaChonRadioConverter}, ConverterParameter=conno}" />
+                          <RadioButton GroupName="SupplierCongNo"
+                            Content="Không còn nợ" FontSize="13" Padding="0,6"
+                            IsChecked="{Binding SupplierCongNoFilter, Mode=TwoWay, Converter={StaticResource LuaChonRadioConverter}, ConverterParameter=khongconno}" />
+                        </StackPanel>
+
+                        <Rectangle Height="1" Fill="#D9EAE4" />
+
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                          <Button Classes="toolbar-action" Content="Xóa" Margin="0"
+                            Command="{Binding ClearSupplierFilterCommand}"
+                            Click="OnSupplierFilterClearClicked"
+                            IsVisible="{Binding SupplierHasFilter}" />
+                          <Button Grid.Column="1" Classes="toolbar-primary"
+                            Content="🔍 Áp dụng" Margin="0"
+                            Command="{Binding ApplySupplierFilterCommand}"
+                            Click="OnSupplierFilterApplyClicked" />
+                        </Grid>
+
+                      </StackPanel>
+                    </Border>
+                  </Flyout>
+                </Button.Flyout>
               </Button>
             </Grid>
 
-            <!-- 3. BỘ LỌC NÂNG CAO -->
-            <Border Grid.Row="2"
-              Background="#F1F8F5" BorderBrush="#D9EAE4" BorderThickness="1"
-              CornerRadius="10" Padding="14"
-              IsVisible="{Binding IsSupplierFilterPanelOpen}">
-
-              <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
-
-                <Grid ColumnDefinitions="*,*,*,*,Auto" ColumnSpacing="10">
-                  <StackPanel>
-                    <TextBlock Text="Mã NCC" FontSize="11" Foreground="#61736E"
-                      Margin="0,0,0,3" />
-                    <TextBox Classes="searchInput" Height="34" FontSize="12"
-                      Watermark="NCC0001"
-                      Text="{Binding SupplierFilterMa, Mode=TwoWay}" />
-                  </StackPanel>
-
-                  <StackPanel Grid.Column="1">
-                    <TextBlock Text="Tên nhà cung cấp" FontSize="11" Foreground="#61736E"
-                      Margin="0,0,0,3" />
-                    <TextBox Classes="searchInput" Height="34" FontSize="12"
-                      Watermark="Công ty TNHH..."
-                      Text="{Binding SupplierFilterTen, Mode=TwoWay}" />
-                  </StackPanel>
-
-                  <StackPanel Grid.Column="2">
-                    <TextBlock Text="Số điện thoại" FontSize="11" Foreground="#61736E"
-                      Margin="0,0,0,3" />
-                    <TextBox Classes="searchInput" Height="34" FontSize="12"
-                      Watermark="09xx xxx xxx"
-                      Text="{Binding SupplierFilterSoDienThoai, Mode=TwoWay}" />
-                  </StackPanel>
-
-                  <StackPanel Grid.Column="3">
-                    <TextBlock Text="Email" FontSize="11" Foreground="#61736E"
-                      Margin="0,0,0,3" />
-                    <TextBox Classes="searchInput" Height="34" FontSize="12"
-                      Watermark="ten@congty.vn"
-                      Text="{Binding SupplierFilterEmail, Mode=TwoWay}" />
-                  </StackPanel>
-
-                  <StackPanel Grid.Column="4" Width="150">
-                    <TextBlock Text="Tình trạng công nợ" FontSize="11"
-                      Foreground="#61736E" Margin="0,0,0,3" />
-                    <ComboBox Height="34" FontSize="12"
-                      ItemsSource="{Binding SupplierCongNoOptions}"
-                      SelectedValue="{Binding SupplierCongNoFilter, Mode=TwoWay}"
-                      SelectedValueBinding="{Binding GiaTri}"
-                      HorizontalAlignment="Stretch">
-                      <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="models:SoQuyLuaChonItem">
-                          <TextBlock Text="{Binding HienThi}" FontSize="12" />
-                        </DataTemplate>
-                      </ComboBox.ItemTemplate>
-                    </ComboBox>
-                  </StackPanel>
-                </Grid>
-
-                <Grid Grid.Row="1" ColumnDefinitions="*,*,Auto,Auto" ColumnSpacing="10">
-                  <StackPanel>
-                    <TextBlock Text="Địa chỉ" FontSize="11" Foreground="#61736E"
-                      Margin="0,0,0,3" />
-                    <TextBox Classes="searchInput" Height="34" FontSize="12"
-                      Watermark="Số nhà, đường, quận..."
-                      Text="{Binding SupplierFilterDiaChi, Mode=TwoWay}" />
-                  </StackPanel>
-
-                  <Grid Grid.Column="1" ColumnDefinitions="*,*" ColumnSpacing="10">
-                    <StackPanel>
-                      <TextBlock Text="Công nợ từ" FontSize="11" Foreground="#61736E"
-                        Margin="0,0,0,3" />
-                      <TextBox Classes="searchInput" Height="34" FontSize="12"
-                        Watermark="0"
-                        Text="{Binding SupplierFilterConNoTu, Mode=TwoWay}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="1">
-                      <TextBlock Text="đến" FontSize="11" Foreground="#61736E"
-                        Margin="0,0,0,3" />
-                      <TextBox Classes="searchInput" Height="34" FontSize="12"
-                        Watermark="Không giới hạn"
-                        Text="{Binding SupplierFilterConNoDen, Mode=TwoWay}" />
-                    </StackPanel>
-                  </Grid>
-
-                  <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
-                    <Button Classes="toolbar-action" Content="Xóa bộ lọc" Margin="0"
-                      Command="{Binding ClearSupplierFilterCommand}"
-                      IsVisible="{Binding SupplierHasFilter}" />
-                  </StackPanel>
-
-                  <Button Grid.Column="3" Classes="toolbar-primary" Content="🔍 Áp dụng"
-                    VerticalAlignment="Bottom" Margin="0"
-                    Command="{Binding ApplySupplierFilterCommand}" />
-                </Grid>
-              </Grid>
-            </Border>
-
-            <!-- 4. THỐNG KÊ THẬT TỪ DATABASE -->
-            <Grid Grid.Row="3" ColumnDefinitions="*,*,*,*,*" ColumnSpacing="14">
+            <!-- 3. THỐNG KÊ THẬT TỪ DATABASE -->
+            <Grid Grid.Row="2" ColumnDefinitions="*,*,*,*,*" ColumnSpacing="14">
 
               <Border Classes="card" Padding="18" Margin="0">
                 <StackPanel>
@@ -2963,8 +2916,8 @@
               </Border>
             </Grid>
 
-            <!-- 5. BẢNG NHÀ CUNG CẤP (DÒNG MỞ RỘNG NGAY DƯỚI DÒNG ĐÃ CHỌN) -->
-            <Border Grid.Row="4" Classes="card" Padding="0" Margin="0">
+            <!-- 4. BẢNG NHÀ CUNG CẤP (DÒNG MỞ RỘNG NGAY DƯỚI DÒNG ĐÃ CHỌN) -->
+            <Border Grid.Row="3" Classes="card" Padding="0" Margin="0">
               <!--
                 Hàng: 0 = tiêu đề bảng, 1 = thanh tải, 2 = vùng danh sách,
                 3 = phân trang.

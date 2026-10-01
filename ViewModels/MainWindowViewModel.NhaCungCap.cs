@@ -44,34 +44,6 @@ public sealed partial class MainWindowViewModel
     [NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
     private string? supplierCongNoFilter = CongNoTatCa;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterMa;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterTen;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterSoDienThoai;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterEmail;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterDiaChi;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterConNoTu;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterConNoDen;
-
     [ObservableProperty] private bool isSupplierFilterPanelOpen;
 
     [ObservableProperty] private bool isLoadingSuppliers;
@@ -135,15 +107,12 @@ public sealed partial class MainWindowViewModel
     // TEXT HIỂN THỊ
     // ============================================================
 
-    public bool SupplierHasFilter => !string.IsNullOrWhiteSpace(SupplierFilterMa)
-        || !string.IsNullOrWhiteSpace(SupplierFilterTen)
-        || !string.IsNullOrWhiteSpace(SupplierFilterSoDienThoai)
-        || !string.IsNullOrWhiteSpace(SupplierFilterEmail)
-        || !string.IsNullOrWhiteSpace(SupplierFilterDiaChi)
-        || !string.IsNullOrWhiteSpace(SupplierFilterConNoTu)
-        || !string.IsNullOrWhiteSpace(SupplierFilterConNoDen)
-        || (!string.IsNullOrWhiteSpace(SupplierCongNoFilter)
-            && SupplierCongNoFilter != CongNoTatCa);
+    /// <summary>
+    /// Panel lọc chỉ còn một điều kiện là "Tình trạng công nợ".
+    /// Ô tìm kiếm ở thanh trên cố ý không tính vào đây.
+    /// </summary>
+    public bool SupplierHasFilter => !string.IsNullOrWhiteSpace(SupplierCongNoFilter)
+        && SupplierCongNoFilter != CongNoTatCa;
 
     public int SupplierTotalPages
     {
@@ -225,10 +194,18 @@ public sealed partial class MainWindowViewModel
 
     public string SupplierSelectedCountText => $"Đã chọn {SupplierSelectedCount} nhà cung cấp";
 
-    /// <summary>Nhãn nút bộ lọc, hiển thị số điều kiện đang bật.</summary>
-    public string SupplierFilterButtonText => TaoBoLocNhaCungCap().MoTa;
+    /// <summary>
+    /// Nhãn nút bộ lọc. Chỉ có một điều kiện là tình trạng công nợ nên nhãn
+    /// ghi rõ đang lọc gì: "Bộ lọc", "Bộ lọc (Còn nợ)", "Bộ lọc (Không còn nợ)".
+    /// </summary>
+    public string SupplierFilterButtonText => SupplierCongNoFilter switch
+    {
+        CongNoConNo => "Bộ lọc (Còn nợ)",
+        CongNoKhongConNo => "Bộ lọc (Không còn nợ)",
+        _ => "Bộ lọc"
+    };
 
-    /// <summary>Mũi tên của nút mở/đóng khung bộ lọc nâng cao.</summary>
+    /// <summary>Mũi tên của nút mở/đóng menu bộ lọc.</summary>
     public string SupplierFilterArrowText => IsSupplierFilterPanelOpen ? "▲" : "▼";
 
     partial void OnIsSupplierFilterPanelOpenChanged(bool value)
@@ -309,18 +286,14 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-    /// <summary>Gom các điều kiện trên giao diện thành đối tượng bộ lọc cho database.</summary>
+    /// <summary>
+    /// Gom điều kiện trên giao diện thành đối tượng bộ lọc cho database.
+    /// Panel lọc chỉ còn "Tình trạng công nợ"; từ khóa tìm kiếm lấy từ thanh tìm kiếm.
+    /// </summary>
     private BoLocNhaCungCap TaoBoLocNhaCungCap() => new()
     {
         TimKiem = SupplierSearch?.Trim() ?? "",
-        MaNhaCungCap = SupplierFilterMa?.Trim() ?? "",
-        TenNhaCungCap = SupplierFilterTen?.Trim() ?? "",
-        SoDienThoai = SupplierFilterSoDienThoai?.Trim() ?? "",
-        Email = SupplierFilterEmail?.Trim() ?? "",
-        DiaChi = SupplierFilterDiaChi?.Trim() ?? "",
-        CongNoMode = ChuyenCongNoFilterSangSo(SupplierCongNoFilter),
-        ConNoTu = ParseTien(SupplierFilterConNoTu),
-        ConNoDen = ParseTien(SupplierFilterConNoDen)
+        CongNoMode = ChuyenCongNoFilterSangSo(SupplierCongNoFilter)
     };
 
     /// <summary>Đổi lựa chọn trên ComboBox thành mã số mà SQL hiểu.</summary>
@@ -330,13 +303,6 @@ public sealed partial class MainWindowViewModel
         "khongconno" => BoLocNhaCungCap.CongNoKhongConNo,
         _ => BoLocNhaCungCap.CongNoTatCa
     };
-
-    /// <summary>
-    /// Đọc số tiền người dùng gõ ở ô khoảng công nợ. Ô trống nghĩa là không lọc
-    /// theo khoảng đó (trả về null), không phải lọc theo giá trị 0.
-    /// </summary>
-    private static decimal? ParseTien(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : MoneyInput.Parse(value);
 
     // ============================================================
     // LỆNH TÌM KIẾM / LỌC / PHÂN TRANG
@@ -403,13 +369,6 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private async Task ClearSupplierFilterAsync()
     {
-        SupplierFilterMa = null;
-        SupplierFilterTen = null;
-        SupplierFilterSoDienThoai = null;
-        SupplierFilterEmail = null;
-        SupplierFilterDiaChi = null;
-        SupplierFilterConNoTu = null;
-        SupplierFilterConNoDen = null;
         SupplierCongNoFilter = CongNoTatCa;
         SupplierPage = 1;
 
