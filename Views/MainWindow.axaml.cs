@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -354,6 +355,44 @@ public partial class MainWindow : Window
         viewModel.SupplierSearch = (sender as TextBox)?.Text ?? string.Empty;
 
         viewModel.TimKiemNhaCungCapTuDong();
+    }
+
+    /// <summary>
+    /// Menu bộ lọc do Flyout của Avalonia mở/đóng. Hai hàm này chỉ cập nhật
+    /// biến trong ViewModel để mũi tên trên nút đổi đúng chiều.
+    /// </summary>
+    private void OnSupplierFilterFlyoutOpened(object? sender, EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+            viewModel.IsSupplierFilterPanelOpen = true;
+    }
+
+    private void OnSupplierFilterFlyoutClosed(object? sender, EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+            viewModel.IsSupplierFilterPanelOpen = false;
+    }
+
+    /// <summary>
+    /// Bấm "Áp dụng" thì đóng menu bộ lọc. Áp dụng xong danh sách và thống kê
+    /// đã cập nhật, giữ menu mở chỉ che mất bảng dữ liệu.
+    /// </summary>
+    private void OnSupplierFilterApplyClicked(object? sender, RoutedEventArgs e)
+        => DongMenuBoLoc();
+
+    /// <summary>Bấm "Xóa" thì đóng menu bộ lọc sau khi đã reset về "Tất cả".</summary>
+    private void OnSupplierFilterClearClicked(object? sender, RoutedEventArgs e)
+        => DongMenuBoLoc();
+
+    /// <summary>
+    /// Đóng menu bộ lọc. Nội dung menu nằm trong Popup nên không sinh field,
+    /// phải lấy qua chính nút đã gắn Flyout.
+    /// </summary>
+    private void DongMenuBoLoc()
+    {
+        // FlyoutBase.IsOpen không có setter công khai, dùng Hide() của FlyoutBase.
+        if (SupplierFilterButton.Flyout is FlyoutBase flyout)
+            flyout.Hide();
     }
 
     private void OnSupplierPageSizeChanged(object? sender, SelectionChangedEventArgs e)

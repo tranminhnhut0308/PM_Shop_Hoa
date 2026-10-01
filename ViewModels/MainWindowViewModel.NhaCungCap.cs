@@ -1,4 +1,7 @@
 using System.Collections.ObjectModel;
+using Avalonia.Controls;
+using Avalonia.Platform.Storage;
+using ClosedXML.Excel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShopHoa.Helpers;
@@ -41,34 +44,6 @@ public sealed partial class MainWindowViewModel
     [NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
     private string? supplierCongNoFilter = CongNoTatCa;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterMa;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterTen;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterSoDienThoai;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterEmail;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterDiaChi;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterConNoTu;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SupplierHasFilter)), NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
-    private string? supplierFilterConNoDen;
-
     [ObservableProperty] private bool isSupplierFilterPanelOpen;
 
     [ObservableProperty] private bool isLoadingSuppliers;
@@ -103,6 +78,11 @@ public sealed partial class MainWindowViewModel
     [NotifyPropertyChangedFor(nameof(SupplierTotalDebtText))]
     private decimal supplierTotalDebt;
 
+    /// <summary>Tổng tiền đã mua của các nhà cung cấp khớp bộ lọc đang xem.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SupplierTotalPurchaseText))]
+    private decimal supplierTotalPurchase;
+
     /// <summary>Số nhà cung cấp còn nợ, đếm cùng bộ lọc đang xem.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupplierDebtSupplierCaption))]
@@ -127,15 +107,12 @@ public sealed partial class MainWindowViewModel
     // TEXT HIỂN THỊ
     // ============================================================
 
-    public bool SupplierHasFilter => !string.IsNullOrWhiteSpace(SupplierFilterMa)
-        || !string.IsNullOrWhiteSpace(SupplierFilterTen)
-        || !string.IsNullOrWhiteSpace(SupplierFilterSoDienThoai)
-        || !string.IsNullOrWhiteSpace(SupplierFilterEmail)
-        || !string.IsNullOrWhiteSpace(SupplierFilterDiaChi)
-        || !string.IsNullOrWhiteSpace(SupplierFilterConNoTu)
-        || !string.IsNullOrWhiteSpace(SupplierFilterConNoDen)
-        || (!string.IsNullOrWhiteSpace(SupplierCongNoFilter)
-            && SupplierCongNoFilter != CongNoTatCa);
+    /// <summary>
+    /// Panel lọc chỉ còn một điều kiện là "Tình trạng công nợ".
+    /// Ô tìm kiếm ở thanh trên cố ý không tính vào đây.
+    /// </summary>
+    public bool SupplierHasFilter => !string.IsNullOrWhiteSpace(SupplierCongNoFilter)
+        && SupplierCongNoFilter != CongNoTatCa;
 
     public int SupplierTotalPages
     {
@@ -174,6 +151,9 @@ public sealed partial class MainWindowViewModel
     public string SupplierTotalDebtText
         => MoneyInput.Format(SupplierTotalDebt) + " đ";
 
+    public string SupplierTotalPurchaseText
+        => MoneyInput.Format(SupplierTotalPurchase) + " đ";
+
     public string SupplierDebtSupplierCaption
         => $"{SupplierDebtSupplierCount:N0} nhà cung cấp còn nợ";
 
@@ -194,12 +174,38 @@ public sealed partial class MainWindowViewModel
 
     public bool HasSelectedSupplierRows => SupplierSelectedCount > 0;
 
+    /// <summary>
+    /// Báo lại trạng thái rỗng/không rỗng của danh sách sau khi <see cref="SupplierRows"/>
+    /// vừa được nạp lại.
+    ///
+    /// Hai thuộc tính trên là biểu thức tính theo <see cref="SupplierRows"/>, mà
+    /// SupplierTotalCount lại được gán TRƯỚC khi danh sách được nạp, nên thông báo
+    /// của nó tới lúc đánh giá vẫn thấy danh sách rỗng và dòng "Chưa có nhà cung
+    /// cấp nào trong hệ thống" cứ hiện lại dù đã có dữ liệu. Gọi hàm này sau khi
+    /// nạp xong danh sách để giao diện đánh giá lại đúng số dòng đang hiển thị.
+    /// </summary>
+    private void CapNhatTrangThaiDanhSachNhaCungCap()
+    {
+        OnPropertyChanged(nameof(IsSupplierListEmpty));
+        OnPropertyChanged(nameof(HasSupplierRows));
+        OnPropertyChanged(nameof(SupplierRangeText));
+        OnPropertyChanged(nameof(IsAllSupplierRowsSelected));
+    }
+
     public string SupplierSelectedCountText => $"Đã chọn {SupplierSelectedCount} nhà cung cấp";
 
-    /// <summary>Nhãn nút bộ lọc, hiển thị số điều kiện đang bật.</summary>
-    public string SupplierFilterButtonText => TaoBoLocNhaCungCap().MoTa;
+    /// <summary>
+    /// Nhãn nút bộ lọc. Chỉ có một điều kiện là tình trạng công nợ nên nhãn
+    /// ghi rõ đang lọc gì: "Bộ lọc", "Bộ lọc (Còn nợ)", "Bộ lọc (Không còn nợ)".
+    /// </summary>
+    public string SupplierFilterButtonText => SupplierCongNoFilter switch
+    {
+        CongNoConNo => "Bộ lọc (Còn nợ)",
+        CongNoKhongConNo => "Bộ lọc (Không còn nợ)",
+        _ => "Bộ lọc"
+    };
 
-    /// <summary>Mũi tên của nút mở/đóng khung bộ lọc nâng cao.</summary>
+    /// <summary>Mũi tên của nút mở/đóng menu bộ lọc.</summary>
     public string SupplierFilterArrowText => IsSupplierFilterPanelOpen ? "▲" : "▼";
 
     partial void OnIsSupplierFilterPanelOpenChanged(bool value)
@@ -244,6 +250,7 @@ public sealed partial class MainWindowViewModel
             SupplierTotalCount = duLieu.TongSoBanGhi;
             SupplierAllCount = thongKe.TongSoNhaCungCap;
             SupplierTotalDebt = thongKe.TongCongNo;
+            SupplierTotalPurchase = thongKe.TongMua;
             SupplierDebtSupplierCount = thongKe.SoNhaCungCapConNo;
 
             SupplierRows.Clear();
@@ -259,12 +266,17 @@ public sealed partial class MainWindowViewModel
             ExpandedSupplierRow = null;
 
             SupplierSelectedCount = 0;
+
+            // Đánh giá lại trạng thái rỗng sau khi danh sách đã nạp xong.
+            CapNhatTrangThaiDanhSachNhaCungCap();
         }
         catch (Exception ex)
         {
             SupplierRows.Clear();
             SupplierTotalCount = 0;
             SupplierSelectedCount = 0;
+
+            CapNhatTrangThaiDanhSachNhaCungCap();
 
             StatusMessage = $"Lỗi tải danh sách nhà cung cấp: {ex.Message}";
         }
@@ -274,18 +286,14 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-    /// <summary>Gom các điều kiện trên giao diện thành đối tượng bộ lọc cho database.</summary>
+    /// <summary>
+    /// Gom điều kiện trên giao diện thành đối tượng bộ lọc cho database.
+    /// Panel lọc chỉ còn "Tình trạng công nợ"; từ khóa tìm kiếm lấy từ thanh tìm kiếm.
+    /// </summary>
     private BoLocNhaCungCap TaoBoLocNhaCungCap() => new()
     {
         TimKiem = SupplierSearch?.Trim() ?? "",
-        MaNhaCungCap = SupplierFilterMa?.Trim() ?? "",
-        TenNhaCungCap = SupplierFilterTen?.Trim() ?? "",
-        SoDienThoai = SupplierFilterSoDienThoai?.Trim() ?? "",
-        Email = SupplierFilterEmail?.Trim() ?? "",
-        DiaChi = SupplierFilterDiaChi?.Trim() ?? "",
-        CongNoMode = ChuyenCongNoFilterSangSo(SupplierCongNoFilter),
-        ConNoTu = ParseTien(SupplierFilterConNoTu),
-        ConNoDen = ParseTien(SupplierFilterConNoDen)
+        CongNoMode = ChuyenCongNoFilterSangSo(SupplierCongNoFilter)
     };
 
     /// <summary>Đổi lựa chọn trên ComboBox thành mã số mà SQL hiểu.</summary>
@@ -295,13 +303,6 @@ public sealed partial class MainWindowViewModel
         "khongconno" => BoLocNhaCungCap.CongNoKhongConNo,
         _ => BoLocNhaCungCap.CongNoTatCa
     };
-
-    /// <summary>
-    /// Đọc số tiền người dùng gõ ở ô khoảng công nợ. Ô trống nghĩa là không lọc
-    /// theo khoảng đó (trả về null), không phải lọc theo giá trị 0.
-    /// </summary>
-    private static decimal? ParseTien(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : MoneyInput.Parse(value);
 
     // ============================================================
     // LỆNH TÌM KIẾM / LỌC / PHÂN TRANG
@@ -368,13 +369,6 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private async Task ClearSupplierFilterAsync()
     {
-        SupplierFilterMa = null;
-        SupplierFilterTen = null;
-        SupplierFilterSoDienThoai = null;
-        SupplierFilterEmail = null;
-        SupplierFilterDiaChi = null;
-        SupplierFilterConNoTu = null;
-        SupplierFilterConNoDen = null;
         SupplierCongNoFilter = CongNoTatCa;
         SupplierPage = 1;
 
@@ -548,5 +542,218 @@ public sealed partial class MainWindowViewModel
 
         SupplierSelectedCount = 0;
         IsAllSupplierRowsSelected = false;
+    }
+
+    // ============================================================
+    // XUẤT FILE EXCEL
+    // ============================================================
+
+    /// <summary>Tên file mặc định khi mở hộp thoại lưu, ví dụ DanhSachNhaCungCap_20261001_161500.xlsx</summary>
+    public static string TaoTenFileXuatNhaCungCap(DateTime thoiDiem)
+        => $"DanhSachNhaCungCap_{thoiDiem:yyyyMMdd_HHmmss}.xlsx";
+
+    /// <summary>
+    /// Xuất toàn bộ nhà cung cấp đang được lọc ra file Excel.
+    ///
+    /// Cố tình gọi lại đúng <see cref="TaoBoLocNhaCungCap"/> của màn hình nên
+    /// từ khoá tìm kiếm và bộ lọc nâng cao được giữ nguyên, và lấy hết từ
+    /// database (không phân trang) nên xuất đủ 48 dòng dù trang đang xem 20 dòng.
+    /// </summary>
+    [RelayCommand]
+    private async Task XuatFileNhaCungCapAsync()
+    {
+        if (OwnerWindow is null)
+            return;
+
+        // Đặt tên file trước để hiện sẵn trong hộp thoại lưu.
+        var tenFileMacDinh = TaoTenFileXuatNhaCungCap(DateTime.Now);
+
+        var file = await OwnerWindow.StorageProvider.SaveFilePickerAsync(
+            new FilePickerSaveOptions
+            {
+                Title = "Xuất danh sách nhà cung cấp",
+
+                SuggestedFileName = tenFileMacDinh,
+
+                DefaultExtension = "xlsx",
+
+                // Không tự động ghi đè file đang tồn tại.
+                ShowOverwritePrompt = true,
+
+                FileTypeChoices =
+                [
+                    new FilePickerFileType("Excel")
+                    {
+                        Patterns = ["*.xlsx"]
+                    }
+                ]
+            });
+
+        if (file is null)
+        {
+            StatusMessage = "Bạn đã hủy xuất file.";
+            return;
+        }
+
+        try
+        {
+            StatusMessage = "Đang xuất danh sách nhà cung cấp...";
+
+            // Xuất đúng bộ lọc đang xem trên màn hình, lấy hết bản ghi.
+            var boLoc = TaoBoLocNhaCungCap();
+
+            var danhSach = await _db.GetAllNhaCungCapForExportAsync(boLoc);
+
+            if (danhSach.Count == 0)
+            {
+                await ShowMessageAsync(
+                    "Xuất file thất bại",
+                    "Không có nhà cung cấp nào khớp điều kiện đang xem\n" +
+                    "nên không thể xuất file.");
+
+                StatusMessage = "Không có dữ liệu để xuất.";
+                return;
+            }
+
+            // Dựng file trên luồng nền cho danh sách lớn, không làm treo giao diện.
+            await using var stream = await file.OpenWriteAsync();
+
+            await Task.Run(() =>
+            {
+                using var workbook = new XLWorkbook();
+
+                GhiSheetNhaCungCap(workbook, danhSach);
+
+                workbook.SaveAs(stream);
+            });
+
+            StatusMessage =
+                $"✅ Đã xuất {danhSach.Count:N0} nhà cung cấp ra file {tenFileMacDinh}.";
+
+            await ShowMessageAsync(
+                "Xuất file thành công",
+                $"Đã xuất {danhSach.Count:N0} nhà cung cấp.\n\n" +
+                $"File:\n{file.Name}");
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Xuất file thất bại: " + ex.Message;
+
+            await ShowMessageAsync(
+                "Xuất file thất bại",
+                $"Không thể xuất danh sách nhà cung cấp.\n\n" +
+                $"Chi tiết lỗi:\n{ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Ghi dữ liệu nhà cung cấp ra sheet: tiêu đề in đậm có nền, các cột tiền
+    /// ghi bằng kiểu số thập phân (người dùng SUM/FILTER được), ngày ghi bằng
+    /// kiểu DateTime, độ rộng cột tự co theo nội dung.
+    /// </summary>
+    private static void GhiSheetNhaCungCap(
+        XLWorkbook workbook,
+        IReadOnlyList<NhaCungCap> danhSach)
+    {
+        var sheet = workbook.Worksheets.Add("Nhà cung cấp");
+
+        // (Tiêu đề cột, độ rộng tối thiểu)
+        var tieuDeCot = new (string Ten, double DoRong)[]
+        {
+            ("Mã nhà cung cấp", 16),
+            ("Tên nhà cung cấp", 32),
+            ("Điện thoại", 15),
+            ("Email", 26),
+            ("Địa chỉ", 34),
+            ("Khu vực", 14),
+            ("Phường/Xã", 18),
+            ("Tổng mua", 18),
+            ("Nợ cần trả hiện tại", 20),
+            ("Mã số thuế", 15),
+            ("Số CMND/CCCD", 16),
+            ("Ghi chú", 28),
+            ("Nhóm nhà cung cấp", 20),
+            ("Trạng thái", 16),
+            ("Tổng mua trừ trả hàng", 22),
+            ("Công ty", 24),
+            ("Người tạo", 18),
+            ("Ngày tạo", 20)
+        };
+
+        // Dòng tiêu đề.
+        for (var c = 0; c < tieuDeCot.Length; c++)
+        {
+            var oTieuDe = sheet.Cell(1, c + 1);
+            oTieuDe.Value = tieuDeCot[c].Ten;
+            oTieuDe.Style.Font.Bold = true;
+            oTieuDe.Style.Font.FontColor = XLColor.White;
+            oTieuDe.Style.Fill.BackgroundColor = XLColor.FromHtml("#164B40");
+            oTieuDe.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            oTieuDe.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        }
+
+        // Các cột tiền và ngày: căn phải, tiền là số thập phân thuần.
+        var cotTien = new HashSet<int> { 8, 9, 15 };
+
+        for (var i = 0; i < danhSach.Count; i++)
+        {
+            var ncc = danhSach[i];
+            var dong = i + 2;
+
+            sheet.Cell(dong, 1).Value = ncc.MaNhaCungCap ?? "";
+            sheet.Cell(dong, 2).Value = ncc.TenNhaCungCap ?? "";
+            sheet.Cell(dong, 3).Value = ncc.SoDienThoai ?? "";
+            sheet.Cell(dong, 4).Value = ncc.Email ?? "";
+            sheet.Cell(dong, 5).Value = ncc.DiaChi ?? "";
+            sheet.Cell(dong, 6).Value = ncc.KhuVuc ?? "";
+            sheet.Cell(dong, 7).Value = ncc.PhuongXa ?? "";
+
+            // Ghi bằng giá trị số thập phân để Excel nhận đúng kiểu Number.
+            sheet.Cell(dong, 8).Value = ncc.TongMua;
+            sheet.Cell(dong, 9).Value = ncc.ConNo;
+
+            sheet.Cell(dong, 10).Value = ncc.MaSoThue ?? "";
+            sheet.Cell(dong, 11).Value = ncc.SoCccd ?? "";
+            sheet.Cell(dong, 12).Value = ncc.GhiChu ?? "";
+            sheet.Cell(dong, 13).Value = ncc.NhomNhaCungCapTen ?? "";
+            sheet.Cell(dong, 14).Value = ncc.TrangThaiHienThi;
+
+            sheet.Cell(dong, 15).Value = ncc.TongMuaTruTraHang;
+            sheet.Cell(dong, 16).Value = ncc.TenCongTy ?? "";
+            sheet.Cell(dong, 17).Value = ncc.NguoiTaoTen ?? "";
+
+            // Ưu tiên ngày nhập từ file, không có thì dùng ngày tạo trong database.
+            var ngayTao = ncc.NgayNhapExcel ?? ncc.NgayTao;
+
+            if (ngayTao.HasValue)
+                sheet.Cell(dong, 18).Value = ngayTao.Value;
+            else
+                sheet.Cell(dong, 18).Clear(XLClearOptions.Contents);
+
+            foreach (var cotTienID in cotTien)
+            {
+                var oTien = sheet.Cell(dong, cotTienID);
+                oTien.Style.NumberFormat.Format = "#,##0";
+                oTien.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+            }
+
+            // Ngày ghi dạng DateTime, hiển thị dd/MM/yyyy HH:mm.
+            var oNgay = sheet.Cell(dong, 18);
+            oNgay.Style.NumberFormat.Format = "dd/MM/yyyy HH:mm";
+            oNgay.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        }
+
+        // Độ rộng cột tự co theo nội dung, giới hạn trên/dưới để không bị
+        // quá hẹp (tiêu đề dài) hoặc quá rộng (mô tả dài).
+        var dongCuoi = 1 + danhSach.Count;
+
+        for (var c = 0; c < tieuDeCot.Length; c++)
+        {
+            sheet.Column(c + 1)
+                .AdjustToContents(1, dongCuoi, tieuDeCot[c].DoRong, 46);
+        }
+
+        sheet.Row(1).Height = 22;
+        sheet.SheetView.FreezeRows(1);
     }
 }

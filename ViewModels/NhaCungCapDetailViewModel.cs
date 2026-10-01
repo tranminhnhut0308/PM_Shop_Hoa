@@ -53,6 +53,7 @@ public sealed partial class NhaCungCapDetailViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasCongNoData))]
     [NotifyPropertyChangedFor(nameof(SoPhieuNhapText))]
     [NotifyPropertyChangedFor(nameof(TongTienNhapText))]
+    [NotifyPropertyChangedFor(nameof(TongMuaText))]
     [NotifyPropertyChangedFor(nameof(TongDaThanhToanText))]
     [NotifyPropertyChangedFor(nameof(TongCongNoText))]
     [NotifyPropertyChangedFor(nameof(SoLanGhiCongNoText))]
@@ -181,6 +182,9 @@ public sealed partial class NhaCungCapDetailViewModel : ObservableObject
     public string TongTienNhapText =>
         ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongTienNhap);
 
+    public string TongMuaText =>
+        ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongMua);
+
     public string TongDaThanhToanText =>
         ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongDaThanhToan);
 
@@ -200,6 +204,9 @@ public sealed partial class NhaCungCapDetailViewModel : ObservableObject
         {
             if (ThongKe is null)
                 return ChuaCoDuLieuCongNo;
+
+            if (ThongKe.CoDuLieuKiotViet)
+                return "Theo file danh sách nhà cung cấp";
 
             if (ThongKe.SoLanGhiCongNo > 0)
                 return "Theo sổ cái công nợ nhà cung cấp (ghi nợ - ghi có)";

@@ -24,6 +24,9 @@ public sealed class KetQuaImportNhaCungCap
     /// <summary>Số nhà cung cấp đã được thêm mới vào database.</summary>
     public int SoThemMoi { get; set; }
 
+    /// <summary>Số nhà cung cấp đã có mã trùng nhưng được cập nhật lại dữ liệu từ file.</summary>
+    public int SoCapNhat { get; set; }
+
     /// <summary>Số dòng không thể nhập (thiếu tên hoặc lỗi database).</summary>
     public int SoLoi { get; set; }
 
@@ -38,7 +41,7 @@ public sealed class KetQuaImportNhaCungCap
     public List<string> DanhSachLoi { get; } = [];
 
     /// <summary>Tổng số bản ghi đã thay đổi trong database.</summary>
-    public int TongSoDaThayDoi => SoThemMoi;
+    public int TongSoDaThayDoi => SoThemMoi + SoCapNhat;
 
     /// <summary>Số dòng bị bỏ qua vì mã nhà cung cấp đã có (trong database hoặc trong file).</summary>
     public int SoBoQuaTrungMa => SoTrungMa + SoTrungMaTrongFile;
@@ -46,5 +49,5 @@ public sealed class KetQuaImportNhaCungCap
     /// <summary>Dòng log tóm tắt kết quả nhập để hiển thị cho người dùng.</summary>
     public string ThongBaoTatCa =>
         $"Tổng dòng: {SoDongExcel:N0} | Thành công: {SoThemMoi:N0} | "
-        + $"Bỏ qua trùng mã: {SoBoQuaTrungMa:N0} | Lỗi: {SoLoi:N0}";
+        + $"Cập nhật: {SoCapNhat:N0} | Bỏ qua trùng mã: {SoBoQuaTrungMa:N0} | Lỗi: {SoLoi:N0}";
 }

@@ -16,4 +16,10 @@ public sealed class ThongKeDanhSachNhaCungCap
 
     /// <summary>Số nhà cung cấp đang có nợ.</summary>
     public int SoNhaCungCapConNo { get; set; }
+
+    /// <summary>Tổng tiền đã mua của các nhà cung cấp khớp điều kiện lọc.</summary>
+    public decimal TongMua { get; set; }
+
+    /// <summary>Tổng tiền đã mua trừ trả hàng của các nhà cung cấp khớp điều kiện lọc.</summary>
+    public decimal TongMuaTruTraHang { get; set; }
 }
