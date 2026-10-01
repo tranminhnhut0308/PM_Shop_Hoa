@@ -90,7 +90,12 @@ public sealed class DatabaseService
                 vt.ten_vai_tro
                 ORDER BY vt.id
                 SEPARATOR ', '
-            ) AS VaiTro
+            ) AS VaiTro,
+            GROUP_CONCAT(
+                vt.ma_vai_tro
+                ORDER BY vt.id
+                SEPARATOR ','
+            ) AS MaVaiTro
 
         FROM nguoi_dung nd
 
@@ -188,115 +193,217 @@ public sealed class DatabaseService
         }
     }
 
+    /// <summary>
+    /// Số hàng hóa tối đa được đọc trong một lần tải danh sách.
+    /// Màn hình "Hàng hóa" hiện chưa có phân trang nên lấy đủ danh sách để người dùng xem.
+    /// </summary>
+    public const int SoDongSanPhamToiDa = 1000;
+
+    /// <summary>
+    /// Lấy danh sách hàng hóa. Từ khóa được MySQL đối chiếu trực tiếp trên TOÀN BỘ bảng
+    /// <c>san_pham</c>, chỉ sau đó mới áp dụng LIMIT, nên sản phẩm nằm ngoài phần đang
+    /// hiển thị vẫn tìm ra được (không lấy sẵn một phần rồi mới lọc).
+    /// </summary>
     public async Task<IReadOnlyList<SanPham>> GetSanPhamAsync(string? search = null)
+        => (await GetSanPhamPagedAsync(search, 1, SoDongSanPhamToiDa)).Items;
+
+    /// <summary>
+    /// Lấy một trang hàng hóa kèm tổng số bản ghi khớp từ khóa.
+    /// Tổng số bản ghi được đếm trên toàn database nên không phụ thuộc số dòng của trang,
+    /// dùng cho phân trang và cho thông điệp "Tìm thấy N sản phẩm".
+    /// </summary>
+    public async Task<(IReadOnlyList<SanPham> Items, int TongSoBanGhi)> GetSanPhamPagedAsync(
+        string? search,
+        int page,
+        int pageSize)
     {
+        var keyword = (search ?? "").Trim();
+        var safePage = page < 1 ? 1 : page;
+        var safePageSize = pageSize < 1 ? SoDongSanPhamToiDa : pageSize;
+        var offset = (safePage - 1) * safePageSize;
+
         await using var connection = await OpenAsync();
 
-        var keyword = (search ?? string.Empty).Trim();
-        var hasSearch = !string.IsNullOrWhiteSpace(keyword);
-        var limit = hasSearch ? 200 : 1000;
+        // Từ khóa được tách thành từng từ, mỗi từ phải xuất hiện trong một trong các
+        // cột tìm kiếm (AND giữa các từ). Nhờ vậy gõ "Hồng mua bên" vẫn ra sản phẩm
+        // "hồng ( mua bên VL )" dù hai từ không nối liền nhau.
+        // Không có từ khóa thì không thêm điều kiện nào để MySQL đọc bảng như bình thường.
+        var parameters = new DynamicParameters();
 
-        // Tách 2 trường hợp để MySQL tối ưu tốt hơn:
-        // - Không tìm kiếm: dùng ORDER BY + LIMIT 30, không có điều kiện OR @Search = ''.
-        // - Có tìm kiếm: tìm trực tiếp trong DB và chỉ trả tối đa 200 dòng.
-        string sql = hasSearch
-            ? """
-              SELECT
-                  sp.id AS Id,
-                  sp.ma_san_pham AS MaSanPham,
-                  sp.ma_vach AS MaVach,
-                  COALESCE(NULLIF(TRIM(sp.ten_san_pham), ''), sp.ma_san_pham) AS TenSanPham,
-                  sp.nhom_san_pham_id AS NhomSanPhamId,
-                  sp.don_vi_tinh_id AS DonViTinhId,
-                  sp.thuong_hieu_id AS ThuongHieuId,
-                  sp.gia_ban AS GiaBan,
-                  sp.gia_von AS GiaVon,
-                  COALESCE(tk.so_luong_ton, 0) AS TonKho,
-                  COALESCE(sp.ton_kho_excel, COALESCE(tk.so_luong_ton, 0)) AS TonKhoExcel,
-                  sp.ton_toi_thieu AS TonToiThieu,
-                  sp.ton_toi_da AS TonToiDa,
-                  COALESCE(sp.khach_dat, 0) AS KhachDat,
-                  sp.ngay_tao AS NgayTao,
-                  sp.du_kien_het_hang AS DuKienHetHang,
-                  dvt.ten_don_vi AS DonViTinh,
-                  nsp.ten_nhom AS NhomSanPham,
-                  sp.loai_hang_excel AS LoaiHang,
-                  sp.nhom_hang_3_cap_excel AS NhomHangBaCap,
-                  sp.vi_tri_kho AS ViTriKho,
-                  sp.dang_kinh_doanh AS DuocBanTrucTiep,
-                  sp.trang_thai AS DangKinhDoanh,
-                  sp.mo_ta AS MoTa,
-                  sp.ghi_chu AS GhiChu,
-                  sp.hinh_anh AS HinhAnh
-              FROM san_pham sp
-              LEFT JOIN ton_kho tk ON tk.san_pham_id = sp.id
-              LEFT JOIN don_vi_tinh dvt ON dvt.id = sp.don_vi_tinh_id
-              LEFT JOIN nhom_san_pham nsp ON nsp.id = sp.nhom_san_pham_id
-              WHERE (
-                    sp.ma_san_pham LIKE CONCAT(@Search, '%')
-                    OR sp.ma_vach LIKE CONCAT(@Search, '%')
-                    OR sp.ten_san_pham LIKE CONCAT('%', @Search, '%')
-                )
+        var dieuKien = TaoDieuKienTimKiemSanPham(
+            parameters,
+            keyword,
+            "sp.ma_san_pham",
+            "sp.ma_vach",
+            "sp.ten_san_pham");
+
+        var whereSql = dieuKien.Length == 0 ? "" : "WHERE " + dieuKien;
+
+        // Khớp chính xác mã hàng / mã vạch thì đưa lên đầu, tên hàng bắt đầu bằng
+        // từ khóa thì kế sau, còn lại sắp theo tên hàng.
+        var orderSql = dieuKien.Length == 0
+            ? "ORDER BY sp.ten_san_pham, sp.id"
+            : """
               ORDER BY
                   CASE
                       WHEN sp.ma_san_pham = @Search THEN 0
                       WHEN sp.ma_vach = @Search THEN 1
-                      ELSE 2
+                      WHEN sp.ten_san_pham LIKE CONCAT(@S0, '%') THEN 2
+                      ELSE 3
                   END,
-                  sp.ten_san_pham
-              LIMIT @Limit;
-              """
-            : """
-              SELECT
-                  sp.id AS Id,
-                  sp.ma_san_pham AS MaSanPham,
-                  sp.ma_vach AS MaVach,
-                  COALESCE(NULLIF(TRIM(sp.ten_san_pham), ''), sp.ma_san_pham) AS TenSanPham,
-                  sp.nhom_san_pham_id AS NhomSanPhamId,
-                  sp.don_vi_tinh_id AS DonViTinhId,
-                  sp.thuong_hieu_id AS ThuongHieuId,
-                  sp.gia_ban AS GiaBan,
-                  sp.gia_von AS GiaVon,
-                  COALESCE(tk.so_luong_ton, 0) AS TonKho,
-                  COALESCE(sp.ton_kho_excel, COALESCE(tk.so_luong_ton, 0)) AS TonKhoExcel,
-                  sp.ton_toi_thieu AS TonToiThieu,
-                  sp.ton_toi_da AS TonToiDa,
-                  COALESCE(sp.khach_dat, 0) AS KhachDat,
-                  sp.ngay_tao AS NgayTao,
-                  sp.du_kien_het_hang AS DuKienHetHang,
-                  dvt.ten_don_vi AS DonViTinh,
-                  nsp.ten_nhom AS NhomSanPham,
-                  sp.loai_hang_excel AS LoaiHang,
-                  sp.nhom_hang_3_cap_excel AS NhomHangBaCap,
-                  sp.vi_tri_kho AS ViTriKho,
-                  sp.dang_kinh_doanh AS DuocBanTrucTiep,
-                  sp.trang_thai AS DangKinhDoanh,
-                  sp.mo_ta AS MoTa,
-                  sp.ghi_chu AS GhiChu,
-                  sp.hinh_anh AS HinhAnh
-              FROM san_pham sp
-              LEFT JOIN ton_kho tk ON tk.san_pham_id = sp.id
-              LEFT JOIN don_vi_tinh dvt ON dvt.id = sp.don_vi_tinh_id
-              LEFT JOIN nhom_san_pham nsp ON nsp.id = sp.nhom_san_pham_id
-              ORDER BY sp.ten_san_pham, sp.id
-              LIMIT @Limit;
+                  sp.ten_san_pham,
+                  sp.id
               """;
 
-        var parameters = new
-        {
-            Search = keyword,
-            Limit = limit
-        };
+        parameters.Add("PageSize", safePageSize);
+        parameters.Add("Offset", offset);
+
+        var countSql = $"""
+            SELECT COUNT(*)
+            FROM san_pham sp
+            {whereSql}
+            """;
+
+        var pageSql = $"""
+            SELECT
+                sp.id AS Id,
+                sp.ma_san_pham AS MaSanPham,
+                sp.ma_vach AS MaVach,
+                COALESCE(NULLIF(TRIM(sp.ten_san_pham), ''), sp.ma_san_pham) AS TenSanPham,
+                sp.nhom_san_pham_id AS NhomSanPhamId,
+                sp.don_vi_tinh_id AS DonViTinhId,
+                sp.thuong_hieu_id AS ThuongHieuId,
+                sp.gia_ban AS GiaBan,
+                sp.gia_von AS GiaVon,
+                COALESCE(tk.so_luong_ton, 0) AS TonKho,
+                COALESCE(sp.ton_kho_excel, COALESCE(tk.so_luong_ton, 0)) AS TonKhoExcel,
+                sp.ton_toi_thieu AS TonToiThieu,
+                sp.ton_toi_da AS TonToiDa,
+                COALESCE(sp.khach_dat, 0) AS KhachDat,
+                sp.ngay_tao AS NgayTao,
+                sp.du_kien_het_hang AS DuKienHetHang,
+                dvt.ten_don_vi AS DonViTinh,
+                nsp.ten_nhom AS NhomSanPham,
+                sp.loai_hang_excel AS LoaiHang,
+                sp.nhom_hang_3_cap_excel AS NhomHangBaCap,
+                sp.vi_tri_kho AS ViTriKho,
+                sp.dang_kinh_doanh AS DuocBanTrucTiep,
+                sp.trang_thai AS DangKinhDoanh,
+                sp.mo_ta AS MoTa,
+                sp.ghi_chu AS GhiChu,
+                sp.hinh_anh AS HinhAnh
+            FROM san_pham sp
+            LEFT JOIN ton_kho tk ON tk.san_pham_id = sp.id
+            LEFT JOIN don_vi_tinh dvt ON dvt.id = sp.don_vi_tinh_id
+            LEFT JOIN nhom_san_pham nsp ON nsp.id = sp.nhom_san_pham_id
+            {whereSql}
+            {orderSql}
+            LIMIT @PageSize OFFSET @Offset
+            """;
+
+        var tongSoBanGhi =
+            await connection.ExecuteScalarAsync<int>(countSql, parameters);
 
         var products = (
-            await connection.QueryAsync<SanPham>(sql, parameters)
+            await connection.QueryAsync<SanPham>(pageSql, parameters)
         ).AsList();
 
-        // Chỉ dùng bảng import cũ khi bảng san_pham không có dữ liệu.
-        if (products.Count > 0)
-            return products;
+        if (products.Count > 0 || tongSoBanGhi > 0)
+            return (products, tongSoBanGhi);
 
-        const string importSql = """
+        // Chỉ dùng bảng import cũ khi bảng san_pham không có dữ liệu.
+        var fromImport = await GetSanPhamTuBangImportAsync(
+            connection,
+            keyword,
+            offset,
+            safePageSize);
+
+        return fromImport.Items.Count > 0
+            ? fromImport
+            : (products, 0);
+    }
+
+    /// <summary>
+    /// Dựng điều kiện tìm kiếm hàng hóa và gắn các tham số vào
+    /// <paramref name="parameters"/>.
+    /// Từ khóa được tách thành từng từ, mỗi từ phải xuất hiện trong một trong các cột
+    /// được tìm, các từ nối với nhau bằng AND.
+    /// <para>
+    /// Các cột dùng collation utf8mb4_unicode_ci nên MySQL không phân biệt hoa/thường
+    /// và không phân biệt dấu: gõ "Hong mua ben" vẫn ra "hồng ( mua bên VL )".
+    /// </para>
+    /// Trả về chuỗi rỗng khi không có từ khóa để người gọi tự ghép vào WHERE.
+    /// </summary>
+    private static string TaoDieuKienTimKiemSanPham(
+        DynamicParameters parameters,
+        string keyword,
+        string cotMaHang,
+        string cotMaVach,
+        string cotTenHang)
+    {
+        parameters.Add("Search", keyword);
+
+        var tokens = keyword
+            .Split(
+                ' ',
+                StringSplitOptions.RemoveEmptyEntries
+                | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (tokens.Length == 0)
+            return "";
+
+        var dieuKien = new List<string>(tokens.Length);
+
+        for (var i = 0; i < tokens.Length; i++)
+        {
+            parameters.Add($"S{i}", tokens[i]);
+
+            dieuKien.Add($"""
+                (
+                    COALESCE({cotMaHang}, '') LIKE CONCAT('%', @S{i}, '%')
+                    OR COALESCE({cotMaVach}, '') LIKE CONCAT('%', @S{i}, '%')
+                    OR {cotTenHang} LIKE CONCAT('%', @S{i}, '%')
+                )
+                """);
+        }
+
+        return string.Join(" AND ", dieuKien);
+    }
+
+    /// <summary>
+    /// Bảng import Excel cũ: chỉ đọc khi bảng san_pham chưa có dữ liệu.
+    /// Dùng chung cách tìm kiếm với bảng san_pham để hành vi nhất quán.
+    /// </summary>
+    private static async Task<(IReadOnlyList<SanPham> Items, int TongSoBanGhi)> GetSanPhamTuBangImportAsync(
+        MySqlConnection connection,
+        string keyword,
+        int offset,
+        int pageSize)
+    {
+        var parameters = new DynamicParameters();
+
+        var dieuKien = TaoDieuKienTimKiemSanPham(
+            parameters,
+            keyword,
+            "`Mã hàng`",
+            "`Mã vạch`",
+            "`Tên hàng`");
+
+        var whereSql = "WHERE COALESCE(`Đang kinh doanh`, 1) = 1"
+                       + (dieuKien.Length == 0 ? "" : " AND " + dieuKien);
+
+        parameters.Add("PageSize", pageSize);
+        parameters.Add("Offset", offset);
+
+        var countSql = $"""
+            SELECT COUNT(*)
+            FROM import_san_pham_excel
+            {whereSql}
+            """;
+
+        var pageSql = $"""
             SELECT
                 `Mã hàng` AS MaSanPham,
                 `Mã vạch` AS MaVach,
@@ -318,29 +425,26 @@ public sealed class DatabaseService
                 COALESCE(`Đang kinh doanh`, 1) AS DangKinhDoanh,
                 COALESCE(`Được bán trực tiếp`, 1) AS DuocBanTrucTiep
             FROM import_san_pham_excel
-            WHERE COALESCE(`Đang kinh doanh`, 1) = 1
-              AND (
-                  @Search = ''
-                  OR `Mã hàng` LIKE CONCAT(@Search, '%')
-                  OR `Mã vạch` LIKE CONCAT(@Search, '%')
-                  OR `Tên hàng` LIKE CONCAT('%', @Search, '%')
-              )
+            {whereSql}
             ORDER BY `Tên hàng`
-            LIMIT @Limit;
+            LIMIT @PageSize OFFSET @Offset
             """;
 
         try
         {
-            return (
-                await connection.QueryAsync<SanPham>(
-                    importSql,
-                    parameters
-                )
+            var tongSoBanGhi =
+                await connection.ExecuteScalarAsync<int>(countSql, parameters);
+
+            var items = (
+                await connection.QueryAsync<SanPham>(pageSql, parameters)
             ).AsList();
+
+            return (items, tongSoBanGhi);
         }
         catch (MySqlException ex) when (ex.Number == 1146)
         {
-            return products;
+            // Bảng import cũ không tồn tại -> coi như không có dữ liệu.
+            return (Array.Empty<SanPham>(), 0);
         }
     }
 
@@ -467,17 +571,37 @@ public sealed class DatabaseService
                 """,
             product);
     }
-    public async Task CapNhatGiaBanSanPhamAsync(
+    /// <summary>
+    /// Chỉ cập nhật đúng cột <c>san_pham.gia_ban</c> của một sản phẩm.
+    /// Không đụng tới mã hàng, tồn kho, giá vốn hay các cột khác.
+    /// Giá bán bằng 0 vẫn hợp lệ (sản phẩm chưa định giá).
+    /// <para>
+    /// Trả về false khi sản phẩm không còn tồn tại (bị người khác xóa)
+    /// để lớp giao diện báo lỗi và tải lại danh sách thay vì crash.
+    /// </para>
+    /// </summary>
+    public async Task<bool> CapNhatGiaBanSanPhamAsync(
         uint productId,
         decimal giaBan)
     {
-        if (giaBan <= 0)
+        if (productId == 0)
             throw new ArgumentException(
-                "Giá bán phải lớn hơn 0.",
+                "Sản phẩm chưa có mã dữ liệu để cập nhật giá bán.",
+                nameof(productId));
+
+        if (giaBan < 0)
+            throw new ArgumentException(
+                "Giá bán không được âm.",
                 nameof(giaBan));
+
+        if (giaBan > Helpers.MoneyInput.GiaTienToiDa)
+            throw new ArgumentOutOfRangeException(
+                nameof(giaBan),
+                "Giá bán vượt quá giới hạn của cột DECIMAL(15,2).");
 
         await using var connection = await OpenAsync();
 
+        // Parameterized query: giá bán do người dùng nhập không bao giờ nối vào SQL.
         const string sql = """
         UPDATE san_pham
         SET gia_ban = @GiaBan,
@@ -490,13 +614,13 @@ public sealed class DatabaseService
             new
             {
                 ProductId = productId,
-                GiaBan = giaBan
+                GiaBan = Math.Round(giaBan, 2, MidpointRounding.AwayFromZero)
             });
 
-        if (affectedRows == 0)
-            throw new InvalidOperationException(
-                "Không tìm thấy sản phẩm để cập nhật giá bán.");
+        // MySQL trả 0 dòng bị ảnh hưởng khi sản phẩm không tồn tại.
+        return affectedRows > 0;
     }
+
     public async Task XoaSanPhamAsync(uint productId)
     {
         await using var connection = await OpenAsync();

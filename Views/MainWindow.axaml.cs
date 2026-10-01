@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using ShopHoa.Models;
 using ShopHoa.ViewModels;
 namespace ShopHoa.Views;
 
@@ -436,6 +437,99 @@ public partial class MainWindow : Window
 
             if (element.DataContext is NhaCungCapRowViewModel row)
                 return row;
+
+            element = element.Parent as StyledElement;
+        }
+
+        return null;
+    }
+
+    // ============================================================
+    // HÀNG HÓA: MỞ FORM SỬA + CHỈNH GIÁ NHANH
+    // ============================================================
+
+    /// <summary>
+    /// Click vào một dòng hàng hóa: mở form chi tiết đúng sản phẩm đang chọn.
+    /// Bấm vào ô nhập giá hoặc lên nút bấm bên trong dòng thì không mở form,
+    /// để không lấy nhầm sản phẩm và không đè lên ô sửa giá nhanh.
+    /// </summary>
+    private void OnProductRowPointerPressed(
+        object? sender,
+        PointerPressedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+            return;
+
+        var product = TimDongSanPham(e.Source as StyledElement, out var benTrongOChinhGia);
+
+        if (product is null || benTrongOChinhGia)
+            return;
+
+        viewModel.SuaSanPhamCommand.Execute(product);
+    }
+
+    /// <summary>
+    /// Enter trong ô giá bán nhanh = nhấn ✓ (lưu), Escape = nhấn ✕ (hủy).
+    /// </summary>
+    private void OnInlineGiaBanKeyDown(
+        object? sender,
+        KeyEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        if (sender is not TextBox textBox)
+            return;
+
+        var product = TimDongSanPham(textBox, out _);
+
+        if (product is null)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.Enter:
+                if (viewModel.LuuGiaBanNhanhCommand.CanExecute(product))
+                    viewModel.LuuGiaBanNhanhCommand.Execute(product);
+
+                e.Handled = true;
+                break;
+
+            case Key.Escape:
+                viewModel.HuyChinhGiaBanCommand.Execute(product);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Đi từ phần tử được bấm lên trên để tìm đúng dòng sản phẩm chứa nó.
+    /// Báo thêm nếu phần tử nằm bên trong vùng sửa giá nhanh.
+    /// </summary>
+    private static SanPham? TimDongSanPham(
+        StyledElement? element,
+        out bool benTrongOChinhGia)
+    {
+        benTrongOChinhGia = false;
+
+        while (element is not null)
+        {
+            if (element.Name == "PriceEditPanel")
+                benTrongOChinhGia = true;
+
+            // Bấm nút hoặc gõ trong ô nhập bên trong dòng thì không mở form sửa
+            if (element is Button or ComboBox
+                or Avalonia.Controls.Primitives.ToggleButton
+                or TextBox)
+            {
+                benTrongOChinhGia = true;
+            }
+
+            if (element.DataContext is SanPham product)
+                return product;
 
             element = element.Parent as StyledElement;
         }

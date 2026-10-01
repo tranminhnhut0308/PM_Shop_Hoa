@@ -40,4 +40,34 @@ public sealed partial class SanPham : ObservableObject
 
     [ObservableProperty]
     private Bitmap? hinhAnhBitmap;
+
+    // =========================================================
+    // TRẠNG THÁI CHỈNH GIÁ NHANH NGAY TRÊN DANH SÁCH
+    // (chỉ phục vụ giao diện, không lưu xuống database)
+    // =========================================================
+
+    /// <summary>Dòng đang mở ô nhập giá bán nhanh.</summary>
+    [ObservableProperty]
+    private bool dangChinhGia;
+
+    /// <summary>Nội dung đang gõ trong ô giá bán nhanh (số, không có dấu phân cách).</summary>
+    [ObservableProperty]
+    private string giaBanDangNhap = "0";
+
+    /// <summary>Lỗi hiển thị ngay dưới ô giá bán nhanh (rỗng = không lỗi).</summary>
+    [ObservableProperty]
+    private string? loiGiaBanNhanh;
+
+    /// <summary>Đang ghi xuống database, khóa nút ✓ để tránh bấm hai lần.</summary>
+    [ObservableProperty]
+    private bool dangLuGiaBan;
+
+    /// <summary>Sao chép các trường giao diện khi đóng ô chỉnh giá nhanh.</summary>
+    public void DongGiaBanNhanh()
+    {
+        DangChinhGia = false;
+        GiaBanDangNhap = "0";
+        LoiGiaBanNhanh = null;
+        DangLuGiaBan = false;
+    }
 }

@@ -109,9 +109,9 @@
 
   <ScrollViewer>
     <StackPanel Margin="28,24">
-      <TextBlock Text="Thông tin sản phẩm" FontSize="23" FontWeight="Bold" Foreground="#163F38"
+      <TextBlock x:Name="TieuDeTextBlock" Text="Thông tin sản phẩm" FontSize="23" FontWeight="Bold" Foreground="#163F38"
         Margin="0,0,0,4" />
-      <TextBlock Text="Nhập thông tin để tạo sản phẩm mới trong kho hàng."
+      <TextBlock x:Name="MoTaTextBlock" Text="Nhập thông tin để tạo sản phẩm mới trong kho hàng."
         Foreground="#6B7D77" FontSize="13" Margin="0,0,0,20" />
 
       <TextBlock Classes="label" Text="Mã sản phẩm" />
@@ -137,11 +137,30 @@
       <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
         <StackPanel>
           <TextBlock Classes="label" Text="Giá bán" />
-          <TextBox x:Name="GiaBanTextBox" Text="0" />
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBox x:Name="GiaBanTextBox"
+              Text="0"
+              TextAlignment="Right"
+              Margin="0,5,0,0"
+              Watermark="Nhập số tiền, ví dụ 50.000" />
+            <TextBlock Grid.Column="1"
+              Text="đ"
+              Foreground="#6B7D77"
+              FontSize="13"
+              VerticalAlignment="Center"
+              Margin="0,5,0,14" />
+          </Grid>
+          <TextBlock x:Name="LoiGiaBanTextBlock"
+            Foreground="#C0392B"
+            FontSize="12"
+            TextWrapping="Wrap"
+            Margin="2,0,0,6" />
         </StackPanel>
         <StackPanel Grid.Column="1">
           <TextBlock Classes="label" Text="Giá vốn" />
-          <TextBox x:Name="GiaVonTextBox" Text="0" />
+          <TextBox x:Name="GiaVonTextBox"
+            Text="0"
+            TextAlignment="Right" />
         </StackPanel>
       </Grid>
 

@@ -21,6 +21,8 @@ public partial class MainWindowViewModel : ObservableObject
     private CancellationTokenSource? _customerSearchCts;
     private int _customerLoadVersion;
     private Task? _customerLoadTask;
+    private CancellationTokenSource? _productSearchCts;
+    private int _productLoadVersion;
     public Window? OwnerWindow { get; set; }
     private bool _customersLoaded;
     private bool _invoicesLoaded;
@@ -44,6 +46,37 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _sortByPrice;
 
     public ObservableCollection<SanPham> SanPhams { get; } = new();
+
+    /// <summary>
+    /// Tổng số hàng hóa trong database khớp từ khóa đang gõ.
+    /// Được MySQL đếm trên toàn bộ bảng san_pham, không phụ thuộc số dòng đang hiển thị.
+    /// </summary>
+    [ObservableProperty] private int productTotalCount;
+
+    public bool IsSanPhamListEmpty => SanPhams.Count == 0;
+
+    /// <summary>Dòng tiêu đề hiển thị khi bảng hàng hóa rỗng, đổi theo từ khóa đang tìm.</summary>
+    public string SanPhamEmptyText =>
+        string.IsNullOrWhiteSpace(ProductSearch)
+            ? "Chưa có hàng hóa nào trong hệ thống"
+            : $"Không tìm thấy hàng hóa với từ khóa \"{ProductSearch.Trim()}\"";
+
+    public string SanPhamEmptyHint =>
+        string.IsNullOrWhiteSpace(ProductSearch)
+            ? "Bấm “＋ Nhập hàng” hoặc “⇩ Import file” để thêm hàng hóa."
+            : "Thử từ khóa khác hoặc xóa nội dung ô tìm kiếm.";
+
+    /// <summary>
+    /// Ô tìm kiếm hàng hóa bind TwoWay nên khi người dùng gõ thì SearchText đổi.
+    /// Tự tìm lại ngay ở đây, không cần nhấn Enter và không cần bấm nút tìm kiếm.
+    /// </summary>
+    partial void OnProductSearchChanged(string value)
+    {
+        OnPropertyChanged(nameof(SanPhamEmptyText));
+        OnPropertyChanged(nameof(SanPhamEmptyHint));
+
+        TimKiemSanPhamTuDong();
+    }
 
     /// <summary>Các dòng khách hàng của trang hiện tại (đã phân trang).</summary>
     public ObservableCollection<KhachHangRowViewModel> CustomerRows { get; } = new();
@@ -985,14 +1018,31 @@ public partial class MainWindowViewModel : ObservableObject
     }
     private async Task LoadProductsAsync()
     {
+        // Dùng chung version guard với tìm kiếm: nếu người dùng gõ từ khóa ngay
+        // lúc vừa vào màn hình thì kết quả tải đầu tiên bị bỏ, không ghi đè
+        // danh sách đang lọc theo từ khóa.
+        var version = ++_productLoadVersion;
+
+        var (products, tongSoKhop) = await _db.GetSanPhamPagedAsync(
+            ProductSearch,
+            1,
+            DatabaseService.SoDongSanPhamToiDa);
+
+        if (version != _productLoadVersion)
+            return;
+
         SanPhams.Clear();
-        foreach (var item in await _db.GetSanPhamAsync())
+        foreach (var item in products)
         {
             if (!string.IsNullOrWhiteSpace(item.HinhAnh) && File.Exists(item.HinhAnh))
                 item.HinhAnhBitmap = new Bitmap(item.HinhAnh);
 
             SanPhams.Add(item);
         }
+
+        ProductTotalCount = tongSoKhop;
+
+        OnPropertyChanged(nameof(IsSanPhamListEmpty));
     }
 
     private async Task LoadOverviewAsync()
@@ -1165,16 +1215,62 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task LoadSuppliersAsync()
         => await LoadSupplierPageAsync();
 
+    /// <summary>
+    /// Tìm kiếm hàng hóa theo từ khóa (nút "Tìm kiếm").
+    /// Ô tìm kiếm đã tự tìm realtime nên lệnh này chỉ phục vụ khi cần tìm lại ngay.
+    /// </summary>
     [RelayCommand]
     private async Task SearchProductsAsync(string? searchText)
     {
+        if (searchText is not null)
+            ProductSearch = searchText;
+
+        // Gán SearchText ở trên đã lên lịch một lần tìm kiếm tự động,
+        // huỷ đi ở đây để không chạy truy vấn hai lần.
+        HuyDongTimKiemSanPham();
+
+        await RefreshProductsAsync();
+    }
+
+    /// <summary>
+    /// Tìm kiếm realtime: chờ người dùng ngừng gõ 300ms mới gọi database,
+    /// tránh mỗi ký tự lại chạy một câu truy vấn làm giao diện bị giật.
+    /// </summary>
+    public void TimKiemSanPhamTuDong()
+    {
+        HuyDongTimKiemSanPham();
+
+        var cts = new CancellationTokenSource();
+        _productSearchCts = cts;
+
+        _ = TimKiemSanPhamSauDebounceAsync(cts.Token);
+    }
+
+    private async Task TimKiemSanPhamSauDebounceAsync(CancellationToken token)
+    {
         try
         {
-            ProductSearch = searchText ?? string.Empty;
-            await RefreshProductsAsync(ProductSearch);
-            StatusMessage = $"Tìm thấy {SanPhams.Count} sản phẩm";
+            await Task.Delay(300, token);
+
+            if (token.IsCancellationRequested)
+                return;
+
+            await RefreshProductsAsync();
         }
-        catch (Exception ex) { StatusMessage = ex.Message; }
+        catch (OperationCanceledException)
+        {
+            // Người dùng gõ tiếp: huỷ lần tìm kiếm trước, không cần báo lỗi.
+        }
+    }
+
+    private void HuyDongTimKiemSanPham()
+    {
+        if (_productSearchCts is null)
+            return;
+
+        _productSearchCts.Cancel();
+        _productSearchCts.Dispose();
+        _productSearchCts = null;
     }
 
     [RelayCommand]
@@ -1200,6 +1296,172 @@ public partial class MainWindowViewModel : ObservableObject
             SanPhams.Add(product);
 
         StatusMessage = _sortByPrice ? "Đã sắp xếp theo giá tăng dần" : "Đã sắp xếp theo tên";
+    }
+
+    // =========================================================
+    // HÀNG HÓA: CHỈNH GIÁ BÁN
+    // =========================================================
+
+    /// <summary>
+    /// Người dùng hiện tại có quyền sửa hàng hóa / giá bán không.
+    /// Lấy từ vai trò trong database (vai_tro.ma_vai_tro), không gắn cứng tài khoản.
+    /// </summary>
+    public bool DuocSuaGiaBan => Quyen.DuocSuaHangHoa(Session.CurrentUser);
+
+    /// <summary>
+    /// Mở ô nhập giá ngay tại dòng sản phẩm (chỉnh nhanh).
+    /// Chỉ một dòng được mở tại một thời điểm để không lẫn giá của sản phẩm khác.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(DuocSuaGiaBan))]
+    private void BatDauChinhGiaBan(SanPham? product)
+    {
+        if (!DuocSuaGiaBan)
+        {
+            StatusMessage = "Bạn không có quyền chỉnh giá bán hàng hóa.";
+            return;
+        }
+
+        if (product is null || product.Id == 0)
+        {
+            StatusMessage = "Sản phẩm này chưa có mã dữ liệu để chỉnh giá bán.";
+            return;
+        }
+
+        // Đóng các dòng đang mở khác, tránh sửa nhầm sang sản phẩm khác
+        foreach (var item in SanPhams)
+        {
+            if (!ReferenceEquals(item, product))
+                item.DongGiaBanNhanh();
+        }
+
+        // Nạp đúng giá của sản phẩm đang chọn, bỏ dấu phân cách cho dễ gõ
+        product.DangChinhGia = true;
+        product.GiaBanDangNhap = MoneyInput.ToRawText(product.GiaBan);
+        product.LoiGiaBanNhanh = null;
+        product.DangLuGiaBan = false;
+    }
+
+    /// <summary>Nhấn ✓: validate, UPDATE đúng một dòng, rồi đóng ô nhập.</summary>
+    [RelayCommand(CanExecute = nameof(DuocSuaGiaBan))]
+    private async Task LuuGiaBanNhanhAsync(SanPham? product)
+    {
+        if (product is null)
+            return;
+
+        if (!DuocSuaGiaBan)
+        {
+            product.LoiGiaBanNhanh = "Bạn không có quyền chỉnh giá bán hàng hóa.";
+            return;
+        }
+
+        // Validate ngay trên dòng, chưa đụng database
+        if (!MoneyInput.TryParse(
+                product.GiaBanDangNhap,
+                true,
+                out var giaBan,
+                out var loi))
+        {
+            product.LoiGiaBanNhanh = loi;
+            return;
+        }
+
+        if (giaBan == product.GiaBan)
+        {
+            product.DongGiaBanNhanh();
+            StatusMessage = "Giá bán không thay đổi.";
+            return;
+        }
+
+        product.DangLuGiaBan = true;
+        product.LoiGiaBanNhanh = null;
+
+        try
+        {
+            var updated =
+                await _db.CapNhatGiaBanSanPhamAsync(product.Id, giaBan);
+
+            // Sản phẩm đã bị người khác xóa: đóng ô nhập, bỏ dòng, tải lại danh sách
+            if (!updated)
+            {
+                product.DongGiaBanNhanh();
+                SanPhams.Remove(product);
+
+                await RefreshProductsAsync();
+
+                // Nói sau khi tải lại danh sách để không bị thông điệp
+                // "đã tải N sản phẩm" của lần tải này ghi đè mất.
+                StatusMessage = "Sản phẩm không còn tồn tại trong hệ thống.";
+                return;
+            }
+
+            DongBoGiaBan(product.Id, giaBan);
+
+            product.DongGiaBanNhanh();
+            StatusMessage = "Cập nhật giá bán thành công";
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Cập nhật giá bán sản phẩm", ex);
+
+            var message = SafeLog.Redact(ex.Message);
+
+            product.LoiGiaBanNhanh = message;
+            StatusMessage = "Không thể cập nhật giá bán: " + message;
+        }
+        finally
+        {
+            product.DangLuGiaBan = false;
+        }
+    }
+
+    /// <summary>
+    /// Nhấn ✕: đóng ô nhập và giữ nguyên giá cũ trong database
+    /// (không gọi UPDATE, không đụng vào SanPham.GiaBan).
+    /// </summary>
+    [RelayCommand]
+    private void HuyChinhGiaBan(SanPham? product)
+    {
+        if (product is null)
+            return;
+
+        product.DongGiaBanNhanh();
+
+        StatusMessage = "Đã hủy chỉnh giá bán.";
+    }
+
+    /// <summary>
+    /// Đồng bộ giá bán mới cho mọi bản sao của sản phẩm đang nạp trong bộ nhớ
+    /// (danh sách hàng hóa, tìm kiếm bán hàng, giỏ hàng) để không màn hình nào
+    /// còn giữ giá cũ. Chỉ cập nhật vài đối tượng, không SELECT lại toàn bảng.
+    /// </summary>
+    private void DongBoGiaBan(uint productId, decimal giaBan)
+    {
+        foreach (var item in SanPhams)
+        {
+            if (item.Id == productId)
+                item.GiaBan = giaBan;
+        }
+
+        foreach (var item in ProductSearchResults)
+        {
+            if (item.Id == productId)
+                item.GiaBan = giaBan;
+        }
+
+        var doiGioHang = false;
+
+        foreach (var item in SaleCart)
+        {
+            if (item.SanPham.Id != productId)
+                continue;
+
+            item.SanPham.GiaBan = giaBan;
+            item.CapNhatThanhTien();
+            doiGioHang = true;
+        }
+
+        if (doiGioHang)
+            RecalculateSaleTotal();
     }
 
     [RelayCommand]
@@ -1239,20 +1501,41 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        if (product.Id == 0)
+        {
+            StatusMessage = "Sản phẩm này chưa có mã dữ liệu để sửa.";
+            return;
+        }
+
         var (groups, units) = await LoadProductOptionsAsync();
-        var editor = new ProductEditorWindow(product, groups, units);
+
+        // Ô giá bán chỉ mở khi người dùng có quyền sửa hàng hóa
+        var editor = new ProductEditorWindow(
+            product,
+            groups,
+            units,
+            DuocSuaGiaBan);
+
         var saved = OwnerWindow is not null && await editor.ShowDialog<bool>(OwnerWindow);
+
+        // Hủy thì không gọi UPDATE: giá cũ giữ nguyên trong database
         if (!saved)
             return;
 
         try
         {
             await _db.CapNhatSanPhamAsync(product);
+
+            // Đồng bộ giá bán mới sang bán hàng / tìm kiếm / giỏ hàng
+            DongBoGiaBan(product.Id, product.GiaBan);
+
+            product.DongGiaBanNhanh();
             StatusMessage = $"Đã cập nhật sản phẩm {product.MaSanPham}";
         }
         catch (Exception ex)
         {
-            StatusMessage = "Không thể cập nhật sản phẩm: " + ex.Message;
+            SafeLog.WriteError("Cập nhật sản phẩm", ex);
+            StatusMessage = "Không thể cập nhật sản phẩm: " + SafeLog.Redact(ex.Message);
         }
     }
 
@@ -1456,24 +1739,71 @@ public partial class MainWindowViewModel : ObservableObject
             IsImporting = false;
         }
     }
-    private async Task RefreshProductsAsync(string? searchText = null)
+    /// <summary>
+    /// Tải lại danh sách hàng hóa theo từ khóa đang gõ.
+    /// Từ khóa được MySQL lọc trên TOÀN BỘ bảng san_pham rồi mới cắt bằng LIMIT,
+    /// nên sản phẩm nằm ở trang khác / ngoài phần đang hiển thị vẫn tìm ra được.
+    /// </summary>
+    private async Task RefreshProductsAsync()
     {
-        var products = await _db.GetSanPhamAsync(searchText ?? ProductSearch);
+        // Version guard: người dùng gõ tiếp trong lúc chờ database thì bỏ kết quả cũ,
+        // tránh danh sách bị nhảy ngược về từ khóa cũ.
+        var version = ++_productLoadVersion;
 
-        if (!string.IsNullOrWhiteSpace(ProductFilter))
+        try
         {
-            products = products
-                .Where(product => MatchesFilter(product, ProductFilter))
-                .ToList();
+            var (products, tongSoKhop) = await _db.GetSanPhamPagedAsync(
+                ProductSearch,
+                1,
+                DatabaseService.SoDongSanPhamToiDa);
+
+            if (version != _productLoadVersion)
+                return;
+
+            if (!string.IsNullOrWhiteSpace(ProductFilter))
+            {
+                products = products
+                    .Where(product => MatchesFilter(product, ProductFilter))
+                    .ToList();
+            }
+
+            SanPhams.Clear();
+            foreach (var product in products)
+            {
+                if (!string.IsNullOrWhiteSpace(product.HinhAnh) && File.Exists(product.HinhAnh))
+                    product.HinhAnhBitmap = new Bitmap(product.HinhAnh);
+
+                SanPhams.Add(product);
+            }
+
+            ProductTotalCount = tongSoKhop;
+
+            OnPropertyChanged(nameof(IsSanPhamListEmpty));
+
+            var dangTimKiem = !string.IsNullOrWhiteSpace(ProductSearch);
+
+            StatusMessage = SanPhams.Count == 0
+                ? SanPhamEmptyText
+                : (dangTimKiem
+                    ? SanPhams.Count < tongSoKhop
+                        ? $"Tìm thấy {tongSoKhop:N0} sản phẩm theo \"{ProductSearch.Trim()}\" (đang hiện {SanPhams.Count:N0})"
+                        : $"Tìm thấy {tongSoKhop:N0} sản phẩm theo \"{ProductSearch.Trim()}\""
+                    : $"Đã tải {SanPhams.Count:N0} sản phẩm");
         }
-
-        SanPhams.Clear();
-        foreach (var product in products)
+        catch (Exception ex)
         {
-            if (!string.IsNullOrWhiteSpace(product.HinhAnh) && File.Exists(product.HinhAnh))
-                product.HinhAnhBitmap = new Bitmap(product.HinhAnh);
+            if (version != _productLoadVersion)
+                return;
 
-            SanPhams.Add(product);
+            SanPhams.Clear();
+            ProductTotalCount = 0;
+
+            OnPropertyChanged(nameof(IsSanPhamListEmpty));
+
+            SafeLog.WriteError("Tải danh sách hàng hóa", ex);
+
+            StatusMessage =
+                "Không thể tải danh sách hàng hóa: " + SafeLog.Redact(ex.Message);
         }
     }
 
@@ -2052,12 +2382,19 @@ public partial class MainWindowViewModel : ObservableObject
                 }
 
                 // Lưu giá bán vào database
-                await _db.CapNhatGiaBanSanPhamAsync(
-                    product.Id,
-                    giaBan.Value);
+                var updated =
+                    await _db.CapNhatGiaBanSanPhamAsync(
+                        product.Id,
+                        giaBan.Value);
 
-                // Cập nhật giá của sản phẩm đang hiển thị
-                product.GiaBan = giaBan.Value;
+                if (!updated)
+                {
+                    StatusMessage = "Sản phẩm không còn tồn tại trong hệ thống.";
+                    return;
+                }
+
+                // Cập nhật giá của sản phẩm đang hiển thị và các màn hình khác
+                DongBoGiaBan(product.Id, giaBan.Value);
             }
             catch (Exception ex)
             {

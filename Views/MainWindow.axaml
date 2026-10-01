@@ -443,6 +443,69 @@
       <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
+    <!-- =====================================================
+         CHỈNH GIÁ NHANH NGAY TRÊN DANH SÁCH HÀNG HÓA
+         ===================================================== -->
+
+    <!-- Nút ✏ mở ô nhập giá: ẩn cho tới khi rê chuột vào dòng -->
+    <Style Selector="Button.priceEditTrigger">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Border:pointerover Button.priceEditTrigger">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="Button.priceEditTrigger:pointerover">
+      <Setter Property="Background" Value="#E7F2EE" />
+    </Style>
+
+    <Style Selector="Button.priceEditTrigger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#087F6E" />
+    </Style>
+
+    <Style Selector="Button.priceEditSave">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Width" Value="22" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.priceEditSave:pointerover">
+      <Setter Property="Background" Value="#056B5D" />
+    </Style>
+
+    <Style Selector="Button.priceEditCancel">
+      <Setter Property="Background" Value="#F3F5F7" />
+      <Setter Property="Foreground" Value="#61736E" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="#C9DCD6" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Width" Value="22" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.priceEditCancel:pointerover">
+      <Setter Property="Background" Value="#FBE9E7" />
+      <Setter Property="Foreground" Value="#C0392B" />
+    </Style>
+
+    <Style Selector="Button.priceEditSave:disabled">
+      <Setter Property="Opacity" Value="0.5" />
+      <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+
     <Style Selector="Button.toolbar-action:pressed /template/ Border">
       <Setter Property="Background" Value="#BDE5DA" />
       <Setter Property="BorderBrush" Value="#087F6E" />
@@ -1761,7 +1824,8 @@
                         <Border Background="White"
                           BorderBrush="#E4E7EC"
                           BorderThickness="0,0,0,1"
-                          Padding="8,0">
+                          Padding="8,0"
+                          PointerPressed="OnProductRowPointerPressed">
 
                           <Grid ColumnDefinitions="34,34,42,150,260,120,120,120,120,120,170,130"
                             Height="56">
@@ -1810,14 +1874,72 @@
                               TextWrapping="NoWrap"
                               TextTrimming="CharacterEllipsis" />
 
-                            <!-- GIÁ BÁN -->
-                            <TextBlock Grid.Column="5"
-                              Text="{Binding GiaBan, StringFormat={}{0:N0}}"
-                              Foreground="#344054"
-                              FontSize="13"
-                              HorizontalAlignment="Right"
-                              Margin="0,0,10,0"
-                              VerticalAlignment="Center" />
+                            <!-- GIÁ BÁN: hiển thị + ô sửa nhanh tại chỗ -->
+                            <Grid Grid.Column="5"
+                              Name="PriceCell">
+
+                              <TextBlock Text="{Binding GiaBan, Converter={StaticResource ThousandsSeparatorConverter}, StringFormat={}{0} đ}"
+                                Foreground="#344054"
+                                FontSize="13"
+                                HorizontalAlignment="Right"
+                                Margin="0,0,22,0"
+                                VerticalAlignment="Center"
+                                IsVisible="{Binding !DangChinhGia}" />
+
+                              <TextBlock Text="✏"
+                                FontSize="12"
+                                Foreground="#087F6E"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Sửa giá bán"
+                                IsVisible="{Binding !DangChinhGia}"
+                                IsHitTestVisible="False" />
+
+                              <Button Classes="priceEditTrigger"
+                                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).BatDauChinhGiaBanCommand}"
+                                CommandParameter="{Binding}"
+                                IsVisible="{Binding !DangChinhGia}"
+                                IsEnabled="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).DuocSuaGiaBan}"
+                                ToolTip.Tip="Sửa giá bán"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="22"
+                                Height="22"
+                                Padding="0" />
+
+                              <StackPanel Name="PriceEditPanel"
+                                IsVisible="{Binding DangChinhGia}"
+                                Spacing="2">
+
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="2">
+                                  <TextBox Name="GiaBanInlineTextBox"
+                                    Text="{Binding GiaBanDangNhap, Mode=TwoWay}"
+                                    Watermark="0"
+                                    Padding="6,3"
+                                    FontSize="12"
+                                    MinWidth="52"
+                                    KeyDown="OnInlineGiaBanKeyDown" />
+                                  <Button Grid.Column="1"
+                                    Classes="priceEditSave"
+                                    Content="✓"
+                                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LuuGiaBanNhanhCommand}"
+                                    CommandParameter="{Binding}"
+                                    IsEnabled="{Binding !DangLuGiaBan}" />
+                                  <Button Grid.Column="2"
+                                    Classes="priceEditCancel"
+                                    Content="✕"
+                                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).HuyChinhGiaBanCommand}"
+                                    CommandParameter="{Binding}" />
+                                </Grid>
+
+                                <TextBlock Text="{Binding LoiGiaBanNhanh}"
+                                  Foreground="#C0392B"
+                                  FontSize="10"
+                                  TextWrapping="Wrap"
+                                  MaxLines="2"
+                                  IsVisible="{Binding LoiGiaBanNhanh, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                              </StackPanel>
+                            </Grid>
 
                             <!-- GIÁ VỐN -->
                             <TextBlock Grid.Column="6"
@@ -1880,6 +2002,22 @@
                 </Grid>
               </ScrollViewer>
             </Border>
+
+            <!-- DANH SÁCH RỖNG / KHÔNG TÌM THẤY -->
+            <StackPanel Grid.Row="2"
+              IsVisible="{Binding IsSanPhamListEmpty}"
+              Margin="0,90,0,0" Spacing="8"
+              VerticalAlignment="Top"
+              HorizontalAlignment="Center"
+              IsHitTestVisible="False">
+              <TextBlock Text="📦" FontSize="34" HorizontalAlignment="Center"
+                Foreground="#C3D6D0" />
+              <TextBlock Text="{Binding SanPhamEmptyText}" FontSize="16"
+                FontWeight="SemiBold" Foreground="#163F38"
+                HorizontalAlignment="Center" />
+              <TextBlock Text="{Binding SanPhamEmptyHint}" Foreground="#61736E"
+                FontSize="13" HorizontalAlignment="Center" />
+            </StackPanel>
 
           </Grid>
         </TabItem>
