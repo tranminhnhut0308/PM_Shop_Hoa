@@ -338,6 +338,112 @@ public partial class MainWindow : Window
     }
 
     // ============================================================
+    // NHÀ CUNG CẤP
+    // ============================================================
+
+    /// <summary>
+    /// Gõ từ khóa tìm nhà cung cấp: ViewModel tự debounce 350ms
+    /// để không gọi database liên tục.
+    /// </summary>
+    private void OnSupplierSearchTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        viewModel.SupplierSearch = (sender as TextBox)?.Text ?? string.Empty;
+
+        viewModel.TimKiemNhaCungCapTuDong();
+    }
+
+    private void OnSupplierPageSizeChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        if (sender is not ComboBox comboBox)
+            return;
+
+        if (!int.TryParse(comboBox.SelectedItem?.ToString(), out var pageSize) || pageSize <= 0)
+            return;
+
+        // Bỏ qua khi giá trị không đổi (kể cả lúc giao diện vừa khởi tạo)
+        if (viewModel.SupplierPageSize == pageSize)
+            return;
+
+        viewModel.SupplierPageSize = pageSize;
+        viewModel.SupplierPage = 1;
+
+        _ = viewModel.LoadSupplierPageAsync();
+    }
+
+    /// <summary>
+    /// Click vào dòng nhà cung cấp: mở / đóng / chuyển vùng chi tiết
+    /// ngay dưới dòng đó. Bấm bên trong vùng chi tiết hoặc lên nút bấm
+    /// thì không đóng/mở lại dòng.
+    /// </summary>
+    private void OnSupplierRowPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+            return;
+
+        var row = TimDongNhaCungCap(e.Source as StyledElement, out var benTrongChiTiet);
+
+        if (row is null || benTrongChiTiet)
+            return;
+
+        viewModel.ToggleSupplierDetailCommand.Execute(row);
+    }
+
+    /// <summary>
+    /// Click vào ô thống kê nhanh: mở đúng tab tương ứng của vùng chi tiết
+    /// đang mở.
+    /// </summary>
+    private void OnSupplierSummaryPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        var tab = (sender as Control)?.Tag?.ToString();
+
+        if (viewModel.ExpandedSupplierRow?.Detail is null)
+            return;
+
+        viewModel.ExpandedSupplierRow.Detail.ChonTabCommand.Execute(
+            tab == "congno" ? "congno" : "lichsu");
+    }
+
+    /// <summary>
+    /// Đi từ phần tử được bấm lên trên để tìm dòng nhà cung cấp chứa nó.
+    /// Báo thêm nếu phần tử nằm bên trong vùng chi tiết đã mở.
+    /// </summary>
+    private static NhaCungCapRowViewModel? TimDongNhaCungCap(
+        StyledElement? element,
+        out bool benTrongChiTiet)
+    {
+        benTrongChiTiet = false;
+
+        while (element is not null)
+        {
+            if (element.Name == "DetailPanel")
+                benTrongChiTiet = true;
+
+            // Không coi thao tác bấm nút/ô nhập bên trong dòng là mở/đóng dòng
+            if (element is Button or ComboBox or TextBox or Avalonia.Controls.Primitives.ToggleButton)
+                benTrongChiTiet = true;
+
+            if (element.DataContext is NhaCungCapRowViewModel row)
+                return row;
+
+            element = element.Parent as StyledElement;
+        }
+
+        return null;
+    }
+
+    // ============================================================
     // XUẤT DANH SÁCH HÀNG HÓA
     // ============================================================
 

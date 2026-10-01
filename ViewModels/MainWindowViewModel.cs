@@ -24,7 +24,6 @@ public partial class MainWindowViewModel : ObservableObject
     public Window? OwnerWindow { get; set; }
     private bool _customersLoaded;
     private bool _invoicesLoaded;
-    private bool _suppliersLoaded;
     private bool _overviewLoaded;
     private CancellationTokenSource? _baoCaoPhieuNhapSearchCts;
     private int _baoCaoPhieuNhapLoadVersion;
@@ -50,7 +49,6 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<KhachHangRowViewModel> CustomerRows { get; } = new();
 
     public ObservableCollection<HoaDon> HoaDons { get; } = new();
-    public ObservableCollection<NhaCungCap> NhaCungCaps { get; } = new();
     public ObservableCollection<SanPham> ProductSearchResults { get; } = new();
     public ObservableCollection<SaleCartItem> SaleCart { get; } = new();
     public ObservableCollection<KhachHang> SaleCustomerSuggestions { get; } = new();
@@ -106,8 +104,15 @@ public partial class MainWindowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CustomerRangeText))]
     private int customerAllCount;
 
-    /// <summary>Số khách hàng mới phát sinh trong 30 ngày gần nhất.</summary>
+    /// <summary>Số khách hàng mới phát sinh trong khoảng số ngày gần nhất.</summary>
     [ObservableProperty] private int customerNewCount;
+
+    /// <summary>
+    /// Chữ dưới thẻ "Khách hàng mới". Lấy từ đúng hằng số mà query dùng để đếm
+    /// để chữ này không bao giờ lệch với số liệu đang hiển thị.
+    /// </summary>
+    public string CustomerNewCountCaption =>
+        $"Phát sinh trong {DatabaseService.SoNgayKhachMoiMacDinh} ngày gần nhất";
 
     /// <summary>Tổng nợ hiện tại của toàn bộ khách hàng (cùng cách tính với cột tiền trong bảng).</summary>
     [ObservableProperty] private decimal customerTotalDebt;
@@ -760,9 +765,6 @@ public partial class MainWindowViewModel : ObservableObject
                 DongChiTietKhachHang();
 
             CustomerRows.Remove(row);
-            CustomerTotalCount = Math.Max(0, CustomerTotalCount - 1);
-            CustomerAllCount = Math.Max(0, CustomerAllCount - 1);
-            CustomerNewCount = Math.Max(0, CustomerNewCount - 1);
 
             OnPropertyChanged(nameof(HasCustomerRows));
             OnPropertyChanged(nameof(IsCustomerListEmpty));
@@ -771,11 +773,13 @@ public partial class MainWindowViewModel : ObservableObject
 
             // Trang cuối vừa bị rỗng -> lùi về trang trước để không bị trang trắng
             if (CustomerRows.Count == 0 && CustomerPage > 1)
-            {
                 CustomerPage--;
 
-                await LoadCustomersAsync();
-            }
+            // Bốn thẻ thống kê phải đọc lại từ database thay vì tự trừ tay:
+            // "Khách hàng mới" chỉ giảm khi khách vừa xóa nằm trong khoảng ngày
+            // đang đếm, còn "Nợ hiện tại"/"Tổng bán" còn phụ thuộc hóa đơn, sổ cái
+            // công nợ và phiếu trả hàng nên không thể suy ra từ thao tác xóa.
+            await LoadCustomersAsync();
 
             StatusMessage = $"Đã xóa khách hàng {customer.TenKhachHang}";
         }
@@ -942,7 +946,6 @@ public partial class MainWindowViewModel : ObservableObject
 
                 case "Nhà cung cấp":
                     await LoadSuppliersAsync();
-                    _suppliersLoaded = true;
                     break;
 
                 case "Nhập hàng":
@@ -954,8 +957,8 @@ public partial class MainWindowViewModel : ObservableObject
                     break;
 
                 case "Sổ quỹ":
-                    await LoadSoQuyPhieuAsync();
-                    await LoadSoQuyTongHopAsync();
+                    await TaiSoQuyBoLocOptionsAsync();
+                    await TaiLaiSoQuyAsync();
                     break;
 
                 case "Báo cáo":
@@ -1160,11 +1163,7 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     private async Task LoadSuppliersAsync()
-    {
-        NhaCungCaps.Clear();
-        foreach (var item in await _db.GetNhaCungCapAsync())
-            NhaCungCaps.Add(item);
-    }
+        => await LoadSupplierPageAsync();
 
     [RelayCommand]
     private async Task SearchProductsAsync(string? searchText)
@@ -1690,18 +1689,6 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
     [RelayCommand]
-    private async Task SearchSuppliersAsync()
-    {
-        try
-        {
-            NhaCungCaps.Clear();
-            foreach (var item in await _db.GetNhaCungCapAsync(SupplierSearch))
-                NhaCungCaps.Add(item);
-            StatusMessage = $"Tìm thấy {NhaCungCaps.Count} nhà cung cấp";
-        }
-        catch (Exception ex) { StatusMessage = ex.Message; }
-    }
-    [RelayCommand]
     private async Task ThemNhaCungCapAsync()
     {
         var supplier = await HienThiFormThemNhaCungCapAsync();
@@ -1744,10 +1731,9 @@ public partial class MainWindowViewModel : ObservableObject
         editor.Supplier.Id =
             await _db.ThemNhaCungCapAsync(editor.Supplier);
 
-        // Thêm ngay vào danh sách giao diện
-        NhaCungCaps.Add(editor.Supplier);
-
-        _suppliersLoaded = true;
+        // Danh sách đang phân trang theo database nên tải lại trang hiện tại
+        // thay vì thêm thủ công một dòng có thể không thuộc trang đang xem.
+        await LoadSupplierPageAsync();
 
         return editor.Supplier;
     }
@@ -1769,13 +1755,11 @@ public partial class MainWindowViewModel : ObservableObject
         {
             await _db.CapNhatNhaCungCapAsync(editor.Supplier);
 
-            var index = NhaCungCaps.IndexOf(supplier);
-
-            if (index >= 0)
-                NhaCungCaps[index] = editor.Supplier;
-
             StatusMessage =
                 $"Đã cập nhật nhà cung cấp {editor.Supplier.TenNhaCungCap}";
+
+            // Thứ tự hiển thị có thể đổi theo tên nên tải lại đúng trang đang xem.
+            await LoadSupplierPageAsync();
         }
         catch (Exception ex)
         {
@@ -1839,14 +1823,9 @@ public partial class MainWindowViewModel : ObservableObject
 
             await Task.Yield();
 
-            // Lấy danh sách hiện có trong database
-            var existingSuppliers = await _db.GetNhaCungCapAsync();
-
-            // Kiểm tra trùng mã nhà cung cấp
-            var existingCodes = existingSuppliers
-                .Where(x => !string.IsNullOrWhiteSpace(x.MaNhaCungCap))
-                .Select(x => x.MaNhaCungCap.Trim())
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // Chỉ hỏi database về các mã có thật trong file, không tải toàn bộ NCC.
+            var existingCodes = await _db.LayMaNhaCungCapDaTonTaiAsync(
+                suppliersFromFile.Select(x => x.MaNhaCungCap));
 
             var duplicateCount = suppliersFromFile.Count(x =>
                 !string.IsNullOrWhiteSpace(x.MaNhaCungCap) &&
@@ -1900,22 +1879,39 @@ public partial class MainWindowViewModel : ObservableObject
 
             await Task.Yield();
 
-            var importedCount = await Task.Run(() =>
+            // Báo tiến độ theo số dòng đã xử lý để người dùng không tưởng ứng cứng.
+            var progress = new Progress<int>(daXuLy =>
+            {
+                ImportStatus =
+                    $"Đang nhập dòng {daXuLy:N0}/{suppliersFromFile.Count:N0}...";
+            });
+
+            var ketQua = await Task.Run(() =>
                 _db.ImportNhaCungCapTuFileAsync(
                     file.Path.LocalPath,
-                    suppliersFromFile));
+                    suppliersFromFile,
+                    progress));
 
             ImportStatus = "Đang cập nhật danh sách nhà cung cấp...";
             StatusMessage = ImportStatus;
 
             await LoadSuppliersAsync();
 
-            _suppliersLoaded = true;
+            StatusMessage = ketQua.SoThemMoi > 0
+                ? $"✅ Đã nhập thành công {ketQua.SoThemMoi:N0} nhà cung cấp từ file \"{file.Name}\". {ketQua.ThongBaoTatCa}"
+                : $"⚠️ Không có nhà cung cấp mới nào được nhập. {ketQua.ThongBaoTatCa}";
 
-            StatusMessage =
-                importedCount > 0
-                    ? $"✅ Đã nhập thành công {importedCount:N0} nhà cung cấp từ file \"{file.Name}\"."
-                    : $"⚠️ Không có nhà cung cấp mới nào được nhập.";
+            if (ketQua.SoTrungTenVaDienThoai > 0)
+            {
+                StatusMessage +=
+                    $" Cảnh báo: {ketQua.SoTrungTenVaDienThoai:N0} nhà cung cấp " +
+                    "trùng tên và số điện thoại với nhà cung cấp đã có.";
+            }
+
+            if (ketQua.DanhSachLoi.Count > 0)
+            {
+                StatusMessage += " " + string.Join(" | ", ketQua.DanhSachLoi.Take(3));
+            }
         }
         catch (Exception ex)
         {
@@ -1954,11 +1950,13 @@ public partial class MainWindowViewModel : ObservableObject
         {
             await _db.XoaNhaCungCapAsync(supplier.Id);
 
-            NhaCungCaps.Remove(supplier);
             SelectedNhaCungCap = null;
 
             StatusMessage =
                 $"Đã xóa nhà cung cấp {supplier.TenNhaCungCap}";
+
+            // Tải lại trang để số trang, tổng và thống kê khớp với database.
+            await LoadSupplierPageAsync();
         }
         catch (Exception ex)
         {
@@ -3159,17 +3157,17 @@ public partial class MainWindowViewModel : ObservableObject
     // ================================================================
     // SỔ QUỸ
     //  - Tự sinh mã phiếu thu (PTxxxx) / phiếu chi (PCxxxx) khi mở form.
-    //  - Tìm kiếm theo mã phiếu (realtime) + phân trang theo kết quả tìm kiếm.
+    //  - Tìm kiếm realtime + bộ lọc + phân trng đều do MySQL xử lý.
+    //    Phần trạng thái của bộ lọc nằm ở MainWindowViewModel.SoQuyBoLoc.cs.
     // ================================================================
-    private CancellationTokenSource? _soQuySearchCts;
     private int _soQuyLoadVersion;
 
     public ObservableCollection<SoQuyGiaoDich> SoQuyGiaoDichs { get; } = new();
 
-    public IReadOnlyList<int> SoQuyPageSizeOptions { get; } = [10, 15, 25, 50, 100];
+    public IReadOnlyList<int> SoQuyPageSizeOptions { get; } = [15, 20, 50, 100];
 
     [ObservableProperty] private string soQuySearchText = "";
-    [ObservableProperty] private int soQuyPageSize = 10;
+    [ObservableProperty] private int soQuyPageSize = 20;
     [ObservableProperty] private int soQuyPage = 1;
     [ObservableProperty] private int soQuyTotalCount;
 
@@ -3193,26 +3191,32 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool CanSoQuyTrangTruoc => SoQuyPage > 1;
 
-    /// <summary>Ví dụ: "1 - 3 trong 3 giao dịch"</summary>
+    /// <summary>Ví dụ: "1 - 20 trong 356 phiếu"</summary>
     public string SoQuyRangeText
     {
         get
         {
             if (SoQuyTotalCount == 0)
-                return "0 giao dịch";
+                return "0 phiếu";
 
             var from = (SoQuyPage - 1) * SoQuyPageSize + 1;
             var to = Math.Min(from + SoQuyPageSize - 1, SoQuyTotalCount);
 
-            return $"{from} - {to} trong {SoQuyTotalCount} giao dịch";
+            return $"{from} - {to} trong {SoQuyTotalCount} phiếu";
         }
     }
 
-    /// <summary>Nội dung Empty State: khác nhau giữa "chưa có phiếu nào" và "không tìm thấy phiếu phù hợp".</summary>
-    public string SoQuyEmptyStateText =>
-        IsSoQuyDangTimKiem
-            ? $"Không tìm thấy phiếu phù hợp với: \"{SoQuySearchText.Trim()}\""
-            : "Chưa có giao dịch nào trong sổ quỹ";
+    /// <summary>Nội dung Empty State: phân biệt "chưa lọc" với "lọc không ra kết quả".</summary>
+    public string SoQuyEmptyStateText
+    {
+        get
+        {
+            if (CoSoQuyBoLoc)
+                return "Không có phiếu nào khớp bộ lọc đang chọn";
+
+            return "Chưa có giao dịch nào trong sổ quỹ";
+        }
+    }
 
     // ---------- Tìm kiếm realtime ----------
 
@@ -3221,42 +3225,19 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSoQuyDangTimKiem));
         OnPropertyChanged(nameof(SoQuyEmptyStateText));
 
-        // Lùi 300ms để không gọi database liên tục khi người dùng đang gõ.
-        var cts = new CancellationTokenSource();
-        _soQuySearchCts?.Cancel();
-        _soQuySearchCts = cts;
-
-        _ = DebounceSoQuySearchAsync(cts.Token);
-    }
-
-    private async Task DebounceSoQuySearchAsync(CancellationToken token)
-    {
-        try
-        {
-            await Task.Delay(300, token);
-
-            // Tìm kiếm luôn quay về trang 1.
-            SoQuyPage = 1;
-
-            await LoadSoQuyPhieuAsync();
-        }
-        catch (OperationCanceledException)
-        {
-            // Người dùng gõ tiếp => kết quả cũ bị huỷ, không cần làm gì.
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = "Không thể tìm kiếm sổ quỹ: " + ex.Message;
-        }
+        // Ô tìm kiếm là một điều kiện của bộ lọc nên dùng chung đường hoãn
+        // 300ms: vừa tránh gọi database liên tục khi đang gõ, vừa bảo đảm
+        // danh sách và 4 thẻ thống kê luôn cùng một bộ điều kiện.
+        BaoLocSoQuyThayDoi();
     }
 
     [RelayCommand]
     private void XoaTimKiemSoQuy()
     {
-        _soQuySearchCts?.Cancel();
+        _soQuyLocCts?.Cancel();
         SoQuySearchText = "";
         SoQuyPage = 1;
-        _ = LoadSoQuyPhieuAsync();
+        _ = TaiLaiSoQuyAsync();
     }
 
     // ---------- Phân trang ----------
@@ -3304,7 +3285,10 @@ public partial class MainWindowViewModel : ObservableObject
             SoQuyPage--;
     }
 
-    /// <summary>Nạp trang hiện tại của sổ quỹ theo từ khóa tìm kiếm đang gõ.</summary>
+    /// <summary>
+    /// Nạp trang hiện tại của sổ quỹ. Chỉ rút đúng <c>SoQuyPageSize</c> dòng
+    /// từ database; danh sách chưa bao giờ chứa toàn bộ bảng phieu_chi.
+    /// </summary>
     private async Task LoadSoQuyPhieuAsync()
     {
         var version = ++_soQuyLoadVersion;
@@ -3312,7 +3296,7 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             var (items, tongSoBanGhi) = await _db.GetSoQuyPhieuPagedAsync(
-                SoQuySearchText,
+                SoQuyLocHienTai,
                 SoQuyPage,
                 SoQuyPageSize);
 
@@ -3320,15 +3304,33 @@ public partial class MainWindowViewModel : ObservableObject
             if (version != _soQuyLoadVersion)
                 return;
 
+            // Lọc xong mà trang hiện tại vượt quá số trang (ví dụ đang ở trang 5
+            // rồi thu hẹp bộ lọc) thì lùi về trang cuối rồi nạp lại cho đúng.
+            var tongSoTrang = SoQuyPageSize <= 0
+                ? 0
+                : (int)Math.Ceiling(tongSoBanGhi / (double)SoQuyPageSize);
+
+            if (tongSoTrang > 0 && SoQuyPage > tongSoTrang)
+            {
+                SoQuyTotalCount = tongSoBanGhi;
+                SoQuyPage = tongSoTrang;
+
+                await LoadSoQuyPhieuAsync();
+
+                return;
+            }
+
             SoQuyGiaoDichs.Clear();
+
             foreach (var item in items)
                 SoQuyGiaoDichs.Add(item);
 
-            // Trang có thể vượt quá tổng số trang sau khi vừa tìm kiếm.
-            if (SoQuyTotalPages > 0 && SoQuyPage > SoQuyTotalPages)
-                SoQuyPage = SoQuyTotalPages;
-
             SoQuyTotalCount = tongSoBanGhi;
+
+            // Danh sách vừa thay => trạng thái "có dữ liệu" và câu thông báo
+            // của Empty State có thể đã đổi.
+            OnPropertyChanged(nameof(HasSoQuyData));
+            OnPropertyChanged(nameof(SoQuyEmptyStateText));
         }
         catch (Exception ex)
         {
@@ -3588,8 +3590,7 @@ public partial class MainWindowViewModel : ObservableObject
             // Đóng modal rồi nạp lại danh sách + tổng hợp để thấy phiếu vừa lưu ngay.
             ResetSoQuyPhieuForm();
 
-            await LoadSoQuyPhieuAsync();
-            await LoadSoQuyTongHopAsync();
+            await TaiLaiSoQuyAsync();
         }
         catch (Exception ex)
         {
@@ -3607,20 +3608,21 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>Cập nhật 4 thẻ tổng quan của sổ quỹ (gọi sau khi lưu hoặc khi mở màn hình).</summary>
+    /// <summary>
+    /// Cập nhật 4 thẻ tổng quan của sổ quỹ. Cả bốn chỉ số đều do MySQL tính
+    /// theo đúng bộ lọc đang áp dụng, không lấy tổng toàn bộ bảng.
+    /// Tồn quỹ = quỹ đầu kỳ + tổng thu - tổng chi.
+    /// </summary>
     private async Task LoadSoQuyTongHopAsync()
     {
         try
         {
-            var (tongThu, tongChi) = await _db.GetSoQuyTongHopAsync();
+            var tongHop = await _db.GetSoQuyTongHopTheoLocAsync(SoQuyLocHienTai);
 
-            SoQuyTongThuText = FormatSoQuyTien(tongThu);
-            SoQuyTongChiText = FormatSoQuyTien(tongChi);
-
-            // Quỹ đầu kỳ do ngoài quyền hạn sổ quỹ quản lý: hiển thị 0 đ,
-            // tồn quỹ = tổng thu - tổng chi.
-            SoQuyQuyDauKyText = FormatSoQuyTien(0m);
-            SoQuyTonQuyText = FormatSoQuyTien(tongThu - tongChi);
+            SoQuyQuyDauKyText = FormatSoQuyTien(tongHop.QuyDauKy);
+            SoQuyTongThuText = FormatSoQuyTien(tongHop.TongThu);
+            SoQuyTongChiText = FormatSoQuyTien(tongHop.TongChi);
+            SoQuyTonQuyText = FormatSoQuyTien(tongHop.TonQuy);
         }
         catch (Exception ex)
         {

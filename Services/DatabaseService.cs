@@ -1269,13 +1269,29 @@ public sealed class DatabaseService
     }
 
     /// <summary>
+    /// Số ngày dùng để đếm "Khách hàng mới" khi giao diện không chỉ định.
+    /// Giữ ở đây để query và chữ dưới thẻ thống kê cùng một con số.
+    /// </summary>
+    public const int SoNgayKhachMoiMacDinh = 30;
+
+    /// <summary>
     /// Số liệu tổng quan cho thanh thống kê phía trên bảng danh sách khách hàng.
-    /// Tổng khách hàng, khách hàng mới, tổng nợ và tổng bán đều tính thẳng từ
-    /// database với đúng biểu thức tiền mà bảng danh sách đang hiển thị, nên
-    /// thẻ thống kê không bao giờ lệch với tổng các dòng trong bảng.
+    /// Cả bốn chỉ số đều tính thẳng từ database, không lấy từ các dòng đang hiển thị:
+    /// <list type="bullet">
+    /// <item>Tổng khách hàng = COUNT(*) của khach_hang có trang_thai = 1.</item>
+    /// <item>Khách hàng mới = số khách hàng đang hoạt động có ngay_tao nằm trong
+    /// <paramref name="soNgay"/> ngày gần nhất (mặc định 30 ngày), tính bằng
+    /// DATE_SUB(NOW(), INTERVAL ...) chứ không phải COUNT toàn bộ bảng.</item>
+    /// <item>Nợ hiện tại = SUM của biểu thức nợ của từng khách hàng, ưu tiên sổ cái
+    /// công nợ (SUM(ghi_no - ghi_co)), không có sổ cái thì lấy SUM(con_no) của
+    /// hóa đơn đã hoàn thành.</item>
+    /// <item>Tổng bán = SUM của biểu thức bán của từng khách hàng, tức tổng
+    /// khach_can_tra của các hóa đơn đã hoàn thành (đã trừ giảm giá, chưa trừ trả hàng).</item>
+    /// </list>
+    /// Nhờ vậy thẻ thống kê và tổng các dòng trong bảng luôn dùng chung một quy tắc.
     /// </summary>
     public async Task<(int TongSoKhachHang, int SoKhachMoi, decimal TongNoHienTai, decimal TongBan)>
-        GetThongKeDanhSachKhachHangAsync(int soNgay = 30)
+        GetThongKeDanhSachKhachHangAsync(int soNgay = SoNgayKhachMoiMacDinh)
     {
         var coBangTraHang = await HasBangTraHangAsync();
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
@@ -1287,7 +1303,8 @@ public sealed class DatabaseService
             COALESCE(
                 SUM(
                     CASE
-                        WHEN kh.ngay_tao >= DATE_SUB(NOW(), INTERVAL @SoNgay DAY)
+                        WHEN kh.ngay_tao IS NOT NULL
+                             AND kh.ngay_tao >= DATE_SUB(NOW(), INTERVAL @SoNgay DAY)
                         THEN 1
                         ELSE 0
                     END
@@ -1304,7 +1321,7 @@ public sealed class DatabaseService
 
         var row = await connection.QueryFirstOrDefaultAsync<ThongKeDanhSachKhachHang>(
             sql,
-            new { SoNgay = soNgay < 1 ? 30 : soNgay });
+            new { SoNgay = soNgay < 1 ? SoNgayKhachMoiMacDinh : soNgay });
 
         return row is null
             ? (0, 0, 0m, 0m)
@@ -1937,7 +1954,7 @@ public sealed class DatabaseService
 
         try
         {
-            foreach (var row in (await connection.QueryAsync<DongTen>(sql, transaction: transaction)).AsList()))
+            foreach (var row in (await connection.QueryAsync<DongTen>(sql, transaction: transaction)).AsList())
             {
                 var ten = (row.Ten ?? "").Trim();
 
@@ -2905,6 +2922,397 @@ LIMIT 500;
     /// Chỉ dùng các mã NCC + số tối đa 7 chữ số để không bị ảnh hưởng
     /// bởi các mã cũ dạng timestamp.
     /// </summary>
+    // ==========================================
+    // DANH SÁCH NHÀ CUNG CẤP: LỌC + PHÂN TRANG SERVER-SIDE
+    // ==========================================
+
+    /// <summary>
+    /// Mệnh đề FROM dùng chung cho cả truy vấn lấy trang và truy vấn đếm/thống kê,
+    /// để danh sách và các thẻ thống kê luôn nói về cùng một tập nhà cung cấp.
+    /// Công nợ lấy đúng từ sổ cái công nợ (vw_cong_no_nha_cung_cap) như cột
+    /// "Còn nợ" đang hiển thị.
+    /// </summary>
+    private const string NhaCungCapFrom = """
+    FROM nha_cung_cap ncc
+    LEFT JOIN vw_cong_no_nha_cung_cap v
+    ON v.id = ncc.id
+    """;
+
+    /// <summary>Danh sách cột của bảng nhà cung cấp, dùng chung cho nhiều câu SQL.</summary>
+    private const string NhaCungCapColumns = """
+            ncc.id AS Id,
+            ncc.ma_nha_cung_cap AS MaNhaCungCap,
+            ncc.ten_nha_cung_cap AS TenNhaCungCap,
+            ncc.so_dien_thoai AS SoDienThoai,
+            ncc.email AS Email,
+            ncc.dia_chi AS DiaChi,
+            ncc.phuong_xa AS PhuongXa,
+            ncc.quan_huyen AS QuanHuyen,
+            ncc.tinh_thanh AS TinhThanh,
+            ncc.ma_so_thue AS MaSoThue,
+            ncc.nguoi_lien_he AS NguoiLienHe,
+            ncc.ghi_chu AS GhiChu,
+            ncc.trang_thai AS TrangThai,
+            ncc.ngay_tao AS NgayTao,
+            COALESCE(v.con_no, 0) AS ConNo
+    """;
+
+    /// <summary>
+    /// Sinh mệnh đề WHERE từ bộ lọc. Mọi điều kiện đều là tham số hóa nên an toàn
+    /// với dấu nháy trong từ khóa, và đều được đẩy xuống MySQL xử lý.
+    /// </summary>
+    private static string TaoDieuKienNhaCungCap(BoLocNhaCungCap loc)
+    {
+        var dieuKien = new StringBuilder();
+
+        dieuKien.Append("ncc.trang_thai = 1");
+
+        // Ô tìm kiếm: mã NCC, tên, số điện thoại, email.
+        dieuKien.Append(
+            " AND (@TimKiem = ''"
+            + " OR ncc.ma_nha_cung_cap LIKE @TimKiemLike"
+            + " OR ncc.ten_nha_cung_cap LIKE @TimKiemLike"
+            + " OR COALESCE(ncc.so_dien_thoai, '') LIKE @TimKiemLike"
+            + " OR COALESCE(ncc.email, '') LIKE @TimKiemLike)");
+
+        // Từng ô của bộ lọc chi tiết.
+        dieuKien.Append(" AND (@MaNhaCungCap = '' OR ncc.ma_nha_cung_cap LIKE @MaNhaCungCapLike)");
+        dieuKien.Append(" AND (@TenNhaCungCap = '' OR ncc.ten_nha_cung_cap LIKE @TenNhaCungCapLike)");
+        dieuKien.Append(" AND (@SoDienThoai = '' OR COALESCE(ncc.so_dien_thoai, '') LIKE @SoDienThoaiLike)");
+        dieuKien.Append(" AND (@Email = '' OR COALESCE(ncc.email, '') LIKE @EmailLike)");
+
+        // Địa chỉ khớp cả 4 cột địa chỉ để lọc được cả khi người dùng chỉ nhớ
+        // tên phường/xã, quận/huyện hoặc tỉnh/thành.
+        dieuKien.Append(
+            " AND (@DiaChi = ''"
+            + " OR COALESCE(ncc.dia_chi, '') LIKE @DiaChiLike"
+            + " OR COALESCE(ncc.phuong_xa, '') LIKE @DiaChiLike"
+            + " OR COALESCE(ncc.quan_huyen, '') LIKE @DiaChiLike"
+            + " OR COALESCE(ncc.tinh_thanh, '') LIKE @DiaChiLike)");
+
+        // Trạng thái công nợ: tất cả / còn nợ / không còn nợ.
+        dieuKien.Append(
+            " AND (@CongNoMode = 0"
+            + " OR (@CongNoMode = 1 AND COALESCE(v.con_no, 0) > 0)"
+            + " OR (@CongNoMode = 2 AND COALESCE(v.con_no, 0) <= 0))");
+
+        // Khoảng công nợ.
+        dieuKien.Append(" AND (@ConNoTu IS NULL OR COALESCE(v.con_no, 0) >= @ConNoTu)");
+        dieuKien.Append(" AND (@ConNoDen IS NULL OR COALESCE(v.con_no, 0) <= @ConNoDen)");
+
+        return dieuKien.ToString();
+    }
+
+    /// <summary>Gom bộ lọc thành đúng bộ tham số mà các câu SQL kia đang mong đợi.</summary>
+    private static object TaoThamSoNhaCungCap(BoLocNhaCungCap loc)
+    {
+        var timKiem = (loc.TimKiem ?? "").Trim();
+        var maNhaCungCap = (loc.MaNhaCungCap ?? "").Trim();
+        var tenNhaCungCap = (loc.TenNhaCungCap ?? "").Trim();
+        var soDienThoai = (loc.SoDienThoai ?? "").Trim();
+        var email = (loc.Email ?? "").Trim();
+        var diaChi = (loc.DiaChi ?? "").Trim();
+
+        return new
+        {
+            TimKiem = timKiem,
+            TimKiemLike = $"%{timKiem}%",
+            MaNhaCungCap = maNhaCungCap,
+            MaNhaCungCapLike = $"%{maNhaCungCap}%",
+            TenNhaCungCap = tenNhaCungCap,
+            TenNhaCungCapLike = $"%{tenNhaCungCap}%",
+            SoDienThoai = soDienThoai,
+            SoDienThoaiLike = $"%{soDienThoai}%",
+            Email = email,
+            EmailLike = $"%{email}%",
+            DiaChi = diaChi,
+            DiaChiLike = $"%{diaChi}%",
+            CongNoMode = loc.CongNoMode,
+            ConNoTu = loc.ConNoTu,
+            ConNoDen = loc.ConNoDen
+        };
+    }
+
+    /// <summary>
+    /// Lấy một trang nhà cung cấp theo bộ lọc, kèm tổng số bản ghi khớp bộ lọc.
+    /// Chỉ đọc đúng <paramref name="pageSize"/> dòng (LIMIT/OFFSET), không bao giờ
+    /// kéo toàn bộ bảng nha_cung_cap về rồi mới lọc ở C#.
+    /// </summary>
+    public async Task<(IReadOnlyList<NhaCungCap> Items, int TongSoBanGhi)> GetNhaCungCapPagedAsync(
+        BoLocNhaCungCap loc,
+        int page,
+        int pageSize)
+    {
+        loc ??= new BoLocNhaCungCap();
+
+        var safePage = page < 1 ? 1 : page;
+        var safePageSize = pageSize < 1 ? 20 : pageSize;
+        var offset = (safePage - 1) * safePageSize;
+
+        await using var connection = await OpenAsync();
+
+        var dieuKien = TaoDieuKienNhaCungCap(loc);
+        var thamSo = TaoThamSoNhaCungCap(loc);
+
+        var countSql = $"""
+        SELECT COUNT(*)
+        {NhaCungCapFrom}
+        WHERE {dieuKien};
+        """;
+
+        var tongSoBanGhi = await connection.ExecuteScalarAsync<int>(countSql, thamSo);
+
+        if (tongSoBanGhi == 0)
+            return (Array.Empty<NhaCungCap>(), 0);
+
+        var pageSql = $"""
+        SELECT
+        {NhaCungCapColumns}
+        {NhaCungCapFrom}
+        WHERE {dieuKien}
+        ORDER BY ncc.ten_nha_cung_cap, ncc.id
+        LIMIT @Limit OFFSET @Offset;
+        """;
+
+        var items = (
+            await connection.QueryAsync<NhaCungCap>(
+                pageSql,
+                GopThamSo(thamSo, safePageSize, offset))
+        ).AsList();
+
+        return (items, tongSoBanGhi);
+    }
+
+    /// <summary>
+    /// Thống kê phía trên bảng nhà cung cấp. Cùng bộ lọc với truy vấn lấy danh
+    /// sách nên khi đổi bộ lọc thì cả bảng lẫn thống kê cùng cập nhật.
+    /// </summary>
+    public async Task<ThongKeDanhSachNhaCungCap> GetThongKeDanhSachNhaCungCapAsync(
+        BoLocNhaCungCap loc)
+    {
+        loc ??= new BoLocNhaCungCap();
+
+        var sql = $"""
+        SELECT
+            COUNT(*) AS TongSoNhaCungCap,
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN COALESCE(v.con_no, 0) > 0 THEN 1
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS SoNhaCungCapConNo,
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN COALESCE(v.con_no, 0) > 0 THEN COALESCE(v.con_no, 0)
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS TongCongNo
+        {NhaCungCapFrom}
+        WHERE {TaoDieuKienNhaCungCap(loc)};
+        """;
+
+        await using var connection = await OpenAsync();
+
+        var thongKe = await connection.QueryFirstOrDefaultAsync<ThongKeDanhSachNhaCungCap>(
+            sql,
+            TaoThamSoNhaCungCap(loc));
+
+        return thongKe ?? new ThongKeDanhSachNhaCungCap();
+    }
+
+    /// <summary>Lấy đầy đủ thông tin một nhà cung cấp để mở vùng chi tiết / form sửa.</summary>
+    public async Task<NhaCungCap?> GetNhaCungCapByIdAsync(uint supplierId)
+    {
+        var sql = $"""
+        SELECT
+        {NhaCungCapColumns}
+        {NhaCungCapFrom}
+        WHERE ncc.trang_thai = 1
+          AND ncc.id = @Id;
+        """;
+
+        await using var connection = await OpenAsync();
+
+        return await connection.QueryFirstOrDefaultAsync<NhaCungCap>(
+            sql,
+            new { Id = supplierId });
+    }
+
+    /// <summary>
+    /// Lịch sử nhập hàng của một nhà cung cấp. Chỉ gọi khi người dùng mở vùng
+    /// chi tiết, và chỉ lấy <paramref name="limit"/> phiếu gần nhất.
+    /// </summary>
+    public async Task<IReadOnlyList<PhieuNhapHang>> GetPhieuNhapCuaNhaCungCapAsync(
+        uint supplierId,
+        int limit = 200)
+    {
+        var safeLimit = limit < 1 ? 200 : limit;
+
+        const string sql = """
+        SELECT
+            p.id AS Id,
+            p.ma_phieu_nhap AS MaPhieuNhap,
+            p.nha_cung_cap_id AS NhaCungCapId,
+            ncc.ma_nha_cung_cap AS MaNhaCungCap,
+            ncc.ten_nha_cung_cap AS TenNhaCungCap,
+            p.nguoi_nhap_id AS NguoiNhapId,
+            nd.ho_ten AS TenNhanVien,
+            p.thoi_gian_nhap AS ThoiGianNhap,
+            p.tong_tien_hang AS TongTienHang,
+            p.chi_phi_khac AS ChiPhiKhac,
+            p.tong_tien_nhap AS TongTienNhap,
+            p.da_thanh_toan AS DaThanhToan,
+            p.con_no AS ConNo,
+            p.trang_thai AS TrangThai,
+            p.ghi_chu AS GhiChu
+        FROM phieu_nhap_hang p
+        LEFT JOIN nha_cung_cap ncc
+            ON ncc.id = p.nha_cung_cap_id
+        LEFT JOIN nguoi_dung nd
+            ON nd.id = p.nguoi_nhap_id
+        WHERE p.nha_cung_cap_id = @Id
+        ORDER BY p.thoi_gian_nhap DESC, p.id DESC
+        LIMIT @Limit;
+        """;
+
+        await using var connection = await OpenAsync();
+
+        return (
+            await connection.QueryAsync<PhieuNhapHang>(
+                sql,
+                new { Id = supplierId, Limit = safeLimit })
+        ).AsList();
+    }
+
+    /// <summary>
+    /// Sổ cái công nợ của một nhà cung cấp (bảng lich_su_cong_no_nha_cung_cap).
+    /// Cũng chỉ đọc khi người dùng mở chi tiết.
+    /// </summary>
+    public async Task<IReadOnlyList<LichSuCongNoNhaCungCap>> GetLichSuCongNoNhaCungCapAsync(
+        uint supplierId,
+        int limit = 200)
+    {
+        var safeLimit = limit < 1 ? 200 : limit;
+
+        const string sql = """
+        SELECT
+            ls.id AS Id,
+            ls.loai_giao_dich AS LoaiGiaoDich,
+            ls.ma_chung_tu AS MaChungTu,
+            ls.ghi_no AS GhiNo,
+            ls.ghi_co AS GhiCo,
+            ls.so_du AS SoDu,
+            ls.thoi_gian AS ThoiGian,
+            ls.ghi_chu AS GhiChu
+        FROM lich_su_cong_no_nha_cung_cap ls
+        WHERE ls.nha_cung_cap_id = @Id
+        ORDER BY ls.thoi_gian DESC, ls.id DESC
+        LIMIT @Limit;
+        """;
+
+        await using var connection = await OpenAsync();
+
+        return (
+            await connection.QueryAsync<LichSuCongNoNhaCungCap>(
+                sql,
+                new { Id = supplierId, Limit = safeLimit })
+        ).AsList();
+    }
+
+    /// <summary>
+    /// Tổng hợp tài chính của một nhà cung cấp: tổng tiền nhập, đã thanh toán,
+    /// còn nợ (theo sổ cái công nợ nếu có, không thì theo phiếu nhập hàng).
+    /// </summary>
+    public async Task<ThongKeTaiChinhNhaCungCap> GetThongKeTaiChinhNhaCungCapAsync(uint supplierId)
+    {
+        const string phieuSql = """
+        SELECT
+            COUNT(*) AS SoPhieuNhap,
+            COALESCE(SUM(p.tong_tien_nhap), 0) AS TongTienNhap,
+            COALESCE(SUM(p.da_thanh_toan), 0) AS TongDaThanhToan,
+            COALESCE(SUM(p.con_no), 0) AS TongConNoPhieuNhap
+        FROM phieu_nhap_hang p
+        WHERE p.nha_cung_cap_id = @Id;
+        """;
+
+        const string congNoSql = """
+        SELECT
+            COUNT(ls.id) AS SoLanGhiCongNo,
+            COALESCE(SUM(ls.ghi_no - ls.ghi_co), 0) AS TongCongNoLichSu,
+            MAX(ls.thoi_gian) AS LanGhiCongNoGanNhat
+        FROM lich_su_cong_no_nha_cung_cap ls
+        WHERE ls.nha_cung_cap_id = @Id;
+        """;
+
+        await using var connection = await OpenAsync();
+
+        var thamSo = new { Id = supplierId };
+
+        var phieu = await connection.QueryFirstOrDefaultAsync<NhaCungCapPhieuTongHopRow>(
+            phieuSql,
+            thamSo) ?? new NhaCungCapPhieuTongHopRow();
+
+        var congNo = await connection.QueryFirstOrDefaultAsync<NhaCungCapCongNoTongHopRow>(
+            congNoSql,
+            thamSo) ?? new NhaCungCapCongNoTongHopRow();
+
+        return new ThongKeTaiChinhNhaCungCap
+        {
+            SoPhieuNhap = phieu.SoPhieuNhap,
+            TongTienNhap = phieu.TongTienNhap,
+            TongDaThanhToan = phieu.TongDaThanhToan,
+            TongConNoPhieuNhap = phieu.TongConNoPhieuNhap,
+            SoLanGhiCongNo = congNo.SoLanGhiCongNo,
+            TongCongNoLichSu = congNo.TongCongNoLichSu,
+            LanGhiCongNoGanNhat = congNo.LanGhiCongNoGanNhat
+        };
+    }
+
+    /// <summary>
+    /// Trong số mã nhà cung cấp được truyền vào, trả về tập mã đã tồn tại trong
+    /// database (kể cả nhà cung cấp đã bị ẩn). Dùng cho bước kiểm tra trùng khi
+    /// import: chỉ hỏi đúng các mã trong file thay vì tải toàn bộ danh sách NCC.
+    /// </summary>
+    public async Task<IReadOnlySet<string>> LayMaNhaCungCapDaTonTaiAsync(
+        IEnumerable<string> maNhaCungCap)
+    {
+        var maList = maNhaCungCap
+            .Select(ma => (ma ?? "").Trim())
+            .Where(ma => ma.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (maList.Count == 0)
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var sql = $"""
+        SELECT ma_nha_cung_cap
+        FROM nha_cung_cap
+        WHERE ma_nha_cung_cap IN ({string.Join(", ", maList.Select((_, i) => "@Ma" + i))});
+        """;
+
+        var thamSo = new Dictionary<string, object>();
+
+        for (var i = 0; i < maList.Count; i++)
+            thamSo["Ma" + i] = maList[i];
+
+        await using var connection = await OpenAsync();
+
+        var rows = (
+            await connection.QueryAsync<string>(sql, thamSo)
+        ).AsList();
+
+        return new HashSet<string>(
+            rows.Where(ma => !string.IsNullOrWhiteSpace(ma)),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
     public async Task<string> TaoMaNhaCungCapMoiAsync()
     {
         await using var connection = await OpenAsync();
@@ -3027,9 +3435,20 @@ LIMIT 500;
     }
 
     public async Task<int> ImportNhaCungCapTuFileAsync(string filePath)
-        => await ImportNhaCungCapTuFileAsync(filePath, null);
+        => (await ImportNhaCungCapTuFileAsync(filePath, null, null)).SoThemMoi;
 
     public async Task<int> ImportNhaCungCapTuFileAsync(string filePath, IReadOnlyCollection<NhaCungCap>? suppliersOverride)
+        => (await ImportNhaCungCapTuFileAsync(filePath, suppliersOverride, null)).SoThemMoi;
+
+    /// <summary>
+    /// Nhập danh sách nhà cung cấp từ file và trả về báo cáo chi tiết để
+    /// người dùng biết chính xác tổng số dòng, số thành công, số bỏ qua và số lỗi.
+    /// Mã trùng với database hoặc trùng ngay trong file đều được bỏ qua an toàn.
+    /// </summary>
+    public async Task<KetQuaImportNhaCungCap> ImportNhaCungCapTuFileAsync(
+        string filePath,
+        IReadOnlyCollection<NhaCungCap>? suppliersOverride,
+        IProgress<int>? progress)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
@@ -3038,32 +3457,169 @@ LIMIT 500;
             throw new FileNotFoundException("Không tìm thấy file danh sách nhà cung cấp.", filePath);
 
         var suppliers = suppliersOverride ?? ParseNhaCungCapFromFile(filePath);
-        if (suppliers.Count == 0)
-            return 0;
 
-        var importedCount = 0;
-        foreach (var supplier in suppliers)
+        var result = new KetQuaImportNhaCungCap
         {
-            if (string.IsNullOrWhiteSpace(supplier.TenNhaCungCap))
-                continue;
+            TenFile = Path.GetFileName(filePath),
+            SoDongExcel = suppliers.Count
+        };
+
+        if (suppliers.Count == 0)
+            return result;
+
+        // Ô tên trống thì không tạo được nhà cung cấp: bỏ qua và ghi log,
+        // không ném lỗi để phần còn lại của file vẫn được nhập.
+        var hopLe = new List<NhaCungCap>(suppliers.Count);
+
+        for (var i = 0; i < suppliers.Count; i++)
+        {
+            if (string.IsNullOrWhiteSpace(suppliers.ElementAt(i).TenNhaCungCap))
+            {
+                result.SoLoi++;
+                GhiLoi(result, $"Dòng {i + 2}: thiếu tên nhà cung cấp.");
+            }
+            else
+            {
+                hopLe.Add(suppliers.ElementAt(i));
+            }
+        }
+
+        result.SoNhaCungCapHopLe = hopLe.Count;
+
+        if (hopLe.Count == 0)
+            return result;
+
+        // Chỉ hỏi database về những mã thực sự có trong file, không tải toàn bộ danh sách.
+        var maTrongDatabase = await LayMaNhaCungCapDaTonTaiAsync(
+            hopLe.Select(ncc => ncc.MaNhaCungCap));
+
+        var maDaDung = new HashSet<string>(maTrongDatabase, StringComparer.OrdinalIgnoreCase);
+
+        // Cảnh báo mềm: tên + số điện thoại trùng nhà cung cấp đã có.
+        // Bảng không có UNIQUE cho hai cột này nên vẫn nhập, chỉ báo cho người dùng.
+        result.SoTrungTenVaDienThoai = await DemNhaCungCapTrungTenVaDienThoaiAsync(
+            hopLe.Select(ncc => (ncc.TenNhaCungCap, ncc.SoDienThoai)));
+
+        for (var i = 0; i < hopLe.Count; i++)
+        {
+            var supplier = hopLe[i];
+
+            progress?.Report(i);
 
             if (string.IsNullOrWhiteSpace(supplier.MaNhaCungCap))
                 supplier.MaNhaCungCap = GenerateSupplierCode();
 
-            try
+            var ma = supplier.MaNhaCungCap.Trim();
+
+            if (maDaDung.Contains(ma))
             {
-                await ThemNhaCungCapAsync(supplier);
-                importedCount++;
+                // Mã đã có trong database.
+                result.SoTrungMa++;
             }
-            catch (MySqlException ex) when (ex.Number == 1062)
+            else if (!maDaDung.Add(ma))
             {
-                // Bỏ qua mã nhà cung cấp trùng và tiếp tục các dòng còn lại.
+                // Mã bị trùng ngay trong chính file này.
+                result.SoTrungMaTrongFile++;
+            }
+            else
+            {
+                try
+                {
+                    await ThemNhaCungCapAsync(supplier);
+                    result.SoThemMoi++;
+                }
+                catch (MySqlException ex) when (ex.Number == 1062)
+                {
+                    // Có tiến trình khác vừa chèn mã này: bỏ qua và tiếp tục.
+                    result.SoTrungMa++;
+                }
+                catch (Exception ex)
+                {
+                    result.SoLoi++;
+                    GhiLoi(result, $"Dòng {i + 2} ({ma}): {ex.Message}");
+                }
             }
         }
 
-        return importedCount;
+        progress?.Report(hopLe.Count);
+
+        return result;
     }
+
+    /// <summary>
+    /// Đếm số nhà cung cấp trong danh sách đang xét trùng (tên + số điện thoại)
+    /// với nhà cung cấp đã có trong database. Chỉ dùng để báo người dùng.
+    /// </summary>
+    public async Task<int> DemNhaCungCapTrungTenVaDienThoaiAsync(
+        IEnumerable<(string Ten, string SoDienThoai)> danhSach)
+    {
+        var cap = danhSach
+            .Where(item => !string.IsNullOrWhiteSpace(item.Ten))
+            .GroupBy(
+                item => (Ten: item.Ten.Trim(), Sdt: (item.SoDienThoai ?? "").Trim()),
+                new CapNhaCungCapSoQuy())
+            .Select(group => group.Key)
+            .ToList();
+
+        if (cap.Count == 0)
+            return 0;
+
+        var dieuKien = new List<string>(cap.Count);
+        var thamSo = new Dictionary<string, object>(cap.Count * 2);
+
+        for (var i = 0; i < cap.Count; i++)
+        {
+            var ten = "Ten" + i;
+            var sdt = "Sdt" + i;
+
+            thamSo[ten] = cap[i].Ten;
+
+            if (cap[i].Sdt.Length == 0)
+            {
+                dieuKien.Add($"(ten_nha_cung_cap = @{ten} AND (so_dien_thoai IS NULL OR so_dien_thoai = ''))");
+            }
+            else
+            {
+                dieuKien.Add($"(ten_nha_cung_cap = @{ten} AND so_dien_thoai = @{sdt})");
+                thamSo[sdt] = cap[i].Sdt;
+            }
+        }
+
+        var sql = $"""
+        SELECT COUNT(*)
+        FROM nha_cung_cap
+        WHERE {string.Join(" OR ", dieuKien)};
+        """;
+
+        await using var connection = await OpenAsync();
+
+        return await connection.ExecuteScalarAsync<int>(sql, thamSo);
+    }
+
+    private static void GhiLoi(KetQuaImportNhaCungCap result, string loi)
+    {
+        // Chỉ giữ 20 lỗi đầu để thông báo không bị quá dài.
+        if (result.DanhSachLoi.Count < 20)
+            result.DanhSachLoi.Add(loi);
+    }
+
+    private sealed class CapNhaCungCapSoQuy : IEqualityComparer<(string Ten, string Sdt)>
+    {
+        public bool Equals((string Ten, string Sdt) x, (string Ten, string Sdt) y)
+            => string.Equals(x.Ten, y.Ten, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(x.Sdt, y.Sdt, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string Ten, string Sdt) obj)
+        {
+            var hash = new HashCode();
+            hash.Add(obj.Ten?.ToUpperInvariant() ?? "", StringComparer.Ordinal);
+            hash.Add(obj.Sdt?.ToUpperInvariant() ?? "", StringComparer.Ordinal);
+            return hash.ToHashCode();
+        }
+    }
+
     public List<NhaCungCap> ParseNhaCungCapFromFile(string filePath)
+
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException(
@@ -3993,81 +4549,426 @@ LIMIT 500;
         }
     }
 
+    /// <summary>Trạng thái chứng từ đã hủy: không được tính vào tổng thu/tổng chi của quỹ.</summary>
+    public const string TrangThaiPhieuHuy = "HUY";
+
     /// <summary>
-    /// Lấy danh sách phiếu của sổ quỹ theo mã phiếu (tìm một phần, không phân biệt hoa/thường)
-    /// kèm tổng số bản ghi để phân trang.
+    /// Trạng thái chứng tư đã hoàn tất: duy nhất được tính vào quỹ.
+    /// Xem <see cref="LuuPhieuQuyAsync"/> đang ghi trạng thái này.
+    /// </summary>
+    public const string TrangThaiPhieuHoanThanh = "HOAN_THANH";
+
+    /// <summary>
+    /// FROM + JOIN dùng chung cho mọi truy vấn sổ quỹ.
+    /// Phiếu thu và phiếu chi cùng nằm trong bảng <c>phieu_chi</c>, loại phiếu
+    /// được phân biệt bằng tiền tố mã (PTxxxx / PCxxxx).
+    /// </summary>
+    private const string SoQuyFrom = """
+    FROM phieu_chi pc
+    LEFT JOIN nguoi_dung nd ON nd.id = pc.nguoi_thuc_hien_id
+    LEFT JOIN nhom_chi_phi ncp ON ncp.id = pc.nhom_chi_phi_id
+    """;
+
+    /// <summary>
+    /// Dựng điều kiện WHERE cho sổ quỹ. Cùng một hàm được dùng cho cả
+    /// COUNT (phân trang), SELECT (danh sách) và SUM (thống kê) nên
+    /// danh sách với thống kê không thể lệch nhau.
+    /// <para>
+    /// Mọi điều kiện đều gắn tham số nên không có chuyện dán chuỗi từ người dùng
+    /// vào SQL. Khoảng thời gian và khoảng tiền có thể tắt riêng vì quỹ đầu kỳ
+    /// cần tới tận các phiếu trước mốc thời gian nhưng không được lọc theo số tiền.
+    /// </para>
+    /// </summary>
+    private static string TaoDieuKienSoQuy(
+        bool apDungKhoangThoiGian,
+        bool apDungKhoangTien)
+    {
+        var dieuKien = new StringBuilder();
+
+        // Ô tìm kiếm: mã phiếu, nội dung, người thực hiện, tên loại thu/chi.
+        dieuKien.Append(
+            "(@TimKiem = ''"
+            + " OR pc.ma_phieu_chi LIKE @TimKiemLike"
+            + " OR COALESCE(pc.noi_dung, '') LIKE @TimKiemLike"
+            + " OR COALESCE(nd.ho_ten, '') LIKE @TimKiemLike"
+            + " OR COALESCE(ncp.ten_nhom, '') LIKE @TimKiemLike)");
+
+        // Loại chứng từ: 0 = cả hai, 1 = chỉ phiếu thu, 2 = chỉ phiếu chi.
+        dieuKien.Append(
+            " AND (@LoaiChungTu = 0"
+            + " OR (@LoaiChungTu = 1 AND pc.ma_phieu_chi LIKE 'PT%')"
+            + " OR (@LoaiChungTu = 2 AND pc.ma_phieu_chi LIKE 'PC%'))");
+
+        // Quỹ: so khớp đúng mã phương thức đang có trong bảng phieu_chi.
+        dieuKien.Append(" AND (@PhuongThuc = '' OR pc.phuong_thuc = @PhuongThuc)");
+
+        if (apDungKhoangThoiGian)
+        {
+            dieuKien.Append(" AND (@TuNgay IS NULL OR pc.thoi_gian_chi >= @TuNgay)");
+            dieuKien.Append(" AND (@DenNgay IS NULL OR pc.thoi_gian_chi < @DenNgay)");
+        }
+
+        // Các nhóm lựa chọn nhiều mục gửi lên dạng danh sách id cách nhau bằng dấu phẩy.
+        dieuKien.Append(
+            " AND (@LoaiThuChiIds = ''"
+            + " OR FIND_IN_SET(CAST(pc.nhom_chi_phi_id AS CHAR), @LoaiThuChiIds) > 0)");
+        dieuKien.Append(
+            " AND (@TrangThaiList = '' OR FIND_IN_SET(pc.trang_thai, @TrangThaiList) > 0)");
+        dieuKien.Append(
+            " AND (@NguoiTaoIds = ''"
+            + " OR FIND_IN_SET(CAST(pc.nguoi_thuc_hien_id AS CHAR), @NguoiTaoIds) > 0)");
+
+        if (apDungKhoangTien)
+        {
+            dieuKien.Append(" AND (@TienTu IS NULL OR pc.so_tien >= @TienTu)");
+            dieuKien.Append(" AND (@TienDen IS NULL OR pc.so_tien <= @TienDen)");
+        }
+
+        return dieuKien.ToString();
+    }
+
+    /// <summary>Gom bộ lọc thành đúng bộ tham số mà các câu SQL kia đang mong đợi.</summary>
+    private static object TaoThamSoSoQuy(SoQuyBoLoc loc, bool apDungKhoangTien)
+    {
+        var timKiem = (loc.TimKiem ?? "").Trim();
+
+        return new
+        {
+            TimKiem = timKiem,
+            TimKiemLike = $"%{timKiem}%",
+            LoaiChungTu = loc.LoaiChungTu,
+            PhuongThuc = loc.PhuongThuc ?? "",
+            TuNgay = loc.TuNgay,
+            DenNgay = loc.DenNgay,
+            LoaiThuChiIds = loc.LoaiThuChiIds ?? "",
+            TrangThaiList = loc.TrangThaiList ?? "",
+            NguoiTaoIds = loc.NguoiTaoIds ?? "",
+            TienTu = apDungKhoangTien ? loc.TienTu : null,
+            TienDen = apDungKhoangTien ? loc.TienDen : null
+        };
+    }
+
+    /// <summary>
+    /// Lấy một trang phiếu của sổ quỹ theo bộ lọc, kèm tổng số phiếu khớp bộ lọc
+    /// để phân trng. Chỉ đọc đúng <c>pageSize</c> dòng, không kéo toàn bộ bảng về.
     /// </summary>
     public async Task<(IReadOnlyList<SoQuyGiaoDich> Items, int TongSoBanGhi)> GetSoQuyPhieuPagedAsync(
-        string? maPhieu,
+        SoQuyBoLoc loc,
         int page,
         int pageSize)
     {
-        var tuKhoa = (maPhieu ?? "").Trim();
+        loc ??= new SoQuyBoLoc();
 
         await using var connection = await OpenAsync();
 
-        const string countSql = """
+        var dieuKien = TaoDieuKienSoQuy(apDungKhoangThoiGian: true, apDungKhoangTien: true);
+        var thamSo = TaoThamSoSoQuy(loc, apDungKhoangTien: true);
+
+        var countSql = $"""
         SELECT COUNT(*)
-        FROM phieu_chi
-        WHERE (@MaPhieu = '' OR ma_phieu_chi LIKE @MaPhieu);
+        {SoQuyFrom}
+        WHERE {dieuKien};
         """;
 
-        var tongSoBanGhi = await connection.ExecuteScalarAsync<int>(
-            countSql,
-            new { MaPhieu = tuKhoa == "" ? "" : $"%{tuKhoa}%" });
+        var tongSoBanGhi = await connection.ExecuteScalarAsync<int>(countSql, thamSo);
 
         if (tongSoBanGhi == 0)
             return (Array.Empty<SoQuyGiaoDich>(), 0);
 
         var safePage = page < 1 ? 1 : page;
-        var safePageSize = pageSize < 1 ? 10 : pageSize;
+        var safePageSize = pageSize < 1 ? 15 : pageSize;
         var offset = (safePage - 1) * safePageSize;
 
-        const string listSql = """
+        var listSql = $"""
         SELECT
             pc.ma_phieu_chi AS MaPhieu,
             pc.so_tien AS SoTien,
             COALESCE(pc.noi_dung, '') AS NoiDung,
             pc.thoi_gian_chi AS ThoiGian,
-            COALESCE(nd.ho_ten, '') AS NguoiThucHien
-        FROM phieu_chi pc
-        LEFT JOIN nguoi_dung nd ON nd.id = pc.nguoi_thuc_hien_id
-        WHERE (@MaPhieu = '' OR pc.ma_phieu_chi LIKE @MaPhieu)
+            COALESCE(nd.ho_ten, '') AS NguoiThucHien,
+            pc.trang_thai AS TrangThai,
+            COALESCE(ncp.ten_nhom, '') AS TenLoai,
+            COALESCE(pc.phuong_thuc, '') AS PhuongThuc
+        {SoQuyFrom}
+        WHERE {dieuKien}
         ORDER BY pc.thoi_gian_chi DESC, pc.id DESC
         LIMIT @Limit OFFSET @Offset;
         """;
 
         var rows = await connection.QueryAsync<SoQuyPhieuRow>(
             listSql,
-            new
-            {
-                MaPhieu = tuKhoa == "" ? "" : $"%{tuKhoa}%",
-                Limit = safePageSize,
-                Offset = offset
-            });
+            GopThamSo(thamSo, safePageSize, offset));
 
         var items = new List<SoQuyGiaoDich>(rows.Count());
 
         foreach (var row in rows)
         {
+            var laThu = (row.MaPhieu ?? "")
+                .StartsWith("PT", StringComparison.OrdinalIgnoreCase);
+
             items.Add(new SoQuyGiaoDich
             {
                 MaPhieu = row.MaPhieu ?? "",
                 // Phiếu thu và phiếu chi cùng nằm trong bảng phieu_chi,
                 // nên loại phiếu được suy ra từ tiền tố mã (PTxxxx / PCxxxx).
-                LaThu = (row.MaPhieu ?? "").StartsWith("PT", StringComparison.OrdinalIgnoreCase),
-                // noi_dung chứa "người nộp/nhận" nên ưu tiên; chỉ fallback sang
-                // tên nhân viên khi phiếu cũ không có nội dung.
+                LaThu = laThu,
+                // noi_dung là nội dung/đối tượng của phiếu nên ưu tiên;
+                // chỉ fallback sang tên nhân viên khi phiếu cũ không có nội dung.
                 NguoiNopNhan = string.IsNullOrWhiteSpace(row.NoiDung)
                     ? (row.NguoiThucHien ?? "")
                     : row.NoiDung!,
                 GiaTri = ToDecimal(row.SoTien),
-                ThoiGian = row.ThoiGian
+                ThoiGian = row.ThoiGian,
+                TenLoai = row.TenLoai,
+                PhuongThuc = row.PhuongThuc,
+                TrangThai = row.TrangThai ?? ""
             });
         }
 
         return (items, tongSoBanGhi);
     }
+
+    /// <summary>Trộn bộ tham số lọc với LIMIT/OFFSET thành một đối tượng duy nhất.</summary>
+    private static Dictionary<string, object?> GopThamSo(
+        object thamSoLoc,
+        int limit,
+        int offset)
+    {
+        var gop = new Dictionary<string, object?>();
+
+        foreach (var thuocTinh in thamSoLoc.GetType().GetProperties())
+            gop[thuocTinh.Name] = thuocTinh.GetValue(thamSoLoc);
+
+        gop["Limit"] = limit;
+        gop["Offset"] = offset;
+
+        return gop;
+    }
+
+    /// <summary>
+    /// Thống kê sổ quỹ theo bộ lọc: quỹ đầu kỳ, tổng thu, tổng chi, tồn quỹ, tổng số phiếu.
+    /// Tổng thu/tổng chi chỉ cộng phiếu <see cref="TrangThaiPhieuHoanThanh"/> nên
+    /// phiếu đã hủy không làm thay đổi quỹ.
+    /// </summary>
+    public async Task<SoQuyTongHop> GetSoQuyTongHopTheoLocAsync(SoQuyBoLoc loc)
+    {
+        loc ??= new SoQuyBoLoc();
+
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            // Quỹ đầu kỳ chỉ có nghĩa khi đang giới hạn bởi mốc bắt đầu: gom tất cả
+            // phiếu trước mốc đó, thu trừ chi, và không lọc theo khoảng tiền
+            // (quỹ đầu kỳ là số dư mang sang, không phải giao dịch của kỳ này).
+            var dieuKienDauKy = TaoDieuKienSoQuy(apDungKhoangThoiGian: false, apDungKhoangTien: false);
+
+            var dieuKienKy = TaoDieuKienSoQuy(apDungKhoangThoiGian: true, apDungKhoangTien: true);
+
+            var sql = $"""
+            SELECT
+                (
+                    SELECT COALESCE(
+                        SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PT%' THEN pc.so_tien ELSE -pc.so_tien END),
+                        0)
+                    {SoQuyFrom}
+                    WHERE {dieuKienDauKy}
+                      AND @TuNgay IS NOT NULL
+                      AND pc.thoi_gian_chi < @TuNgay
+                      AND pc.trang_thai = @TrangThaiHoanThanh
+                ) AS QuyDauKy,
+                COALESCE(SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PT%' THEN pc.so_tien ELSE 0 END), 0) AS TongThu,
+                COALESCE(SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PC%' THEN pc.so_tien ELSE 0 END), 0) AS TongChi,
+                COUNT(*) AS TongSoPhieu
+            {SoQuyFrom}
+            WHERE {dieuKienKy}
+              AND pc.trang_thai = @TrangThaiHoanThanh;
+            """;
+
+            var thamSo = TaoThamSoSoQuy(loc, apDungKhoangTien: true);
+
+            var parameters = GopThamSo(thamSo, 0, 0);
+            parameters["TrangThaiHoanThanh"] = TrangThaiPhieuHoanThanh;
+
+            var row = await connection.QueryFirstOrDefaultAsync<SoQuyTongHopRow>(sql, parameters);
+
+            return new SoQuyTongHop
+            {
+                QuyDauKy = row?.QuyDauKy ?? 0m,
+                TongThu = row?.TongThu ?? 0m,
+                TongChi = row?.TongChi ?? 0m,
+                // Đếm cả phiếu đã hủy để tổng số phiếu khớp bộ lọc khớp
+                // với danh sách đang hiển thị bên dưới.
+                TongSoPhieu = await connection.ExecuteScalarAsync<int>(
+                    $"SELECT COUNT(*) {SoQuyFrom} WHERE {dieuKienKy};",
+                    thamSo)
+            };
+        }
+        catch
+        {
+            // Tổng quỹ chỉ để hiển thị: lỗi truy vấn không được chặn màn hình.
+            return new SoQuyTongHop();
+        }
+    }
+
+    /// <summary>
+    /// Các quỹ thực sự đang có dữ liệu trong bảng phieu_chi.
+    /// Không tự thêm lựa chọn "ngân hàng"/"ví điện tử" khi database chưa có.
+    /// </summary>
+    public async Task<IReadOnlyList<SoQuyLuaChon>> GetSoQuyQuyOptionsAsync()
+    {
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            const string sql = """
+            SELECT DISTINCT phuong_thuc
+            FROM phieu_chi
+            WHERE phuong_thuc IS NOT NULL AND phuong_thuc <> ''
+            ORDER BY phuong_thuc;
+            """;
+
+            var maQuy = await connection.QueryAsync<string>(sql);
+
+            return maQuy
+                .Select(ma => new SoQuyLuaChon(ma, TenHienThiPhuongThuc(ma)))
+                .ToList();
+        }
+        catch
+        {
+            return Array.Empty<SoQuyLuaChon>();
+        }
+    }
+
+    /// <summary>
+    /// Các loại thu/chi thực tế đang có trong bảng nhom_chi_phi.
+    /// Bảng này rỗng thì bộ lọc hiển thị rỗng, không bịa thêm loại giả.
+    /// </summary>
+    public async Task<IReadOnlyList<SoQuyLuaChonItem>> GetSoQuyLoaiThuChiOptionsAsync()
+    {
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            // Dapper khớp tên cột theo đúng tên thuộc tính (bỏ qua dấu gạch dưới),
+            // nên phải đặt alias là TenNhom chứ không để tên cột là ten_nhom.
+            const string sql = """
+            SELECT id, ten_nhom AS TenNhom
+            FROM nhom_chi_phi
+            WHERE trang_thai = 1
+            ORDER BY ten_nhom;
+            """;
+
+            var loai = await connection.QueryAsync<SoQuyTenNhomRow>(sql);
+
+            return loai
+                .Select(item => new SoQuyLuaChonItem(
+                    item.Id.ToString(CultureInfo.InvariantCulture),
+                    item.TenNhom))
+                .ToList();
+        }
+        catch
+        {
+            return Array.Empty<SoQuyLuaChonItem>();
+        }
+    }
+
+    /// <summary>Các trạng thái chứng từ thực tế đang có trong bảng phieu_chi.</summary>
+    public async Task<IReadOnlyList<SoQuyLuaChonItem>> GetSoQuyTrangThaiOptionsAsync()
+    {
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            const string sql = """
+            SELECT DISTINCT trang_thai
+            FROM phieu_chi
+            WHERE trang_thai IS NOT NULL AND trang_thai <> ''
+            ORDER BY trang_thai;
+            """;
+
+            var trangThai = await connection.QueryAsync<string>(sql);
+
+            // Hai trạng thái này luôn là trạng thái mà sổ quỹ hỗ trợ (khi
+            // lưu phiếu và khi hủy phiếu), nên hiện sẵn trong bộ lọc kể cả khi
+            // hiện tại database chưa có phiếu nào ở trạng thái đó. Đây là
+            // trạng thái nghiệp vụ của phần mềm, không phải dữ liệu bịa thêm.
+            var ds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                TrangThaiPhieuHoanThanh,
+                TrangThaiPhieuHuy
+            };
+
+            foreach (var ma in trangThai)
+            {
+                if (!string.IsNullOrWhiteSpace(ma))
+                    ds.Add(ma);
+            }
+
+            // "Đã thanh toán" luôn đứng trước, "Đã hủy" sau cho dễ đọc.
+            return ds
+                .OrderBy(ma => ma.Equals(TrangThaiPhieuHoanThanh, StringComparison.OrdinalIgnoreCase) ? 0
+                    : ma.Equals(TrangThaiPhieuHuy, StringComparison.OrdinalIgnoreCase) ? 1
+                    : 2)
+                .ThenBy(ma => ma, StringComparer.OrdinalIgnoreCase)
+                .Select(ma => new SoQuyLuaChonItem(ma, TenHienThiTrangThaiPhieu(ma)))
+                .ToList();
+        }
+        catch
+        {
+            return Array.Empty<SoQuyLuaChonItem>();
+        }
+    }
+
+    /// <summary>Người dùng thực tế trong bảng nguoi_dung, dùng cho bộ lọc "Người tạo".</summary>
+    public async Task<IReadOnlyList<SoQuyLuaChonItem>> GetSoQuyNguoiTaoOptionsAsync()
+    {
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            // Dùng chung kiểu dòng với nhom_chi_phi, xem chú thích alias bên trên.
+            const string sql = """
+            SELECT id, ho_ten AS TenNhom
+            FROM nguoi_dung
+            WHERE trang_thai = 1
+            ORDER BY ho_ten;
+            """;
+
+            var nguoi = await connection.QueryAsync<SoQuyTenNhomRow>(sql);
+
+            return nguoi
+                .Select(item => new SoQuyLuaChonItem(
+                    item.Id.ToString(CultureInfo.InvariantCulture),
+                    item.TenNhom))
+                .ToList();
+        }
+        catch
+        {
+            return Array.Empty<SoQuyLuaChonItem>();
+        }
+    }
+
+    /// <summary>
+    /// Đổi mã phương thức trong database sang nhãn tiếng Việt.
+    /// Mã lạ thì hiện nguyên văn, không bịa nghĩa.
+    /// </summary>
+    private static string TenHienThiPhuongThuc(string ma) => ma.Trim().ToUpperInvariant() switch
+    {
+        "TIEN_MAT" => "Tiền mặt",
+        "CHUYEN_KHOAN" or "CHUYEN_KHOAN_NGAN_HANG" or "NGAN_HANG" => "Ngân hàng",
+        "THE" or "THE_TIN_DUNG" => "Thẻ",
+        "VI_DIEN_TU" or "VI" => "Ví điện tử",
+        _ => ma
+    };
+
+    /// <summary>Đổi mã trạng thái chứng từ sang nhãn tiếng Việt.</summary>
+    private static string TenHienThiTrangThaiPhieu(string ma) => ma.Trim().ToUpperInvariant() switch
+    {
+        "HOAN_THANH" => "Đã thanh toán",
+        "HUY" or "DA_HUY" => "Đã hủy",
+        _ => ma
+    };
 
     /// <summary>Dòng kết quả truy vấn sổ quỹ (chỉ dùng nội bộ DatabaseService).</summary>
     private sealed class SoQuyPhieuRow
@@ -4077,6 +4978,42 @@ LIMIT 500;
         public string NoiDung { get; set; } = "";
         public DateTime ThoiGian { get; set; }
         public string NguoiThucHien { get; set; } = "";
+        public string TrangThai { get; set; } = "";
+        public string TenLoai { get; set; } = "";
+        public string PhuongThuc { get; set; } = "";
+    }
+
+    /// <summary>Dòng kết quả tổng hợp sổ quỹ (chỉ dùng nội bộ DatabaseService).</summary>
+    private sealed class SoQuyTongHopRow
+    {
+        public decimal QuyDauKy { get; set; }
+        public decimal TongThu { get; set; }
+        public decimal TongChi { get; set; }
+        public int TongSoPhieu { get; set; }
+    }
+
+    /// <summary>Cặp id + tên dùng chung cho nhom_chi_phi và nguoi_dung.</summary>
+    private sealed class SoQuyTenNhomRow
+    {
+        public uint Id { get; set; }
+        public string TenNhom { get; set; } = "";
+    }
+
+    /// <summary>Tổng hợp số tiền trên các phiếu nhập hàng (chỉ dùng nội bộ DatabaseService).</summary>
+    private sealed class NhaCungCapPhieuTongHopRow
+    {
+        public int SoPhieuNhap { get; set; }
+        public decimal TongTienNhap { get; set; }
+        public decimal TongDaThanhToan { get; set; }
+        public decimal TongConNoPhieuNhap { get; set; }
+    }
+
+    /// <summary>Tổng hợp sổ cái công nợ (chỉ dùng nội bộ DatabaseService).</summary>
+    private sealed class NhaCungCapCongNoTongHopRow
+    {
+        public int SoLanGhiCongNo { get; set; }
+        public decimal TongCongNoLichSu { get; set; }
+        public DateTime? LanGhiCongNoGanNhat { get; set; }
     }
 
     /// <summary>
@@ -4130,40 +5067,6 @@ LIMIT 500;
             new { HoTen = hoTen.Trim() });
 
         return id;
-    }
-
-    /// <summary>
-    /// Tổng hợp số tiền sổ quỹ: tổng thu (mã PT) và tổng chi (mã PC).
-    /// </summary>
-    public async Task<(decimal TongThu, decimal TongChi)> GetSoQuyTongHopAsync()
-    {
-        try
-        {
-            await using var connection = await OpenAsync();
-
-            const string sql = """
-            SELECT
-                COALESCE(SUM(CASE WHEN ma_phieu_chi LIKE 'PT%' THEN so_tien ELSE 0 END), 0) AS TongThu,
-                COALESCE(SUM(CASE WHEN ma_phieu_chi LIKE 'PC%' THEN so_tien ELSE 0 END), 0) AS TongChi
-            FROM phieu_chi;
-            """;
-
-            var tongHop = await connection.QueryFirstOrDefaultAsync<SoQuyTongHopRow>(sql);
-
-            return (tongHop?.TongThu ?? 0m, tongHop?.TongChi ?? 0m);
-        }
-        catch
-        {
-            // Tổng quỹ chỉ để hiển thị: lỗi truy vấn không được chặn màn hình.
-            return (0m, 0m);
-        }
-    }
-
-    /// <summary>Kết quả tổng hợp sổ quỹ (chỉ dùng nội bộ DatabaseService).</summary>
-    private sealed class SoQuyTongHopRow
-    {
-        public decimal TongThu { get; set; }
-        public decimal TongChi { get; set; }
     }
 }
 

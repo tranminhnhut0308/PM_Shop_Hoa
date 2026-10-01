@@ -184,8 +184,15 @@ public sealed partial class KhachHangDetailViewModel : ObservableObject
     public string TongTienDaMuaText =>
         ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongTienDaMua);
 
+    /// <summary>
+    /// Số tiền đã thanh toán lấy từ cột <c>khach_da_thanh_toan</c> của hóa đơn.
+    /// Khách hàng chỉ có số tiền tổng hợp từ file KiotViet thì không có cột này,
+    /// nên báo "Chưa có" thay vì hiện 0 đ (số 0 sẽ mâu thuẫn với tổng đã mua).
+    /// </summary>
     public string TongDaThanhToanText =>
-        ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongDaThanhToan);
+        ThongKe is null || ThongKe.SoHoaDon == 0
+            ? ChuaCo
+            : FormatTien(ThongKe.TongDaThanhToan);
 
     public string TongBanTruTraHangText =>
         ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongBanTruTraHang);
@@ -215,6 +222,10 @@ public sealed partial class KhachHangDetailViewModel : ObservableObject
 
             if (ThongKe.SoHoaDon > 0)
                 return "Theo tổng công nợ còn lại trên hóa đơn bán hàng";
+
+            // Số tiền lấy từ dữ liệu tổng hợp nhập từ file KiotViet
+            if (ThongKe.CoDuLieuKiotViet && ThongKe.CoDuLieu)
+                return "Theo số tiền tổng hợp đã nhập từ file KiotViet";
 
             return ChuaCoDuLieuCongNo;
         }

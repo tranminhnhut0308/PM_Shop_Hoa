@@ -36,8 +36,25 @@ public sealed class ThongKeMuaHangKhachHang
     /// <summary>Thời điểm ghi công nợ gần nhất, null nếu chưa có phát sinh.</summary>
     public DateTime? LanGhiCongNoGanNhat { get; set; }
 
-    /// <summary>Hệ thống đã có dữ liệu mua hàng hoặc công nợ cho khách hàng này chưa.</summary>
-    public bool CoDuLieu => SoHoaDon > 0 || SoLanGhiCongNo > 0;
+    /// <summary>
+    /// Hệ thống đã có dữ liệu để hiển thị vùng "Công nợ" cho khách hàng này chưa.
+    /// Phải tính cả số tiền tổng hợp đã nhập từ file KiotViet, vì phần lớn
+    /// khách hàng chỉ có số tiền ở các cột đó mà chưa có hóa đơn/sổ cái trong
+    /// phần mềm. Nếu chỉ nhìn SoHoaDon và SoLanGhiCongNo thì vùng này luôn báo
+    /// "Chưa có dữ liệu" trong khi ô "Công nợ hiện tại" phía trên lại ra số.
+    /// </summary>
+    public bool CoDuLieu =>
+        SoHoaDon > 0
+        || SoLanGhiCongNo > 0
+        || TongTienDaMua > 0
+        || TongBanTruTraHang > 0
+        || TongConNoHienTai > 0;
+
+    /// <summary>
+    /// Số tiền chỉ có trong dữ liệu tổng hợp nhập từ file KiotViet, tức khách
+    /// hàng này chưa phát sinh hóa đơn hay lần ghi công nợ nào trong phần mềm.
+    /// </summary>
+    public bool CoDuLieuKiotViet => SoHoaDon == 0 && SoLanGhiCongNo == 0;
 
     /// <summary>
     /// Công nợ hiện tại: ưu tiên số dư từ sổ cái công nợ,
