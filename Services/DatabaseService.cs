@@ -14,11 +14,8 @@ public sealed class DatabaseService
     private bool? _hasPhieuNhapExtraColumns;
     private bool? _hasBangTraHang;
     private bool? _coCotDuLieuKiotViet;
-<<<<<<< HEAD
     private bool? _cotNgayTaoSanPhamChoPhepNull;
-=======
     private bool? _coCotDuLieuKiotVietNhaCungCap;
->>>>>>> 5c8a3bf94dc46ebf765b3a225c24c25dfaa53950
 
     public DatabaseService()
     {
@@ -1151,7 +1148,7 @@ foreach (var character in khongDau)
     }
 
     /// <summary>Chuyển lỗi MySQL thành thông báo dễ hiểu cho người dùng.</summary>
-    private static string MoTaLoiNhap(Exception ex)
+    internal static string MoTaLoiNhap(Exception ex)
     {
         if (ex is MySqlException mySql)
         {
@@ -1878,18 +1875,12 @@ foreach (var character in khongDau)
 
         foreach (var character in normalized)
         {
-<<<<<<< HEAD
-            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
+if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
                 continue;
 
             // Chỉ giữ lại chữ và số; bỏ hết dấu câu, ngoặc, khoảng trắng.
             if (char.IsLetterOrDigit(character))
-                builder.Append(char.ToLowerInvariant(character));
-=======
-            var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(character);
-            if (unicodeCategory != UnicodeCategory.NonSpacingMark)
                 builder.Append(FoldDangDe(char.ToLowerInvariant(character)));
->>>>>>> 5c8a3bf94dc46ebf765b3a225c24c25dfaa53950
         }
 
         return builder.ToString();
@@ -3209,7 +3200,12 @@ foreach (var character in khongDau)
             GhiLog($"[NHAP KHACH HANG] LỖI {result.TenFile}: {loi}");
     }
 
-    private void GhiLog(string message)
+    /// <param name="message">Nội dung cần ghi.</param>
+    /// <param name="tenTep">
+    /// Tiền tố tên tệp log theo ngày. Mặc định là log nhập khách hàng;
+    /// mỗi loại nhập dùng một tệp riêng để tra cứu không lẫn lộn.
+    /// </param>
+    internal void GhiLog(string message, string tenTep = "nhap-khach-hang")
     {
         try
         {
@@ -3220,10 +3216,10 @@ foreach (var character in khongDau)
 
             Directory.CreateDirectory(thuMuc);
 
-            var tenTep = $"nhap-khach-hang-{DateTime.Now:yyyyMMdd}.log";
+            var tenTepLog = $"{tenTep}-{DateTime.Now:yyyyMMdd}.log";
 
             File.AppendAllText(
-                Path.Combine(thuMuc, tenTep),
+                Path.Combine(thuMuc, tenTepLog),
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
         }
         catch
@@ -3426,7 +3422,7 @@ foreach (var character in khongDau)
     /// dùng dấu phẩy làm dấu thập phân). Giá trị số/ngày được chuyển sang
     /// chuỗi theo quy ước bất biến để ParseSoTien/ParseNgayTaiFile đọc đúng.
     /// </summary>
-    private static string DocGiaTriOTheoKieu(IXLCell cell)
+    internal static string DocGiaTriOTheoKieu(IXLCell cell)
     {
         return cell.Value.Type switch
         {
@@ -3468,7 +3464,7 @@ foreach (var character in khongDau)
         return rows;
     }
 
-    private static string NormalizeHeaderKey(string? value)
+    internal static string NormalizeHeaderKey(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return string.Empty;
@@ -3592,7 +3588,7 @@ foreach (var character in khongDau)
     /// Đọc số tiền từ ô. Giá trị đọc từ file Excel đã là chuỗi số theo quy ước
     /// bất biến, còn dữ liệu CSV có thể là "195.000", "195,000" hoặc "1.234,56".
     /// </summary>
-    private static decimal? ParseSoTien(string? value)
+    internal static decimal? ParseSoTien(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
@@ -3656,7 +3652,7 @@ foreach (var character in khongDau)
     /// Đọc ngày từ ô. Chấp nhận cả chuỗi không dấu phân cách do Excel sinh ra
     /// ("2026-09-30 12:37:50"), dạng Việt Nam ("30/09/2026") và dạng quốc tế.
     /// </summary>
-    private static DateTime? ParseNgayTaiFile(string? value)
+    internal static DateTime? ParseNgayTaiFile(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
@@ -4897,7 +4893,7 @@ LIMIT 500;
     /// với nhà cung cấp đã có trong database. Chỉ dùng để báo người dùng.
     /// </summary>
     public async Task<int> DemNhaCungCapTrungTenVaDienThoaiAsync(
-        IEnumerable<(string Ten, string SoDienThoai)> danhSach)
+        IEnumerable<(string Ten, string? SoDienThoai)> danhSach)
     {
         var cap = danhSach
             .Where(item => !string.IsNullOrWhiteSpace(item.Ten))

@@ -1,0 +1,215 @@
+using System.Collections.ObjectModel;
+using Avalonia.Controls;
+using Avalonia.Platform.Storage;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using ShopHoa.Models;
+using ShopHoa.Services;
+using ShopHoa.Views;
+
+namespace ShopHoa.ViewModels;
+
+public sealed partial class MainWindowViewModel
+{
+    private readonly HoaDonImportService _hoaDonImport = new();
+
+    /// <summary>
+    /// Nhập hóa đơn từ file Excel/CSV có sẵn của người dùng: đọc dòng tiêu đề để
+    /// tự đối chiếu cột, chỉ mở màn hình ánh xạ khi còn cột chưa khớp, cho xem
+    /// trước rồi mới ghi xuống database.
+    /// </summary>
+    [RelayCommand]
+    private async Task NhapHoaDonTuFileAsync()
+    {
+        if (OwnerWindow is null || IsImporting)
+            return;
+
+        var files = await OwnerWindow.StorageProvider.OpenFilePickerAsync(
+            new FilePickerOpenOptions
+            {
+                Title = "Chọn file hóa đơn cần nhập",
+                AllowMultiple = false,
+                FileTypeFilter =
+                [
+                    new FilePickerFileType("Excel / CSV")
+                    {
+                        Patterns = ["*.xlsx", "*.xlsm", "*.csv"]
+                    }
+                ]
+            });
+
+        var file = files.FirstOrDefault();
+
+        if (file is null)
+        {
+            StatusMessage = "Bạn chưa chọn file hóa đơn.";
+            return;
+        }
+
+        try
+        {
+            IsImporting = true;
+            ImportHasProgress = false;
+            ImportProgress = 0;
+
+            CapNhatTrangThaiNhap($"Đang đọc dòng tiêu đề của \"{file.Name}\"...");
+
+            var thongTin = await _hoaDonImport.DocTieuDeAsync(file.Path.LocalPath);
+
+            if (thongTin.Mapping.Sheets.Count == 0)
+            {
+                IsImporting = false;
+
+                await ShowMessageAsync(
+                    "File không đọc được nội dung",
+                    $"File \"{thongTin.TenFile}\" không có sheet nào chứa dòng tiêu đề. "
+                    + "Hãy kiểm tra lại file rồi nhập lại.");
+
+                return;
+            }
+
+            var mapping = thongTin.Mapping;
+
+            // File đã tự khớp đủ cột thì nhảy thẳng sang xem trước, không bắt
+            // người dùng xác nhận lại những gì phần mềm đã hiểu đúng. Còn lại thì
+            // mở màn hình ánh xạ để người dùng tự gán cột, kể cả sheet mà phần
+            // mềm chưa nhận ra cột mã hóa đơn.
+            if (!thongTin.DaKhopDayDu)
+            {
+                IsImporting = false;
+
+                mapping = await HoaDonImportMappingWindow.ShowAsync(OwnerWindow, thongTin)
+                          ?? throw new OperationCanceledException();
+
+                var thieu = mapping.CoTruongChuaGan().Distinct().ToList();
+
+                if (thieu.Count > 0)
+                {
+                    await ShowMessageAsync(
+                        "Thiếu cột bắt buộc",
+                        "Các trường sau chưa được gán cột: "
+                        + string.Join(", ", thieu.Select(TenTruongHoaDon.Lay))
+                        + ".\n\nNhững hóa đơn bị ảnh hưởng sẽ được báo ở bước xem trước, "
+                        + "bạn vẫn có thể tiếp tục nếu muốn nhập phần còn lại.");
+                }
+            }
+
+            IsImporting = true;
+            CapNhatTrangThaiNhap($"Đang đọc dữ liệu từ \"{mapping.TenFile}\"...");
+
+            var progress = new Progress<HoaDonImportProgress>(CapNhatTrangThaiNhap);
+
+            var preview = await _hoaDonImport.DocFileAsync(
+                file.Path.LocalPath,
+                mapping,
+                progress);
+
+            if (preview.TongSoHoaDon == 0)
+            {
+                IsImporting = false;
+
+                await ShowMessageAsync(
+                    "File không có dữ liệu",
+                    $"File \"{preview.TenFile}\" không tìm thấy dòng nào có mã hóa đơn "
+                    + "theo cách ánh xạ đã chọn.");
+
+                return;
+            }
+
+            // Tắt overlay để cửa sổ xem trước hiện được trên UI thread.
+            IsImporting = false;
+
+            var quyetDinh = await HoaDonImportPreviewWindow.ShowAsync(OwnerWindow, preview);
+
+            if (quyetDinh is null)
+            {
+                StatusMessage = "Đã hủy nhập hóa đơn. Không có dữ liệu nào được thay đổi.";
+                return;
+            }
+
+            if (preview.SoHoaDonHopLe == 0)
+            {
+                await ShowMessageAsync(
+                    "Không có hóa đơn nào nhập được",
+                    "Mọi hóa đơn trong file đều bị loại. "
+                    + (preview.DanhSachLoi.FirstOrDefault()?.LyDo ?? "Hãy xem lại danh sách lỗi."));
+
+                return;
+            }
+
+            IsImporting = true;
+            ImportHasProgress = false;
+            ImportProgress = 0;
+
+            CapNhatTrangThaiNhap("Đang ghi hóa đơn vào database...");
+
+            var ketQua = await _hoaDonImport.ImportAsync(
+                preview,
+                quyetDinh.XuLyTrung,
+                quyetDinh.TaoKhachHangMoi,
+                progress);
+
+            // Danh sách hóa đơn trên màn hình đã cũ, nạp lại để thấy dữ liệu mới.
+            IsImporting = false;
+            _invoicesLoaded = false;
+
+            await LoadInvoicesAsync();
+
+            await HoaDonImportResultWindow.ShowAsync(OwnerWindow, ketQua);
+
+            StatusMessage = TaoThongBaoKetQua(ketQua);
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Đã hủy nhập hóa đơn. Không có dữ liệu nào được thay đổi.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "❌ Không thể nhập hóa đơn từ file: " + ex.Message;
+        }
+        finally
+        {
+            IsImporting = false;
+            ImportHasProgress = false;
+            ImportProgress = 0;
+        }
+    }
+
+    /// <summary>
+    /// Cập nhật nội dung overlay đang chạy. Khi biết tổng số đơn vị công việc
+    /// thì hiện thanh tiến độ xác định, không thì dùng thanh chạy vô hạn.
+    /// </summary>
+    private void CapNhatTrangThaiNhap(HoaDonImportProgress tienDo)
+    {
+        if (tienDo.TongSo > 0)
+        {
+            ImportHasProgress = true;
+
+            var daXuLy = Math.Clamp(tienDo.DaXuLy, 0, tienDo.TongSo);
+            ImportProgress = daXuLy * 100d / tienDo.TongSo;
+        }
+
+        CapNhatTrangThaiNhap(
+            tienDo.TongSo > 0
+                ? $"{tienDo.GiaiDoan} {tienDo.DaXuLy:N0}/{tienDo.TongSo:N0}"
+                : $"{tienDo.GiaiDoan} {tienDo.DaXuLy:N0}");
+    }
+
+    private void CapNhatTrangThaiNhap(string trangThai)
+    {
+        ImportStatus = trangThai;
+        StatusMessage = trangThai;
+    }
+
+    private static string TaoThongBaoKetQua(HoaDonImportResult ketQua)
+    {
+        if (ketQua.DaRollback)
+            return "❌ Lỗi nghiêm trọng, đã hủy toàn bộ thay đổi. Database giữ nguyên như cũ.";
+
+        if (ketQua.TongSoGhiThanhCong == 0)
+            return $"⚠️ Không có hóa đơn nào được ghi. {ketQua.ThongBaoTatCa}";
+
+        return $"✅ Đã nhập {ketQua.SoThemMoi:N0}, cập nhật {ketQua.SoCapNhat:N0} hóa đơn "
+            + $"từ file \"{ketQua.TenFile}\". {ketQua.ThongBaoTatCa}";
+    }
+}

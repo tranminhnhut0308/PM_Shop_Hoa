@@ -38,6 +38,15 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private bool isImporting;
     [ObservableProperty]
     private string importStatus = "";
+
+    /// <summary>
+    /// Thanh tiến độ xác định 0-100 cho các luồng import biết trước tổng số
+    /// đơn vị công việc. Luồng không biết trước thì để false để hiện thanh
+    /// chạy vô hạn như cũ.
+    /// </summary>
+    [ObservableProperty] private bool importHasProgress;
+
+    [ObservableProperty] private double importProgress;
     [ObservableProperty] private string productSearch = "";
     [ObservableProperty] private string customerSearch = "";
     [ObservableProperty] private string invoiceSearch = "";

@@ -2601,10 +2601,17 @@
                   Margin="0,3,0,0" />
               </StackPanel>
 
-              <Button Grid.Column="1"
-                Classes="toolbar-action"
-                Content="↻ Làm mới"
-                Command="{Binding ClearInvoiceSearchCommand}" />
+              <StackPanel Grid.Column="1"
+                Orientation="Horizontal"
+                Spacing="8">
+                <Button Classes="toolbar-action"
+                  Content="⇩ Nhập từ file"
+                  Command="{Binding NhapHoaDonTuFileCommand}" />
+
+                <Button Classes="toolbar-action"
+                  Content="↻ Làm mới"
+                  Command="{Binding ClearInvoiceSearchCommand}" />
+              </StackPanel>
             </Grid>
 
             <!-- 2. THANH TÌM KIẾM (ĐÃ BỎ NÚT XÓA TÌM KIẾM) -->
@@ -5571,9 +5578,20 @@
               HorizontalAlignment="Center" />
 
             <!-- LOADING -->
-            <ProgressBar IsIndeterminate="True"
-              Height="9"
-              Width="360" />
+            <ProgressBar Height="9"
+              Width="360"
+              IsIndeterminate="{Binding !ImportHasProgress}"
+              Minimum="0"
+              Maximum="100"
+              Value="{Binding ImportProgress}" />
+
+            <!-- PHẦN TRĂM -->
+            <TextBlock Text="{Binding ImportProgress, StringFormat={}{0:N0}%}"
+              IsVisible="{Binding ImportHasProgress}"
+              FontSize="13"
+              FontWeight="SemiBold"
+              Foreground="#087F6E"
+              HorizontalAlignment="Center" />
 
             <!-- TRẠNG THÁI -->
             <TextBlock Text="{Binding ImportStatus}"
