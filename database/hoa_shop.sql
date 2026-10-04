@@ -485,6 +485,8 @@ CREATE TABLE `phieu_chi` (
   `so_tien` decimal(15,2) NOT NULL DEFAULT '0.00',
   `phuong_thuc` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'TIEN_MAT',
   `noi_dung` text COLLATE utf8mb4_unicode_ci,
+  `nguoi_nop_nhan` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ghi_chu` text COLLATE utf8mb4_unicode_ci,
   `thoi_gian_chi` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `nguoi_thuc_hien_id` int(10) UNSIGNED DEFAULT NULL,
   `trang_thai` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'HOAN_THANH'
@@ -1376,6 +1378,34 @@ EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 SET @sql = IF(@co_so_dat = '' OR @co_dat_hang <> '', 'SELECT 1', 'ALTER TABLE `phieu_nhap_hang` ADD COLUMN `ma_dat_hang_nhap` varchar(50) DEFAULT NULL AFTER `so_hoa_don_dau_vao`');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+--
+-- Sổ quỹ: hai cột `nguoi_nop_nhan` và `ghi_chu` cho bảng `phieu_chi`.
+--
+-- Trước đây bảng này chỉ có `noi_dung` (text) nên phần "người nộp / nhận" và
+-- "ghi chú" phải nhồi chung vào một ô, không tách được trên danh sách, không xuất
+-- được ra Excel và không nhập lại từ file. Hai cột mới tách riêng từng thông tin:
+--   nguoi_nop_nhan : người nộp (phiếu thu) hoặc người nhận (phiếu chi)
+--   ghi_chu        : ghi chú tự do của phiếu
+-- `nguoi_thuc_hien_id` giữ đúng nghĩa FK là người tạo chứng từ.
+--
+-- Chạy lại đoạn dưới nhiều lần vẫn an toàn (đã có cột thì bỏ qua).
+--
+SET @co_so_dat_sq = IFNULL((SELECT `information_schema`.`SCHEMA_NAME` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'phieu_chi' LIMIT 1), '');
+
+SET @co_nop_nhan = IFNULL((SELECT `information_schema`.`COLUMN_NAME` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'phieu_chi' AND `COLUMN_NAME` = 'nguoi_nop_nhan' LIMIT 1), '');
+
+SET @co_ghi_chu_sq = IFNULL((SELECT `information_schema`.`COLUMN_NAME` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'phieu_chi' AND `COLUMN_NAME` = 'ghi_chu' LIMIT 1), '');
+
+SET @sql = IF(@co_so_dat_sq = '' OR @co_nop_nhan <> '', 'SELECT 1', 'ALTER TABLE `phieu_chi` ADD COLUMN `nguoi_nop_nhan` varchar(150) DEFAULT NULL AFTER `noi_dung`');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(@co_so_dat_sq = '' OR @co_ghi_chu_sq <> '', 'SELECT 1', 'ALTER TABLE `phieu_chi` ADD COLUMN `ghi_chu` text DEFAULT NULL AFTER `nguoi_nop_nhan`');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;

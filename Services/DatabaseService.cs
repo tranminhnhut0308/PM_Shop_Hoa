@@ -12,6 +12,7 @@ public sealed class DatabaseService
 {
     private readonly DatabaseConfigService _configService;
     private bool? _hasPhieuNhapExtraColumns;
+    private bool? _hasPhieuQuyExtraColumns;
     private bool? _hasBangTraHang;
     private bool? _coCotDuLieuKiotViet;
     private bool? _cotNgayTaoSanPhamChoPhepNull;
@@ -5843,6 +5844,64 @@ LIMIT 500;
         return _hasPhieuNhapExtraColumns.Value;
     }
 
+    /// <summary>
+    /// Bảng <c>phieu_chi</c> dùng chung cho cả phiếu thu và phiếu chi. Ngoài cột
+    /// <c>noi_dung</c>, sổ quỹ cần tách riêng <c>nguoi_nop_nhan</c> (người nộp với
+    /// phiếu thu, người nhận với phiếu chi) và <c>ghi_chu</c>; trước đây hai thông
+    /// tin này bị dồn chung vào <c>noi_dung</c> nên không hiển thị tách biệt được.
+    /// <para>
+    /// Hai cột là bắt buộc nên hàm này tự thêm vào database cũ thay vì chỉ báo lỗi.
+    /// Việc kiểm tra chỉ làm một lần rồi cache. Nếu tài khoản MySQL không có quyền
+    /// ALTER TABLE thì hàm trả về false và các câu SQL sổ quỹ tự bỏ qua hai cột này
+    /// để ứng dụng vẫn chạy được với dữ liệu cũ.
+    /// </para>
+    /// </summary>
+    private async Task<bool> EnsurePhieuQuyExtraColumnsAsync()
+    {
+        if (_hasPhieuQuyExtraColumns.HasValue)
+            return _hasPhieuQuyExtraColumns.Value;
+
+        await using var connection = await OpenAsync();
+
+        const string kiemTraSql = """
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'phieu_chi'
+          AND COLUMN_NAME IN ('nguoi_nop_nhan', 'ghi_chu');
+        """;
+
+        try
+        {
+            var count = await connection.ExecuteScalarAsync<long>(kiemTraSql);
+
+            if (count >= 2)
+            {
+                _hasPhieuQuyExtraColumns = true;
+                return true;
+            }
+
+            // ADD COLUMN không có IF NOT EXISTS trên MySQL nên phải kiểm tra từng cột.
+            if (count == 0)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE phieu_chi ADD COLUMN nguoi_nop_nhan varchar(150) DEFAULT NULL AFTER noi_dung;");
+            }
+
+            await connection.ExecuteAsync(
+                "ALTER TABLE phieu_chi ADD COLUMN ghi_chu text DEFAULT NULL AFTER nguoi_nop_nhan;");
+
+            _hasPhieuQuyExtraColumns = true;
+        }
+        catch
+        {
+            // Không có quyền ALTER hoặc mạng lỗi: chạy tiếp với cấu trúc cũ.
+            _hasPhieuQuyExtraColumns = false;
+        }
+
+        return _hasPhieuQuyExtraColumns.Value;
+    }
+
     private static decimal ToDecimal(object? value)
     {
         if (value is null || value is DBNull)
@@ -5934,6 +5993,42 @@ LIMIT 500;
     """;
 
     /// <summary>
+    /// Danh sách cột lấy từ <see cref="SoQuyFrom"/>.
+    /// Bản đầy đủ dùng khi database đã có <c>nguoi_nop_nhan</c> và <c>ghi_chu</c>;
+    /// bản rút gọn dùng khi chưa thêm được (xem
+    /// <c>EnsurePhieuQuyExtraColumnsAsync</c>) để ứng dụng vẫn chạy với dữ liệu cũ.
+    /// </summary>
+    private const string SoQuyCotChonDayDu = """
+            pc.ma_phieu_chi AS MaPhieu,
+            pc.so_tien AS SoTien,
+            COALESCE(pc.noi_dung, '') AS NoiDung,
+            COALESCE(pc.nguoi_nop_nhan, '') AS NguoiNopNhan,
+            COALESCE(pc.ghi_chu, '') AS GhiChu,
+            pc.thoi_gian_chi AS ThoiGian,
+            COALESCE(nd.ho_ten, '') AS NguoiTao,
+            pc.trang_thai AS TrangThai,
+            COALESCE(ncp.ten_nhom, '') AS TenLoai,
+            pc.nhom_chi_phi_id AS NhomChiPhiId,
+            COALESCE(pc.phuong_thuc, '') AS PhuongThuc
+        """;
+
+    private const string SoQuyCotChonRutGon = """
+            pc.ma_phieu_chi AS MaPhieu,
+            pc.so_tien AS SoTien,
+            COALESCE(pc.noi_dung, '') AS NoiDung,
+            '' AS NguoiNopNhan,
+            '' AS GhiChu,
+            pc.thoi_gian_chi AS ThoiGian,
+            COALESCE(nd.ho_ten, '') AS NguoiTao,
+            pc.trang_thai AS TrangThai,
+            COALESCE(ncp.ten_nhom, '') AS TenLoai,
+            pc.nhom_chi_phi_id AS NhomChiPhiId,
+            COALESCE(pc.phuong_thuc, '') AS PhuongThuc
+        """;
+
+    private static string LayCotChonSoQuy(bool coCotMoi) => coCotMoi ? SoQuyCotChonDayDu : SoQuyCotChonRutGon;
+
+    /// <summary>
     /// Dựng điều kiện WHERE cho sổ quỹ. Cùng một hàm được dùng cho cả
     /// COUNT (phân trang), SELECT (danh sách) và SUM (thống kê) nên
     /// danh sách với thống kê không thể lệch nhau.
@@ -5945,17 +6040,27 @@ LIMIT 500;
     /// </summary>
     private static string TaoDieuKienSoQuy(
         bool apDungKhoangThoiGian,
-        bool apDungKhoangTien)
+        bool apDungKhoangTien,
+        bool coCotNguoiNopNhanGhiChu = true)
     {
         var dieuKien = new StringBuilder();
 
-        // Ô tìm kiếm: mã phiếu, nội dung, người thực hiện, tên loại thu/chi.
+        // Ô tìm kiếm: mã phiếu, nội dung, ghi chú, người nộp/nhận, người tạo, tên loại thu/chi.
         dieuKien.Append(
             "(@TimKiem = ''"
             + " OR pc.ma_phieu_chi LIKE @TimKiemLike"
             + " OR COALESCE(pc.noi_dung, '') LIKE @TimKiemLike"
             + " OR COALESCE(nd.ho_ten, '') LIKE @TimKiemLike"
             + " OR COALESCE(ncp.ten_nhom, '') LIKE @TimKiemLike)");
+
+        // Hai cột này chỉ tồn tại khi migration đã chạy thành công.
+        if (coCotNguoiNopNhanGhiChu)
+        {
+            dieuKien.Append(" OR COALESCE(pc.nguoi_nop_nhan, '') LIKE @TimKiemLike");
+            dieuKien.Append(" OR COALESCE(pc.ghi_chu, '') LIKE @TimKiemLike");
+        }
+
+        dieuKien.Append(")");
 
         // Loại chứng từ: 0 = cả hai, 1 = chỉ phiếu thu, 2 = chỉ phiếu chi.
         dieuKien.Append(
@@ -6023,9 +6128,11 @@ LIMIT 500;
     {
         loc ??= new SoQuyBoLoc();
 
+        var coCotMoi = await EnsurePhieuQuyExtraColumnsAsync();
+
         await using var connection = await OpenAsync();
 
-        var dieuKien = TaoDieuKienSoQuy(apDungKhoangThoiGian: true, apDungKhoangTien: true);
+        var dieuKien = TaoDieuKienSoQuy(apDungKhoangThoiGian: true, apDungKhoangTien: true, coCotMoi);
         var thamSo = TaoThamSoSoQuy(loc, apDungKhoangTien: true);
 
         var countSql = $"""
@@ -6040,19 +6147,12 @@ LIMIT 500;
             return (Array.Empty<SoQuyGiaoDich>(), 0);
 
         var safePage = page < 1 ? 1 : page;
-        var safePageSize = pageSize < 1 ? 15 : pageSize;
+        var safePageSize = pageSize < 1 ? 20 : pageSize;
         var offset = (safePage - 1) * safePageSize;
 
         var listSql = $"""
         SELECT
-            pc.ma_phieu_chi AS MaPhieu,
-            pc.so_tien AS SoTien,
-            COALESCE(pc.noi_dung, '') AS NoiDung,
-            pc.thoi_gian_chi AS ThoiGian,
-            COALESCE(nd.ho_ten, '') AS NguoiThucHien,
-            pc.trang_thai AS TrangThai,
-            COALESCE(ncp.ten_nhom, '') AS TenLoai,
-            COALESCE(pc.phuong_thuc, '') AS PhuongThuc
+            {LayCotChonSoQuy(coCotMoi)}
         {SoQuyFrom}
         WHERE {dieuKien}
         ORDER BY pc.thoi_gian_chi DESC, pc.id DESC
@@ -6063,33 +6163,192 @@ LIMIT 500;
             listSql,
             GopThamSo(thamSo, safePageSize, offset));
 
-        var items = new List<SoQuyGiaoDich>(rows.Count());
+        return (ChuyenThanhGiaoDich(rows), tongSoBanGhi);
+    }
+
+    /// <summary>
+    /// Chuyển dòng kết quả SQL thành đối tượng hiển thị.
+    /// Dùng chung cho danh sách phân trang và xuất Excel nên hai nơi không thể lệch nhau.
+    /// </summary>
+    private static List<SoQuyGiaoDich> ChuyenThanhGiaoDich(IEnumerable<SoQuyPhieuRow> rows)
+    {
+        var items = new List<SoQuyGiaoDich>();
 
         foreach (var row in rows)
         {
-            var laThu = (row.MaPhieu ?? "")
-                .StartsWith("PT", StringComparison.OrdinalIgnoreCase);
+            var maPhieu = row.MaPhieu ?? "";
 
             items.Add(new SoQuyGiaoDich
             {
-                MaPhieu = row.MaPhieu ?? "",
-                // Phiếu thu và phiếu chi cùng nằm trong bảng phieu_chi,
-                // nên loại phiếu được suy ra từ tiền tố mã (PTxxxx / PCxxxx).
-                LaThu = laThu,
-                // noi_dung là nội dung/đối tượng của phiếu nên ưu tiên;
-                // chỉ fallback sang tên nhân viên khi phiếu cũ không có nội dung.
-                NguoiNopNhan = string.IsNullOrWhiteSpace(row.NoiDung)
-                    ? (row.NguoiThucHien ?? "")
-                    : row.NoiDung!,
+                MaPhieu = maPhieu,
+                // Phiếu thu và phiếu chi cùng nằm trong bảng phieu_chi nên loại
+                // phiếu được suy ra từ tiền tố mã (PTxxxx / PCxxxx).
+                LaThu = maPhieu.StartsWith("PT", StringComparison.OrdinalIgnoreCase),
+                // Người nộp/nhận là thông tin riêng của phiếu (cột nguoi_nop_nhan),
+                // còn người tạo là nhân viên thao tác (FK nguoi_thuc_hien_id).
+                NguoiNopNhan = row.NguoiNopNhan ?? "",
+                NguoiTao = row.NguoiTao ?? "",
+                NoiDung = row.NoiDung ?? "",
+                GhiChu = row.GhiChu ?? "",
                 GiaTri = ToDecimal(row.SoTien),
                 ThoiGian = row.ThoiGian,
-                TenLoai = row.TenLoai,
-                PhuongThuc = row.PhuongThuc,
+                TenLoai = row.TenLoai ?? "",
+                PhuongThuc = row.PhuongThuc ?? "",
                 TrangThai = row.TrangThai ?? ""
             });
         }
 
-        return (items, tongSoBanGhi);
+        return items;
+    }
+
+    /// <summary>
+    /// Lấy chi tiết một phiếu thu/chi để mở màn hình chi tiết.
+    /// Chỉ đọc đúng một dòng theo mã phiếu nên không ảnh hưởng hiệu năng.
+    /// </summary>
+    public async Task<SoQuyChiTiet?> GetSoQuyChiTietAsync(string maPhieu)
+    {
+        if (string.IsNullOrWhiteSpace(maPhieu))
+            return null;
+
+        var coCotMoi = await EnsurePhieuQuyExtraColumnsAsync();
+
+        await using var connection = await OpenAsync();
+
+        var sql = $"""
+        SELECT
+            {LayCotChonSoQuy(coCotMoi)}
+        {SoQuyFrom}
+        WHERE pc.ma_phieu_chi = @MaPhieu
+        LIMIT 1;
+        """;
+
+        var row = await connection.QueryFirstOrDefaultAsync<SoQuyPhieuRow>(
+            sql,
+            new { MaPhieu = maPhieu.Trim() });
+
+        if (row is null)
+            return null;
+
+        var ma = row.MaPhieu ?? "";
+
+        return new SoQuyChiTiet
+        {
+            MaPhieu = ma,
+            LaThu = ma.StartsWith("PT", StringComparison.OrdinalIgnoreCase),
+            ThoiGian = row.ThoiGian,
+            NguoiNopNhan = row.NguoiNopNhan ?? "",
+            SoTien = ToDecimal(row.SoTien),
+            NoiDung = row.NoiDung ?? "",
+            GhiChu = row.GhiChu ?? "",
+            NguoiTao = row.NguoiTao ?? "",
+            TrangThai = row.TrangThai ?? "",
+            TenLoai = row.TenLoai ?? "",
+            NhomChiPhiId = row.NhomChiPhiId,
+            PhuongThuc = row.PhuongThuc ?? ""
+        };
+    }
+
+    /// <summary>
+    /// Hủy phiếu: chỉ chuyển sang trạng thái HUY khi phiếu đang HOAN_THANH.
+    /// Trả về số dòng được cập nhật (0 = phiếu không tồn tại hoặc đã hủy).
+    /// </summary>
+    public async Task<int> HuyPhieuQuyAsync(string maPhieu)
+    {
+        if (string.IsNullOrWhiteSpace(maPhieu))
+            return 0;
+
+        await using var connection = await OpenAsync();
+
+        const string sql = """
+        UPDATE phieu_chi
+        SET trang_thai = @TrangThaiHuy
+        WHERE ma_phieu_chi = @MaPhieu
+          AND trang_thai = @TrangThaiHoanThanh
+        LIMIT 1;
+        """;
+
+        return await connection.ExecuteAsync(sql, new
+        {
+            MaPhieu = maPhieu.Trim(),
+            TrangThaiHuy = TrangThaiPhieuHuy,
+            TrangThaiHoanThanh = TrangThaiPhieuHoanThanh
+        });
+    }
+
+    /// <summary>
+    /// Hủy nhiều phiếu cùng lúc trong một transaction: hoặc cả nhóm thành công,
+    /// hoặc không phiếu nào bị đổi. Dùng cho thao tác chọn nhiều trên danh sách.
+    /// Trả về số phiếu thực sự chuyển sang trạng thái hủy (những phiếu đã hủy trước đó không tính).
+    /// </summary>
+    public async Task<int> HuyNhieuPhieuQuyAsync(IReadOnlyCollection<string> maPhieus)
+    {
+        var danhSach = maPhieus
+            .Where(ma => !string.IsNullOrWhiteSpace(ma))
+            .Select(ma => ma.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (danhSach.Count == 0)
+            return 0;
+
+        await using var connection = await OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var soDong = await connection.ExecuteAsync(
+                """
+                UPDATE phieu_chi
+                SET trang_thai = @TrangThaiHuy
+                WHERE trang_thai = @TrangThaiHoanThanh
+                  AND ma_phieu_chi IN @MaPhieus;
+                """,
+                new
+                {
+                    TrangThaiHuy = TrangThaiPhieuHuy,
+                    TrangThaiHoanThanh = TrangThaiPhieuHoanThanh,
+                    MaPhieus = danhSach.ToArray()
+                },
+                transaction);
+
+            await transaction.CommitAsync();
+
+            return soDong;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Lấy toàn bộ phiếu khớp bộ lọc để xuất Excel (không phân trang).
+    /// Dùng đúng điều kiện WHERE với danh sách nên file xuất ra luôn khớp
+    /// với những gì người dùng đang nhìn thấy trên màn hình.
+    /// </summary>
+    public async Task<IReadOnlyList<SoQuyGiaoDich>> GetSoQuyPhieuExportAsync(SoQuyBoLoc loc)
+    {
+        loc ??= new SoQuyBoLoc();
+
+        var coCotMoi = await EnsurePhieuQuyExtraColumnsAsync();
+
+        await using var connection = await OpenAsync();
+
+        var dieuKien = TaoDieuKienSoQuy(apDungKhoangThoiGian: true, apDungKhoangTien: true, coCotMoi);
+        var thamSo = TaoThamSoSoQuy(loc, apDungKhoangTien: true);
+
+        var listSql = $"""
+        SELECT
+            {LayCotChonSoQuy(coCotMoi)}
+        {SoQuyFrom}
+        WHERE {dieuKien}
+        ORDER BY pc.thoi_gian_chi DESC, pc.id DESC;
+        """;
+
+        var rows = await connection.QueryAsync<SoQuyPhieuRow>(listSql, thamSo);
+
+        return ChuyenThanhGiaoDich(rows);
     }
 
     /// <summary>Trộn bộ tham số lọc với LIMIT/OFFSET thành một đối tượng duy nhất.</summary>
@@ -6120,14 +6379,16 @@ LIMIT 500;
 
         try
         {
+            var coCotMoi = await EnsurePhieuQuyExtraColumnsAsync();
+
             await using var connection = await OpenAsync();
 
             // Quỹ đầu kỳ chỉ có nghĩa khi đang giới hạn bởi mốc bắt đầu: gom tất cả
             // phiếu trước mốc đó, thu trừ chi, và không lọc theo khoảng tiền
             // (quỹ đầu kỳ là số dư mang sang, không phải giao dịch của kỳ này).
-            var dieuKienDauKy = TaoDieuKienSoQuy(apDungKhoangThoiGian: false, apDungKhoangTien: false);
+            var dieuKienDauKy = TaoDieuKienSoQuy(apDungKhoangThoiGian: false, apDungKhoangTien: false, coCotMoi);
 
-            var dieuKienKy = TaoDieuKienSoQuy(apDungKhoangThoiGian: true, apDungKhoangTien: true);
+            var dieuKienKy = TaoDieuKienSoQuy(apDungKhoangThoiGian: true, apDungKhoangTien: true, coCotMoi);
 
             var sql = $"""
             SELECT
@@ -6237,6 +6498,26 @@ LIMIT 500;
         }
     }
 
+    /// <summary>
+    /// Tên hiển thị của một mã loại thu/chi trong bảng nhom_chi_phi.
+    /// Trả về r��ng nếu id không tồn tại (phiếu cũ chưa gán nhóm).
+    /// </summary>
+    public async Task<string> GetTenNhomChiPhiAsync(int id)
+    {
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            return await connection.ExecuteScalarAsync<string?>(
+                "SELECT ten_nhom FROM nhom_chi_phi WHERE id = @Id LIMIT 1;",
+                new { Id = id }) ?? "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
     /// <summary>Các trạng thái chứng từ thực tế đang có trong bảng phieu_chi.</summary>
     public async Task<IReadOnlyList<SoQuyLuaChonItem>> GetSoQuyTrangThaiOptionsAsync()
     {
@@ -6340,11 +6621,29 @@ LIMIT 500;
         public string MaPhieu { get; set; } = "";
         public decimal SoTien { get; set; }
         public string NoiDung { get; set; } = "";
+        public string NguoiNopNhan { get; set; } = "";
+        public string GhiChu { get; set; } = "";
         public DateTime ThoiGian { get; set; }
-        public string NguoiThucHien { get; set; } = "";
+
+        /// <summary>
+        /// Nhân viên thao tác (FK nguoi_thuc_hien_id), tức người tạo chứng từ.
+        /// Không phải người nộp/nhận — thông tin đó nằm ở cột riêng.
+        /// </summary>
+        public string NguoiTao { get; set; } = "";
+
         public string TrangThai { get; set; } = "";
         public string TenLoai { get; set; } = "";
+
+        /// <summary>Khóa ngoại tới nhom_chi_phi, cần cho form sửa để chọn lại loại.</summary>
+        public uint? NhomChiPhiId { get; set; }
         public string PhuongThuc { get; set; } = "";
+    }
+
+    /// <summary>Danh mục chuẩn hóa dùng để tra cứu khi validate file nhập.</summary>
+    private sealed class SoQuyChuanHoaRow
+    {
+        public uint Id { get; set; }
+        public string Ten { get; set; } = "";
     }
 
     /// <summary>Dòng kết quả tổng hợp sổ quỹ (chỉ dùng nội bộ DatabaseService).</summary>
@@ -6361,6 +6660,346 @@ LIMIT 500;
     {
         public uint Id { get; set; }
         public string TenNhom { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Tra cứu một lần danh mục cần cho bước validate file nhập.
+    /// Trả về cả chiều id -&gt; tên và tên đã bỏ dấu -&gt; id để dòng trong file chỉ cần
+    /// ghi tên loại / tên người tạo cũng tra khớp được, không query từng dòng.
+    /// </summary>
+    public async Task<SoQuyImportDanhMuc> GetSoQuyImportDanhMucAsync()
+    {
+        var danhMuc = new SoQuyImportDanhMuc();
+
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            const string sqlLoai = """
+            SELECT id, ten_nhom AS Ten
+            FROM nhom_chi_phi
+            WHERE trang_thai = 1
+            ORDER BY ten_nhom;
+            """;
+
+            foreach (var row in await connection.QueryAsync<SoQuyChuanHoaRow>(sqlLoai))
+            {
+                danhMuc.LoaiThuChiTheoId[row.Id] = row.Ten;
+                danhMuc.LoaiThuChiTheoTen[ChuanHoaChuoi(row.Ten)] = row.Id;
+            }
+
+            const string sqlNguoi = """
+            SELECT id, ho_ten AS Ten
+            FROM nguoi_dung
+            WHERE trang_thai = 1
+            ORDER BY ho_ten;
+            """;
+
+            foreach (var row in await connection.QueryAsync<SoQuyChuanHoaRow>(sqlNguoi))
+            {
+                danhMuc.NguoiDungTheoId[row.Id] = row.Ten;
+                danhMuc.NguoiDungTheoTen[ChuanHoaChuoi(row.Ten)] = row.Id;
+            }
+
+            // Quỹ lấy từ chính dữ liệu đang có, không tự thêm mã mới.
+            const string sqlQuy = """
+            SELECT phuong_thuc AS Ten
+            FROM phieu_chi
+            WHERE phuong_thuc IS NOT NULL AND phuong_thuc <> ''
+            GROUP BY phuong_thuc
+            ORDER BY phuong_thuc;
+            """;
+
+            foreach (var ma in await connection.QueryAsync<string>(sqlQuy))
+            {
+                if (string.IsNullOrWhiteSpace(ma))
+                    continue;
+
+                var maChuanHoa = ma.Trim();
+                danhMuc.QuyTheoMa[maChuanHoa] = TenHienThiPhuongThuc(maChuanHoa);
+                danhMuc.QuyTheoTen[ChuanHoaChuoi(maChuanHoa)] = maChuanHoa;
+                danhMuc.QuyTheoTen[ChuanHoaChuoi(TenHienThiPhuongThuc(maChuanHoa))] = maChuanHoa;
+            }
+
+            // Nếu database còn chưa có phiếu nào thì vẫn cho phép dùng giá trị mặc định
+            // của cột phuong_thuc, vẫn là dữ liệu thật của database chứ không phải bịa thêm.
+            if (danhMuc.QuyTheoMa.Count == 0)
+            {
+                danhMuc.QuyTheoMa[danhMuc.PhuongThucMacDinh] = TenHienThiPhuongThuc(danhMuc.PhuongThucMacDinh);
+                danhMuc.QuyTheoTen[ChuanHoaChuoi(danhMuc.PhuongThucMacDinh)] = danhMuc.PhuongThucMacDinh;
+            }
+        }
+        catch
+        {
+            // Để danh mục rỗng: mọi dòng cần tra cứu sẽ báo lỗi ở bước validate,
+            // người dùng thấy ngay trong bước xem trước thay vì ghi sai dữ liệu.
+        }
+
+        return danhMuc;
+    }
+
+    /// <summary>
+    /// Lấy tập mã phiếu đã tồn tại trong database. Dùng cho bước xem trước để biết
+    /// dòng nào trùng mã, tránh gọi vòng lặp "SELECT từng dòng".
+    /// </summary>
+    public async Task<HashSet<string>> GetSoQuyMaPhieuTonTaiAsync(IReadOnlyCollection<string> maPhieus)
+    {
+        var danhSach = maPhieus
+            .Where(ma => !string.IsNullOrWhiteSpace(ma))
+            .Select(ma => ma.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var ketQua = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (danhSach.Count == 0)
+            return ketQua;
+
+        await using var connection = await OpenAsync();
+
+        // Chia nhỏ để câu IN không vượt quá giới hạn tham số của MySQL.
+        const int khoi = 500;
+
+        for (var i = 0; i < danhSach.Count; i += khoi)
+        {
+            var chunk = danhSach.Skip(i).Take(khoi).ToArray();
+
+            var tonTai = await connection.QueryAsync<string>(
+                "SELECT ma_phieu_chi FROM phieu_chi WHERE ma_phieu_chi IN @MaPhieus;",
+                new { MaPhieus = chunk });
+
+            foreach (var ma in tonTai)
+            {
+                if (!string.IsNullOrWhiteSpace(ma))
+                    ketQua.Add(ma.Trim());
+            }
+        }
+
+        return ketQua;
+    }
+
+    /// <summary>
+    /// Ghi hàng loạt phiếu sổ quỹ trong một transaction.
+    /// Một dòng lỗi khiến toàn bộ lượt ghi được rollback để không để lại dữ liệu nửa vời.
+    /// Tiến độ được báo sau mỗi lô để thanh tiến trên UI không bị đứng.
+    /// </summary>
+    public async Task<SoQuyImportResult> NhapPhieuQuyAsync(
+        IReadOnlyList<SoQuyImportRow> dongGhi,
+        XuLyPhieuTrung xuLyTrung,
+        Func<SoQuyImportProgress, Task>? baoTienDo = null)
+    {
+        var ketQua = new SoQuyImportResult
+        {
+            XuLyTrung = xuLyTrung
+        };
+
+        var coCotMoi = await EnsurePhieuQuyExtraColumnsAsync();
+
+        await using var connection = await OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var chiNhanhId = Session.CurrentUser?.ChiNhanhId ?? 1;
+            var tongSoDong = dongGhi.Count;
+
+            // Số thứ tự mã tự sinh: đọc MAX một lần rồi cấp phát liên tục trong bộ nhớ.
+            var soThuTuThu = await DocSoThuTuMaPhieuQuyAsync(connection, transaction, "PT");
+            var soThuTuChi = await DocSoThuTuMaPhieuQuyAsync(connection, transaction, "PC");
+
+            var dongDaXuLy = 0;
+
+            foreach (var dong in dongGhi)
+            {
+                var maPhieu = dong.MaPhieu.Trim();
+
+                if (maPhieu.Length == 0)
+                {
+                    // File không ghi mã phiếu thì hệ thống tự cấp.
+                    maPhieu = dong.LaThu
+                        ? "PT" + (soThuTuThu++).ToString("D4", CultureInfo.InvariantCulture)
+                        : "PC" + (soThuTuChi++).ToString("D4", CultureInfo.InvariantCulture);
+                }
+
+                const string sqlThem = """
+                INSERT INTO phieu_chi
+                    (ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc, noi_dung, thoi_gian_chi, nguoi_thuc_hien_id, trang_thai)
+                VALUES
+                    (@MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc, @NoiDung, @ThoiGian, @NguoiTaoId, @TrangThai);
+                """;
+
+                const string sqlThemDayDu = """
+                INSERT INTO phieu_chi
+                    (ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc, noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi, nguoi_thuc_hien_id, trang_thai)
+                VALUES
+                    (@MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc, @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian, @NguoiTaoId, @TrangThai);
+                """;
+
+                if (dong.MaPhieuDaTonTai && xuLyTrung == XuLyPhieuTrung.ThayThe)
+                {
+                    var capNhatCotMoi = coCotMoi
+                        ? ", nguoi_nop_nhan = @NguoiNopNhan, ghi_chu = @GhiChu"
+                        : "";
+
+                    var sqlCapNhat = $"""
+                    UPDATE phieu_chi
+                    SET nhom_chi_phi_id = @NhomChiPhiId,
+                        so_tien = @SoTien,
+                        phuong_thuc = COALESCE(@PhuongThuc, phuong_thuc),
+                        noi_dung = @NoiDung{capNhatCotMoi},
+                        thoi_gian_chi = @ThoiGian,
+                        nguoi_thuc_hien_id = COALESCE(@NguoiTaoId, nguoi_thuc_hien_id),
+                        trang_thai = @TrangThai
+                    WHERE ma_phieu_chi = @MaPhieu;
+                    """;
+
+                    var soDongCapNhat = await connection.ExecuteAsync(sqlCapNhat, TaoThamSoGhiPhieu(
+                        maPhieu,
+                        chiNhanhId,
+                        dong,
+                        phuongThuc: dong.PhuongThuc), transaction);
+
+                    // UPDATE không sinh mã mới nên vẫn cần nới số thứ tự về sau mã vừa dùng.
+                    if (maPhieu.StartsWith("PT", StringComparison.OrdinalIgnoreCase))
+                        soThuTuThu = Math.Max(soThuTuThu, ParseSoThuTuMaPhieu(maPhieu, "PT") + 1);
+                    else if (maPhieu.StartsWith("PC", StringComparison.OrdinalIgnoreCase))
+                        soThuTuChi = Math.Max(soThuTuChi, ParseSoThuTuMaPhieu(maPhieu, "PC") + 1);
+
+                    if (soDongCapNhat > 0)
+                    {
+                        ketQua.SoCapNhat++;
+                    }
+                    else
+                    {
+                        ketQua.SoLoi++;
+                        ketQua.DanhSachLoi.Add(new SoQuyImportError(dong.SoDongExcel, dong.MaPhieu, "Không tìm thấy phiếu để cập nhật."));
+                    }
+                }
+                else if (dong.MaPhieuDaTonTai)
+                {
+                    // Giữ dữ liệu cũ hoặc bỏ qua dòng trùng: hai cách này đều không ghi.
+                    ketQua.SoBoQua++;
+                }
+                else
+                {
+                    await connection.ExecuteAsync(
+                        coCotMoi ? sqlThemDayDu : sqlThem,
+                        TaoThamSoGhiPhieu(maPhieu, chiNhanhId, dong, phuongThuc: dong.PhuongThuc),
+                        transaction);
+
+                    ketQua.SoThemMoi++;
+                }
+
+                dongDaXuLy++;
+
+                if (baoTienDo is not null)
+                    await baoTienDo(new SoQuyImportProgress
+                    {
+                        GiaiDoan = "Đang ghi phiếu",
+                        DaXuLy = dongDaXuLy,
+                        TongSo = tongSoDong
+                    });
+            }
+
+            await transaction.CommitAsync();
+
+            return ketQua;
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+
+            // Lỗi này chặn cả lượt ghi vì có thể là hết quyền, mất kết nối, trùng mã...
+            // Rollback sạch thì báo người dùng chứ không ghi tiếp.
+            ketQua.DaRollback = true;
+            ketQua.DaHuy = true;
+            ketQua.CanhBao.Add($"Đã rollback toàn bộ lượt nhập: {ex.Message}");
+            ketQua.SoThemMoi = 0;
+            ketQua.SoCapNhat = 0;
+            ketQua.SoLoi++;
+            ketQua.DanhSachLoi.Add(new SoQuyImportError(0, null, ex.Message));
+
+            return ketQua;
+        }
+    }
+
+    /// <summary>Gom tham số chung cho INSERT và UPDATE của một dòng phiếu nhập từ file.</summary>
+    private static object TaoThamSoGhiPhieu(
+        string maPhieu,
+        uint chiNhanhId,
+        SoQuyImportRow dong,
+        string? phuongThuc)
+    {
+        return new
+        {
+            MaPhieu = maPhieu,
+            ChiNhanhId = chiNhanhId,
+            NhomChiPhiId = dong.NhomChiPhiId,
+            SoTien = dong.SoTien,
+            PhuongThuc = string.IsNullOrWhiteSpace(phuongThuc) ? null : phuongThuc.Trim().ToUpperInvariant(),
+            NoiDung = string.IsNullOrWhiteSpace(dong.NoiDung) ? null : dong.NoiDung.Trim(),
+            NguoiNopNhan = Truncate150(dong.NguoiNopNhan),
+            GhiChu = string.IsNullOrWhiteSpace(dong.GhiChu) ? null : dong.GhiChu.Trim(),
+            ThoiGian = dong.ThoiGian,
+            NguoiTaoId = dong.NguoiTaoId,
+            TrangThai = dong.TrangThai
+        };
+    }
+
+    /// <summary>
+    /// Đọc số thứ tự lớn nhất của một tiền tố mã phiếu, dùng để cấp mã tự sinh khi
+    /// nhập hàng loạt (tránh gọi SELECT cho từng dòng).
+    /// </summary>
+    private static async Task<long> DocSoThuTuMaPhieuQuyAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        string tienTo)
+    {
+        var maxSuffix = await connection.ExecuteScalarAsync<long?>(
+            """
+            SELECT COALESCE(MAX(CAST(SUBSTRING(TRIM(ma_phieu_chi), 3) AS SIGNED)), 0)
+            FROM phieu_chi
+            WHERE ma_phieu_chi LIKE CONCAT(@Prefix, '%')
+              AND TRIM(ma_phieu_chi) REGEXP CONCAT('^', @Prefix, '[0-9]+$');
+            """,
+            new { Prefix = tienTo },
+            transaction) ?? 0L;
+
+        return maxSuffix > 0 ? maxSuffix + 1 : 1L;
+    }
+
+    /// <summary>Lấy phần số của mã phiếu, trả về 0 nếu mã không đúng định dạng.</summary>
+    private static long ParseSoThuTuMaPhieu(string maPhieu, string tienTo)
+    {
+        var phanConLai = maPhieu.Trim();
+
+        if (phanConLai.StartsWith(tienTo, StringComparison.OrdinalIgnoreCase))
+            phanConLai = phanConLai[tienTo.Length..];
+
+        return long.TryParse(phanConLai, NumberStyles.None, CultureInfo.InvariantCulture, out var giaTri)
+            ? giaTri
+            : 0L;
+    }
+
+    /// <summary>
+    /// Bỏ dấu và viết thường để so khớp tên loại thu/chi, tên người và tên quỹ
+    /// giữa file nhập và database, không phụ thuộc khác biệt hoa/thường hay dấu tiếng Việt.
+    /// </summary>
+    internal static string ChuanHoaChuoi(string? giaTri)
+    {
+        if (string.IsNullOrWhiteSpace(giaTri))
+            return "";
+
+        var chuoi = giaTri.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+
+        return new string(chuoi.Where(ch =>
+        {
+            var loai = CharUnicodeInfo.GetUnicodeCategory(ch);
+
+            return loai != UnicodeCategory.NonSpacingMark
+                && loai != UnicodeCategory.SpacingCombiningMark
+                && loai != UnicodeCategory.EnclosingMark;
+        }).ToArray());
     }
 
     /// <summary>Tổng hợp số tiền trên các phiếu nhập hàng (chỉ dùng nội bộ DatabaseService).</summary>
@@ -6384,12 +7023,22 @@ LIMIT 500;
     /// Lưu 1 phiếu thu (PTxxxx) hoặc phiếu chi (PCxxxx) của sổ quỹ.
     /// Cột số <c>so_tien</c> luôn nhận giá trị decimal thô, không nhận chuỗi đã định dạng.
     /// Không nuốt exception: lỗi UNIQUE/connection được ném ra để ViewModel hiển thị cho người dùng.
+    /// <para>
+    /// Ánh xạ cột: <c>chi_nhanh_id</c> lấy chi nhánh của người đang đăng nhập,
+    /// <c>nhom_chi_phi_id</c> là loại thu/chi, <c>phuong_thuc</c> là mã quỹ,
+    /// <c>nguoi_thuc_hien_id</c> là người tạo, còn <c>nguoi_nop_nhan</c> và
+    /// <c>ghi_chu</c> là hai thông tin riêng của từng phiếu.
+    /// </para>
     /// </summary>
     public async Task LuuPhieuQuyAsync(
         string maPhieu,
         decimal soTien,
         DateTime thoiGian,
-        string? nguoiThucHien,
+        uint? nhomChiPhiId,
+        string? phuongThuc,
+        uint? nguoiTaoId,
+        string? nguoiNopNhan,
+        string? noiDung,
         string? ghiChu)
     {
         if (string.IsNullOrWhiteSpace(maPhieu))
@@ -6398,39 +7047,108 @@ LIMIT 500;
         if (soTien <= 0)
             throw new InvalidOperationException("Số tiền phải lớn hơn 0.");
 
+        var coCotMoi = await EnsurePhieuQuyExtraColumnsAsync();
+
         await using var connection = await OpenAsync();
 
-        // nguoi_thuc_hien_id là FK sang nguoi_dung: chỉ gán khi tìm thấy đúng người,
-        // nếu không thì để NULL (cột cho phép NULL) để không làm hỏng phiếu.
-        const string sql = """
-        INSERT INTO phieu_chi
-            (ma_phieu_chi, chi_nhanh_id, so_tien, phuong_thuc, noi_dung, thoi_gian_chi, nguoi_thuc_hien_id, trang_thai)
-        VALUES
-            (@MaPhieu, @ChiNhanhId, @SoTien, 'TIEN_MAT', @NoiDung, @ThoiGian, @NguoiThucHienId, 'HOAN_THANH');
-        """;
+        // Cột tùy chọn được ghép vào danh sách hàng/cột; mọi giá trị vẫn đi qua tham số
+        // nên không có chuyện dán chuỗi của người dùng vào SQL.
+        var danhSachCot = "(ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc, noi_dung";
+        var danhSachGiaTri = "(@MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc, @NoiDung";
+
+        if (coCotMoi)
+        {
+            danhSachCot += ", nguoi_nop_nhan, ghi_chu";
+            danhSachGiaTri += ", @NguoiNopNhan, @GhiChu";
+        }
+
+        danhSachCot += ", thoi_gian_chi, nguoi_thuc_hien_id, trang_thai)";
+        danhSachGiaTri += ", @ThoiGian, @NguoiTaoId, @TrangThai);";
+
+        var sql = $"INSERT INTO phieu_chi {danhSachCot} VALUES {danhSachGiaTri}";
 
         await connection.ExecuteAsync(sql, new
         {
             MaPhieu = maPhieu.Trim(),
             ChiNhanhId = Session.CurrentUser?.ChiNhanhId ?? 1,
+            NhomChiPhiId = nhomChiPhiId,
             SoTien = soTien,
-            NoiDung = string.IsNullOrWhiteSpace(ghiChu) ? null : ghiChu.Trim(),
+            // Rỗng thì để MySQL lấy giá trị mặc định của cột (TIEN_MAT).
+            PhuongThuc = string.IsNullOrWhiteSpace(phuongThuc) ? null : phuongThuc.Trim().ToUpperInvariant(),
+            NoiDung = string.IsNullOrWhiteSpace(noiDung) ? null : noiDung.Trim(),
+            NguoiNopNhan = Truncate150(nguoiNopNhan),
+            GhiChu = string.IsNullOrWhiteSpace(ghiChu) ? null : ghiChu.Trim(),
             ThoiGian = thoiGian,
-            NguoiThucHienId = await ResolveNguoiThucHienIdAsync(connection, nguoiThucHien)
+            NguoiTaoId = nguoiTaoId,
+            TrangThai = TrangThaiPhieuHoanThanh
         });
     }
 
-    /// <summary>Tìm id của nhân viên theo tên, trả về null nếu không khớp.</summary>
-    private static async Task<uint?> ResolveNguoiThucHienIdAsync(MySqlConnection connection, string? hoTen)
+    /// <summary>Cắt chuỗi cho vừa độ dài của cột varchar(150) của nguoi_nop_nhan.</summary>
+    private static string? Truncate150(string? giaTri)
     {
-        if (string.IsNullOrWhiteSpace(hoTen))
+        if (string.IsNullOrWhiteSpace(giaTri))
             return null;
 
-        var id = await connection.ExecuteScalarAsync<uint?>(
-            "SELECT id FROM nguoi_dung WHERE ho_ten = @HoTen LIMIT 1;",
-            new { HoTen = hoTen.Trim() });
+        var chuoi = giaTri.Trim();
 
-        return id;
+        return chuoi.Length <= 150 ? chuoi : chuoi[..150];
+    }
+
+    /// <summary>
+    /// Sửa một phiếu đang hiệu lực. Cho sửa được cả loại thu/chi, quỹ, người nộp/nhận,
+    /// nội dung và ghi chú vì đều là thông tin của phiếu; không cho sửa mã phiếu,
+    /// người tạo và trạng thái vì đó là dữ liệu sinh ra lúc tạo chứng từ.
+    /// Trả về số dòng được cập nhật (0 = phiếu không tồn tại hoặc đã hủy).
+    /// </summary>
+    public async Task<int> SuaPhieuQuyAsync(
+        string maPhieu,
+        decimal soTien,
+        DateTime thoiGian,
+        uint? nhomChiPhiId,
+        string? phuongThuc,
+        string? nguoiNopNhan,
+        string? noiDung,
+        string? ghiChu)
+    {
+        if (string.IsNullOrWhiteSpace(maPhieu))
+            throw new InvalidOperationException("Thiếu mã phiếu khi sửa sổ quỹ.");
+
+        if (soTien <= 0)
+            throw new InvalidOperationException("Số tiền phải lớn hơn 0.");
+
+        var coCotMoi = await EnsurePhieuQuyExtraColumnsAsync();
+
+        await using var connection = await OpenAsync();
+
+        // Hai cột mới chỉ xuất hiện trong câu UPDATE khi migration đã chạy, tránh lỗi
+        // "Unknown column" với database cũ. Giá trị vẫn đi qua tham số.
+        var capNhatCotMoi = coCotMoi ? ", nguoi_nop_nhan = @NguoiNopNhan, ghi_chu = @GhiChu" : "";
+
+        var sql = $"""
+        UPDATE phieu_chi
+        SET so_tien = @SoTien,
+            thoi_gian_chi = @ThoiGian,
+            nhom_chi_phi_id = @NhomChiPhiId,
+            phuong_thuc = @PhuongThuc,
+            noi_dung = @NoiDung{capNhatCotMoi}
+        WHERE ma_phieu_chi = @MaPhieu
+          AND trang_thai <> @TrangThaiHuy
+        LIMIT 1;
+        """;
+
+        return await connection.ExecuteAsync(sql, new
+        {
+            MaPhieu = maPhieu.Trim(),
+            SoTien = soTien,
+            ThoiGian = thoiGian,
+            NhomChiPhiId = nhomChiPhiId,
+            PhuongThuc = string.IsNullOrWhiteSpace(phuongThuc) ? null : phuongThuc.Trim().ToUpperInvariant(),
+            NoiDung = string.IsNullOrWhiteSpace(noiDung) ? null : noiDung.Trim(),
+            NguoiNopNhan = Truncate150(nguoiNopNhan),
+            GhiChu = string.IsNullOrWhiteSpace(ghiChu) ? null : ghiChu.Trim(),
+            TrangThaiHuy = TrangThaiPhieuHuy
+        });
     }
 }
 

@@ -38,7 +38,7 @@ public sealed partial class MainWindowViewModel
     /// <summary>Quỹ: danh sách phương thức thực tế có trong bảng phieu_chi.</summary>
     public ObservableCollection<SoQuyLuaChon> SoQuyQuyOptions { get; } = new();
 
-    /// <summary>Các khoảng thời gian cố định + tùy chỉnh. Mặc định là "Toàn thời gian".</summary>
+    /// <summary>Các khoảng thời gian cố định + tùy chỉnh. Mặc định là "Tháng này".</summary>
     public IReadOnlyList<SoQuyLuaChon> SoQuyKhoangThoiGianOptions { get; } =
     [
         new(SoQuyTgTatCa, "Toàn thời gian"),
@@ -51,8 +51,10 @@ public sealed partial class MainWindowViewModel
         new(SoQuyTgTuyChinh, "Tùy chỉnh")
     ];
 
-    /// <summary>Mặc định sổ quỹ luôn xem toàn bộ lịch sử.</summary>
-    private SoQuyLuaChon? SoQuyKhoangThoiGianMacDinh => SoQuyKhoangThoiGianOptions[0];
+    /// <summary>Mặc định sổ quỹ xem phiếu trong tháng hiện tại.</summary>
+    private SoQuyLuaChon? SoQuyKhoangThoiGianMacDinh =>
+        SoQuyKhoangThoiGianOptions.FirstOrDefault(o => o.GiaTri == SoQuyTgThangNay)
+        ?? SoQuyKhoangThoiGianOptions[0];
 
     /// <summary>Loại thu/chi lấy từ bảng nhom_chi_phi (rỗng nếu hệ thống chưa có loại nào).</summary>
     public ObservableCollection<SoQuyLuaChonItem> SoQuyLoaiThuChiOptions { get; } = new();
@@ -218,12 +220,16 @@ public sealed partial class MainWindowViewModel
             SoQuyQuyOptions.Add(item);
         }
 
+        // Mục quỹ là RadioButton nên cần biết mục nào đang được tick.
+        foreach (var item in SoQuyQuyOptions)
+            item.PropertyChanged += OnSoQuyQuyItemChanged;
+
         // Quỹ đang chọn có thể không còn tồn tại (đã bị xoá ở nơi khác) -> về "tất cả".
         SoQuyLocQuy = SoQuyQuyOptions.FirstOrDefault(o => o.GiaTri == maQuyDangChon)
                       ?? SoQuyQuyOptions[0];
 
-        // Lần đầu vào màn hình thì chọn "Toàn thời gian" cho ComboBox khoảng thời gian.
-        if (SoQuyLocKhoangThoiGian is null
+        // Lần đầu vào màn hình thì chọn "Tháng này" cho ô khoảng thời gian.
+ if (SoQuyLocKhoangThoiGian is null
             || !SoQuyKhoangThoiGianOptions.Any(o => o.GiaTri == SoQuyLocKhoangThoiGian.GiaTri))
             SoQuyLocKhoangThoiGian = SoQuyKhoangThoiGianMacDinh;
 
@@ -231,10 +237,14 @@ public sealed partial class MainWindowViewModel
         ThayTheLuaChon(SoQuyTrangThaiOptions, trangThai);
         ThayTheLuaChon(SoQuyNguoiTaoOptions, nguoiTao);
 
-        // Danh sách vừa thay => các nhóm điều kiện phải ẩn/hiện lại.
+        // Danh sách vừa thay => các nhóm điều kiện phải ẩn/hiện lại,
+        // đồng thời chữ tóm tắt trên ô chọn nhiều cũng phải cập nhật theo.
         OnPropertyChanged(nameof(SoQuyCoLoaiThuChi));
         OnPropertyChanged(nameof(SoQuyCoTrangThai));
         OnPropertyChanged(nameof(SoQuyCoNguoiTao));
+        OnPropertyChanged(nameof(SoQuyLocLoaiThuChiText));
+        OnPropertyChanged(nameof(SoQuyLocNguoiTaoText));
+        OnPropertyChanged(nameof(SoQuyLocTrangThaiText));
     }
 
     /// <summary>
@@ -270,9 +280,44 @@ public sealed partial class MainWindowViewModel
 
     private void OnSoQuyLuaChonItemChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(SoQuyLuaChonItem.IsChecked))
-            BaoLocSoQuyThayDoi();
+        if (e.PropertyName != nameof(SoQuyLuaChonItem.IsChecked))
+            return;
+
+        // Ô chọn nhiều hiển thị tóm tắt theo số mục đang tick nên phải báo lại.
+        OnPropertyChanged(nameof(SoQuyLocLoaiThuChiText));
+        OnPropertyChanged(nameof(SoQuyLocNguoiTaoText));
+        OnPropertyChanged(nameof(SoQuyLocTrangThaiText));
+
+        BaoLocSoQuyThayDoi();
     }
+
+    /// <summary>
+    /// Tóm tắt lựa chọn để hiển thị trên ô chọn nhiều:
+    /// chưa chọn gì thì để trống (ô hiện chữ mờ), chọn một thì hiện tên,
+    /// chọn nhiều thì hiện số lượng để ô không bị tràn chữ.
+    /// </summary>
+    private static string TomTatLuaChonDaChon(
+        ObservableCollection<SoQuyLuaChonItem> items,
+        string danhTua)
+    {
+        var chon = items.Where(i => i.IsChecked).ToList();
+
+        return chon.Count switch
+        {
+            0 => "",
+            1 => chon[0].HienThi,
+            _ => $"{chon.Count} {danhTua} đã chọn"
+        };
+    }
+
+    /// <summary>Chữ hiển thị trên ô chọn loại thu chi.</summary>
+    public string SoQuyLocLoaiThuChiText => TomTatLuaChonDaChon(SoQuyLoaiThuChiOptions, "loại");
+
+    /// <summary>Chữ hiển thị trên ô chọn người tạo.</summary>
+    public string SoQuyLocNguoiTaoText => TomTatLuaChonDaChon(SoQuyNguoiTaoOptions, "người");
+
+    /// <summary>Chữ hiển thị trên ô chọn trạng thái.</summary>
+    public string SoQuyLocTrangThaiText => TomTatLuaChonDaChon(SoQuyTrangThaiOptions, "trạng thái");
 
     /// <summary>Gộp các mục đang tick thành chuỗi id phân tách bằng dấu phẩy cho SQL.</summary>
     private static string GopGiaTriDaChon(ObservableCollection<SoQuyLuaChonItem> items)
@@ -372,7 +417,45 @@ public sealed partial class MainWindowViewModel
     }
 
     /// <summary>Được gọi mỗi khi có bất kỳ điều kiện lọc nào thay đổi.</summary>
-    partial void OnSoQuyLocQuyChanged(SoQuyLuaChon? value) => BaoLocSoQuyThayDoi();
+    partial void OnSoQuyLocQuyChanged(SoQuyLuaChon? value)
+    {
+        // Mục quỹ là RadioButton nên tick phải bám theo quỹ đang chọn.
+        DongBoTickQuyTheoQuyDangChon(value);
+
+        BaoLocSoQuyThayDoi();
+    }
+
+    /// <summary>Chặn vòng lặp khi tick radio quỹ tự đồng bộ ngược lại SoQuyLocQuy.</summary>
+    private bool _dangDongBoTickQuy;
+
+    /// <summary>Đặt cờ tick của đúng một mục quỹ theo quỹ đang chọn.</summary>
+    private void DongBoTickQuyTheoQuyDangChon(SoQuyLuaChon? quyDangChon)
+    {
+        if (_dangDongBoTickQuy)
+            return;
+
+        _dangDongBoTickQuy = true;
+
+        foreach (var item in SoQuyQuyOptions)
+            item.IsSelected = ReferenceEquals(item, quyDangChon);
+
+        _dangDongBoTickQuy = false;
+    }
+
+    /// <summary>Người dùng tick radio quỹ thì cập nhật quỹ đang chọn.</summary>
+    private void OnSoQuyQuyItemChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(SoQuyLuaChon.IsSelected) || _dangDongBoTickQuy)
+            return;
+
+        if (sender is not SoQuyLuaChon item)
+            return;
+
+        if (item.IsSelected)
+            SoQuyLocQuy = item;
+        else if (ReferenceEquals(item, SoQuyLocQuy))
+            SoQuyLocQuy = null;
+    }
 
     partial void OnSoQuyLocKhoangThoiGianChanged(SoQuyLuaChon? value) => BaoLocSoQuyThayDoi();
 
