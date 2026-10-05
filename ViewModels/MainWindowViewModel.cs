@@ -31,6 +31,7 @@ public partial class MainWindowViewModel : ObservableObject
     private CancellationTokenSource? _baoCaoPhieuNhapSearchCts;
     private int _baoCaoPhieuNhapLoadVersion;
     private bool _baoCaoPhieuNhapLoaded;
+    private bool _baoCaoCuoiNgayLoaded;
 
     /// <summary>
     /// Màn "Tổng quan" có ViewModel riêng. Giữ một instance sống suốt phiên để
@@ -38,9 +39,24 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public DashboardViewModel Dashboard { get; }
 
+    /// <summary>
+    /// Màn "Báo cáo cuối ngày" cũng giữ một instance sống suốt phiên để nhớ ngày
+    /// đang xem giữa các lần chuyển màn.
+    /// </summary>
+    public BaoCaoCuoiNgayViewModel BaoCaoCuoiNgay { get; }
+
     public MainWindowViewModel()
     {
         Dashboard = new DashboardViewModel(_db);
+        BaoCaoCuoiNgay = new BaoCaoCuoiNgayViewModel(_db)
+        {
+            // Cửa sổ chính chỉ có sau khi ViewModel được tạo, nên các callback
+            // đọc nó theo thời điểm dùng thay vì chụp giá trị lúc khởi tạo.
+            LayCuaSoChinh = () => OwnerWindow,
+            CapNhatTrangThai = message => StatusMessage = message,
+            HienThiHopNhat = (tieuDe, noiDung) => ShowMessageAsync(tieuDe, noiDung)
+        };
+
         // Giỏ hàng thêm/bớt dòng thì trạng thái nút "Thanh toán" phải cập nhật
         // theo, nếu không nút sẽ mở khi giỏ hàng vẫn còn trống.
         SaleCart.CollectionChanged += (_, _) => OnPropertyChanged(nameof(CanThanhToan));
@@ -2851,6 +2867,12 @@ ketQua = await _db.ImportSanPhamAsync(
     {
         new BaoCaoMenuItem
         {
+            Key = "cuoi-ngay",
+            TieuDe = "Báo cáo cuối ngày",
+            BieuTuong = "🗓"
+        },
+        new BaoCaoMenuItem
+        {
             Key = "phieu-nhap-hang",
             TieuDe = "Báo cáo phiếu nhập hàng",
             BieuTuong = "📥"
@@ -2917,6 +2939,9 @@ ketQua = await _db.ImportSanPhamAsync(
     public bool IsBaoCaoPhieuNhapSelected =>
         SelectedMenu == "Báo cáo" && SelectedReportKey == "phieu-nhap-hang";
 
+    public bool IsBaoCaoCuoiNgaySelected =>
+        SelectedMenu == "Báo cáo" && SelectedReportKey == "cuoi-ngay";
+
     partial void OnBaoCaoPhieuNhapSearchChanged(string value)
     {
         // Mỗi lần tìm kiếm luôn quay về trang đầu
@@ -2947,6 +2972,7 @@ ketQua = await _db.ImportSanPhamAsync(
     partial void OnSelectedReportKeyChanged(string value)
     {
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
+        OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
     }
 
     [RelayCommand]
@@ -2965,6 +2991,14 @@ ketQua = await _db.ImportSanPhamAsync(
         {
             _baoCaoPhieuNhapLoaded = true;
             _ = LoadBaoCaoPhieuNhapAsync();
+        }
+
+        // Báo cáo cuối ngày chỉ tải khi mở lần đầu, sau đó giữ nguyên ngày đang
+        // xem trong suốt phiên (người dùng tự bấm "Làm mới" khi cần).
+        if (item.Key == "cuoi-ngay" && !_baoCaoCuoiNgayLoaded)
+        {
+            _baoCaoCuoiNgayLoaded = true;
+            _ = BaoCaoCuoiNgay.TaiDuLieuAsync();
         }
 
         StatusMessage = item.TieuDe;
@@ -4015,6 +4049,7 @@ partial void OnTienKhachDuaChanged(decimal value)
         OnPropertyChanged(nameof(IsDataSectionSelected));
         OnPropertyChanged(nameof(IsBaoCaoSectionSelected));
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
+        OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
 
         _ = LoadSelectedSectionAsync(value);
     }

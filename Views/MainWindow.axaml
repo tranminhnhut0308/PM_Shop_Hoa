@@ -5189,6 +5189,16 @@
       </TabControl>
 
       <!-- ============================================================ -->
+      <!-- BÁO CÁO CUỐI NGÀY                                           -->
+      <!-- Grid ngoài bind vào MainWindowViewModel để đọc được           -->
+      <!-- IsBaoCaoCuoiNgaySelected; UserControl bên trong nhận        -->
+      <!-- DataContext là ViewModel báo cáo.                            -->
+      <!-- ============================================================ -->
+      <Grid IsVisible="{Binding IsBaoCaoCuoiNgaySelected}">
+        <views:BaoCaoCuoiNgayView DataContext="{Binding BaoCaoCuoiNgay}" />
+      </Grid>
+
+      <!-- ============================================================ -->
       <!-- BÁO CÁO PHIẾU NHẬP HÀNG                                       -->
       <!-- (khác với Mua hàng → Nhập hàng: đây là màn đọc dữ liệu)      -->
       <!-- ============================================================ -->
