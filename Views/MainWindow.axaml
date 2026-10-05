@@ -179,6 +179,23 @@
       <Setter Property="Background" Value="#F2F9F6" />
     </Style>
 
+    <!--
+      BẢNG CUỘN (KHÁCH HÀNG / NHÀ CUNG CẤP)
+      Thanh cuộn luôn chiếm đúng 13px nên vùng danh sách có chiều rộng ổn định,
+      không nhảy cột khi dữ liệu nhiều/ít. Tiêu đề bảng chừa sẵn 13px Padding phải
+      tương ứng để cột tiêu đề thẳng hàng với cột dữ liệu.
+    -->
+    <Style Selector="ScrollViewer.listScroll">
+      <Setter Property="VerticalScrollBarVisibility" Value="Visible" />
+      <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+    </Style>
+
+    <Style Selector="ScrollViewer.listScroll ScrollBar:vertical">
+      <Setter Property="Width" Value="13" />
+      <Setter Property="MinWidth" Value="13" />
+      <Setter Property="MaxWidth" Value="13" />
+    </Style>
+
     <Style Selector="CheckBox.rowCheckBox">
       <Setter Property="Width" Value="20" />
       <Setter Property="Height" Value="20" />
@@ -2112,8 +2129,13 @@
             <Border Grid.Row="2" Classes="card" Padding="0" Margin="0">
               <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
 
-                <!-- TIÊU ĐỀ BẢNG -->
-                <Border Padding="16,14" BorderBrush="#E2ECE8" BorderThickness="0,0,0,1"
+                <!--
+                  TIÊU ĐỀ BẢNG (KHÔNG CUỘN)
+                  Padding phải 29px: 16px lề trái + 13px chừa sẵn cho thanh cuộn
+                  của vùng danh sách, để cột tiêu đề thẳng hàng với dòng dữ liệu
+                  bên dưới khi thanh cuộn xuất hiện.
+                -->
+                <Border Padding="16,14,29,14" BorderBrush="#E2ECE8" BorderThickness="0,0,0,1"
                   Background="#F1F8F5">
                   <Grid ColumnDefinitions="40,120,*,150,150,160,190,40" ColumnSpacing="10">
 
@@ -2157,8 +2179,21 @@
                     Foreground="#61736E" FontSize="13" HorizontalAlignment="Center" />
                 </StackPanel>
 
-                <!-- CÁC DÒNG KHÁCH HÀNG -->
-                <ItemsControl Grid.Row="3" ItemsSource="{Binding CustomerRows}">
+                <!--
+                  CÁC DÒNG KHÁCH HÀNG - ĐƯỢC CUỘN DỌC
+
+                  ItemsControl mặc định KHÔNG có thanh cuộn: nó đo các dòng con với
+                  chiều cao vô hạn rồi bị hàng lưới cắt, nên chỉ thấy vài dòng đầu và
+                  không kéo xuống được. Bọc ScrollViewer quanh ItemsControl là cách
+                  đúng trong Avalonia. KHÔNG bọc cả khung bảng để tiêu đề, thanh tìm
+                  kiếm, thống kê và phân trang không bị cuộn theo.
+                  VerticalScrollBarVisibility="Visible" giữ chiều rộng vùng cuộn luôn
+                  cố định 13px nên tiêu đề không bị lệch cột.
+                -->
+                <ScrollViewer Grid.Row="3" Classes="listScroll"
+                  IsVisible="{Binding HasCustomerRows}">
+
+                  <ItemsControl ItemsSource="{Binding CustomerRows}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:KhachHangRowViewModel">
                       <Border Classes="customerRow" BorderBrush="#EDF3F1" BorderThickness="0,0,0,1"
@@ -2500,7 +2535,9 @@
                       </Border>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                  </ItemsControl>
+
+                </ScrollViewer>
 
                 <!-- PHÂN TRANG -->
                 <Border Grid.Row="4" Padding="16,12" BorderBrush="#E2ECE8" BorderThickness="0,1,0,0">
@@ -2946,8 +2983,12 @@
               -->
               <Grid RowDefinitions="Auto,Auto,*,Auto">
 
-                <!-- TIÊU ĐỀ BẢNG -->
-                <Border Padding="16,14" BorderBrush="#E2ECE8" BorderThickness="0,0,0,1"
+                <!--
+                  TIÊU ĐỀ BẢNG (KHÔNG CUỘN)
+                  Padding phải 29px: 16px lề trái + 13px chừa sẵn cho thanh cuộn
+                  của vùng danh sách, để cột tiêu đề thẳng hàng với dòng dữ liệu.
+                -->
+                <Border Padding="16,14,29,14" BorderBrush="#E2ECE8" BorderThickness="0,0,0,1"
                   Background="#F1F8F5">
                   <Grid ColumnDefinitions="40,110,*,140,150,*,130,140,40" ColumnSpacing="10">
 
@@ -3000,8 +3041,14 @@
                     TextAlignment="Center" />
                 </StackPanel>
 
-                <!-- CÁC DÒNG NHÀ CUNG CẤP -->
-                <ItemsControl Grid.Row="2" ItemsSource="{Binding SupplierRows}"
+                <!--
+                  CÁC DÒNG NHÀ CUNG CẤP - ĐƯỢC CUỘN DỌC
+                  Xem giải thích ở tab Khách hàng: ItemsControl không tự cuộn,
+                  phải bọc ScrollViewer và không bọc cả khung bảng.
+                -->
+                <ScrollViewer Grid.Row="2" Classes="listScroll">
+
+                  <ItemsControl ItemsSource="{Binding SupplierRows}"
                   IsVisible="{Binding HasSupplierRows}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:NhaCungCapRowViewModel">
@@ -3392,7 +3439,9 @@
                       </Border>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                  </ItemsControl>
+
+                </ScrollViewer>
 
                 <!-- PHÂN TRANG -->
                 <Border Grid.Row="3" Padding="16,12" BorderBrush="#E2ECE8"
