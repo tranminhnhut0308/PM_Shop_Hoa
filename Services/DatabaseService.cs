@@ -14,6 +14,7 @@ public sealed class DatabaseService
     private readonly DatabaseConfigService _configService;
     private bool? _hasPhieuNhapExtraColumns;
     private bool? _hasPhieuQuyExtraColumns;
+    private bool? _hasPhieuQuyHoaDonColumns;
     private bool? _hasBangTraHang;
     private bool? _coCotDuLieuKiotViet;
     private bool? _cotNgayTaoSanPhamChoPhepNull;
@@ -22,6 +23,20 @@ public sealed class DatabaseService
     public DatabaseService()
     {
         _configService = new DatabaseConfigService();
+    }
+
+    /// <summary>
+    /// Mở kết nối mới tới database. Công khai để các service khác (ví dụ
+    /// <see cref="DashboardService"/>) dùng chung đúng một cách cấu hình kết nối
+    /// thay vì tự dựng connection string riêng.
+    /// </summary>
+    public async Task<MySqlConnection> TaoKetNoiAsync()
+    {
+        var connection = new MySqlConnection(GetConnectionString());
+
+        await connection.OpenAsync();
+
+        return connection;
     }
 
     private string GetConnectionString()
@@ -3951,10 +3966,18 @@ LIMIT 500;
         var branchId = Session.CurrentUser?.ChiNhanhId ?? 1;
         var userId = Session.CurrentUser?.Id;
 
+        // Đảm bảo cột liên kết phiếu thu tồn tại TRƯỚC khi mở giao dịch.
+        // ALTER TABLE bên trong transaction sẽ làm MySQL báo
+        // "Table definition has changed" và huỷ cả giao dịch.
+        var coCotPhieuThuLienKet = await EnsurePhieuQuyHoaDonColumnsAsync();
+
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
 
         var daCommit = false;
+
+        // Mã phiếu thu sổ quỹ sinh ra từ hóa đơn này (rỗng nếu khách trả 0 đồng).
+        var maPhieuThu = "";
 
         try
         {
@@ -4217,14 +4240,36 @@ LIMIT 500;
             }
 
             // ============================================================
-            // 5. COMMIT
+            // 5. GHI PHIẾU THU SỔ QUỸ
+            //    Chỉ ghi phần tiền khách trả thật (không kể tiền thối và
+            //    không tính phần còn nợ) và ghi trong CÙNG giao dịch với hóa đơn
+            //    nên không bao giờ có hóa đơn không kèm phiếu thu, hoặc phiếu thu
+            //    mồ côi khi hóa đơn bị rollback.
+            // ============================================================
+
+            maPhieuThu = await GhiPhieuThuBanHangAsync(
+                connection,
+                transaction,
+                branchId,
+                userId,
+                invoiceId,
+                invoiceCode,
+                paidAmount,
+                changeAmount,
+                debtAmount,
+                customer,
+                now,
+                coCotPhieuThuLienKet);
+
+            // ============================================================
+            // 6. COMMIT
             // ============================================================
 
             await transaction.CommitAsync();
             daCommit = true;
 
             // ============================================================
-            // 6. ĐỌC LẠI HÓA ĐƠN ĐÃ LƯU ĐỂ HIỂN THỊ
+            // 7. ĐỌC LẠI HÓA ĐƠN ĐÃ LƯU ĐỂ HIỂN THỊ
             //    Lấy dữ liệu thật trong database thay vì dựng lại từ RAM, nhờ
             //    vậy mã hóa đơn, tổng tiền, tiền thối, công nợ và danh sách hàng
             //    trên hóa đơn luôn khớp với dữ liệu đã lưu.
@@ -4237,6 +4282,8 @@ LIMIT 500;
                     $"Đã lưu hóa đơn {invoiceCode} nhưng không đọc lại được. Hãy kiểm tra danh sách hóa đơn.");
 
             receipt.CanhBao.AddRange(canhBao);
+
+            receipt.MaPhieuThu = maPhieuThu;
 
             return receipt;
         }
@@ -4394,6 +4441,133 @@ LIMIT 500;
                 GhiChu = $"Xuất kho bán hàng theo hóa đơn {invoiceCode}"
             },
             transaction);
+    }
+
+    /// <summary>
+    /// Ghi phiếu Thu trong sổ quỹ cho một hóa đơn bán hàng, dùng CHUNG connection
+    /// và transaction với lần ghi hóa đơn nên hai thao tác cùng thành công hoặc
+    /// cùng bị rollback.
+    /// Chỉ ghi khi khách trả thật (&gt; 0); tiền thối và phần còn nợ không ghi vào quỹ.
+    /// Trả về mã phiếu Thu vừa tạo, rỗng nếu không tạo phiếu.
+    /// </summary>
+    private async Task<string> GhiPhieuThuBanHangAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        uint branchId,
+        uint? userId,
+        uint invoiceId,
+        string invoiceCode,
+        decimal paidAmount,
+        decimal changeAmount,
+        decimal debtAmount,
+        KhachHang? customer,
+        DateTime thoiGian,
+        bool coCotLienKet)
+    {
+        if (paidAmount <= 0)
+            return "";
+
+        // Chống tạo trùng: nếu hóa đơn này đã có phiếu thu thì lấy lại mã cũ,
+        // không ghi thêm (an toàn kể cả khi giao dịch bị chạy lại).
+        if (coCotLienKet)
+        {
+            var maPhieuDaCo = await connection.QueryFirstOrDefaultAsync<string>(
+                "SELECT ma_phieu_chi FROM phieu_chi WHERE hoa_don_ban_hang_id = @HoaDonId LIMIT 1;",
+                new { HoaDonId = invoiceId },
+                transaction);
+
+            if (!string.IsNullOrWhiteSpace(maPhieuDaCo))
+                return maPhieuDaCo;
+        }
+
+        // Cấp mã PT ngay trong giao dịch để không trùng với phiếu đang mở ở máy khác.
+        var maPhieu = await SinhMaPhieuThuTrongGiaoDichAsync(connection, transaction);
+
+        var ghiChu = $"Thu tiền thanh toán hóa đơn {invoiceCode}.";
+
+        if (changeAmount > 0)
+            ghiChu += $" Tiền thối {changeAmount:N0} đã trả lại khách, không tính vào quỹ.";
+
+        if (debtAmount > 0)
+            ghiChu += $" Còn nợ {debtAmount:N0} ghi vào sổ công nợ khách hàng.";
+
+        var sql = coCotLienKet
+            ? """
+              INSERT INTO phieu_chi
+              (
+                  ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                  noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
+                  nguoi_thuc_hien_id, trang_thai, hoa_don_ban_hang_id, ma_hoa_don
+              )
+              VALUES
+              (
+                  @MaPhieu, @ChiNhanhId, NULL, @SoTien, 'TIEN_MAT',
+                  @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
+                  @NguoiTaoId, @TrangThai, @HoaDonId, @MaHoaDon
+              );
+              """
+            : """
+              INSERT INTO phieu_chi
+              (
+                  ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                  noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
+                  nguoi_thuc_hien_id, trang_thai
+              )
+              VALUES
+              (
+                  @MaPhieu, @ChiNhanhId, NULL, @SoTien, 'TIEN_MAT',
+                  @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
+                  @NguoiTaoId, @TrangThai
+              );
+              """;
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                MaPhieu = maPhieu,
+                ChiNhanhId = branchId,
+                SoTien = paidAmount,
+                NoiDung = $"Thu tiền bán hàng - hóa đơn {invoiceCode}",
+                NguoiNopNhan = Truncate150(customer?.TenKhachHang),
+                GhiChu = ghiChu,
+                ThoiGian = thoiGian,
+                NguoiTaoId = userId,
+                TrangThai = TrangThaiPhieuHoanThanh,
+                HoaDonId = invoiceId,
+                MaHoaDon = invoiceCode
+            },
+            transaction);
+
+        return maPhieu;
+    }
+
+    /// <summary>
+    /// Cấp mã phiếu Thu kế tiếp (PT0001, PT0002...) bằng chính connection và
+    /// transaction của giao dịch đang chạy, tránh mở thêm kết nối và tránh trùng mã.
+    /// </summary>
+    private async Task<string> SinhMaPhieuThuTrongGiaoDichAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction)
+    {
+        var nextNumber = await DocSoThuTuMaPhieuQuyAsync(connection, transaction, "PT");
+
+        for (var i = 0; i < 100; i++)
+        {
+            var candidate = "PT" + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
+
+            var daTonTai = await connection.ExecuteScalarAsync<int?>(
+                "SELECT 1 FROM phieu_chi WHERE ma_phieu_chi = @Ma LIMIT 1;",
+                new { Ma = candidate },
+                transaction);
+
+            if (daTonTai is null)
+                return candidate;
+
+            nextNumber++;
+        }
+
+        return "PT" + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
     }
 
     public async Task<IReadOnlyList<NhaCungCap>> GetNhaCungCapAsync(
@@ -5969,6 +6143,18 @@ LIMIT 500;
                 phieu,
                 dongHopLe);
 
+            // ============================================================
+            // 4. CÔNG NỢ NHÀ CUNG CẤP
+            //    Ghi vào lich_su_cong_no_nha_cung_cap ngay trong giao dịch này
+            //    để số dư công nợ khách mới luôn khớp với phiếu vừa lưu.
+            // ============================================================
+
+            await GhiCongNoNhaCungCapPhieuNhapAsync(
+                connection,
+                transaction,
+                phieu,
+                branchId);
+
             await transaction.CommitAsync();
 
             return phieu.Id;
@@ -5978,6 +6164,122 @@ LIMIT 500;
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Ghi sổ cái công nợ nhà cung cấp cho một phiếu nhập, trong CÙNG transaction
+    /// với lần lưu phiếu: một dòng ghi khoản phải trả khi nhập hàng và một dòng
+    /// ghi khoản đã trả nếu phiếu có ghi "đã thanh toán".
+    /// Tổng ghi nợ - ghi có của mỗi phiếu luôn bằng <c>phieu.ConNo</c> nên số dư
+    /// công nợ khớp với cột con_no trên đầu phiếu.
+    /// </summary>
+    private static async Task GhiCongNoNhaCungCapPhieuNhapAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        PhieuNhapHang phieu,
+        uint branchId)
+    {
+        if (phieu.NhaCungCapId is not uint nccId || nccId == 0)
+            return;
+
+        // Chống ghi trùng khi một phiếu được sửa rồi hoàn thành lại:
+        // xoá các dòng cũ của chính mã phiếu này trước khi ghi lại.
+        await connection.ExecuteAsync(
+            "DELETE FROM lich_su_cong_no_nha_cung_cap WHERE ma_chung_tu = @MaChungTu;",
+            new { phieu.MaPhieuNhap },
+            transaction);
+
+        // Khoản mua làm tăng nợ phải trả, nên ghi nợ.
+        if (phieu.TongTienNhap > 0)
+        {
+            await GhiMotDongCongNoNhaCungCapAsync(
+                connection,
+                transaction,
+                nccId,
+                branchId,
+                "NHAP_HANG",
+                phieu.MaPhieuNhap,
+                phieu.TongTienNhap,
+                0,
+                phieu.ThoiGianNhap,
+                phieu.NguoiNhapId,
+                $"Nhập hàng tạo khoản phải trả {phieu.TongTienNhap:N0} cho phiếu {phieu.MaPhieuNhap}");
+        }
+
+        // Khoản đã trả làm giảm nợ phải trả, nên ghi có.
+        if (phieu.DaThanhToan > 0)
+        {
+            await GhiMotDongCongNoNhaCungCapAsync(
+                connection,
+                transaction,
+                nccId,
+                branchId,
+                "THANH_TOAN_NHAP",
+                phieu.MaPhieuNhap,
+                0,
+                phieu.DaThanhToan,
+                phieu.ThoiGianNhap,
+                phieu.NguoiNhapId,
+                $"Đã thanh toán {phieu.DaThanhToan:N0} cho phiếu {phieu.MaPhieuNhap}");
+        }
+    }
+
+    /// <summary>
+    /// Ghi một dòng vào sổ công nợ nhà cung cấp, tự tính lại số dư cộng dồn
+    /// (đọc khoá dòng hiện tại để hai phiếu song song không ghi đè số dư của nhau).
+    /// </summary>
+    private static async Task GhiMotDongCongNoNhaCungCapAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        uint nccId,
+        uint branchId,
+        string loaiGiaoDich,
+        string maChungTu,
+        decimal ghiNo,
+        decimal ghiCo,
+        DateTime thoiGian,
+        uint? nguoiThucHienId,
+        string ghiChu)
+    {
+        var soDuHienTai = await connection.ExecuteScalarAsync<decimal>(
+            """
+            SELECT COALESCE(SUM(ghi_no - ghi_co), 0)
+            FROM lich_su_cong_no_nha_cung_cap
+            WHERE nha_cung_cap_id = @NhaCungCapId
+            FOR UPDATE;
+            """,
+            new { NhaCungCapId = nccId },
+            transaction);
+
+        await connection.ExecuteAsync(
+            """
+            INSERT INTO lich_su_cong_no_nha_cung_cap
+            (
+                nha_cung_cap_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu,
+                ma_chung_tu, ghi_no, ghi_co, so_du,
+                thoi_gian, nguoi_thuc_hien_id, ghi_chu
+            )
+            VALUES
+            (
+                @NhaCungCapId, @ChiNhanhId, @LoaiGiaoDich, 'PHIEU_NHAP',
+                @MaChungTu, @GhiNo, @GhiCo, @SoDu,
+                @ThoiGian, @NguoiThucHienId, @GhiChu
+            );
+            """,
+            new
+            {
+                NhaCungCapId = nccId,
+                ChiNhanhId = branchId,
+                LoaiGiaoDich = loaiGiaoDich,
+                MaChungTu = maChungTu,
+                GhiNo = ghiNo,
+                GhiCo = ghiCo,
+                SoDu = soDuHienTai + ghiNo - ghiCo,
+                ThoiGian = thoiGian,
+                NguoiThucHienId = nguoiThucHienId,
+                GhiChu = ghiChu
+            },
+            transaction);
     }
 
     private async Task CapNhatTonKhoPhieuNhapAsync(
@@ -6230,6 +6532,80 @@ LIMIT 500;
         return _hasPhieuQuyExtraColumns.Value;
     }
 
+    /// <summary>
+    /// Bảo đảm <c>phieu_chi</c> có 2 cột liên kết hóa đơn bán hàng:
+    /// <c>hoa_don_ban_hang_id</c> (UNIQUE) và <c>ma_hoa_don</c>.
+    /// Phiếu thu sinh ra khi bán hàng sẽ gắn vào đây nên mỗi hóa đơn chỉ có
+    /// tối đa một phiếu thu — UNIQUE index chặn trùng ngay ở tầng database, không
+    /// phụ thuộc code kiểm tra của ứng dụng.
+    /// </summary>
+    private async Task<bool> EnsurePhieuQuyHoaDonColumnsAsync()
+    {
+        if (_hasPhieuQuyHoaDonColumns.HasValue)
+            return _hasPhieuQuyHoaDonColumns.Value;
+
+        await using var connection = await OpenAsync();
+
+        try
+        {
+            var coCot = (await connection.QueryAsync<string>(
+                """
+                SELECT COLUMN_NAME FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'phieu_chi'
+                  AND COLUMN_NAME IN ('hoa_don_ban_hang_id', 'ma_hoa_don');
+                """)).AsList();
+
+            var daCoHoaDonId = false;
+            var daCoMaHoaDon = false;
+
+            foreach (var cot in coCot)
+            {
+                if (string.Equals(cot, "hoa_don_ban_hang_id", StringComparison.OrdinalIgnoreCase))
+                    daCoHoaDonId = true;
+                else if (string.Equals(cot, "ma_hoa_don", StringComparison.OrdinalIgnoreCase))
+                    daCoMaHoaDon = true;
+            }
+
+            // MySQL không có ADD COLUMN IF NOT EXISTS nên phải kiểm tra từng cột.
+            if (!daCoHoaDonId)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE phieu_chi ADD COLUMN hoa_don_ban_hang_id int(10) unsigned DEFAULT NULL AFTER trang_thai;");
+            }
+
+            if (!daCoMaHoaDon)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE phieu_chi ADD COLUMN ma_hoa_don varchar(50) DEFAULT NULL AFTER hoa_don_ban_hang_id;");
+            }
+
+            var coIndex = await connection.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*) FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'phieu_chi'
+                  AND INDEX_NAME = 'uk_phieu_chi_hoa_don';
+                """);
+
+            if (coIndex == 0)
+            {
+                // Cột cho phép NULL nên phiếu thu/chi tay vẫn insert bình thường,
+                // chỉ mỗi hóa đơn bán hàng mới bị giới hạn 1 phiếu thu.
+                await connection.ExecuteAsync(
+                    "CREATE UNIQUE INDEX uk_phieu_chi_hoa_don ON phieu_chi (hoa_don_ban_hang_id);");
+            }
+
+            _hasPhieuQuyHoaDonColumns = true;
+        }
+        catch
+        {
+            // Thiếu quyền ALTER: vẫn chạy tiếp, code sẽ tự kiểm tra trùng
+            // bằng SELECT trước khi INSERT.
+            _hasPhieuQuyHoaDonColumns = false;
+        }
+
+        return _hasPhieuQuyHoaDonColumns.Value;
+    }
+
     private static decimal ToDecimal(object? value)
     {
         if (value is null || value is DBNull)
@@ -6379,7 +6755,7 @@ LIMIT 500;
             + " OR pc.ma_phieu_chi LIKE @TimKiemLike"
             + " OR COALESCE(pc.noi_dung, '') LIKE @TimKiemLike"
             + " OR COALESCE(nd.ho_ten, '') LIKE @TimKiemLike"
-            + " OR COALESCE(ncp.ten_nhom, '') LIKE @TimKiemLike)");
+            + " OR COALESCE(ncp.ten_nhom, '') LIKE @TimKiemLike");
 
         // Hai cột này chỉ tồn tại khi migration đã chạy thành công.
         if (coCotNguoiNopNhanGhiChu)

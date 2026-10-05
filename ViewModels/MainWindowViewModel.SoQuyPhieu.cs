@@ -429,6 +429,8 @@ public sealed partial class MainWindowViewModel
             StatusMessage = $"Đã hủy {soDaHuy:N0} phiếu.";
 
             await TaiLaiSoQuyAsync();
+
+            _ = LamMoiTongQuanNeuDangMoAsync();
         }
         catch (Exception ex)
         {
@@ -751,6 +753,9 @@ public sealed partial class MainWindowViewModel
             ResetSoQuyPhieuForm();
 
             await TaiLaiSoQuyAsync();
+
+            // Dashboard có khoản thu/chi trong "Hoạt động gần đây".
+            _ = LamMoiTongQuanNeuDangMoAsync();
         }
         catch (Exception ex)
         {
@@ -1017,6 +1022,8 @@ public sealed partial class MainWindowViewModel
             StatusMessage = $"Đã sửa phiếu {maPhieu} thành công.";
 
             await TaiLaiSoQuyAsync();
+
+            _ = LamMoiTongQuanNeuDangMoAsync();
 
             // Mở lại chi tiết để người dùng thấy ngay giá trị vừa sửa.
             var gd = SoQuyGiaoDichs.FirstOrDefault(x => x.MaPhieu == maPhieu);

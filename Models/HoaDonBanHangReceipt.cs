@@ -20,6 +20,12 @@ public sealed class HoaDonBanHangReceipt
     public decimal ConNo { get; set; }
     public string TrangThaiThanhToan { get; set; } = "";
 
+    /// <summary>
+    /// Mã phiếu Thu trong sổ quỹ đã sinh kèm hóa đơn này (ví dụ "PT0004").
+    /// Rỗng khi khách chưa trả đồng nào nên không có dòng tiền vào quỹ.
+    /// </summary>
+    public string MaPhieuThu { get; set; } = "";
+
     /// <summary>Tiền thối đã lưu xuống database (cột thu_khac).</summary>
     public decimal ThuKhac { get; set; }
 
