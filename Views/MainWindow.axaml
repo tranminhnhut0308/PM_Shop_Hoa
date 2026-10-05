@@ -1121,10 +1121,23 @@
           BorderThickness="1" Margin="30,20" BoxShadow="0 10 30 #0A1F1B22">
           <Grid RowDefinitions="Auto,Auto,*" ColumnDefinitions="1.2*,0.8*" ColumnSpacing="20"
             RowSpacing="16">
-            <StackPanel Grid.ColumnSpan="2">
-              <TextBlock Text="Bán hàng" FontSize="26" FontWeight="Bold" Foreground="#163F38" />
-              <TextBlock Text="Tìm hoa cần bán, chọn sản phẩm, số lượng mặc định là 1"
-                Foreground="#61736E" Margin="0,4,0,0" />
+            <StackPanel Grid.ColumnSpan="2" Margin="0,0,0,4">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Bán hàng" FontSize="26" FontWeight="Bold" Foreground="#163F38" />
+                  <TextBlock Text="Tìm hoa cần bán, chọn sản phẩm, số lượng mặc định là 1"
+                    Foreground="#61736E" Margin="0,4,0,0" />
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                  Classes="toolbar-action"
+                  Content="🧾 Đơn mới"
+                  VerticalAlignment="Center"
+                  Command="{Binding TaoDonMoiCommand}" />
+              </Grid>
+
+              <TextBlock Text="Mã hóa đơn sẽ được sinh tự động khi bấm Thanh toán"
+                Foreground="#8FA39D" FontSize="11" Margin="0,4,0,0" />
             </StackPanel>
 
             <Border Grid.Row="1" Grid.Column="0" CornerRadius="10" BorderBrush="#D8E5E0"
@@ -1431,7 +1444,13 @@
                   Spacing="10" Margin="0,12,0,0">
                   <Button Classes="secondary" Content="Đóng"
                     Command="{Binding DongGiaoDienBanHangCommand}" />
-                  <Button Classes="toolbar-primary" Content="Thanh toán"
+
+                  <Button Classes="secondary" Content="🧾 Đơn mới"
+                    Command="{Binding TaoDonMoiCommand}" />
+
+                  <Button Classes="toolbar-primary"
+                    Content="{Binding TrangThaiXuLyThanhToan}"
+                    IsEnabled="{Binding CanThanhToan}"
                     Command="{Binding ThanhToanCommand}" />
                 </StackPanel>
               </Grid>
@@ -2716,20 +2735,39 @@
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center" />
 
-                          <!-- Tag Trạng thái bo góc -->
-                          <Border Grid.Column="6"
-                            CornerRadius="14"
-                            Padding="10,4"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Background="{Binding ConNo, Converter={x:Static ObjectConverters.IsNull}}">
-                            <TextBlock Text="{Binding TrangThaiThanhToan}"
-                              FontSize="11"
-                              FontWeight="SemiBold"
+                          <!-- TRẠNG THÁI + XEM HÓA ĐƠN -->
+                          <StackPanel Grid.Column="6" Orientation="Horizontal"
+                            Spacing="6" HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+
+                            <Border CornerRadius="14"
+                              Padding="10,4"
                               HorizontalAlignment="Center"
                               VerticalAlignment="Center"
-                              Foreground="#087F6E" />
-                          </Border>
+                              Background="#E4F5EC">
+                              <TextBlock Text="{Binding TrangThaiThanhToanHienThi}"
+                                FontSize="11"
+                                FontWeight="SemiBold"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Foreground="#087F6E" />
+                            </Border>
+
+                            <Button Content="👁"
+                              Width="26" Height="26"
+                              Padding="0"
+                              CornerRadius="13"
+                              FontSize="12"
+                              Background="#EAF9F5"
+                              Foreground="#0C756A"
+                              BorderBrush="#CFE6E1"
+                              BorderThickness="1"
+                              ToolTip.Tip="Xem / in hóa đơn"
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Center"
+                              Command="{Binding ElementName=RootWindow, Path=DataContext.XemHoaDonCommand}"
+                              CommandParameter="{Binding}" />
+                          </StackPanel>
 
                         </Grid>
                       </Border>

@@ -32,6 +32,13 @@ public partial class MainWindowViewModel : ObservableObject
     private int _baoCaoPhieuNhapLoadVersion;
     private bool _baoCaoPhieuNhapLoaded;
 
+    public MainWindowViewModel()
+    {
+        // Giỏ hàng thêm/bớt dòng thì trạng thái nút "Thanh toán" phải cập nhật
+        // theo, nếu không nút sẽ mở khi giỏ hàng vẫn còn trống.
+        SaleCart.CollectionChanged += (_, _) => OnPropertyChanged(nameof(CanThanhToan));
+    }
+
     [ObservableProperty] private string selectedMenu = "Tổng quan";
     [ObservableProperty] private int selectedDataTabIndex = 0;
     [ObservableProperty] private string selectedReportKey = "";
@@ -118,6 +125,29 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string saleDiscountMode = "Số tiền";
     [ObservableProperty] private NhaCungCap? selectedNhaCungCap;
     [ObservableProperty] private KhachHang? selectedSaleCustomer;
+
+    // =========================================================
+    // TRẠNG THÁI ĐƠN HÀNG ĐANG BÁN
+    // =========================================================
+
+    /// <summary>
+    /// Khoá chống bấm nút "Thanh toán" nhiều lần / gọi lệnh chồng nhau.
+    /// Trước đây lệnh thanh toán không có cờ này nên bấm hai lần là tạo hai hóa đơn.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanThanhToan))]
+    [NotifyPropertyChangedFor(nameof(TrangThaiXuLyThanhToan))]
+    private bool isThanhToanDangXuLy;
+
+    /// <summary>Có thể bấm "Thanh toán" hay không.</summary>
+    public bool CanThanhToan => !IsThanhToanDangXuLy && SaleCart.Count > 0;
+
+    /// <summary>Chữ hiển thị trên nút thanh toán khi đang xử lý.</summary>
+    public string TrangThaiXuLyThanhToan =>
+        IsThanhToanDangXuLy ? "Đang lưu..." : "Thanh toán";
+
+    /// <summary>Mã hóa đơn của đơn đang bán (xem trước, do database sinh khi lưu).</summary>
+    [ObservableProperty] private string saleMaHoaDonHienThi = "";
 
     // =========================================================
     // DANH SÁCH KHÁCH HÀNG: PHÂN TRANG + MỞ RỘNG CHI TIẾT
@@ -2527,7 +2557,7 @@ ketQua = await _db.ImportSanPhamAsync(
         }
     }
 
-    [RelayCommand]
+[RelayCommand]
     private async Task TimKiemHoaBanAsync(string? keyword)
     {
         var search = keyword ?? SaleSearchText ?? "";
@@ -2538,15 +2568,57 @@ ketQua = await _db.ImportSanPhamAsync(
             ProductSearchResults.Add(product);
     }
 
+    /// <summary>
+    /// Đặt lại TOÀN BỘ trạng thái của đơn hàng đang bán.
+    /// <para>
+    /// Bản cũ chỉ xoá SaleCart và vài ô tổng tiền, giữ lại TienKhachDua,
+    /// TienThoi, TienCongNo, TrangThaiThanhToan, SelectedSaleCustomer và
+    /// SaleCustomerName — nên đơn thứ hai kế thừa tiền của đơn thứ nhất và
+    /// khách hàng của đơn trước. Hàm này gom tất cả vào một chỗ để mọi đường
+    /// vào (mở màn bán hàng, đóng màn, thanh toán xong, bấm "Đơn mới") đều
+    /// xoá trạng thái cũ giống nhau.
+    /// </para>
+    /// </summary>
+    private void ResetDonHangVeMacDinh()
+    {
+        foreach (var item in SaleCart)
+            item.QuantityChanged -= RecalculateSaleTotal;
+
+        SaleCart.Clear();
+        SaleCustomerSuggestions.Clear();
+        ProductSearchResults.Clear();
+
+        SelectedSaleCustomer = null;
+        SaleCustomerName = "Khách lẻ";
+        SaleSearchText = "";
+
+        SaleTotal = 0;
+        SaleSubtotal = 0;
+        SaleDiscountInput = 0;
+        SaleDiscountAmount = 0;
+        SaleDiscountMode = "Số tiền";
+
+        TienKhachDua = 0;
+        TienThoi = 0;
+        TienCongNo = 0;
+        TrangThaiThanhToan = "";
+
+        SaleMaHoaDonHienThi = "";
+        IsThanhToanDangXuLy = false;
+    }
+
+    /// <summary>
+    /// Bắt đầu một đơn hàng mới: xoá sạch đơn cũ rồi tải lại danh sách sản phẩm.
+    /// Dùng chung cho lệnh "🛒 Bán hàng" và lệnh "Đơn mới".
+    /// </summary>
     [RelayCommand]
     private async Task MoGiaoDienBanHangAsync()
     {
-        IsSalesPanelVisible = true;
-        SaleCustomerName = "Khách lẻ";
-        SaleSearchText = "";
-        SaleCart.Clear();
+        ResetDonHangVeMacDinh();
 
-        ProductSearchResults.Clear();
+        IsSalesPanelVisible = true;
+
+        StatusMessage = "Đã tạo đơn hàng mới. Chọn sản phẩm để bắt đầu.";
 
         // TẢI DANH SÁCH SẢN PHẨM KHI MỞ BÁN HÀNG
         try
@@ -2561,28 +2633,49 @@ ketQua = await _db.ImportSanPhamAsync(
             StatusMessage = "Không thể tải danh sách sản phẩm: " + ex.Message;
         }
 
-        SaleTotal = 0;
-        SaleSubtotal = 0;
-        SaleDiscountInput = 0;
-        SaleDiscountAmount = 0;
-        SaleDiscountMode = "Số tiền";
+        RecalculateSaleTotal();
+    }
 
-        TienKhachDua = 0;
-        TienThoi = 0;
-        TienCongNo = 0;
-        TrangThaiThanhToan = "";
+    /// <summary>Nút "Đơn mới" trên màn bán hàng: xoá sạch đơn hiện tại để bán tiếp.</summary>
+    [RelayCommand]
+    private async Task TaoDonMoiAsync()
+    {
+        if (IsThanhToanDangXuLy)
+            return;
+
+        var owner = OwnerWindow;
+
+        if (owner is null)
+        {
+            StatusMessage = "Không xác định được cửa sổ bán hàng.";
+            return;
+        }
+
+        // Đơn đang có hàng chưa thanh toán thì phải hỏi trước khi xoá.
+        if (SaleCart.Count > 0)
+        {
+            var confirm = new ConfirmationWindow(
+                "Tạo đơn mới",
+                "Đơn hàng hiện tại chưa thanh toán. Xoá đơn này và bắt đầu đơn mới?",
+                "Tạo đơn mới",
+                "Huỷ");
+
+            if (!await confirm.ShowDialog<bool>(owner))
+            {
+                StatusMessage = "Đã giữ nguyên đơn hàng hiện tại.";
+                return;
+            }
+        }
+
+        await MoGiaoDienBanHangAsync();
     }
 
     [RelayCommand]
     private void DongGiaoDienBanHang()
     {
         IsSalesPanelVisible = false;
-        SaleCart.Clear();
-        ProductSearchResults.Clear();
-        SaleTotal = 0;
-        SaleSubtotal = 0;
-        SaleDiscountInput = 0;
-        SaleDiscountAmount = 0;
+
+        ResetDonHangVeMacDinh();
     }
 
     [RelayCommand]
@@ -3575,14 +3668,34 @@ ketQua = await _db.ImportSanPhamAsync(
         }
     }
 
-    partial void OnTienKhachDuaChanged(decimal value)
+partial void OnTienKhachDuaChanged(decimal value)
     {
         RecalculatePayment();
     }
+
+    /// <summary>
+    /// Tổng tiền thay đổi thì tiền thối / công nợ / trạng thái phải tính lại.
+    /// Bản cũ chỉ gắn hook cho TienKhachDua nên khi tổng tiền đổi (thêm hàng,
+    /// đổi số lượng, giảm giá) các ô này giữ số cũ — và sau khi thanh toán
+    /// xong chúng cũng không tự về 0.
+    /// </summary>
+    partial void OnSaleTotalChanged(decimal value)
+    {
+        RecalculatePayment();
+    }
+
     private void RecalculatePayment()
     {
         var canTra = Math.Max(0, SaleTotal);
         var khachDua = Math.Max(0, TienKhachDua);
+
+        if (canTra <= 0)
+        {
+            TienThoi = 0;
+            TienCongNo = 0;
+            TrangThaiThanhToan = "";
+            return;
+        }
 
         if (khachDua > canTra)
         {
@@ -3625,68 +3738,175 @@ ketQua = await _db.ImportSanPhamAsync(
 
     partial void OnSaleDiscountModeChanged(string value) => RecalculateSaleTotal();
 
+    /// <summary>
+    /// Thanh toán đơn hàng đang bán.
+    /// <para>
+    /// Thứ tự bắt buộc: khoá chống bấm hai lần → kiểm tra dữ liệu → xác nhận
+    /// người dùng → LƯU VÀO DATABASE (hóa đơn + chi tiết + tồn kho + công nợ
+    /// trong một transaction) → chỉ khi lưu thành công mới mở hóa đơn và báo
+    /// "thanh toán thành công" → cuối cùng xoá sạch đơn cũ để bán đơn tiếp theo.
+    /// Nếu database lỗi thì rollback toàn bộ, giữ nguyên đơn hàng và báo lỗi
+    /// thật, tuyệt đối không báo thành công giả.
+    /// </para>
+    /// </summary>
     [RelayCommand]
     private async Task ThanhToanAsync()
     {
+        // 1. Chống bấm nút nhiều lần / gọi lệnh chồng nhau
+        if (IsThanhToanDangXuLy)
+            return;
+
+        // 2. Kiểm tra dữ liệu
         if (SaleCart.Count == 0)
         {
             StatusMessage = "Vui lòng chọn ít nhất một sản phẩm trước khi thanh toán.";
             return;
         }
 
-        var tenKhachHang = SelectedSaleCustomer?.TenKhachHang ?? "Khách lẻ";
+        var sanPhamChuaCoGia = SaleCart.FirstOrDefault(x => x.SanPham.GiaBan <= 0);
 
-        // Mở popup xác nhận đẹp mắt thay vì hộp thoại chữ thô
-        bool xacNhan = false;
-        if (OwnerWindow is not null)
+        if (sanPhamChuaCoGia is not null)
         {
-            var confirmWindow = new ThanhToanConfirmWindow(
-                tenKhachHang,
-                SaleTotal,
-                TienKhachDua,
-                TienThoi,
-                TienCongNo
-            );
-            xacNhan = await confirmWindow.ShowDialog<bool>(OwnerWindow);
+            StatusMessage =
+                $"Sản phẩm \"{sanPhamChuaCoGia.SanPham.TenSanPham}\" chưa có giá bán, không thể thanh toán.";
+            return;
         }
 
-        if (!xacNhan)
+        var soLuongSai = SaleCart.FirstOrDefault(x => x.SoLuong <= 0);
+
+        if (soLuongSai is not null)
+        {
+            StatusMessage =
+                $"Số lượng của \"{soLuongSai.SanPham.TenSanPham}\" phải lớn hơn 0.";
+            return;
+        }
+
+        if (SaleTotal < 0)
+        {
+            StatusMessage = "Tổng tiền không hợp lệ. Vui lòng kiểm tra lại giỏ hàng.";
+            return;
+        }
+
+        if (OwnerWindow is null)
+        {
+            StatusMessage = "Không xác định được cửa sổ bán hàng.";
+            return;
+        }
+
+        var owner = OwnerWindow;
+
+        // Chụp lại dữ liệu đơn hàng TRƯỚC khi mở hộp thoại, tránh việc người
+        // dùng sửa giỏ hàng lúc đang xác nhận làm lệch số liệu.
+        var cartSnapshot = SaleCart.ToList();
+        var customer = SelectedSaleCustomer;
+        var customerName = customer?.TenKhachHang ?? "Khách lẻ";
+        var discountSnapshot = SaleDiscountAmount;
+        var cashSnapshot = TienKhachDua;
+
+        // 3. Xác nhận thanh toán
+        var confirmWindow = new ThanhToanConfirmWindow(
+            customerName,
+            SaleTotal,
+            TienKhachDua,
+            TienThoi,
+            TienCongNo);
+
+        if (!await confirmWindow.ShowDialog<bool>(owner))
         {
             StatusMessage = "Đã hủy thanh toán.";
             return;
         }
 
+        // 4. Lưu vào database
+        HoaDonBanHangReceipt? receipt = null;
+
+        IsThanhToanDangXuLy = true;
+        StatusMessage = "Đang lưu hóa đơn...";
+
         try
         {
-            var receipt = await _db.TaoHoaDonBanHangAsync(
-                SaleCart.ToList(),
-                SelectedSaleCustomer,
-                SaleDiscountAmount,
-                TienKhachDua);
-
-            if (OwnerWindow is not null)
-            {
-                var invoiceWindow = new InvoiceWindow(receipt);
-                await invoiceWindow.ShowDialog(OwnerWindow);
-            }
-
-            SaleCart.Clear();
-            SaleCustomerSuggestions.Clear();
-
-            SaleTotal = 0;
-            SaleSubtotal = 0;
-            SaleDiscountInput = 0;
-            SaleDiscountAmount = 0;
-
-            _invoicesLoaded = false;
-            SelectedMenu = "Hóa đơn";
-            StatusMessage = $"Đã tạo hóa đơn {receipt.MaHoaDon}";
+            receipt = await _db.TaoHoaDonBanHangAsync(
+                cartSnapshot,
+                customer,
+                discountSnapshot,
+                cashSnapshot);
         }
         catch (Exception ex)
         {
-            StatusMessage = "Không thể thanh toán: " + ex.Message;
+            // Giao dịch đã được rollback trong DatabaseService: giữ nguyên đơn
+            // hàng để người dùng sửa rồi thử lại, tuyệt đối không báo thành công.
+            StatusMessage =
+                $"KHÔNG thanh toán được - dữ liệu chưa được lưu vào database: {ex.Message}";
+
+            SafeLog.WriteError("Loi thanh toan ban hang", ex);
+
+            return;
+        }
+        finally
+        {
+            IsThanhToanDangXuLy = false;
+        }
+
+        // 5. Lưu thành công mới dọn đơn cũ, không làm mất dữ liệu đơn vừa bán
+        var maHoaDon = receipt.MaHoaDon;
+
+        ResetDonHangVeMacDinh();
+
+        _invoicesLoaded = false;
+        ChonMenu("Hóa đơn");
+
+        StatusMessage = receipt.CanhBao.Count > 0
+            ? $"Đã tạo hóa đơn {maHoaDon}. {string.Join(" ", receipt.CanhBao)}"
+            : $"Đã tạo hóa đơn {maHoaDon} thành công.";
+
+        // 6. Hiển thị hóa đơn vừa bán (đọc lại từ database nên khớp dữ liệu đã lưu)
+        try
+        {
+            var invoiceWindow = new InvoiceWindow(receipt);
+            await invoiceWindow.ShowDialog(owner);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage =
+                $"Đã tạo hóa đơn {maHoaDon} nhưng không mở được cửa sổ hóa đơn: {ex.Message}";
+
+            SafeLog.WriteError("Loi mo cua so hoa don", ex);
         }
     }
+
+    /// <summary>Mở lại một hóa đơn đã có để xem / in (đọc dữ liệu từ database).</summary>
+    [RelayCommand]
+    private async Task XemHoaDonAsync(HoaDon? hoaDon)
+    {
+        if (hoaDon is null || OwnerWindow is null)
+            return;
+
+        var maHoaDon = hoaDon.MaHoaDon;
+
+        if (string.IsNullOrWhiteSpace(maHoaDon))
+            return;
+
+        try
+        {
+            var receipt = await _db.GetHoaDonBanHangTheoMaAsync(maHoaDon);
+
+            if (receipt is null)
+            {
+                StatusMessage = $"Không tìm thấy hóa đơn {maHoaDon} trong database.";
+                return;
+            }
+
+            var invoiceWindow = new InvoiceWindow(receipt);
+            await invoiceWindow.ShowDialog(OwnerWindow);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Không mở được hóa đơn {maHoaDon}: {ex.Message}";
+
+            SafeLog.WriteError("Loi xem hoa don", ex);
+        }
+    }
+
     [RelayCommand]
     private void ChonMenu(string menu)
     {

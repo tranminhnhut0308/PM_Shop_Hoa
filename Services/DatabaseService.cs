@@ -4,6 +4,7 @@ using System.Text;
 using ClosedXML.Excel;
 using Dapper;
 using MySqlConnector;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
 
 namespace ShopHoa.Services;
@@ -3736,22 +3737,155 @@ LIMIT 500;
                 })
         ).AsList();
     }
+/// <summary>
+    /// Sinh mã hóa đơn kế tiếp trong ngày, dạng HDyyMMdd-NNN (VD: HD261005-002).
+    /// <para>
+    /// PHẢI cắt chuỗi tại <c>CHAR_LENGTH(@Prefix) + 2</c>. Mã hóa đơn gồm 8 ký tự
+    /// tiền tố + 1 dấu gạch nối nên phần số bắt đầu ở vị trí 10. Bản cũ dùng cứng
+    /// <c>SUBSTRING(ma_hoa_don, 9)</c> nên cắt trúng dấu "-" và cắt dấu "-" đi
+    /// ("-001"); MySQL/MariaDB ép "-001" sang UNSIGNED thành 18446744073709551615,
+    /// rồi <c>MAX(...) + 1</c> tràn số khiến Dapper ném
+    /// <see cref="OverflowException"/>. Hệ quả: đơn đầu tiên vẫn tạo được (bảng
+    /// rỗng nên MAX là NULL, COALESCE về 0) nhưng TỪ ĐƠN THỨ HAI TRỞ ĐI LUÔN LỖI:
+    /// không INSERT được gì và không hiện hóa đơn.
+    /// </para>
+    /// <para>
+    /// Đọc kết quả bằng <see cref="decimal"/> để mã hóa đơn bẩn/sai định dạng
+    /// không làm tràn số lúc quy đổi sang <see cref="long"/>.
+    /// </para>
+    /// </summary>
+    private static async Task<string> TaoMaHoaDonMoiTrongGiaoDichAsync(
+        MySqlConnection connection,
+        MySqlTransaction? transaction)
+    {
+        var prefix = $"HD{DateTime.Now:yyMMdd}";
+
+        const string sql = """
+        SELECT COALESCE(
+            MAX(CAST(SUBSTRING(ma_hoa_don, CHAR_LENGTH(@Prefix) + 2) AS UNSIGNED)),
+            0
+        )
+        FROM hoa_don_ban_hang
+        WHERE ma_hoa_don LIKE CONCAT(@Prefix, '-%')
+          AND ma_hoa_don REGEXP CONCAT('^', @Prefix, '-[0-9]+$');
+        """;
+
+        var maxNumber = await connection.ExecuteScalarAsync<decimal>(
+            sql,
+            new { Prefix = prefix },
+            transaction);
+
+        var nextNumber = Convert.ToInt64(Math.Clamp(maxNumber, 0, 999_999_999)) + 1;
+
+        return $"{prefix}-{nextNumber:D3}";
+    }
+
+    /// <summary>Lấy mã hóa đơn kế tiếp (dùng ngoài giao dịch bán hàng).</summary>
     public async Task<string> TaoMaHoaDonMoiAsync()
     {
         await using var connection = await OpenAsync();
-        var prefix = $"HD{DateTime.Now:yyMMdd}"; // VD: HD260927
 
-        var sql = @"
-        SELECT COALESCE(
-            MAX(CAST(SUBSTRING(ma_hoa_don, 9) AS UNSIGNED)), 
-            0
-        ) + 1
-        FROM hoa_don_ban_hang
-        WHERE ma_hoa_don LIKE CONCAT(@Prefix, '-%');";
-
-        var nextNum = await connection.ExecuteScalarAsync<long>(sql, new { Prefix = prefix });
-        return $"{prefix}-{nextNum:D3}"; // Kết quả: HD260927-001, HD260927-002...
+        return await TaoMaHoaDonMoiTrongGiaoDichAsync(connection, null);
     }
+
+    /// <summary>
+    /// Dựng lại hóa đơn bán hàng từ database (đầy đủ cả chi tiết) để mở lại
+    /// xem / in một hóa đơn đã có. Trả về null nếu mã hóa đơn không tồn tại.
+    /// </summary>
+    public async Task<HoaDonBanHangReceipt?> GetHoaDonBanHangTheoMaAsync(
+        string maHoaDon)
+    {
+        if (string.IsNullOrWhiteSpace(maHoaDon))
+            return null;
+
+        var maCanTim = maHoaDon.Trim();
+
+        await using var connection = await OpenAsync();
+
+        const string headerSql = """
+        SELECT
+            hd.id                       AS HoaDonId,
+            hd.ma_hoa_don               AS MaHoaDon,
+            hd.thoi_gian_ban            AS ThoiGianBan,
+            COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
+            COALESCE(nd.ho_ten, '')     AS TenNhanVien,
+            hd.tong_tien_hang           AS TongTienHang,
+            hd.giam_gia                 AS GiamGia,
+            hd.thu_khac                 AS ThuKhac,
+            hd.khach_can_tra            AS KhachCanTra,
+            hd.khach_da_thanh_toan      AS KhachDaThanhToan,
+            hd.con_no                   AS ConNo
+        FROM hoa_don_ban_hang hd
+        LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
+        LEFT JOIN nguoi_dung  nd ON nd.id = hd.nguoi_ban_id
+        WHERE hd.ma_hoa_don = @MaHoaDon
+        LIMIT 1;
+        """;
+
+        var header = await connection.QueryFirstOrDefaultAsync(
+            headerSql,
+            new { MaHoaDon = maCanTim });
+
+        if (header is null)
+            return null;
+
+        const string detailSql = """
+        SELECT
+            ten_san_pham AS TenSanPham,
+            so_luong     AS SoLuong,
+            don_gia      AS DonGia,
+            thanh_tien   AS ThanhTien
+        FROM chi_tiet_hoa_don_ban_hang
+        WHERE hoa_don_id = @HoaDonId
+        ORDER BY id;
+        """;
+
+        var items = (await connection.QueryAsync<HoaDonBanHangReceiptItem>(
+            detailSql,
+            new { HoaDonId = (uint)header.HoaDonId })).AsList();
+
+        var thuKhac = ToDecimal(header.ThuKhac);
+        var daThanhToan = ToDecimal(header.KhachDaThanhToan);
+        var conNo = ToDecimal(header.ConNo);
+
+        return new HoaDonBanHangReceipt
+        {
+            HoaDonId = (uint)header.HoaDonId,
+            MaHoaDon = header.MaHoaDon ?? maCanTim,
+            ThoiGianBan = header.ThoiGianBan,
+            TenKhachHang = header.TenKhachHang ?? "Khách lẻ",
+            TenNhanVien = header.TenNhanVien ?? "",
+
+            TongTienHang = ToDecimal(header.TongTienHang),
+            GiamGia = ToDecimal(header.GiamGia),
+            ThuKhac = thuKhac,
+            KhachCanTra = ToDecimal(header.KhachCanTra),
+            KhachDaThanhToan = daThanhToan,
+            ConNo = conNo,
+
+            // "Tiền khách đưa" = số tiền đã trả + tiền thối
+            TienKhachDua = daThanhToan + thuKhac,
+            TienThoi = thuKhac,
+
+            TrangThaiThanhToan = TrangThaiThanhToanHienThi(conNo > 0, thuKhac > 0),
+
+            Items = items
+        };
+    }
+
+    private static string TrangThaiThanhToanHienThi(bool conNo, bool coTienThoi)
+        => conNo
+            ? "Thanh toán thiếu - Công nợ"
+            : coTienThoi
+                ? "Đã thanh toán đủ - Tiền thối"
+                : "Đã thanh toán đủ";
+
+    /// <summary>
+    /// Lưu một đơn bán hàng: hóa đơn + chi tiết + trừ tồn kho + ghi lịch sử xuất
+    /// kho + công nợ khách hàng, tất cả trong MỘT giao dịch duy nhất.
+    /// Chỉ khi commit thành công mới trả về hóa đơn đã đọc lại từ database;
+    /// bất kỳ bước nào lỗi thì rollback toàn bộ và ném lỗi ra ngoài.
+    /// </summary>
     public async Task<HoaDonBanHangReceipt> TaoHoaDonBanHangAsync(
     IReadOnlyCollection<SaleCartItem> items,
     KhachHang? customer,
@@ -3762,10 +3896,35 @@ LIMIT 500;
             throw new InvalidOperationException("Giỏ hàng đang trống.");
 
         var now = DateTime.Now;
-        var invoiceCode = await TaoMaHoaDonMoiAsync();
+
+        // ============================================================
+        // 0. KIỂM TRA DỮ LIỆU ĐẦU VÀO (trước khi mở giao dịch)
+        // ============================================================
+
+        var cart = new List<SaleCartItem>(items.Count);
+
+        foreach (var item in items)
+        {
+            if (item?.SanPham is null)
+                throw new InvalidOperationException("Giỏ hàng có dòng sản phẩm không hợp lệ.");
+
+            if (item.SanPham.Id == 0)
+                throw new InvalidOperationException(
+                    $"Sản phẩm \"{item.SanPham.TenSanPham}\" chưa được lưu vào hệ thống nên không thể bán.");
+
+            if (item.SoLuong <= 0)
+                throw new InvalidOperationException(
+                    $"Số lượng của sản phẩm \"{item.SanPham.TenSanPham}\" phải lớn hơn 0.");
+
+            if (item.SanPham.GiaBan <= 0)
+                throw new InvalidOperationException(
+                    $"Sản phẩm \"{item.SanPham.TenSanPham}\" chưa có giá bán.");
+
+            cart.Add(item);
+        }
 
         // Tổng tiền hàng
-        var total = items.Sum(item => item.ThanhTien);
+        var total = cart.Sum(item => item.ThanhTien);
 
         // Giảm giá hợp lệ
         var safeDiscount = Math.Clamp(discount, 0, total);
@@ -3787,16 +3946,7 @@ LIMIT 500;
         var changeAmount = Math.Max(0, cashReceived - amountDue);
 
         // Trạng thái thanh toán
-        string paymentStatus;
-
-        if (debtAmount > 0)
-        {
-            paymentStatus = "CONG_NO";
-        }
-        else
-        {
-            paymentStatus = "DA_THANH_TOAN";
-        }
+        var paymentStatus = debtAmount > 0 ? "CONG_NO" : "DA_THANH_TOAN";
 
         var branchId = Session.CurrentUser?.ChiNhanhId ?? 1;
         var userId = Session.CurrentUser?.Id;
@@ -3804,13 +3954,17 @@ LIMIT 500;
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
 
+        var daCommit = false;
+
         try
         {
             // ============================================================
             // 1. TẠO HÓA ĐƠN
+            //    Mã hóa đơn sinh NGAY TRONG giao dịch (cùng connection) để
+            //    không trùng mã, và thử lại nếu chạm UNIQUE index ma_hoa_don.
             // ============================================================
 
-            const string invoiceSql = """
+            const string insertInvoiceSql = """
             INSERT INTO hoa_don_ban_hang
             (
                 ma_hoa_don,
@@ -3820,6 +3974,7 @@ LIMIT 500;
                 thoi_gian_ban,
                 tong_tien_hang,
                 giam_gia,
+                thu_khac,
                 khach_can_tra,
                 khach_da_thanh_toan,
                 con_no,
@@ -3837,6 +3992,7 @@ LIMIT 500;
                 @ThoiGianBan,
                 @TongTienHang,
                 @GiamGia,
+                @ThuKhac,
                 @KhachCanTra,
                 @KhachDaThanhToan,
                 @ConNo,
@@ -3845,35 +4001,68 @@ LIMIT 500;
                 @ThoiGianBan,
                 @ThoiGianBan
             );
-
-            SELECT LAST_INSERT_ID();
             """;
 
-            var invoiceId = await connection.ExecuteScalarAsync<uint>(
-                invoiceSql,
-                new
+            var invoiceCode = "";
+            uint invoiceId = 0;
+
+            const int soLanThuLai = 5;
+
+            for (var lan = 1; lan <= soLanThuLai; lan++)
+            {
+                invoiceCode = await TaoMaHoaDonMoiTrongGiaoDichAsync(
+                    connection,
+                    transaction);
+
+                try
                 {
-                    MaHoaDon = invoiceCode,
-                    ChiNhanhId = branchId,
-                    KhachHangId = customer?.Id,
-                    NguoiBanId = userId,
-                    ThoiGianBan = now,
+                    await connection.ExecuteAsync(
+                        insertInvoiceSql,
+                        new
+                        {
+                            MaHoaDon = invoiceCode,
+                            ChiNhanhId = branchId,
+                            KhachHangId = customer?.Id,
+                            NguoiBanId = userId,
+                            ThoiGianBan = now,
 
-                    TongTienHang = total,
-                    GiamGia = safeDiscount,
+                            TongTienHang = total,
+                            GiamGia = safeDiscount,
 
-                    // Khách cần trả
-                    KhachCanTra = amountDue,
+                            // Tiền thối
+                            ThuKhac = changeAmount,
 
-                    // Khách thực tế đã thanh toán
-                    KhachDaThanhToan = paidAmount,
+                            // Khách cần trả
+                            KhachCanTra = amountDue,
 
-                    // Công nợ
-                    ConNo = debtAmount,
+                            // Khách thực tế đã thanh toán
+                            KhachDaThanhToan = paidAmount,
 
-                    TrangThaiThanhToan = paymentStatus
-                },
-                transaction);
+                            // Công nợ
+                            ConNo = debtAmount,
+
+                            TrangThaiThanhToan = paymentStatus
+                        },
+                        transaction);
+
+                    // Đọc LAST_INSERT_ID() bằng lệnh riêng, không gộp batch nhiều
+                    // câu lệnh (batch phụ thuộc cờ AllowBatch của driver).
+                    invoiceId = await connection.ExecuteScalarAsync<uint>(
+                        "SELECT LAST_INSERT_ID();",
+                        null,
+                        transaction);
+
+                    break;
+                }
+                catch (MySqlException ex) when (ex.Number == 1062 && lan < soLanThuLai)
+                {
+                    // 1062 = Duplicate entry: mã hóa đơn bị trùng, thử mã kế tiếp.
+                }
+            }
+
+            if (invoiceId == 0)
+                throw new InvalidOperationException(
+                    "Không tạo được hóa đơn trong database. Giao dịch đã hủy, dữ liệu bán hàng không bị thay đổi.");
 
             // ============================================================
             // 2. CHI TIẾT HÓA ĐƠN
@@ -3906,9 +4095,9 @@ LIMIT 500;
             );
             """;
 
-            foreach (var item in items)
+            foreach (var item in cart)
             {
-                await connection.ExecuteAsync(
+                var affectedRows = await connection.ExecuteAsync(
                     detailSql,
                     new
                     {
@@ -3923,10 +4112,45 @@ LIMIT 500;
                         GiaVon = item.SanPham.GiaVon
                     },
                     transaction);
+
+                if (affectedRows != 1)
+                    throw new InvalidOperationException(
+                        $"Không lưu được dòng sản phẩm \"{item.SanPham.TenSanPham}\" vào hóa đơn {invoiceCode}.");
             }
 
+            // Bảng chi tiết KHÔNG có khoá ngoại nên phải tự đối chiếu số dòng,
+            // tránh trường hợp "có hóa đơn nhưng hụt chi tiết" vẫn commit.
+            var soDongChiTiet = await connection.ExecuteScalarAsync<int>(
+                """
+                SELECT COUNT(*)
+                FROM chi_tiet_hoa_don_ban_hang
+                WHERE hoa_don_id = @HoaDonId;
+                """,
+                new { HoaDonId = invoiceId },
+                transaction);
+
+            if (soDongChiTiet != cart.Count)
+                throw new InvalidOperationException(
+                    $"Hóa đơn {invoiceCode} chỉ lưu được {soDongChiTiet}/{cart.Count} dòng sản phẩm. Giao dịch đã hủy.");
+
             // ============================================================
-            // 3. NẾU CÓ CÔNG NỢ -> LƯU VÀO LỊCH SỬ CÔNG NỢ KHÁCH HÀNG
+            // 3. TRỪ TỒN KHO + GHI LỊCH SỬ NHẬP/XUẤT
+            // ============================================================
+
+            var canhBao = new List<string>();
+
+            foreach (var item in cart)
+                await CapNhatTonKhoBanHangAsync(
+                    connection,
+                    transaction,
+                    branchId,
+                    userId,
+                    invoiceCode,
+                    item,
+                    canhBao);
+
+            // ============================================================
+            // 4. NẾU CÓ CÔNG NỢ -> LƯU VÀO LỊCH SỬ CÔNG NỢ KHÁCH HÀNG
             // ============================================================
 
             if (customer is not null && customer.Id > 0 && debtAmount > 0)
@@ -3938,7 +4162,8 @@ LIMIT 500;
                     0
                 )
                 FROM lich_su_cong_no_khach_hang
-                WHERE khach_hang_id = @KhachHangId;
+                WHERE khach_hang_id = @KhachHangId
+                FOR UPDATE;
                 """;
 
                 var currentDebt = await connection.ExecuteScalarAsync<decimal>(
@@ -3956,31 +4181,14 @@ LIMIT 500;
                 const string debtSql = """
                 INSERT INTO lich_su_cong_no_khach_hang
                 (
-                    khach_hang_id,
-                    chi_nhanh_id,
-                    loai_giao_dich,
-                    loai_chung_tu,
-                    ma_chung_tu,
-                    ghi_no,
-                    ghi_co,
-                    so_du,
-                    thoi_gian,
-                    nguoi_thuc_hien_id,
-                    ghi_chu
+                    khach_hang_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu,
+                    ma_chung_tu, ghi_no, ghi_co, so_du,
+                    thoi_gian, nguoi_thuc_hien_id, ghi_chu
                 )
                 VALUES
                 (
-                    @KhachHangId,
-                    @ChiNhanhId,
-                    'BAN_HANG',
-                    'HOA_DON',
-                    @MaChungTu,
-                    @GhiNo,
-                    0,
-                    @SoDu,
-                    @ThoiGian,
-                    @NguoiThucHienId,
-                    @GhiChu
+                    @KhachHangId, @ChiNhanhId, 'BAN_HANG', 'HOA_DON', @MaChungTu,
+                    @GhiNo, 0, @SoDu, @ThoiGian, @NguoiThucHienId, @GhiChu
                 );
                 """;
 
@@ -4000,7 +4208,6 @@ LIMIT 500;
                         SoDu = newDebtBalance,
 
                         ThoiGian = now,
-
                         NguoiThucHienId = userId,
 
                         GhiChu =
@@ -4010,62 +4217,183 @@ LIMIT 500;
             }
 
             // ============================================================
-            // 4. COMMIT
+            // 5. COMMIT
             // ============================================================
 
             await transaction.CommitAsync();
+            daCommit = true;
 
             // ============================================================
-            // 5. TRẢ DỮ LIỆU CHO HÓA ĐƠN HIỂN THỊ
+            // 6. ĐỌC LẠI HÓA ĐƠN ĐÃ LƯU ĐỂ HIỂN THỊ
+            //    Lấy dữ liệu thật trong database thay vì dựng lại từ RAM, nhờ
+            //    vậy mã hóa đơn, tổng tiền, tiền thối, công nợ và danh sách hàng
+            //    trên hóa đơn luôn khớp với dữ liệu đã lưu.
             // ============================================================
 
-            return new HoaDonBanHangReceipt
-            {
-                MaHoaDon = invoiceCode,
-                ThoiGianBan = now,
+            var receipt = await GetHoaDonBanHangTheoMaAsync(invoiceCode);
 
-                TenKhachHang = customer?.TenKhachHang ?? "Khách lẻ",
-                TenNhanVien = Session.CurrentUser?.HoTen ?? "",
+            if (receipt is null)
+                throw new InvalidOperationException(
+                    $"Đã lưu hóa đơn {invoiceCode} nhưng không đọc lại được. Hãy kiểm tra danh sách hóa đơn.");
 
-                TongTienHang = total,
-                GiamGia = safeDiscount,
+            receipt.CanhBao.AddRange(canhBao);
 
-                // Tổng khách cần trả
-                KhachCanTra = amountDue,
-
-                // Số tiền thực tế đã thanh toán
-                KhachDaThanhToan = paidAmount,
-
-                // Tiền khách đưa
-                TienKhachDua = cashReceived,
-
-                // Tiền thối
-                TienThoi = changeAmount,
-
-                // Công nợ
-                ConNo = debtAmount,
-
-                // Trạng thái
-                TrangThaiThanhToan = debtAmount > 0
-        ? "Thanh toán thiếu - Công nợ"
-        : changeAmount > 0
-            ? "Đã thanh toán đủ - Tiền thối"
-            : "Đã thanh toán đủ",
-
-                Items = items.Select(item => new HoaDonBanHangReceiptItem
-                {
-                    TenSanPham = item.SanPham.TenSanPham,
-                    SoLuong = item.SoLuong,
-                    DonGia = item.SanPham.GiaBan,
-                    ThanhTien = item.ThanhTien
-                }).ToList()
-            };
+            return receipt;
         }
-        catch
+        catch (Exception ex)
         {
-            await transaction.RollbackAsync();
+            if (!daCommit)
+            {
+                try
+                {
+                    await transaction.RollbackAsync();
+                }
+                catch (Exception rollbackEx)
+                {
+                    SafeLog.WriteError(
+                        "Khong rollback duoc giao dich ban hang",
+                        rollbackEx);
+                }
+            }
+
+            SafeLog.WriteError("Loi tao hoa don ban hang", ex);
+
             throw;
         }
+    }
+
+    /// <summary>
+    /// Trừ tồn kho khi bán hàng và ghi lịch sử nhập/xuất kho, trong CÙNG giao dịch
+    /// với hóa đơn. Trước đây luồng bán hàng không hề đụng tới bảng ton_kho nên
+    /// tồn kho không bao giờ giảm và không có dấu vết xuất hàng.
+    /// </summary>
+    private async Task CapNhatTonKhoBanHangAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        uint branchId,
+        uint? userId,
+        string invoiceCode,
+        SaleCartItem item,
+        List<string> canhBao)
+    {
+        const string selectTonSql = """
+        SELECT so_luong_ton, gia_von_binh_quan
+        FROM ton_kho
+        WHERE chi_nhanh_id = @ChiNhanhId
+          AND san_pham_id = @SanPhamId
+        FOR UPDATE;
+        """;
+
+        const string upsertTonSql = """
+        INSERT INTO ton_kho
+        (
+            chi_nhanh_id,
+            san_pham_id,
+            so_luong_ton,
+            gia_von_binh_quan,
+            ngay_cap_nhat
+        )
+        VALUES
+        (
+            @ChiNhanhId,
+            @SanPhamId,
+            @SoLuongTon,
+            @GiaVonBinhQuan,
+            NOW()
+        )
+        ON DUPLICATE KEY UPDATE
+            so_luong_ton  = @SoLuongTon,
+            ngay_cap_nhat = NOW();
+        """;
+
+        const string insertLichSuSql = """
+        INSERT INTO lich_su_nhap_xuat_kho
+        (
+            chi_nhanh_id,
+            san_pham_id,
+            loai_giao_dich,
+            loai_chung_tu,
+            ma_chung_tu,
+            so_luong,
+            ton_truoc,
+            ton_sau,
+            gia_von,
+            nguoi_thuc_hien_id,
+            thoi_gian,
+            ghi_chu
+        )
+        VALUES
+        (
+            @ChiNhanhId,
+            @SanPhamId,
+            'XUAT',
+            'HOA_DON_BAN_HANG',
+            @MaChungTu,
+            @SoLuong,
+            @TonTruoc,
+            @TonSau,
+            @GiaVon,
+            @NguoiThucHienId,
+            NOW(),
+            @GhiChu
+        );
+        """;
+
+        var banGhi = (await connection.QueryAsync(
+            selectTonSql,
+            new
+            {
+                ChiNhanhId = branchId,
+                SanPhamId = item.SanPham.Id
+            },
+            transaction)).ToList();
+
+        var coBanGhiTon = banGhi.Count > 0;
+
+        decimal tonTruoc = 0;
+        decimal giaVonCu = 0;
+
+        if (banGhi.FirstOrDefault() is IDictionary<string, object> row)
+        {
+            tonTruoc = ToDecimal(row.TryGetValue("so_luong_ton", out var soLuong) ? soLuong : null);
+            giaVonCu = ToDecimal(row.TryGetValue("gia_von_binh_quan", out var giaVon) ? giaVon : null);
+        }
+
+        var tonSau = tonTruoc - item.SoLuong;
+
+        if (!coBanGhiTon)
+            canhBao.Add(
+                $"\"{item.SanPham.TenSanPham}\" chưa có số tồn trong kho, tồn sau khi bán = {tonSau:N0}.");
+        else if (tonSau < 0)
+            canhBao.Add(
+                $"\"{item.SanPham.TenSanPham}\" bán vượt tồn kho (còn {tonTruoc:N0}, bán {item.SoLuong:N0}).");
+
+        await connection.ExecuteAsync(
+            upsertTonSql,
+            new
+            {
+                ChiNhanhId = branchId,
+                SanPhamId = item.SanPham.Id,
+                SoLuongTon = tonSau,
+                GiaVonBinhQuan = giaVonCu > 0 ? giaVonCu : item.SanPham.GiaVon
+            },
+            transaction);
+
+        await connection.ExecuteAsync(
+            insertLichSuSql,
+            new
+            {
+                ChiNhanhId = branchId,
+                SanPhamId = item.SanPham.Id,
+                MaChungTu = invoiceCode,
+                item.SoLuong,
+                TonTruoc = tonTruoc,
+                TonSau = tonSau,
+                GiaVon = item.SanPham.GiaVon,
+                NguoiThucHienId = userId,
+                GhiChu = $"Xuất kho bán hàng theo hóa đơn {invoiceCode}"
+            },
+            transaction);
     }
 
     public async Task<IReadOnlyList<NhaCungCap>> GetNhaCungCapAsync(
