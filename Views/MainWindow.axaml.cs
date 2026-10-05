@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using ShopHoa.Models;
+using ShopHoa.Services;
 using ShopHoa.ViewModels;
 namespace ShopHoa.Views;
 
@@ -36,6 +37,13 @@ public partial class MainWindow : Window
     }
     private async void OpenSettingsButton_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
+        if (DataContext is MainWindowViewModel
+            && !Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SettingsView))
+        {
+            await ShowMessageAsync("Thông báo", "Bạn không có quyền xem cài đặt.");
+            return;
+        }
+
         var settingsDialog = new CategorySettingsWindow();
         await settingsDialog.ShowDialog(this);
 
@@ -600,6 +608,12 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (!Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsExport))
+            {
+                await ShowMessageAsync("Thông báo", "Bạn không có quyền export hàng hóa.");
+                return;
+            }
+
             // ====================================================
             // CHỌN NƠI LƯU FILE
             // ====================================================
@@ -960,5 +974,18 @@ public partial class MainWindow : Window
         };
 
         await window.ShowDialog(this);
+    }
+    private async void OpenUsersButton_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        if (!viewModel.CanManageUsers)
+        {
+            return;
+        }
+
+        var usersWindow = new UsersWindow();
+        await usersWindow.ShowDialog(this);
     }
 }

@@ -31,9 +31,32 @@ public partial class MainWindowViewModel : ObservableObject
     private CancellationTokenSource? _baoCaoPhieuNhapSearchCts;
     private int _baoCaoPhieuNhapLoadVersion;
     private bool _baoCaoPhieuNhapLoaded;
+    private bool _baoCaoCuoiNgayLoaded;
+
+    /// <summary>
+    /// Màn "Tổng quan" có ViewModel riêng. Giữ một instance sống suốt phiên để
+    /// giữ nguyên bộ lọc người dùng đang chọn khi chuyển sang màn khác rồi quay lại.
+    /// </summary>
+    public DashboardViewModel Dashboard { get; }
+
+    /// <summary>
+    /// Màn "Báo cáo cuối ngày" cũng giữ một instance sống suốt phiên để nhớ ngày
+    /// đang xem giữa các lần chuyển màn.
+    /// </summary>
+    public BaoCaoCuoiNgayViewModel BaoCaoCuoiNgay { get; }
 
     public MainWindowViewModel()
     {
+        Dashboard = new DashboardViewModel(_db);
+        BaoCaoCuoiNgay = new BaoCaoCuoiNgayViewModel(_db)
+        {
+            // Cửa sổ chính chỉ có sau khi ViewModel được tạo, nên các callback
+            // đọc nó theo thời điểm dùng thay vì chụp giá trị lúc khởi tạo.
+            LayCuaSoChinh = () => OwnerWindow,
+            CapNhatTrangThai = message => StatusMessage = message,
+            HienThiHopNhat = (tieuDe, noiDung) => ShowMessageAsync(tieuDe, noiDung)
+        };
+
         // Giỏ hàng thêm/bớt dòng thì trạng thái nút "Thanh toán" phải cập nhật
         // theo, nếu không nút sẽ mở khi giỏ hàng vẫn còn trống.
         SaleCart.CollectionChanged += (_, _) => OnPropertyChanged(nameof(CanThanhToan));
@@ -571,6 +594,10 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task ThemMoiKhachHangAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersCreate, "Bạn không có quyền thêm khách hàng."))
+        {
+            return;
+        }
         if (OwnerWindow is null)
             return;
 
@@ -612,6 +639,10 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task ThemKhachHangTuFileAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersImport, "Bạn không có quyền import khách hàng."))
+        {
+            return;
+        }
         if (OwnerWindow is null || IsImporting)
             return;
 
@@ -741,6 +772,10 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task SuaKhachHangAsync(KhachHangRowViewModel? row)
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersEdit, "Bạn không có quyền sửa khách hàng."))
+        {
+            return;
+        }
         if (row is null || OwnerWindow is null)
             return;
 
@@ -807,6 +842,10 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task XoaKhachHangAsync(KhachHangRowViewModel? row)
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersDelete, "Bạn không có quyền xóa khách hàng."))
+        {
+            return;
+        }
         if (row is null)
             return;
 
@@ -1087,11 +1126,21 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task LoadOverviewAsync()
     {
-        var customersTask = LoadCustomersAsync();
-        var invoicesTask = LoadInvoicesAsync();
-        var suppliersTask = LoadSuppliersAsync();
+        // Dashboard tự tải số liệu của nó (COUNT/SUM/GROUP BY ở tầng SQL).
+        // Các danh sách dùng chung với các tab khác không còn cần nạp ở đây
+        // vì màn Tổng quan không hiển thị chúng nữa.
+        await Dashboard.TaiDuLieuAsync();
+    }
 
-        await Task.WhenAll(customersTask, invoicesTask, suppliersTask);
+    /// <summary>
+    /// Làm mới số liệu Tổng quan sau khi ghi xong một nghiệp vụ (bán hàng, nhập
+    /// hàng, ghi sổ quỹ). Chỉ nạp lại khi màn đang mở để không tốn truy vấn
+    /// nền, nhưng dữ liệu vẫn luôn sẵn sàng khi người dùng quay lại màn này.
+    /// </summary>
+    public async Task LamMoiTongQuanNeuDangMoAsync()
+    {
+        if (IsTongQuanSelected)
+            await Dashboard.TaiDuLieuAsync();
     }
 
     /// <summary>
@@ -1385,6 +1434,10 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(DuocSuaGiaBan))]
     private async Task LuuGiaBanNhanhAsync(SanPham? product)
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsUpdatePrice, "Bạn không có quyền cập nhật giá bán hàng hóa."))
+        {
+            return;
+        }
         if (product is null)
             return;
 
@@ -1507,6 +1560,10 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task XoaSanPhamAsync(SanPham? product)
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsDelete, "Bạn không có quyền xóa hàng hóa."))
+        {
+            return;
+        }
         if (product is null || product.Id == 0)
         {
             StatusMessage = "Sản phẩm này chưa có mã dữ liệu để xóa.";
@@ -1535,6 +1592,10 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task SuaSanPhamAsync(SanPham? product)
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsEdit, "Bạn không có quyền sửa hàng hóa."))
+        {
+            return;
+        }
         if (product is null)
         {
             StatusMessage = "Vui lòng chọn sản phẩm cần sửa.";
@@ -1582,6 +1643,10 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task CapNhatHinhAnhAsync(SanPham? product)
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsEdit, "Bạn không có quyền cập nhật hàng hóa."))
+        {
+            return;
+        }
         if (product is null || product.Id == 0 || OwnerWindow is null)
         {
             StatusMessage = "Không thể mở chọn ảnh cho sản phẩm này.";
@@ -1624,6 +1689,10 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task ThemSanPhamAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsCreate, "Bạn không có quyền thêm hàng hóa."))
+        {
+            return;
+        }
         if (OwnerWindow is null)
             return;
 
@@ -1646,6 +1715,10 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task ThemSanPhamTuFileAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsImport, "Bạn không có quyền import hàng hóa."))
+        {
+            return;
+        }
         if (OwnerWindow is null)
             return;
 
@@ -2104,7 +2177,9 @@ ketQua = await _db.ImportSanPhamAsync(
         {
             Title = title,
             Width = 430,
-            Height = 230,
+            // Cao theo nội dung: tiêu đề/nguyên nhân dài không bị cắt chữ.
+            SizeToContent = Avalonia.Controls.SizeToContent.Height,
+            MinHeight = 230,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Background = Avalonia.Media.Brushes.White
@@ -2182,6 +2257,23 @@ ketQua = await _db.ImportSanPhamAsync(
 
         var dialog = new ConfirmationWindow(title, message, confirmButtonText, cancelButtonText);
         return await dialog.ShowDialog<bool>(OwnerWindow);
+    }
+
+    /// <summary>
+    /// Báo lỗi khi lưu phiếu nhập: hiện hộp thoại "Thất bại" kèm nguyên nhân và
+    /// giữ nguyên toàn bộ form để người dùng sửa rồi bấm lại.
+    /// </summary>
+    private async Task BaoLoiLuuPhieuNhapAsync(string lyDo)
+    {
+        var noiDung = string.IsNullOrWhiteSpace(lyDo)
+            ? "Lỗi không xác định. Vui lòng thử lại."
+            : lyDo.Trim();
+
+        StatusMessage = "❌ Thất bại – Không thể lưu phiếu nhập: " + noiDung;
+
+        await ShowMessageAsync(
+            "Thất bại – Không thể lưu phiếu nhập.",
+            $"{noiDung}\n\nDữ liệu đang nhập vẫn được giữ nguyên, hãy sửa và bấm Hoàn thành lại.");
     }
 
     private async Task<(IReadOnlyList<ProductOption> Groups, IReadOnlyList<ProductOption> Units)> LoadProductOptionsAsync()
@@ -2277,6 +2369,10 @@ ketQua = await _db.ImportSanPhamAsync(
     [RelayCommand]
     private async Task ThemNhaCungCapAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersCreate, "Bạn không có quyền thêm nhà cung cấp."))
+        {
+            return;
+        }
         var supplier = await HienThiFormThemNhaCungCapAsync();
 
         if (supplier is null)
@@ -2326,6 +2422,10 @@ ketQua = await _db.ImportSanPhamAsync(
     [RelayCommand]
     private async Task SuaNhaCungCapAsync(NhaCungCap? supplier)
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersEdit, "Bạn không có quyền sửa nhà cung cấp."))
+        {
+            return;
+        }
         if (supplier is null || OwnerWindow is null)
             return;
 
@@ -2357,6 +2457,10 @@ ketQua = await _db.ImportSanPhamAsync(
     [RelayCommand]
     private async Task ThemNhaCungCapTuFileAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersImport, "Bạn không có quyền import nhà cung cấp."))
+        {
+            return;
+        }
         if (OwnerWindow is null || IsImporting)
             return;
 
@@ -2519,6 +2623,10 @@ ketQua = await _db.ImportSanPhamAsync(
     [RelayCommand]
     private async Task XoaNhaCungCapAsync(NhaCungCap? supplier)
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersDelete, "Bạn không có quyền xóa nhà cung cấp."))
+        {
+            return;
+        }
         if (supplier is null)
             return;
 
@@ -2614,7 +2722,18 @@ ketQua = await _db.ImportSanPhamAsync(
     [RelayCommand]
     private async Task MoGiaoDienBanHangAsync()
     {
+<<<<<<< HEAD
         ResetDonHangVeMacDinh();
+=======
+        if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền mở màn hình bán hàng."))
+        {
+            return;
+        }
+        IsSalesPanelVisible = true;
+        SaleCustomerName = "Khách lẻ";
+        SaleSearchText = "";
+        SaleCart.Clear();
+>>>>>>> c355869 ("Cap nhat phan quyen tai khoan")
 
         IsSalesPanelVisible = true;
 
@@ -2815,6 +2934,12 @@ ketQua = await _db.ImportSanPhamAsync(
     {
         new BaoCaoMenuItem
         {
+            Key = "cuoi-ngay",
+            TieuDe = "Báo cáo cuối ngày",
+            BieuTuong = "🗓"
+        },
+        new BaoCaoMenuItem
+        {
             Key = "phieu-nhap-hang",
             TieuDe = "Báo cáo phiếu nhập hàng",
             BieuTuong = "📥"
@@ -2881,6 +3006,9 @@ ketQua = await _db.ImportSanPhamAsync(
     public bool IsBaoCaoPhieuNhapSelected =>
         SelectedMenu == "Báo cáo" && SelectedReportKey == "phieu-nhap-hang";
 
+    public bool IsBaoCaoCuoiNgaySelected =>
+        SelectedMenu == "Báo cáo" && SelectedReportKey == "cuoi-ngay";
+
     partial void OnBaoCaoPhieuNhapSearchChanged(string value)
     {
         // Mỗi lần tìm kiếm luôn quay về trang đầu
@@ -2911,6 +3039,22 @@ ketQua = await _db.ImportSanPhamAsync(
     partial void OnSelectedReportKeyChanged(string value)
     {
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
+<<<<<<< HEAD
+        OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
+=======
+                OnPropertyChanged(nameof(CanManageUsers));
+        OnPropertyChanged(nameof(CanViewDashboard));
+        OnPropertyChanged(nameof(CanViewProducts));
+        OnPropertyChanged(nameof(CanViewPurchases));
+        OnPropertyChanged(nameof(CanViewInvoices));
+        OnPropertyChanged(nameof(CanViewSales));
+        OnPropertyChanged(nameof(CanViewCustomers));
+        OnPropertyChanged(nameof(CanViewSuppliers));
+        OnPropertyChanged(nameof(CanViewCashBook));
+        OnPropertyChanged(nameof(CanViewReports));
+        OnPropertyChanged(nameof(CanViewUsers));
+        OnPropertyChanged(nameof(CanViewSettings));
+>>>>>>> c355869 ("Cap nhat phan quyen tai khoan")
     }
 
     [RelayCommand]
@@ -2929,6 +3073,14 @@ ketQua = await _db.ImportSanPhamAsync(
         {
             _baoCaoPhieuNhapLoaded = true;
             _ = LoadBaoCaoPhieuNhapAsync();
+        }
+
+        // Báo cáo cuối ngày chỉ tải khi mở lần đầu, sau đó giữ nguyên ngày đang
+        // xem trong suốt phiên (người dùng tự bấm "Làm mới" khi cần).
+        if (item.Key == "cuoi-ngay" && !_baoCaoCuoiNgayLoaded)
+        {
+            _baoCaoCuoiNgayLoaded = true;
+            _ = BaoCaoCuoiNgay.TaiDuLieuAsync();
         }
 
         StatusMessage = item.TieuDe;
@@ -3098,6 +3250,10 @@ ketQua = await _db.ImportSanPhamAsync(
     [RelayCommand]
     private async Task MoGiaoDienNhapHangTuBaoCaoAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesView, "Bạn không có quyền mở màn hình nhập hàng."))
+        {
+            return;
+        }
         // Nút "+ Nhập hàng" trong báo cáo: chuyển sang màn lập phiếu nhập hàng
         await MoGiaoDienNhapHangAsync();
     }
@@ -3199,6 +3355,10 @@ ketQua = await _db.ImportSanPhamAsync(
     [RelayCommand]
     private async Task MoPhieuNhapHangAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesCreate, "Bạn không có quyền tạo phiếu nhập hàng."))
+        {
+            return;
+        }
         IsNhapHangFormVisible = true;
 
         _phieuNhapId = 0;
@@ -3247,6 +3407,10 @@ ketQua = await _db.ImportSanPhamAsync(
     [RelayCommand]
     private async Task MoGiaoDienNhapHangAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesView, "Bạn không có quyền mở màn hình nhập hàng."))
+        {
+            return;
+        }
         // Nếu đang đứng ở màn Nhập hàng thì SelectedMenu không đổi,
         // LoadSelectedSectionAsync sẽ không chạy nên phải tự khởi tạo phiếu mới.
         if (SelectedMenu == "Nhập hàng")
@@ -3512,6 +3676,10 @@ ketQua = await _db.ImportSanPhamAsync(
     [RelayCommand]
     private async Task ThemNhaCungCapNhapNhanhAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersCreate, "Bạn không có quyền thêm nhà cung cấp."))
+        {
+            return;
+        }
         try
         {
             // Tái sử dụng đúng form thêm nhà cung cấp sẵn có
@@ -3537,17 +3705,23 @@ ketQua = await _db.ImportSanPhamAsync(
     [RelayCommand]
     private async Task HoanThanhPhieuNhapAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesCreate, "Bạn không có quyền lưu phiếu nhập hàng."))
+        {
+            return;
+        }
         if (IsSavingPhieuNhap)
             return;
 
         // ------------------------------------------
         // VALIDATE
+        // Mọi lỗi nghiệp vụ đều báo qua hộp thoại và GIỮ NGUYÊN form,
+        // không bao giờ xóa dữ liệu đang nhập.
         // ------------------------------------------
 
         // 1. Phiếu phải có ít nhất 1 hàng hóa
         if (PhieuNhapItems.Count == 0)
         {
-            StatusMessage = "Phiếu nhập chưa có hàng hóa.";
+            await BaoLoiLuuPhieuNhapAsync("Phiếu nhập chưa có hàng hóa.");
             return;
         }
 
@@ -3558,9 +3732,9 @@ ketQua = await _db.ImportSanPhamAsync(
 
         if (dongSoLuongSai.Count > 0)
         {
-            StatusMessage = dongSoLuongSai.Count == 1
+            await BaoLoiLuuPhieuNhapAsync(dongSoLuongSai.Count == 1
                 ? $"Vui lòng kiểm tra số lượng của hàng \"{dongSoLuongSai[0].SanPham.TenSanPham}\" (phải lớn hơn 0)."
-                : $"Vui lòng kiểm tra số lượng hàng hóa: còn {dongSoLuongSai.Count} dòng chưa nhập số lượng.";
+                : $"Vui lòng kiểm tra số lượng hàng hóa: còn {dongSoLuongSai.Count} dòng chưa nhập số lượng.");
             return;
         }
 
@@ -3571,9 +3745,9 @@ ketQua = await _db.ImportSanPhamAsync(
 
         if (dongGiaSai.Count > 0)
         {
-            StatusMessage = dongGiaSai.Count == 1
+            await BaoLoiLuuPhieuNhapAsync(dongGiaSai.Count == 1
                 ? $"Vui lòng kiểm tra giá nhập của hàng \"{dongGiaSai[0].SanPham.TenSanPham}\"."
-                : $"Vui lòng kiểm tra giá nhập: còn {dongGiaSai.Count} dòng có giá nhập không hợp lệ.";
+                : $"Vui lòng kiểm tra giá nhập: còn {dongGiaSai.Count} dòng có giá nhập không hợp lệ.");
             return;
         }
 
@@ -3584,28 +3758,28 @@ ketQua = await _db.ImportSanPhamAsync(
 
         if (dongHopLe.Count == 0)
         {
-            StatusMessage = "Phiếu nhập chưa có hàng hóa hợp lệ nào để hoàn thành.";
+            await BaoLoiLuuPhieuNhapAsync("Phiếu nhập chưa có hàng hóa hợp lệ nào để hoàn thành.");
             return;
         }
 
         // 4. Nhà cung cấp là trường bắt buộc khi hoàn thành phiếu
         if (SelectedPhieuNhapNcc is null || SelectedPhieuNhapNcc.Id == 0)
         {
-            StatusMessage = "Vui lòng chọn nhà cung cấp.";
+            await BaoLoiLuuPhieuNhapAsync("Vui lòng chọn nhà cung cấp.");
             return;
         }
 
         // 5. Ngày nhập hợp lệ
         if (PhieuNhapNgayNhap is null)
         {
-            StatusMessage = "Vui lòng chọn ngày nhập.";
+            await BaoLoiLuuPhieuNhapAsync("Vui lòng chọn ngày nhập.");
             return;
         }
 
         // 6. Mã phiếu phải sinh được trước khi lưu
         if (string.IsNullOrWhiteSpace(PhieuNhapMa))
         {
-            StatusMessage = "Chưa tạo được mã phiếu nhập, vui lòng mở lại màn hình và thử lại.";
+            await BaoLoiLuuPhieuNhapAsync("Chưa tạo được mã phiếu nhập, vui lòng mở lại màn hình và thử lại.");
             return;
         }
 
@@ -3619,6 +3793,9 @@ ketQua = await _db.ImportSanPhamAsync(
             return;
 
         IsSavingPhieuNhap = true;
+
+        var maPhieuVuaLuu = PhieuNhapMa;
+        var tongTienVuaLuu = PhieuNhapTongTienNhapText;
 
         try
         {
@@ -3635,37 +3812,65 @@ ketQua = await _db.ImportSanPhamAsync(
                 SoHoaDonDauVao = PhieuNhapSoHoaDonDauVao
             };
 
-            // Lưu header + chi tiết + tồn kho + lịch sử trong một transaction.
+            // Lưu header + chi tiết + tồn kho + giá vốn + công nợ trong MỘT transaction.
             // Service tự rollback toàn bộ nếu bất kỳ bước nào lỗi.
             _phieuNhapId = await _db.LuuPhieuNhapHangAsync(phieu, dongHopLe);
-
-            // Phiếu vừa lưu phải xuất hiện trong "Báo cáo → Báo cáo phiếu nhập hàng"
-            // nên đánh dấu cần tải lại thay vì giữ cache cũ.
-            _baoCaoPhieuNhapLoaded = false;
-
-            // Tồn kho và giá vốn đã đổi -> nạp lại danh sách sản phẩm
-            await LoadProductsAsync();
-
-            StatusMessage =
-                $"✅ Đã hoàn thành phiếu nhập {PhieuNhapMa} - tổng {PhieuNhapTongTienNhapText} đ";
-
-            // Quay về danh sách phiếu nhập theo flow hiện tại của project
-            IsNhapHangFormVisible = false;
-
-            BoDangKyPhieuNhapItems();
-            PhieuNhapItems.Clear();
-            RecalculatePhieuNhapTongTienHang();
-            RecalculatePhieuNhapTotal();
-            _phieuNhapId = 0;
         }
         catch (Exception ex)
         {
-            StatusMessage = "Không thể hoàn thành phiếu nhập: " + ex.Message;
+            // Lưu thất bại: KHÔNG reset, KHÔNG chuyển màn hình, giữ nguyên
+            // toàn bộ dữ liệu đang nhập để người dùng sửa rồi bấm lại.
+            SafeLog.WriteError("Loi luu phieu nhap hang", ex);
+
+            await BaoLoiLuuPhieuNhapAsync(ex.Message);
+            return;
         }
         finally
         {
             IsSavingPhieuNhap = false;
         }
+
+        // ---- Đã lưu thành công ----
+
+        // Phiếu vừa lưu phải xuất hiện trong "Báo cáo → Báo cáo phiếu nhập hàng"
+        // nên đánh dấu cần tải lại thay vì giữ cache cũ.
+        _baoCaoPhieuNhapLoaded = false;
+
+        // Dashboard thống kê phiếu nhập trong hoạt động gần đây và thống kê kho.
+        _ = LamMoiTongQuanNeuDangMoAsync();
+
+        // Tồn kho và giá vốn đã đổi -> nạp lại danh sách sản phẩm.
+        // Bọc try/catch riêng: nạp lại thất bại không được làm hỏng kết quả
+        // đã commit (phiếu vẫn lưu thành công).
+        try
+        {
+            await LoadProductsAsync();
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi tai lai danh sach san pham sau khi nhap hang", ex);
+        }
+
+        // Báo thành công và CHỜ người dùng đóng hộp thoại.
+        StatusMessage =
+            $"✅ Phiếu nhập {maPhieuVuaLuu} đã được lưu - tổng {tongTienVuaLuu} đ.";
+
+        await ShowMessageAsync(
+            "Thành công – Phiếu nhập đã được lưu.",
+            $"Mã phiếu: {maPhieuVuaLuu}\nTổng tiền nhập: {tongTienVuaLuu} đ");
+
+        // Chỉ reset SAU khi hộp thoại thành công đã đóng, và vẫn giữ nguyên
+        // màn hình "Lập phiếu nhập hàng" (IsNhapHangFormVisible vẫn = true).
+        // MoPhieuNhapHangAsync() xóa hàng hóa, nhà cung cấp, số hóa đơn đầu vào,
+        // ghi chú, chi phí khác, đã thanh toán, ngày nhập về hôm nay,
+        // tính lại tổng tiền và SINH MÃ PHIẾU MỚI từ database.
+        await MoPhieuNhapHangAsync();
+
+        // MoPhieuNhapHangAsync() để PhieuNhapMa = "" nếu sinh mã thất bại
+        // (lỗi SQL/kết nối). Không được báo "sẵn sàng" khi mã còn rỗng.
+        StatusMessage = string.IsNullOrWhiteSpace(PhieuNhapMa)
+            ? $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Không tạo được mã phiếu mới, vui lòng mở lại màn hình."
+            : $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Sẵn sàng lập phiếu mới: {PhieuNhapMa}";
     }
 
 partial void OnTienKhachDuaChanged(decimal value)
@@ -3752,11 +3957,18 @@ partial void OnTienKhachDuaChanged(decimal value)
     [RelayCommand]
     private async Task ThanhToanAsync()
     {
+<<<<<<< HEAD
         // 1. Chống bấm nút nhiều lần / gọi lệnh chồng nhau
         if (IsThanhToanDangXuLy)
             return;
 
         // 2. Kiểm tra dữ liệu
+=======
+        if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Bạn không có quyền bán hàng."))
+        {
+            return;
+        }
+>>>>>>> c355869 ("Cap nhat phan quyen tai khoan")
         if (SaleCart.Count == 0)
         {
             StatusMessage = "Vui lòng chọn ít nhất một sản phẩm trước khi thanh toán.";
@@ -3855,9 +4067,21 @@ partial void OnTienKhachDuaChanged(decimal value)
         _invoicesLoaded = false;
         ChonMenu("Hóa đơn");
 
-        StatusMessage = receipt.CanhBao.Count > 0
+        // Dashboard phải thấy ngay hóa đơn vừa tạo (doanh thu, số hóa đơn,
+        // hoạt động gần đây, top hàng bán chạy, top khách hàng).
+        _ = LamMoiTongQuanNeuDangMoAsync();
+
+        // Sổ quỹ tự đọc lại database mỗi lần mở menu nên phiếu thu mới sẽ
+        // hiện ra ngay khi người dùng chuyển sang tab "Sổ quỹ".
+        var thongTinPhieuThu = string.IsNullOrWhiteSpace(receipt.MaPhieuThu)
+            ? ""
+            : $" Đã ghi phiếu thu {receipt.MaPhieuThu} vào sổ quỹ.";
+
+        var thongBaoThanhToan = receipt.CanhBao.Count > 0
             ? $"Đã tạo hóa đơn {maHoaDon}. {string.Join(" ", receipt.CanhBao)}"
             : $"Đã tạo hóa đơn {maHoaDon} thành công.";
+
+        StatusMessage = thongBaoThanhToan + thongTinPhieuThu;
 
         // 6. Hiển thị hóa đơn vừa bán (đọc lại từ database nên khớp dữ liệu đã lưu)
         try
@@ -3934,12 +4158,153 @@ partial void OnTienKhachDuaChanged(decimal value)
         OnPropertyChanged(nameof(IsDataSectionSelected));
         OnPropertyChanged(nameof(IsBaoCaoSectionSelected));
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
+<<<<<<< HEAD
+        OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
+=======
+                OnPropertyChanged(nameof(CanManageUsers));
+        OnPropertyChanged(nameof(CanViewDashboard));
+        OnPropertyChanged(nameof(CanViewProducts));
+        OnPropertyChanged(nameof(CanViewPurchases));
+        OnPropertyChanged(nameof(CanViewInvoices));
+        OnPropertyChanged(nameof(CanViewSales));
+        OnPropertyChanged(nameof(CanViewCustomers));
+        OnPropertyChanged(nameof(CanViewSuppliers));
+        OnPropertyChanged(nameof(CanViewCashBook));
+        OnPropertyChanged(nameof(CanViewReports));
+        OnPropertyChanged(nameof(CanViewUsers));
+        OnPropertyChanged(nameof(CanViewSettings));
+        RaiseAllCanProperties();
+>>>>>>> c355869 ("Cap nhat phan quyen tai khoan")
 
         _ = LoadSelectedSectionAsync(value);
+    }
+
+    /// <summary>Thông báo lại toàn bộ cờ quyền chi tiết sau khi phiên đăng nhập thay đổi.</summary>
+    public void RaiseAllCanProperties()
+    {
+        string[] names =
+        [
+            nameof(CanCreateProduct), nameof(CanEditProduct), nameof(CanDeleteProduct),
+            nameof(CanImportProduct), nameof(CanExportProduct), nameof(CanUpdateProductPrice),
+            nameof(CanCreateSale), nameof(CanEditSale), nameof(CanDeleteSale),
+            nameof(CanPaySale), nameof(CanViewSaleHistory),
+            nameof(CanPrintInvoice), nameof(CanImportInvoice), nameof(CanCancelInvoice),
+            nameof(CanCreateCustomer), nameof(CanEditCustomer), nameof(CanDeleteCustomer), nameof(CanImportCustomer),
+            nameof(CanCreateSupplier), nameof(CanEditSupplier), nameof(CanDeleteSupplier),
+            nameof(CanImportSupplier), nameof(CanExportSupplier),
+            nameof(CanCreatePurchase), nameof(CanEditPurchase), nameof(CanDeletePurchase),
+            nameof(CanImportPurchase), nameof(CanExportPurchase), nameof(CanPrintPurchase),
+            nameof(CanCreateReceipt), nameof(CanCreatePayment), nameof(CanEditCashBook),
+            nameof(CanDeleteCashBook), nameof(CanCancelCashBook),
+            nameof(CanImportCashBook), nameof(CanExportCashBook),
+            nameof(CanCreateUser), nameof(CanEditUser), nameof(CanDeleteUser),
+            nameof(CanAssignPermission), nameof(CanEditSettings)
+        ];
+
+        foreach (var name in names)
+        {
+            OnPropertyChanged(name);
+        }
     }
 
     public bool IsTongQuanSelected => SelectedMenu == "Tổng quan";
 
     // Báo cáo có vùng nội dung riêng nên không dùng chung TabControl dữ liệu
     public bool IsDataSectionSelected => !IsTongQuanSelected && !IsBaoCaoSectionSelected;
+    public bool CanViewDashboard => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.DashboardView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewProducts => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewPurchases => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.PurchasesView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewInvoices => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.InvoicesView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewSales => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SalesView) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SalesCreate) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewCustomers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.CustomersView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewSuppliers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SuppliersView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewCashBook => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.CashBookView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewReports => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ReportsView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewUsers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersView) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersCreate) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersAssignPermission) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewSettings => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SettingsView) || Quyen.IsAdmin(Session.CurrentUser);
+
+    public bool CanManageUsers
+    {
+        get
+        {
+            var u = Session.CurrentUser;
+            if (u == null) return false;
+            if (Quyen.IsAdmin(u)) return true;
+            return Session.HasPermission(PermissionKeys.UsersView) || Session.HasPermission(PermissionKeys.UsersAssignPermission) || Session.HasPermission(PermissionKeys.UsersCreate);
+        }
+    }
+
+    // ===== Quyền theo từng chức năng chi tiết (dùng cho IsVisible/IsEnabled của nút) =====
+
+    private static bool CoQuyen(string key) => Quyen.HasPermission(Session.CurrentUser, key);
+
+    // Hàng hóa
+    public bool CanCreateProduct => CoQuyen(PermissionKeys.ProductsCreate);
+    public bool CanEditProduct => CoQuyen(PermissionKeys.ProductsEdit);
+    public bool CanDeleteProduct => CoQuyen(PermissionKeys.ProductsDelete);
+    public bool CanImportProduct => CoQuyen(PermissionKeys.ProductsImport);
+    public bool CanExportProduct => CoQuyen(PermissionKeys.ProductsExport);
+    public bool CanUpdateProductPrice => CoQuyen(PermissionKeys.ProductsUpdatePrice);
+
+    // Bán hàng / Hóa đơn
+    public bool CanCreateSale => CoQuyen(PermissionKeys.SalesCreate);
+    public bool CanEditSale => CoQuyen(PermissionKeys.SalesEdit);
+    public bool CanDeleteSale => CoQuyen(PermissionKeys.SalesDelete);
+    public bool CanPaySale => CoQuyen(PermissionKeys.SalesPayment);
+    public bool CanViewSaleHistory => CoQuyen(PermissionKeys.SalesHistory);
+    public bool CanPrintInvoice => CoQuyen(PermissionKeys.InvoicesPrint);
+    public bool CanImportInvoice => CoQuyen(PermissionKeys.InvoicesImport);
+    public bool CanCancelInvoice => CoQuyen(PermissionKeys.InvoicesCancel);
+
+    // Khách hàng
+    public bool CanCreateCustomer => CoQuyen(PermissionKeys.CustomersCreate);
+    public bool CanEditCustomer => CoQuyen(PermissionKeys.CustomersEdit);
+    public bool CanDeleteCustomer => CoQuyen(PermissionKeys.CustomersDelete);
+    public bool CanImportCustomer => CoQuyen(PermissionKeys.CustomersImport);
+
+    // Nhà cung cấp
+    public bool CanCreateSupplier => CoQuyen(PermissionKeys.SuppliersCreate);
+    public bool CanEditSupplier => CoQuyen(PermissionKeys.SuppliersEdit);
+    public bool CanDeleteSupplier => CoQuyen(PermissionKeys.SuppliersDelete);
+    public bool CanImportSupplier => CoQuyen(PermissionKeys.SuppliersImport);
+    public bool CanExportSupplier => CoQuyen(PermissionKeys.SuppliersExport);
+
+    // Phiếu nhập
+    public bool CanCreatePurchase => CoQuyen(PermissionKeys.PurchasesCreate);
+    public bool CanEditPurchase => CoQuyen(PermissionKeys.PurchasesEdit);
+    public bool CanDeletePurchase => CoQuyen(PermissionKeys.PurchasesDelete);
+    public bool CanImportPurchase => CoQuyen(PermissionKeys.PurchasesImport);
+    public bool CanExportPurchase => CoQuyen(PermissionKeys.PurchasesExport);
+    public bool CanPrintPurchase => CoQuyen(PermissionKeys.PurchasesPrint);
+
+    // Sổ quỹ
+    public bool CanCreateReceipt => CoQuyen(PermissionKeys.CashBookCreateReceipt);
+    public bool CanCreatePayment => CoQuyen(PermissionKeys.CashBookCreatePayment);
+    public bool CanEditCashBook => CoQuyen(PermissionKeys.CashBookEdit);
+    public bool CanDeleteCashBook => CoQuyen(PermissionKeys.CashBookDelete);
+    public bool CanCancelCashBook => CoQuyen(PermissionKeys.CashBookCancel);
+    public bool CanImportCashBook => CoQuyen(PermissionKeys.CashBookImport);
+    public bool CanExportCashBook => CoQuyen(PermissionKeys.CashBookExport);
+
+    // Tài khoản
+    public bool CanCreateUser => CoQuyen(PermissionKeys.UsersCreate);
+    public bool CanEditUser => CoQuyen(PermissionKeys.UsersEdit);
+    public bool CanDeleteUser => CoQuyen(PermissionKeys.UsersDelete);
+    public bool CanAssignPermission => CoQuyen(PermissionKeys.UsersAssignPermission);
+
+    // Cài đặt
+    public bool CanEditSettings => CoQuyen(PermissionKeys.SettingsEdit);
+
+    /// <summary>Kiểm tra quyền ngay tại thời điểm gọi lệnh (bắt được cả trường hợp gọi trực tiếp).</summary>
+    private async Task<bool> KiemTraQuyenAsync(string key, string message)
+    {
+        if (CoQuyen(key))
+        {
+            return true;
+        }
+
+        await ShowMessageAsync("Thông báo", message);
+        return false;
+    }
+
 }

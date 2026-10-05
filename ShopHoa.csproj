@@ -6,7 +6,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.12" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.3.12" />
@@ -20,8 +19,7 @@
     <PackageReference Include="MySqlConnector" Version="2.4.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
-
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
-  </ItemGroup>
+</ItemGroup>
 </Project>
