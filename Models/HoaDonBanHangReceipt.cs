@@ -36,6 +36,13 @@ public sealed class HoaDonBanHangReceipt
     public List<string> CanhBao { get; set; } = [];
 
     public bool CoCanhBao => CanhBao.Count > 0;
+
+    /// <summary>
+    /// Thông tin tiệm in lên đầu hóa đơn, lấy từ
+    /// <see cref="Services.StoreInfoService"/>. Luôn có giá trị (không null) để
+    /// hóa đơn không bao giờ trắng phần đầu, kể cả khi đọc lỗi.
+    /// </summary>
+    public ThongTinTiem ThongTinTiem { get; set; } = new();
 }
 
 public sealed class HoaDonBanHangReceiptItem

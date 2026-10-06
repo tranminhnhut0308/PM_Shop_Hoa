@@ -1417,6 +1417,37 @@ ALTER TABLE `ton_kho`
   ADD CONSTRAINT `fk_ton_kho_chi_nhanh` FOREIGN KEY (`chi_nhanh_id`) REFERENCES `chi_nhanh` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_ton_kho_san_pham` FOREIGN KEY (`san_pham_id`) REFERENCES `san_pham` (`id`) ON UPDATE CASCADE;
 
+--
+-- Bảng thông tin tiệm: chỉ MỘT bản ghi (id = 1)
+--
+-- Hóa đơn / phiếu nhập / báo cáo đọc thông tin này thay cho giá trị hard-code.
+-- Ràng buộc CHECK (id = 1) chặn ở tầng database, nên kể cả khi có ai đó chạy
+-- SQL tay cũng không thể tạo thêm bản ghi thứ hai làm sai thông tin in ra.
+--
+CREATE TABLE IF NOT EXISTS `thong_tin_tiem` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `ten_tiem` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `dia_chi` varchar(300) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `so_dien_thoai` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `email` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `ma_so_thue` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `website` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `duong_dan_logo` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `loi_cam_on` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `ngay_cap_nhat` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `ck_thong_tin_tiem_id` CHECK (`id` = 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Bản ghi thông tin tiệm đầu tiên. INSERT IGNORE nên chạy lại script này
+-- nhiều lần vẫn chỉ có một dòng.
+--
+INSERT IGNORE INTO `thong_tin_tiem`
+  (`id`, `ten_tiem`, `dia_chi`, `so_dien_thoai`, `email`, `ma_so_thue`, `website`, `duong_dan_logo`, `loi_cam_on`)
+VALUES
+  (1, 'SHOP HOA', '', '', '', '', '', '', 'Cảm ơn quý khách!');
+
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;

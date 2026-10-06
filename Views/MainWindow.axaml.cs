@@ -51,6 +51,33 @@ public partial class MainWindow : Window
         // viewModel.ReloadProductOptions();
     }
 
+    /// <summary>
+    /// Mở màn "Thông tin tiệm" từ menu tài khoản góc trái dưới.
+    /// <para>
+    /// Chỉ đổi <see cref="MainWindowViewModel.SelectedMenu"/> nên dùng lại đúng màn
+    /// hình và logic tải dữ liệu sẵn có — không dựng màn mới, không đụng tới
+    /// StoreInfoService. Đóng menu tài khoản trước để flyout không đè lên nội dung.
+    /// </para>
+    /// </summary>
+    private void OpenStoreInfoButton_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        // Đóng menu tài khoản, không thì flyout đè lên màn vừa mở.
+        (AccountButton.Flyout as Flyout)?.Hide();
+
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        if (!Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SettingsView))
+        {
+            _ = ShowMessageAsync("Thông báo", "Bạn không có quyền xem thông tin tiệm.");
+            return;
+        }
+
+        // Giống hệt cách các mục menu khác đổi màn: SelectedMenu được set thì
+        // OnSelectedMenuChanged bật cờ IsThongTinTiemSelected và tải lại dữ liệu.
+        viewModel.SelectedMenu = "Thông tin tiệm";
+    }
+
     private async void LogoutButton_OnClick(
         object? sender,
         RoutedEventArgs e)

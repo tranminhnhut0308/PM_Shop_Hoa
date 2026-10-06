@@ -26,8 +26,38 @@
   </Window.Styles>
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="28" Spacing="10">
-      <TextBlock Text="CỬA HÀNG HOA" HorizontalAlignment="Center" FontSize="18" FontWeight="Bold"
-        Foreground="#163F38" />
+      <!-- ĐẦU HÓA ĐƠN: lấy từ Thông tin tiệm trong database, không hard-code -->
+      <StackPanel Spacing="3" Margin="0,0,0,4">
+        <Image Source="{Binding ThongTinTiem.LogoBitmap}"
+          IsVisible="{Binding ThongTinTiem.CoLogo}"
+          Height="64" Stretch="Uniform" HorizontalAlignment="Center" />
+
+        <TextBlock Text="{Binding ThongTinTiem.TenTiem}"
+          HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+          FontSize="18" FontWeight="Bold" Foreground="#163F38" />
+
+        <TextBlock Text="{Binding ThongTinTiem.DiaChi}"
+          IsVisible="{Binding ThongTinTiem.DiaChi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+          HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+          FontSize="12" Foreground="#61736E" />
+
+        <TextBlock Text="{Binding ThongTinTiem.SoDienThoaiHienThi}"
+          IsVisible="{Binding ThongTinTiem.SoDienThoaiHienThi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+          HorizontalAlignment="Center" FontSize="12" Foreground="#61736E" />
+
+        <TextBlock Text="{Binding ThongTinTiem.Email}"
+          IsVisible="{Binding ThongTinTiem.Email, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+          HorizontalAlignment="Center" FontSize="12" Foreground="#61736E" />
+
+        <TextBlock Text="{Binding ThongTinTiem.WebsiteHienThi}"
+          IsVisible="{Binding ThongTinTiem.WebsiteHienThi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+          HorizontalAlignment="Center" FontSize="12" Foreground="#61736E" />
+
+        <TextBlock Text="{Binding ThongTinTiem.MaSoThueHienThi}"
+          IsVisible="{Binding ThongTinTiem.MaSoThueHienThi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+          HorizontalAlignment="Center" FontSize="12" Foreground="#61736E" />
+      </StackPanel>
+
       <TextBlock Text="HÓA ĐƠN BÁN HÀNG" HorizontalAlignment="Center" FontSize="22"
         FontWeight="Bold" Foreground="#163F38" />
       <TextBlock Text="{Binding MaHoaDon, StringFormat=Mã hóa đơn: {0}}"
@@ -180,7 +210,8 @@
         </ItemsControl>
       </Border>
 
-      <TextBlock Text="Cảm ơn quý khách!" HorizontalAlignment="Center" FontStyle="Italic"
+      <TextBlock Text="{Binding ThongTinTiem.LoiCamOnHienThi}" HorizontalAlignment="Center"
+        TextAlignment="Center" TextWrapping="Wrap" FontStyle="Italic"
         Foreground="#61736E" Margin="0,18,0,8" />
       <Button Content="Đóng" HorizontalAlignment="Center" Classes="toolbar-primary"
         Click="CloseButton_OnClick" Padding="28,10" />

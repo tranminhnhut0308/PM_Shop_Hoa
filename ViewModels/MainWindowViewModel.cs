@@ -45,9 +45,19 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public BaoCaoCuoiNgayViewModel BaoCaoCuoiNgay { get; }
 
+    /// <summary>
+    /// Nguồn dữ liệu thông tin tiệm dùng chung. Mọi mẫu hóa đơn và màn "Thông
+    /// tin tiệm" đều đọc/ghi qua đúng service này nên không tự tạo bản sao riêng.
+    /// </summary>
+    private readonly StoreInfoService _storeInfo;
+
+    /// <summary>Màn "Thông tin tiệm". Giữ instance sống suốt phiên như các màn khác.</summary>
+    public ThongTinTiemViewModel ThongTinTiem { get; }
+
     public MainWindowViewModel()
     {
         Dashboard = new DashboardViewModel(_db);
+        _storeInfo = new StoreInfoService(_db.TaoKetNoiAsync);
         BaoCaoCuoiNgay = new BaoCaoCuoiNgayViewModel(_db)
         {
             // Cửa sổ chính chỉ có sau khi ViewModel được tạo, nên các callback
@@ -57,10 +67,27 @@ public partial class MainWindowViewModel : ObservableObject
             HienThiHopNhat = (tieuDe, noiDung) => ShowMessageAsync(tieuDe, noiDung)
         };
 
+        ThongTinTiem = new ThongTinTiemViewModel(_storeInfo)
+        {
+            LayCuaSoChinh = () => OwnerWindow,
+            CapNhatTrangThai = message => StatusMessage = message,
+            HienThiHopNhat = (tieuDe, noiDung) => ShowMessageAsync(tieuDe, noiDung),
+            // Nút Lưu khoá theo quyền SettingsEdit: người chỉ được xem thì vẫn
+            // thấy thông tin hiện tại nhưng không sửa được.
+            CoTheChinhSua = () => CanEditStoreInfo
+        };
+
         // Giỏ hàng thêm/bớt dòng thì trạng thái nút "Thanh toán" phải cập nhật
         // theo, nếu không nút sẽ mở khi giỏ hàng vẫn còn trống.
         SaleCart.CollectionChanged += (_, _) => OnPropertyChanged(nameof(CanThanhToan));
     }
+
+    /// <summary>
+    /// Đọc thông tin tiệm để đưa vào hóa đơn. Gọi mỗi lần mở hóa đơn nên hóa
+    /// đơn luôn thấy thông tin vừa sửa ở màn "Thông tin tiệm".
+    /// </summary>
+    private async Task<ThongTinTiem> LayThongTinTiemChoHoaDonAsync()
+        => await _storeInfo.LayThongTinKemLogoAsync();
 
     [ObservableProperty] private string selectedMenu = "Tổng quan";
     [ObservableProperty] private int selectedDataTabIndex = 0;
@@ -1071,6 +1098,12 @@ public partial class MainWindowViewModel : ObservableObject
                 case "Sổ quỹ":
                     await TaiSoQuyBoLocOptionsAsync();
                     await TaiLaiSoQuyAsync();
+                    break;
+
+                case "Thông tin tiệm":
+                    // Luôn đọc lại database mỗi lần mở màn để thấy đúng thông
+                    // tin đã lưu, kể cả khi vừa sửa xong ở phiên trước.
+                    await ThongTinTiem.TaiLaiCommand.ExecuteAsync(null);
                     break;
 
                 case "Báo cáo":
@@ -4065,6 +4098,10 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Bạn không có quy�
     // 6. Hiển thị hóa đơn vừa bán (đọc lại từ database nên khớp dữ liệu đã lưu)
     try
     {
+        // Gắn thông tin tiệm lúc mở hóa đơn (không phải lúc thanh toán) để người
+        // dùng vừa sửa ở màn "Thông tin tiệm" cũng thấy ngay ở hóa đơn này.
+        receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
+
         var invoiceWindow = new InvoiceWindow(receipt);
         await invoiceWindow.ShowDialog(owner);
     }
@@ -4098,6 +4135,8 @@ private async Task XemHoaDonAsync(HoaDon? hoaDon)
             StatusMessage = $"Không tìm thấy hóa đơn {maHoaDon} trong database.";
             return;
         }
+
+        receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
 
         var invoiceWindow = new InvoiceWindow(receipt);
         await invoiceWindow.ShowDialog(OwnerWindow);
@@ -4138,6 +4177,7 @@ partial void OnSelectedMenuChanged(string value)
     OnPropertyChanged(nameof(IsBaoCaoSectionSelected));
     OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
     OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
+    OnPropertyChanged(nameof(IsThongTinTiemSelected));
 
     _ = LoadSelectedSectionAsync(value);
 }
@@ -4160,6 +4200,7 @@ public void RaiseAllCanProperties()
             nameof(CanCreateReceipt), nameof(CanCreatePayment), nameof(CanEditCashBook),
             nameof(CanDeleteCashBook), nameof(CanCancelCashBook),
             nameof(CanImportCashBook), nameof(CanExportCashBook),
+            nameof(CanViewStoreInfo), nameof(CanEditStoreInfo),
             nameof(CanCreateUser), nameof(CanEditUser), nameof(CanDeleteUser),
             nameof(CanAssignPermission), nameof(CanEditSettings)
     ];
@@ -4173,7 +4214,21 @@ public void RaiseAllCanProperties()
 public bool IsTongQuanSelected => SelectedMenu == "Tổng quan";
 
 // Báo cáo có vùng nội dung riêng nên không dùng chung TabControl dữ liệu
-public bool IsDataSectionSelected => !IsTongQuanSelected && !IsBaoCaoSectionSelected;
+// Màn nào có vùng nội dung riêng thì không được bật TabControl dữ liệu,
+// nếu không TabControl sẽ hiện chồng lên màn đó.
+public bool IsDataSectionSelected =>
+    !IsTongQuanSelected
+    && !IsBaoCaoSectionSelected
+    && !IsThongTinTiemSelected;
+
+/// <summary>Màn "Thông tin tiệm" có vùng nội dung riêng, không nằm trong TabControl dữ liệu.</summary>
+public bool IsThongTinTiemSelected => SelectedMenu == "Thông tin tiệm";
+
+/// <summary>Được phép xem màn thông tin tiệm (dùng chung nhóm quyền Cài đặt).</summary>
+public bool CanViewStoreInfo => CanViewSettings;
+
+/// <summary>Được phép sửa thông tin tiệm (cùng nhóm quyền Cài đặt).</summary>
+public bool CanEditStoreInfo => CanEditSettings;
 public bool CanViewDashboard => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.DashboardView) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewProducts => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsView) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewPurchases => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.PurchasesView) || Quyen.IsAdmin(Session.CurrentUser);
