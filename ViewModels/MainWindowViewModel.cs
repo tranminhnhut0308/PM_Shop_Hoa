@@ -33,6 +33,7 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _baoCaoPhieuNhapLoaded;
     private bool _baoCaoCuoiNgayLoaded;
     private bool _baoCaoBanHangLoaded;
+    private bool _baoCaoHangHoaLoaded;
 
     /// <summary>
     /// Màn "Tổng quan" có ViewModel riêng. Giữ một instance sống suốt phiên để
@@ -46,6 +47,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     /// <summary>Màn "Báo cáo bán hàng" cũng giữ một instance sống suốt phiên.</summary>
     public BaoCaoBanHangViewModel BaoCaoBanHang { get; }
+
+    /// <summary>Màn "Báo cáo hàng hóa" cũng giữ một instance sống suốt phiên.</summary>
+    public BaoCaoHangHoaViewModel BaoCaoHangHoa { get; }
 
     public BaoCaoCuoiNgayViewModel BaoCaoCuoiNgay { get; }
 
@@ -63,6 +67,7 @@ public partial class MainWindowViewModel : ObservableObject
         Dashboard = new DashboardViewModel(_db);
         _storeInfo = new StoreInfoService(_db.TaoKetNoiAsync);
         BaoCaoBanHang = new BaoCaoBanHangViewModel(_db);
+        BaoCaoHangHoa = new BaoCaoHangHoaViewModel(_db);
         BaoCaoCuoiNgay = new BaoCaoCuoiNgayViewModel(_db)
         {
             // Cửa sổ chính chỉ có sau khi ViewModel được tạo, nên các callback
@@ -1129,6 +1134,14 @@ public partial class MainWindowViewModel : ObservableObject
                     {
                         _baoCaoBanHangLoaded = true;
                         await BaoCaoBanHang.TaiLaiAsync();
+                    }
+
+                    // Báo cáo hàng hóa cũng chỉ tải lần đầu; các lần sau giữ nguyên
+                    // bộ lọc người dùng đang xem.
+                    if (SelectedReportKey == "hang-hoa" && !_baoCaoHangHoaLoaded)
+                    {
+                        _baoCaoHangHoaLoaded = true;
+                        await BaoCaoHangHoa.TaiLaiAsync();
                     }
 
                     break;
@@ -2986,6 +2999,12 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
         },
         new BaoCaoMenuItem
         {
+            Key = "hang-hoa",
+            TieuDe = "Báo cáo hàng hóa",
+            BieuTuong = "📦"
+        },
+        new BaoCaoMenuItem
+        {
             Key = "phieu-nhap-hang",
             TieuDe = "Báo cáo phiếu nhập hàng",
             BieuTuong = "📥"
@@ -3055,6 +3074,9 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
     public bool IsBaoCaoBanHangSelected =>
         IsBaoCaoSectionSelected && SelectedReportKey == "ban-hang";
 
+    public bool IsBaoCaoHangHoaSelected =>
+        IsBaoCaoSectionSelected && SelectedReportKey == "hang-hoa";
+
     public bool IsBaoCaoCuoiNgaySelected =>
         SelectedMenu == "Báo cáo" && SelectedReportKey == "cuoi-ngay";
 
@@ -3089,6 +3111,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
     {
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
         OnPropertyChanged(nameof(IsBaoCaoBanHangSelected));
+        OnPropertyChanged(nameof(IsBaoCaoHangHoaSelected));
         OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
     }
 
@@ -3116,6 +3139,14 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
         {
             _baoCaoBanHangLoaded = true;
             _ = BaoCaoBanHang.TaiLaiAsync();
+        }
+
+        // Báo cáo hàng hóa cũng chỉ tải một lần đầu, các lần sau giữ nguyên
+        // bộ lọc người dùng đang xem.
+        if (item.Key == "hang-hoa" && !_baoCaoHangHoaLoaded)
+        {
+            _baoCaoHangHoaLoaded = true;
+            _ = BaoCaoHangHoa.TaiLaiAsync();
         }
 
         // Báo cáo cuối ngày chỉ tải khi mở lần đầu, sau đó giữ nguyên ngày đang
@@ -4208,6 +4239,7 @@ partial void OnSelectedMenuChanged(string value)
     OnPropertyChanged(nameof(IsBaoCaoSectionSelected));
     OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
     OnPropertyChanged(nameof(IsBaoCaoBanHangSelected));
+    OnPropertyChanged(nameof(IsBaoCaoHangHoaSelected));
     OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
     OnPropertyChanged(nameof(IsThongTinTiemSelected));
 
