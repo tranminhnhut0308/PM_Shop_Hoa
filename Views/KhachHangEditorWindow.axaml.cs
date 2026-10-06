@@ -80,7 +80,6 @@ public partial class KhachHangEditorWindow : Window
             NgaySinh = customer.NgaySinh,
             GioiTinh = customer.GioiTinh,
             Email = customer.Email,
-            Facebook = customer.Facebook,
             DiaChi = customer.DiaChi,
             PhuongXa = customer.PhuongXa,
             QuanHuyen = customer.QuanHuyen,
@@ -158,7 +157,6 @@ public partial class KhachHangEditorWindow : Window
         Customer.TenKhachHang = Customer.TenKhachHang?.Trim() ?? "";
         Customer.SoDienThoai = Customer.SoDienThoai?.Trim();
         Customer.Email = Customer.Email?.Trim();
-        Customer.Facebook = Customer.Facebook?.Trim();
         Customer.DiaChi = Customer.DiaChi?.Trim();
         Customer.PhuongXa = Customer.PhuongXa?.Trim();
         Customer.QuanHuyen = Customer.QuanHuyen?.Trim();

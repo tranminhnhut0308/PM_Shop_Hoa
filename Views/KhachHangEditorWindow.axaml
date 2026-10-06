@@ -211,13 +211,8 @@
                                  Watermark="example@email.com"/>
                     </StackPanel>
 
-                    <!-- Facebook + Nhóm khách hàng -->
-                    <StackPanel Grid.Row="3" Grid.Column="0">
-                        <TextBlock Classes="label" Text="Facebook"/>
-                        <TextBox Classes="input"
-                                 Text="{Binding Customer.Facebook, Mode=TwoWay}"
-                                 Watermark="Tên hoặc đường dẫn Facebook"/>
-                    </StackPanel>
+                    <!--  Nhóm khách hàng -->
+                
 
                     <StackPanel Grid.Row="3" Grid.Column="1">
                         <TextBlock Classes="label" Text="Nhóm khách hàng"/>
@@ -279,34 +274,36 @@
                         <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
 
                             <TextBlock Grid.Row="0"
-                                       Text="Thông tin xuất hóa đơn"
-                                       FontWeight="SemiBold"
-                                       Foreground="#163F38"/>
+                                    Text="Thông tin xuất hóa đơn"
+                                    FontWeight="SemiBold"
+                                    Foreground="#163F38"/>
 
+                            <!-- Bổ sung RowDefinitions="Auto,Auto" ở Grid bên dưới -->
                             <Grid Grid.Row="1"
-                                  ColumnDefinitions="*,*"
-                                  ColumnSpacing="14"
-                                  RowSpacing="10">
+                                ColumnDefinitions="*,*"
+                                RowDefinitions="Auto,Auto"
+                                ColumnSpacing="14"
+                                RowSpacing="10">
 
-                                <StackPanel Grid.Column="0">
+                                <StackPanel Grid.Row="0" Grid.Column="0">
                                     <TextBlock Classes="label" Text="Tên công ty"/>
                                     <TextBox Classes="input"
-                                             Text="{Binding Customer.TenCongTy, Mode=TwoWay}"
-                                             Watermark="Tên công ty"/>
+                                            Text="{Binding Customer.TenCongTy, Mode=TwoWay}"
+                                            Watermark="Tên công ty"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="1">
+                                <StackPanel Grid.Row="0" Grid.Column="1">
                                     <TextBlock Classes="label" Text="Người mua hóa đơn"/>
                                     <TextBox Classes="input"
-                                             Text="{Binding Customer.TenNguoiMuaHoaDon, Mode=TwoWay}"
-                                             Watermark="Tên người mua"/>
+                                            Text="{Binding Customer.TenNguoiMuaHoaDon, Mode=TwoWay}"
+                                            Watermark="Tên người mua"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
                                     <TextBlock Classes="label" Text="Địa chỉ xuất hóa đơn"/>
                                     <TextBox Classes="input"
-                                             Text="{Binding Customer.DiaChiXuatHoaDon, Mode=TwoWay}"
-                                             Watermark="Địa chỉ xuất hóa đơn"/>
+                                            Text="{Binding Customer.DiaChiXuatHoaDon, Mode=TwoWay}"
+                                            Watermark="Địa chỉ xuất hóa đơn"/>
                                 </StackPanel>
 
                             </Grid>
