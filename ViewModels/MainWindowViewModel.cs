@@ -44,32 +44,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// đang xem giữa các lần chuyển màn.
     /// </summary>
     public BaoCaoCuoiNgayViewModel BaoCaoCuoiNgay { get; }
-    private bool _baoCaoCuoiNgayLoaded;
-
-    /// <summary>
-    /// Màn "Tổng quan" có ViewModel riêng. Giữ một instance sống suốt phiên để
-    /// giữ nguyên bộ lọc người dùng đang chọn khi chuyển sang màn khác rồi quay lại.
-    /// </summary>
-    public DashboardViewModel Dashboard { get; }
-
-    /// <summary>
-    /// Màn "Báo cáo cuối ngày" cũng giữ một instance sống suốt phiên để nhớ ngày
-    /// đang xem giữa các lần chuyển màn.
-    /// </summary>
-    public BaoCaoCuoiNgayViewModel BaoCaoCuoiNgay { get; }
 
     public MainWindowViewModel()
     {
-        Dashboard = new DashboardViewModel(_db);
-        BaoCaoCuoiNgay = new BaoCaoCuoiNgayViewModel(_db)
-        {
-            // Cửa sổ chính chỉ có sau khi ViewModel được tạo, nên các callback
-            // đọc nó theo thời điểm dùng thay vì chụp giá trị lúc khởi tạo.
-            LayCuaSoChinh = () => OwnerWindow,
-            CapNhatTrangThai = message => StatusMessage = message,
-            HienThiHopNhat = (tieuDe, noiDung) => ShowMessageAsync(tieuDe, noiDung)
-        };
-
         Dashboard = new DashboardViewModel(_db);
         BaoCaoCuoiNgay = new BaoCaoCuoiNgayViewModel(_db)
         {
@@ -1164,21 +1141,6 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (IsTongQuanSelected)
             await Dashboard.TaiDuLieuAsync();
-        // Dashboard tự tải số liệu của nó (COUNT/SUM/GROUP BY ở tầng SQL).
-        // Các danh sách dùng chung với các tab khác không còn cần nạp ở đây
-        // vì màn Tổng quan không hiển thị chúng nữa.
-        await Dashboard.TaiDuLieuAsync();
-    }
-
-    /// <summary>
-    /// Làm mới số liệu Tổng quan sau khi ghi xong một nghiệp vụ (bán hàng, nhập
-    /// hàng, ghi sổ quỹ). Chỉ nạp lại khi màn đang mở để không tốn truy vấn
-    /// nền, nhưng dữ liệu vẫn luôn sẵn sàng khi người dùng quay lại màn này.
-    /// </summary>
-    public async Task LamMoiTongQuanNeuDangMoAsync()
-    {
-        if (IsTongQuanSelected)
-            await Dashboard.TaiDuLieuAsync();
     }
 
     /// <summary>
@@ -2218,9 +2180,6 @@ public partial class MainWindowViewModel : ObservableObject
             // Cao theo nội dung: tiêu đề/nguyên nhân dài không bị cắt chữ.
             SizeToContent = Avalonia.Controls.SizeToContent.Height,
             MinHeight = 230,
-            // Cao theo nội dung: tiêu đề/nguyên nhân dài không bị cắt chữ.
-            SizeToContent = Avalonia.Controls.SizeToContent.Height,
-            MinHeight = 230,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Background = Avalonia.Media.Brushes.White
@@ -2298,23 +2257,6 @@ public partial class MainWindowViewModel : ObservableObject
 
         var dialog = new ConfirmationWindow(title, message, confirmButtonText, cancelButtonText);
         return await dialog.ShowDialog<bool>(OwnerWindow);
-    }
-
-    /// <summary>
-    /// Báo lỗi khi lưu phiếu nhập: hiện hộp thoại "Thất bại" kèm nguyên nhân và
-    /// giữ nguyên toàn bộ form để người dùng sửa rồi bấm lại.
-    /// </summary>
-    private async Task BaoLoiLuuPhieuNhapAsync(string lyDo)
-    {
-        var noiDung = string.IsNullOrWhiteSpace(lyDo)
-            ? "Lỗi không xác định. Vui lòng thử lại."
-            : lyDo.Trim();
-
-        StatusMessage = "❌ Thất bại – Không thể lưu phiếu nhập: " + noiDung;
-
-        await ShowMessageAsync(
-            "Thất bại – Không thể lưu phiếu nhập.",
-            $"{noiDung}\n\nDữ liệu đang nhập vẫn được giữ nguyên, hãy sửa và bấm Hoàn thành lại.");
     }
 
     /// <summary>
@@ -2780,18 +2722,12 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task MoGiaoDienBanHangAsync()
     {
-<<<<<<< HEAD
-        ResetDonHangVeMacDinh();
-=======
-        if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền mở màn hình bán hàng."))
+if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền mở màn hình bán hàng."))
         {
             return;
         }
-        IsSalesPanelVisible = true;
-        SaleCustomerName = "Khách lẻ";
-        SaleSearchText = "";
-        SaleCart.Clear();
->>>>>>> c355869 ("Cap nhat phan quyen tai khoan")
+
+        ResetDonHangVeMacDinh();
 
         IsSalesPanelVisible = true;
 
@@ -2998,12 +2934,6 @@ public partial class MainWindowViewModel : ObservableObject
         },
         new BaoCaoMenuItem
         {
-            Key = "cuoi-ngay",
-            TieuDe = "Báo cáo cuối ngày",
-            BieuTuong = "🗓"
-        },
-        new BaoCaoMenuItem
-        {
             Key = "phieu-nhap-hang",
             TieuDe = "Báo cáo phiếu nhập hàng",
             BieuTuong = "📥"
@@ -3073,9 +3003,6 @@ public partial class MainWindowViewModel : ObservableObject
     public bool IsBaoCaoCuoiNgaySelected =>
         SelectedMenu == "Báo cáo" && SelectedReportKey == "cuoi-ngay";
 
-    public bool IsBaoCaoCuoiNgaySelected =>
-        SelectedMenu == "Báo cáo" && SelectedReportKey == "cuoi-ngay";
-
     partial void OnBaoCaoPhieuNhapSearchChanged(string value)
     {
         // Mỗi lần tìm kiếm luôn quay về trang đầu
@@ -3125,14 +3052,6 @@ public partial class MainWindowViewModel : ObservableObject
         {
             _baoCaoPhieuNhapLoaded = true;
             _ = LoadBaoCaoPhieuNhapAsync();
-        }
-
-        // Báo cáo cuối ngày chỉ tải khi mở lần đầu, sau đó giữ nguyên ngày đang
-        // xem trong suốt phiên (người dùng tự bấm "Làm mới" khi cần).
-        if (item.Key == "cuoi-ngay" && !_baoCaoCuoiNgayLoaded)
-        {
-            _baoCaoCuoiNgayLoaded = true;
-            _ = BaoCaoCuoiNgay.TaiDuLieuAsync();
         }
 
         // Báo cáo cuối ngày chỉ tải khi mở lần đầu, sau đó giữ nguyên ngày đang
@@ -3784,7 +3703,6 @@ public partial class MainWindowViewModel : ObservableObject
         if (PhieuNhapItems.Count == 0)
         {
             await BaoLoiLuuPhieuNhapAsync("Phiếu nhập chưa có hàng hóa.");
-            await BaoLoiLuuPhieuNhapAsync("Phiếu nhập chưa có hàng hóa.");
             return;
         }
 
@@ -3796,9 +3714,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (dongSoLuongSai.Count > 0)
         {
             await BaoLoiLuuPhieuNhapAsync(dongSoLuongSai.Count == 1
-            await BaoLoiLuuPhieuNhapAsync(dongSoLuongSai.Count == 1
                 ? $"Vui lòng kiểm tra số lượng của hàng \"{dongSoLuongSai[0].SanPham.TenSanPham}\" (phải lớn hơn 0)."
-                : $"Vui lòng kiểm tra số lượng hàng hóa: còn {dongSoLuongSai.Count} dòng chưa nhập số lượng.");
                 : $"Vui lòng kiểm tra số lượng hàng hóa: còn {dongSoLuongSai.Count} dòng chưa nhập số lượng.");
             return;
         }
@@ -3811,9 +3727,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (dongGiaSai.Count > 0)
         {
             await BaoLoiLuuPhieuNhapAsync(dongGiaSai.Count == 1
-            await BaoLoiLuuPhieuNhapAsync(dongGiaSai.Count == 1
                 ? $"Vui lòng kiểm tra giá nhập của hàng \"{dongGiaSai[0].SanPham.TenSanPham}\"."
-                : $"Vui lòng kiểm tra giá nhập: còn {dongGiaSai.Count} dòng có giá nhập không hợp lệ.");
                 : $"Vui lòng kiểm tra giá nhập: còn {dongGiaSai.Count} dòng có giá nhập không hợp lệ.");
             return;
         }
@@ -3826,14 +3740,12 @@ public partial class MainWindowViewModel : ObservableObject
         if (dongHopLe.Count == 0)
         {
             await BaoLoiLuuPhieuNhapAsync("Phiếu nhập chưa có hàng hóa hợp lệ nào để hoàn thành.");
-            await BaoLoiLuuPhieuNhapAsync("Phiếu nhập chưa có hàng hóa hợp lệ nào để hoàn thành.");
             return;
         }
 
         // 4. Nhà cung cấp là trường bắt buộc khi hoàn thành phiếu
         if (SelectedPhieuNhapNcc is null || SelectedPhieuNhapNcc.Id == 0)
         {
-            await BaoLoiLuuPhieuNhapAsync("Vui lòng chọn nhà cung cấp.");
             await BaoLoiLuuPhieuNhapAsync("Vui lòng chọn nhà cung cấp.");
             return;
         }
@@ -3842,14 +3754,12 @@ public partial class MainWindowViewModel : ObservableObject
         if (PhieuNhapNgayNhap is null)
         {
             await BaoLoiLuuPhieuNhapAsync("Vui lòng chọn ngày nhập.");
-            await BaoLoiLuuPhieuNhapAsync("Vui lòng chọn ngày nhập.");
             return;
         }
 
         // 6. Mã phiếu phải sinh được trước khi lưu
         if (string.IsNullOrWhiteSpace(PhieuNhapMa))
         {
-            await BaoLoiLuuPhieuNhapAsync("Chưa tạo được mã phiếu nhập, vui lòng mở lại màn hình và thử lại.");
             await BaoLoiLuuPhieuNhapAsync("Chưa tạo được mã phiếu nhập, vui lòng mở lại màn hình và thử lại.");
             return;
         }
@@ -3864,9 +3774,6 @@ public partial class MainWindowViewModel : ObservableObject
             return;
 
         IsSavingPhieuNhap = true;
-
-        var maPhieuVuaLuu = PhieuNhapMa;
-        var tongTienVuaLuu = PhieuNhapTongTienNhapText;
 
         var maPhieuVuaLuu = PhieuNhapMa;
         var tongTienVuaLuu = PhieuNhapTongTienNhapText;
@@ -3887,26 +3794,9 @@ public partial class MainWindowViewModel : ObservableObject
             };
 
             // Lưu header + chi tiết + tồn kho + giá vốn + công nợ trong MỘT transaction.
-            // Lưu header + chi tiết + tồn kho + giá vốn + công nợ trong MỘT transaction.
             // Service tự rollback toàn bộ nếu bất kỳ bước nào lỗi.
             _phieuNhapId = await _db.LuuPhieuNhapHangAsync(phieu, dongHopLe);
         }
-        catch (Exception ex)
-        {
-            // Lưu thất bại: KHÔNG reset, KHÔNG chuyển màn hình, giữ nguyên
-            // toàn bộ dữ liệu đang nhập để người dùng sửa rồi bấm lại.
-            SafeLog.WriteError("Loi luu phieu nhap hang", ex);
-
-            await BaoLoiLuuPhieuNhapAsync(ex.Message);
-            return;
-        }
-        finally
-        {
-            IsSavingPhieuNhap = false;
-        }
-
-        // ---- Đã lưu thành công ----
-    }
         catch (Exception ex)
         {
             // Lưu thất bại: KHÔNG reset, KHÔNG chuyển màn hình, giữ nguyên
@@ -3926,80 +3816,45 @@ public partial class MainWindowViewModel : ObservableObject
         // Phiếu vừa lưu phải xuất hiện trong "Báo cáo → Báo cáo phiếu nhập hàng"
         // nên đánh dấu cần tải lại thay vì giữ cache cũ.
         _baoCaoPhieuNhapLoaded = false;
-// Phiếu vừa lưu phải xuất hiện trong "Báo cáo → Báo cáo phiếu nhập hàng"
-// nên đánh dấu cần tải lại thay vì giữ cache cũ.
-_baoCaoPhieuNhapLoaded = false;
 
-// Dashboard thống kê phiếu nhập trong hoạt động gần đây và thống kê kho.
-_ = LamMoiTongQuanNeuDangMoAsync();
+        // Dashboard thống kê phiếu nhập trong hoạt động gần đây và thống kê kho.
+        _ = LamMoiTongQuanNeuDangMoAsync();
 
-// Tồn kho và giá vốn đã đổi -> nạp lại danh sách sản phẩm.
-// Bọc try/catch riêng: nạp lại thất bại không được làm hỏng kết quả
-// đã commit (phiếu vẫn lưu thành công).
-try
-{
-    // Dashboard thống kê phiếu nhập trong hoạt động gần đây và thống kê kho.
-    _ = LamMoiTongQuanNeuDangMoAsync();
+        // Tồn kho và giá vốn đã đổi -> nạp lại danh sách sản phẩm.
+        // Bọc try/catch riêng: nạp lại thất bại không được làm hỏng kết quả
+        // đã commit (phiếu vẫn lưu thành công).
+        try
+        {
+            await LoadProductsAsync();
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi tai lai danh sach san pham sau khi nhap hang", ex);
+        }
 
-    // Tồn kho và giá vốn đã đổi -> nạp lại danh sách sản phẩm.
-    // Bọc try/catch riêng: nạp lại thất bại không được làm hỏng kết quả
-    // đã commit (phiếu vẫn lưu thành công).
-    try
-    {
-        await LoadProductsAsync();
-    }
-    catch (Exception ex)
-    {
-        SafeLog.WriteError("Loi tai lai danh sach san pham sau khi nhap hang", ex);
-    }
-}
-catch (Exception ex)
-{
-    SafeLog.WriteError("Loi tai lai danh sach san pham sau khi nhap hang", ex);
-}
+        // Báo thành công và CHỜ người dùng đóng hộp thoại.
+        StatusMessage =
+            $"✅ Phiếu nhập {maPhieuVuaLuu} đã được lưu - tổng {tongTienVuaLuu} đ.";
 
-// Báo thành công và CHỜ người dùng đóng hộp thoại.
-StatusMessage =
-    $"✅ Phiếu nhập {maPhieuVuaLuu} đã được lưu - tổng {tongTienVuaLuu} đ.";
-// Báo thành công và CHỜ người dùng đóng hộp thoại.
-StatusMessage =
-    $"✅ Phiếu nhập {maPhieuVuaLuu} đã được lưu - tổng {tongTienVuaLuu} đ.";
+        await ShowMessageAsync(
+            "Thành công – Phiếu nhập đã được lưu.",
+            $"Mã phiếu: {maPhieuVuaLuu}\nTổng tiền nhập: {tongTienVuaLuu} đ");
 
-await ShowMessageAsync(
-    "Thành công – Phiếu nhập đã được lưu.",
-    $"Mã phiếu: {maPhieuVuaLuu}\nTổng tiền nhập: {tongTienVuaLuu} đ");
+        // Chỉ reset SAU khi hộp thoại thành công đã đóng, và vẫn giữ nguyên
+        // màn hình "Lập phiếu nhập hàng" (IsNhapHangFormVisible vẫn = true).
+        // MoPhieuNhapHangAsync() xóa hàng hóa, nhà cung cấp, số hóa đơn đầu vào,
+        // ghi chú, chi phí khác, đã thanh toán, ngày nhập về hôm nay,
+        // tính lại tổng tiền và SINH MÃ PHIẾU MỚI từ database.
+        await MoPhieuNhapHangAsync();
 
-// Chỉ reset SAU khi hộp thoại thành công đã đóng, và vẫn giữ nguyên
-// màn hình "Lập phiếu nhập hàng" (IsNhapHangFormVisible vẫn = true).
-// MoPhieuNhapHangAsync() xóa hàng hóa, nhà cung cấp, số hóa đơn đầu vào,
-// ghi chú, chi phí khác, đã thanh toán, ngày nhập về hôm nay,
-// tính lại tổng tiền và SINH MÃ PHIẾU MỚI từ database.
-await MoPhieuNhapHangAsync();
-
-// MoPhieuNhapHangAsync() để PhieuNhapMa = "" nếu sinh mã thất bại
-// (lỗi SQL/kết nối). Không được báo "sẵn sàng" khi mã còn rỗng.
-StatusMessage = string.IsNullOrWhiteSpace(PhieuNhapMa)
-    ? $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Không tạo được mã phiếu mới, vui lòng mở lại màn hình."
-    : $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Sẵn sàng lập phiếu mới: {PhieuNhapMa}";
-await ShowMessageAsync(
-    "Thành công – Phiếu nhập đã được lưu.",
-    $"Mã phiếu: {maPhieuVuaLuu}\nTổng tiền nhập: {tongTienVuaLuu} đ");
-
-// Chỉ reset SAU khi hộp thoại thành công đã đóng, và vẫn giữ nguyên
-// màn hình "Lập phiếu nhập hàng" (IsNhapHangFormVisible vẫn = true).
-// MoPhieuNhapHangAsync() xóa hàng hóa, nhà cung cấp, số hóa đơn đầu vào,
-// ghi chú, chi phí khác, đã thanh toán, ngày nhập về hôm nay,
-// tính lại tổng tiền và SINH MÃ PHIẾU MỚI từ database.
-await MoPhieuNhapHangAsync();
-
-// MoPhieuNhapHangAsync() để PhieuNhapMa = "" nếu sinh mã thất bại
-// (lỗi SQL/kết nối). Không được báo "sẵn sàng" khi mã còn rỗng.
-StatusMessage = string.IsNullOrWhiteSpace(PhieuNhapMa)
-    ? $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Không tạo được mã phiếu mới, vui lòng mở lại màn hình."
-    : $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Sẵn sàng lập phiếu mới: {PhieuNhapMa}";
+        // MoPhieuNhapHangAsync() để PhieuNhapMa = "" nếu sinh mã thất bại
+        // (lỗi SQL/kết nối). Không được báo "sẵn sàng" khi mã còn rỗng.
+        StatusMessage = string.IsNullOrWhiteSpace(PhieuNhapMa)
+            ? $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Không tạo được mã phiếu mới, vui lòng mở lại màn hình."
+            : $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Sẵn sàng lập phiếu mới: {PhieuNhapMa}";
     }
 
-partial void OnTienKhachDuaChanged(decimal value)
+    partial void OnTienKhachDuaChanged(decimal value)
 {
     RecalculatePayment();
 }
@@ -4083,18 +3938,16 @@ partial void OnSaleDiscountModeChanged(string value) => RecalculateSaleTotal();
 [RelayCommand]
 private async Task ThanhToanAsync()
 {
-<<<<<<< HEAD
+if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Bạn không có quyền bán hàng."))
+    {
+        return;
+    }
+
     // 1. Chống bấm nút nhiều lần / gọi lệnh chồng nhau
     if (IsThanhToanDangXuLy)
         return;
 
     // 2. Kiểm tra dữ liệu
-=======
-        if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Bạn không có quyền bán hàng."))
-        {
-            return;
-        }
->>>>>>> c355869 ("Cap nhat phan quyen tai khoan")
     if (SaleCart.Count == 0)
     {
         StatusMessage = "Vui lòng chọn ít nhất một sản phẩm trước khi thanh toán.";
@@ -4204,21 +4057,8 @@ private async Task ThanhToanAsync()
         : $" Đã ghi phiếu thu {receipt.MaPhieuThu} vào sổ quỹ.";
 
     var thongBaoThanhToan = receipt.CanhBao.Count > 0
-        // Dashboard phải thấy ngay hóa đơn vừa tạo (doanh thu, số hóa đơn,
-        // hoạt động gần đây, top hàng bán chạy, top khách hàng).
-        _ = LamMoiTongQuanNeuDangMoAsync();
-
-    // Sổ quỹ tự đọc lại database mỗi lần mở menu nên phiếu thu mới sẽ
-    // hiện ra ngay khi người dùng chuyển sang tab "Sổ quỹ".
-    var thongTinPhieuThu = string.IsNullOrWhiteSpace(receipt.MaPhieuThu)
-        ? ""
-        : $" Đã ghi phiếu thu {receipt.MaPhieuThu} vào sổ quỹ.";
-
-    var thongBaoThanhToan = receipt.CanhBao.Count > 0
         ? $"Đã tạo hóa đơn {maHoaDon}. {string.Join(" ", receipt.CanhBao)}"
         : $"Đã tạo hóa đơn {maHoaDon} thành công.";
-
-    StatusMessage = thongBaoThanhToan + thongTinPhieuThu;
 
     StatusMessage = thongBaoThanhToan + thongTinPhieuThu;
 

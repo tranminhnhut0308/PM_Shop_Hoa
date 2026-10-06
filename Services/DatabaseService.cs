@@ -8046,7 +8046,9 @@ LIMIT 500;
     public async Task<IReadOnlyList<UserPermissionDto>> GetUserPermissionsDetailAsync(uint userId)
     {
         await using var connection = await OpenAsync();
-        var hasExplicit = await CoQuanTriCheckAsync(userId);
+        var hasExplicit = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId",
+            new { UserId = userId }) > 0;
 
         var sql = hasExplicit
             ? """

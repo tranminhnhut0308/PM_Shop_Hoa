@@ -1471,20 +1471,16 @@
                   Spacing="10" Margin="0,12,0,0">
                   <Button Classes="secondary" Content="Đóng"
                     Command="{Binding DongGiaoDienBanHangCommand}" />
-<<<<<<< HEAD
 
                   <Button Classes="secondary" Content="🧾 Đơn mới"
-                    Command="{Binding TaoDonMoiCommand}" />
+                    Command="{Binding TaoDonMoiCommand}"
+                    IsVisible="{Binding CanCreateSale}" />
 
                   <Button Classes="toolbar-primary"
                     Content="{Binding TrangThaiXuLyThanhToan}"
                     IsEnabled="{Binding CanThanhToan}"
-                    Command="{Binding ThanhToanCommand}" />
-=======
-                  <Button Classes="toolbar-primary" Content="Thanh toán"
                     Command="{Binding ThanhToanCommand}"
                     IsVisible="{Binding CanCreateSale}" />
->>>>>>> c355869 ("Cap nhat phan quyen tai khoan")
                 </StackPanel>
               </Grid>
             </Border>
@@ -4628,10 +4624,6 @@
                     IsEnabled="{Binding !IsSoQuyDangNhap}"
                     Height="38"
                     Padding="14,0"
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
                     FontSize="13"
                     IsVisible="{Binding CanImportCashBook}" />
 
@@ -4642,9 +4634,8 @@
                     IsEnabled="{Binding !IsSoQuyDangNhap}"
                     Height="38"
                     Padding="12,0"
->>>>>>> c355869 ("Cap nhat phan quyen tai khoan")
->>>>>>> 357681fb44d9c836660f933715b75590cbeffa81
-                    FontSize="13" />
+                    FontSize="13"
+                    IsVisible="{Binding CanImportCashBook}" />
                 </StackPanel>
               </Grid>
 
