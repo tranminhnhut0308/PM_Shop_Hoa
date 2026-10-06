@@ -132,10 +132,29 @@ WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
         var list = new List<BaoCaoBanHangDiemThoiGian>();
         foreach (var r in rs)
         {
-            DateTime tg = r.ThoiGianStr;
-            list.Add(new BaoCaoBanHangDiemThoiGian { ThoiGian = tg, DoanhThu = r.DoanhThu, SoHoaDon = r.SoHoaDon, NhanXet = tg.ToString((denKeTiep - tu).TotalDays <= 1 ? "HH:00" : "dd/MM") });
+            // DATE_FORMAT trả về chuỗi, DATE() trả về DateTime — chuẩn hoá về DateTime.
+            object raw = r.ThoiGianStr;
+            DateTime tg = raw is DateTime trucTiep
+                ? trucTiep
+                : DateTime.Parse(raw.ToString() ?? string.Empty, CultureInfo.InvariantCulture);
+
+            list.Add(new BaoCaoBanHangDiemThoiGian
+            {
+                ThoiGian = tg,
+                DoanhThu = r.DoanhThu,
+                SoHoaDon = r.SoHoaDon,
+                NhanXet = tg.ToString((denKeTiep - tu).TotalDays <= 1 ? "HH:00" : "dd/MM")
+            });
         }
-        // Fill zeros if needed? Keep as is for chart (can extend if short range)
+
+        // Chiều cao cột tính sẵn theo điểm cao nhất để XAML bind thẳng.
+        if (list.Count > 0)
+        {
+            var max = list.Max(x => x.DoanhThu);
+            foreach (var x in list)
+                x.TyLeChieuCao = max <= 0 ? 0 : (double)(x.DoanhThu / max * 100m);
+        }
+
         return list;
     }
 
@@ -143,8 +162,6 @@ WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
 
     private async Task<List<BaoCaoBanHangBangRow>> TaiBangDuLieuAsync(MySqlConnection conn, DateTime tu, DateTime denKeTiep, int kieuLoc, CancellationToken token)
     {
-        string bucket = "DATE(hd.thoi_gian_ban)";
-        string groupBy = "DATE(hd.thoi_gian_ban)";
         string sql = @"SELECT DATE(hd.thoi_gian_ban) AS ThoiGian, COUNT(*) AS SoHoaDon, COALESCE(SUM(hd.tong_tien_hang), 0) AS TongTienHang, COALESCE(SUM(hd.giam_gia), 0) AS GiamGia, COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu, COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThu, COALESCE(SUM(hd.con_no), 0) AS CongNo FROM hoa_don_ban_hang hd WHERE hd.trang_thai_hoa_don = 'HOAN_THANH' AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep GROUP BY DATE(hd.thoi_gian_ban) ORDER BY ThoiGian ASC;";
         var rs = await conn.QueryAsync<BaoCaoBanHangBangRow>(new CommandDefinition(sql, new { TuNgay = tu, DenKeTiep = denKeTiep }, cancellationToken: token));
         var list = rs.AsList();
@@ -227,6 +244,11 @@ ORDER BY SoTien DESC;
                 _ => string.IsNullOrWhiteSpace(x.PhuongThuc) ? "Khác" : x.PhuongThuc
             };
         }
+
+        var tongTien = list.Sum(x => x.SoTien);
+        foreach (var x in list)
+            x.TyLePhanTram = tongTien <= 0 ? 0 : (double)(x.SoTien / tongTien * 100m);
+
         return list;
     }
 }

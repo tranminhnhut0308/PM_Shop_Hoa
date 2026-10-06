@@ -1123,6 +1123,14 @@ public partial class MainWindowViewModel : ObservableObject
                         await LoadBaoCaoPhieuNhapAsync();
                     }
 
+                    // Báo cáo bán hàng cũng chỉ tải lần đầu; các lần sau giữ nguyên
+                    // khoảng thời gian người dùng đang xem.
+                    if (SelectedReportKey == "ban-hang" && !_baoCaoBanHangLoaded)
+                    {
+                        _baoCaoBanHangLoaded = true;
+                        await BaoCaoBanHang.TaiLaiAsync();
+                    }
+
                     break;
             }
 
@@ -2969,6 +2977,12 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
             Key = "cuoi-ngay",
             TieuDe = "Báo cáo cuối ngày",
             BieuTuong = "🗓"
+        },
+        new BaoCaoMenuItem
+        {
+            Key = "ban-hang",
+            TieuDe = "Báo cáo bán hàng",
+            BieuTuong = "📊"
         },
         new BaoCaoMenuItem
         {

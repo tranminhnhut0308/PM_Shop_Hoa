@@ -8,8 +8,13 @@ public sealed class BaoCaoBanHangPhuongThucRow
     public string PhuongThucHienThi { get; set; } = string.Empty;
     public int SoGiaoDich { get; set; }
     public decimal SoTien { get; set; }
+
+    /// <summary>Tỉ lệ số tiền của dòng này so với tổng các dòng (0..100).</summary>
+    public double TyLePhanTram { get; set; }
+
     public string SoTienHienThi => SoTien.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " ₫";
     public string SoGiaoDichHienThi => SoGiaoDich.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+    public string TyLePhanTramHienThi => TyLePhanTram.ToString("N1", CultureInfo.GetCultureInfo("vi-VN")) + "%";
 }
 
 
@@ -20,7 +25,28 @@ public sealed class BaoCaoBanHangDiemThoiGian
     public string NhanXet { get; set; } = string.Empty;
     public decimal DoanhThu { get; set; }
     public int SoHoaDon { get; set; }
+
+    /// <summary>Tỉ lệ chiều cao cột so với điểm cao nhất trong khoảng (0..100).</summary>
+    public double TyLeChieuCao { get; set; }
+
+    /// <summary>Bề rộng cột (0..100) — mọi cột trong biểu đồ rộng đều nhau.</summary>
+    public double TyLeBeRong { get; set; } = 100;
+
+    /// <summary>Chiều cao tối đa của vùng vẽ cột (px) — XAML lấy hằng này làm mốc.</summary>
+    public const double ChieuCaoToiDa = 190;
+
+    /// <summary>Bề rộng tối đa của một cột (px) để cột không giãn quá rộng.</summary>
+    public const double BeRongToiDa = 72;
+
+    /// <summary>Chiều cao cột tính bằng pixel để XAML bind thẳng, không cần converter.</summary>
+    public double ChieuCaoCot => DoanhThu <= 0 ? 0 : Math.Max(3, TyLeChieuCao / 100d * ChieuCaoToiDa);
+
+    /// <summary>Bề rộng cột (px); nhiều điểm thì cuộn ngang trong vùng biểu đồ.</summary>
+    public double BeRongCot => Math.Max(16, Math.Min(BeRongToiDa, TyLeBeRong / 100d * BeRongToiDa));
+
     public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " ₫";
+    public string SoHoaDonHienThi => SoHoaDon.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " hóa đơn";
+    public string ToolTip => $"{NhanXet} · {DoanhThuHienThi} · {SoHoaDonHienThi}";
 }
 
 
