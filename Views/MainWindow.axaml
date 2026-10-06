@@ -1004,33 +1004,32 @@
           Margin="8,28,8,30" />
 
         <StackPanel Grid.Row="1" Orientation="Vertical">
-          <Button Classes="menu" Content="Tổng quan" Command="{Binding ChonMenuCommand}"
+          <Button Classes="menu" Content="Tổng quan" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewDashboard}"
             CommandParameter="Tổng quan" />
-          <Button Classes="menu" Content="Hàng hóa" Command="{Binding ChonMenuCommand}"
+          <Button Classes="menu" Content="Hàng hóa" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewProducts}"
             CommandParameter="Hàng hóa" />
           <!-- Đã ẩn Nhập hàng vì chuyển vào nút Tạo mới trong Hàng hóa -->
           <!-- 
-          <Button Classes="menu" Content="Nhập hàng" Command="{Binding ChonMenuCommand}"
+          <Button Classes="menu" Content="Nhập hàng" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewPurchases}"
             CommandParameter="Nhập hàng" /> 
           -->
           <Button Classes="menu" Content="Hóa đơn"
-            Command="{Binding ChonMenuCommand}"
+            Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewInvoices}"
             CommandParameter="Hóa đơn" />
-          <Button Classes="menu" Content="Khách hàng" Command="{Binding ChonMenuCommand}"
+          <Button Classes="menu" Content="Khách hàng" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewCustomers}"
             CommandParameter="Khách hàng" />
           <Button Classes="menu"
             Content="Nhà cung cấp"
-            Command="{Binding ChonMenuCommand}"
+            Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewSuppliers}"
             CommandParameter="Nhà cung cấp" />
-          <Button Classes="menu" Content="Sổ quỹ" Command="{Binding ChonMenuCommand}"
+          <Button Classes="menu" Content="Sổ quỹ" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewCashBook}"
             CommandParameter="Sổ quỹ" />
 
           <!-- NHÓM MENU BÁO CÁO (mở rộng được cho các báo cáo sau) -->
-          <Button Classes="menu" Content="Báo cáo" Command="{Binding ChonMenuCommand}"
+          <Button Classes="menu" Content="Báo cáo" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewReports}"
             CommandParameter="Báo cáo" />
 
-          <ItemsControl ItemsSource="{Binding BaoCaoMenuItems}"
-            IsVisible="{Binding IsBaoCaoSectionSelected}"
+          <ItemsControl ItemsSource="{Binding BaoCaoMenuItems}" IsVisible="{Binding CanViewReports}"
             Margin="14,0,0,4">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="models:BaoCaoMenuItem">
@@ -1053,7 +1052,7 @@
         <StackPanel Grid.Row="2">
           <!-- NÚT BÁN HÀNG -->
           <Button Classes="salesButton" Content="🛒  Bán hàng" VerticalAlignment="Center"
-            Command="{Binding MoGiaoDienBanHangCommand}" />
+            Command="{Binding MoGiaoDienBanHangCommand}" IsVisible="{Binding CanViewSales}" />
 
           <!-- THẺ TÀI KHOẢN ADMIN TÍCH HỢP POPUP MENU (FLYOUT) -->
           <Button Background="#087F6E"
@@ -1087,12 +1086,28 @@
                   BoxShadow="0 4 12 #20000000">
                   <StackPanel Spacing="3">
 
+                    <!-- Mục Quản lý tài khoản -->
+                    <Button Background="Transparent"
+                      BorderThickness="0"
+                      HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Left"
+                      Padding="10,8"
+                      Click="OpenUsersButton_OnClick"
+                      IsVisible="{Binding CanManageUsers}">
+                      <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="👤" FontSize="14" Foreground="#087F6E"
+                          VerticalAlignment="Center" />
+                        <TextBlock Text="Quản lý tài khoản" FontSize="13" Foreground="#263B35"
+                          VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
                     <!-- Mục Cài đặt danh mục -->
                     <Button Background="Transparent"
                       BorderThickness="0"
                       HorizontalAlignment="Stretch"
                       HorizontalContentAlignment="Left"
                       Padding="10,8"
+                      IsVisible="{Binding CanViewSettings}"
                       Click="OpenSettingsButton_OnClick">
                       <StackPanel Orientation="Horizontal" Spacing="10">
                         <TextBlock Text="⚙" FontSize="14" Foreground="#087F6E"
@@ -1456,6 +1471,7 @@
                   Spacing="10" Margin="0,12,0,0">
                   <Button Classes="secondary" Content="Đóng"
                     Command="{Binding DongGiaoDienBanHangCommand}" />
+<<<<<<< HEAD
 
                   <Button Classes="secondary" Content="🧾 Đơn mới"
                     Command="{Binding TaoDonMoiCommand}" />
@@ -1464,6 +1480,11 @@
                     Content="{Binding TrangThaiXuLyThanhToan}"
                     IsEnabled="{Binding CanThanhToan}"
                     Command="{Binding ThanhToanCommand}" />
+=======
+                  <Button Classes="toolbar-primary" Content="Thanh toán"
+                    Command="{Binding ThanhToanCommand}"
+                    IsVisible="{Binding CanCreateSale}" />
+>>>>>>> c355869 ("Cap nhat phan quyen tai khoan")
                 </StackPanel>
               </Grid>
             </Border>
@@ -1500,14 +1521,16 @@
                 Content="＋  Nhập hàng"
                 Command="{Binding MoGiaoDienNhapHangCommand}"
                 Margin="0"
-                Height="38" />
+                Height="38"
+                IsVisible="{Binding CanCreatePurchase}" />
 
               <Button Grid.Column="2"
                 Classes="toolbar-action"
                 Content="⇩  Import file"
                 Command="{Binding ThemSanPhamTuFileCommand}"
                 Margin="0"
-                Height="38" />
+                Height="38"
+                IsVisible="{Binding CanImportProduct}" />
 
               <Button Grid.Column="3"
                 Classes="toolbar-action"
@@ -1515,6 +1538,7 @@
                 Margin="0"
                 Height="38"
                 Padding="14,7"
+                IsVisible="{Binding CanExportProduct}"
                 Click="OnExportProductsClick" />
 
               <Button Grid.Column="4"
@@ -1926,10 +1950,12 @@
                 Margin="0,0,10,0" />
               <Button Grid.Column="2" Classes="toolbar-action" Content="📁 Nhập file"
                 Margin="0,0,10,0"
-                Command="{Binding ThemKhachHangTuFileCommand}" />
+                Command="{Binding ThemKhachHangTuFileCommand}"
+                IsVisible="{Binding CanImportCustomer}" />
               <Button Grid.Column="3" Classes="toolbar-primary" Content="＋ Thêm mới"
                 Margin="0"
-                Command="{Binding ThemMoiKhachHangCommand}" />
+                Command="{Binding ThemMoiKhachHangCommand}"
+                IsVisible="{Binding CanCreateCustomer}" />
             </Grid>
 
             <!-- 2. THỐNG KÊ THẬT TỪ DATABASE -->
@@ -2130,9 +2156,11 @@
                                 </StackPanel>
 
                                 <Button Grid.Column="2" Classes="toolbar-action" Content="✏ Sửa"
-                                  Margin="0,0,8,0" Command="{Binding SuaCommand}" />
+                                  Margin="0,0,8,0" Command="{Binding SuaCommand}"
+                                  IsVisible="{Binding $parent[Window].DataContext.CanEditCustomer}" />
                                 <Button Grid.Column="3" Classes="toolbar-action" Content="🗑 Xóa"
-                                  Margin="0" Command="{Binding XoaCommand}" />
+                                  Margin="0" Command="{Binding XoaCommand}"
+                                  IsVisible="{Binding $parent[Window].DataContext.CanDeleteCustomer}" />
                               </Grid>
 
                               <!-- ĐANG TẢI CHI TIẾT -->
@@ -2485,7 +2513,8 @@
                 Spacing="8">
                 <Button Classes="toolbar-action"
                   Content="⇩ Nhập từ file"
-                  Command="{Binding NhapHoaDonTuFileCommand}" />
+                  Command="{Binding NhapHoaDonTuFileCommand}"
+                  IsVisible="{Binding CanImportInvoice}" />
 
                 <Button Classes="toolbar-action"
                   Content="↻ Làm mới"
@@ -2715,12 +2744,15 @@
                 <Button Classes="toolbar-action" Content="↻ Làm mới" Margin="0"
                   Command="{Binding RefreshSuppliersCommand}" />
                 <Button Classes="toolbar-action" Content="📁 Nhập file" Margin="0"
-                  Command="{Binding ThemNhaCungCapTuFileCommand}" />
+                  Command="{Binding ThemNhaCungCapTuFileCommand}"
+                  IsVisible="{Binding CanImportSupplier}" />
                 <Button Classes="toolbar-action" Content="📤 Xuất file" Margin="0"
                   Command="{Binding XuatFileNhaCungCapCommand}"
-                  ToolTip.Tip="Xuất toàn bộ danh sách nhà cung cấp đang xem ra file Excel" />
+                  ToolTip.Tip="Xuất toàn bộ danh sách nhà cung cấp đang xem ra file Excel"
+                  IsVisible="{Binding CanExportSupplier}" />
                 <Button Classes="toolbar-primary" Content="＋ Thêm nhà cung cấp" Margin="0"
-                  Command="{Binding ThemNhaCungCapCommand}" />
+                  Command="{Binding ThemNhaCungCapCommand}"
+                  IsVisible="{Binding CanCreateSupplier}" />
               </StackPanel>
             </Grid>
 
@@ -3027,10 +3059,12 @@
 
                                 <Button Grid.Column="2" Classes="toolbar-action"
                                   Content="✏ Sửa" Margin="0,0,8,0"
-                                  Command="{Binding SuaCommand}" />
+                                  Command="{Binding SuaCommand}"
+                                  IsVisible="{Binding $parent[Window].DataContext.CanEditSupplier}" />
                                 <Button Grid.Column="3" Classes="toolbar-action"
                                   Content="🗑 Xóa" Margin="0"
-                                  Command="{Binding XoaCommand}" />
+                                  Command="{Binding XoaCommand}"
+                                  IsVisible="{Binding $parent[Window].DataContext.CanDeleteSupplier}" />
                               </Grid>
 
                               <!-- ĐANG TẢI CHI TIẾT -->
@@ -3433,7 +3467,8 @@
                   Classes="toolbar-primary"
                   Content="＋  Hàng hóa mới"
                   Command="{Binding MoPhieuNhapHangCommand}"
-                  Margin="0" />
+                  Margin="0"
+                  IsVisible="{Binding CanCreatePurchase}" />
               </Grid>
 
               <!-- THANH TÌM KIẾM -->
@@ -3594,7 +3629,8 @@
                     Content="＋  Thêm hàng hóa"
                     Command="{Binding ThemSanPhamCommand}"
                     CommandParameter="{Binding ImportProductSearch}"
-                    VerticalAlignment="Stretch" />
+                    VerticalAlignment="Stretch"
+                    IsVisible="{Binding CanCreateProduct}" />
                 </Grid>
 
                 <!-- KẾT QUẢ TÌM HÀNG HÓA -->
@@ -4060,7 +4096,8 @@
                           VerticalAlignment="Stretch"
                           HorizontalAlignment="Stretch"
                           ToolTip.Tip="Thêm nhà cung cấp mới"
-                          Command="{Binding ThemNhaCungCapNhapNhanhCommand}" />
+                          Command="{Binding ThemNhaCungCapNhapNhanhCommand}"
+                          IsVisible="{Binding CanCreateSupplier}" />
                       </Grid>
 
                       <!-- KẾT QUẢ TÌM NHÀ CUNG CẤP -->
@@ -4236,7 +4273,8 @@
                       HorizontalContentAlignment="Center"
                       Padding="0,12"
                       Command="{Binding HoanThanhPhieuNhapCommand}"
-                      IsEnabled="{Binding CanSavePhieuNhap}" />
+                      IsEnabled="{Binding CanSavePhieuNhap}"
+                      IsVisible="{Binding CanCreatePurchase}" />
 
                     <!-- XÓA TẤT CẢ -->
                     <Button Classes="toolbar-action"
@@ -4557,14 +4595,16 @@
                     Command="{Binding MoSoQuyPhieuThuCommand}"
                     Height="38"
                     Padding="16,0"
-                    FontSize="13" />
+                    FontSize="13"
+                    IsVisible="{Binding CanCreateReceipt}" />
 
                   <Button Classes="toolbar-action"
                     Content="－  Phiếu chi"
                     Command="{Binding MoSoQuyPhieuChiCommand}"
                     Height="38"
                     Padding="16,0"
-                    FontSize="13" />
+                    FontSize="13"
+                    IsVisible="{Binding CanCreatePayment}" />
 
                   <Border Width="1"
                     Height="26"
@@ -4578,7 +4618,8 @@
                     Command="{Binding XuatFileSoQuyCommand}"
                     Height="38"
                     Padding="14,0"
-                    FontSize="13" />
+                    FontSize="13"
+                    IsVisible="{Binding CanExportCashBook}" />
 
                   <Button Classes="toolbar-action"
                     Content="⇧  Nhập file"
@@ -4587,6 +4628,22 @@
                     IsEnabled="{Binding !IsSoQuyDangNhap}"
                     Height="38"
                     Padding="14,0"
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+                    FontSize="13"
+                    IsVisible="{Binding CanImportCashBook}" />
+
+                  <Button Classes="toolbar-action"
+                    Content="File mẫu"
+                    ToolTip.Tip="Tải file Excel mẫu đúng định dạng nhập sổ quỹ"
+                    Command="{Binding TaiFileMauSoQuyCommand}"
+                    IsEnabled="{Binding !IsSoQuyDangNhap}"
+                    Height="38"
+                    Padding="12,0"
+>>>>>>> c355869 ("Cap nhat phan quyen tai khoan")
+>>>>>>> 357681fb44d9c836660f933715b75590cbeffa81
                     FontSize="13" />
                 </StackPanel>
               </Grid>
@@ -4875,7 +4932,8 @@
                             Command="{Binding HuyNhieuPhieuDaChonCommand}"
                             Height="30"
                             Padding="12,0"
-                            FontSize="12" />
+                            FontSize="12"
+                            IsVisible="{Binding CanCancelCashBook}" />
                         </StackPanel>
                       </Border>
                     </Grid>
@@ -5228,7 +5286,8 @@
             Content="＋  Nhập hàng"
             Command="{Binding MoGiaoDienNhapHangTuBaoCaoCommand}"
             VerticalAlignment="Center"
-            Margin="0" />
+            Margin="0"
+            IsVisible="{Binding CanViewPurchases}" />
 
           <Button Grid.Column="2"
             Classes="toolbar-action"
@@ -5924,13 +5983,15 @@
                     Classes="sq-btn-secondary"
                     Content="Lưu &amp; In"
                     IsEnabled="{Binding !IsSoQuyPhieuDangLuu}"
-                    Command="{Binding LuuVaInSoQuyPhieuThuCommand}" />
+                    Command="{Binding LuuVaInSoQuyPhieuThuCommand}"
+                    IsVisible="{Binding CanCreateReceipt}" />
 
                   <Button Grid.Column="3"
                     Classes="sq-btn-primary"
                     Content="Lưu"
                     IsEnabled="{Binding !IsSoQuyPhieuDangLuu}"
-                    Command="{Binding LuuSoQuyPhieuThuCommand}" />
+                    Command="{Binding LuuSoQuyPhieuThuCommand}"
+                    IsVisible="{Binding CanCreateReceipt}" />
                 </Grid>
               </StackPanel>
             </Border>
@@ -6196,13 +6257,15 @@
                     Classes="sq-btn-secondary"
                     Content="Lưu &amp; In"
                     IsEnabled="{Binding !IsSoQuyPhieuDangLuu}"
-                    Command="{Binding LuuVaInSoQuyPhieuChiCommand}" />
+                    Command="{Binding LuuVaInSoQuyPhieuChiCommand}"
+                    IsVisible="{Binding CanCreatePayment}" />
 
                   <Button Grid.Column="3"
                     Classes="sq-btn-primary"
                     Content="Lưu"
                     IsEnabled="{Binding !IsSoQuyPhieuDangLuu}"
-                    Command="{Binding LuuSoQuyPhieuChiCommand}" />
+                    Command="{Binding LuuSoQuyPhieuChiCommand}"
+                    IsVisible="{Binding CanCreatePayment}" />
                 </Grid>
               </StackPanel>
             </Border>
@@ -6402,13 +6465,13 @@
                   <Button Grid.Column="2"
                     Classes="sq-btn-secondary"
                     Content="Sửa"
-                    IsVisible="{Binding !SoQuyChiTietDangXem.DaHuy}"
+                    IsVisible="{Binding !SoQuyChiTietDangXem.DaHuy} and {Binding CanEditCashBook}"
                     Command="{Binding SuaPhieuHienTaiCommand}" />
 
                   <Button Grid.Column="3"
                     Classes="sq-btn-primary"
                     Content="Hủy phiếu"
-                    IsVisible="{Binding !SoQuyChiTietDangXem.DaHuy}"
+                    IsVisible="{Binding !SoQuyChiTietDangXem.DaHuy} and {Binding CanCancelCashBook}"
                     Command="{Binding HuyPhieuHienTaiCommand}" />
                 </Grid>
               </Border>
@@ -6577,7 +6640,8 @@
                     Classes="sq-btn-primary"
                     Content="Lưu thay đổi"
                     IsEnabled="{Binding !IsSoQuySuaPhieuDangLuu}"
-                    Command="{Binding LuuSoQuySuaPhieuCommand}" />
+                    Command="{Binding LuuSoQuySuaPhieuCommand}"
+                    IsVisible="{Binding CanEditCashBook}" />
                 </Grid>
               </StackPanel>
             </ScrollViewer>
