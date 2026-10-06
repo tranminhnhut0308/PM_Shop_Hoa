@@ -456,9 +456,7 @@
       <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
-    <!-- =====================================================
          CHỈNH GIÁ NHANH NGAY TRÊN DANH SÁCH HÀNG HÓA
-         ===================================================== -->
 
     <!-- Nút ✏ mở ô nhập giá: ẩn cho tới khi rê chuột vào dòng -->
     <Style Selector="Button.priceEditTrigger">
@@ -693,7 +691,6 @@
       <Setter Property="TextElement.Foreground" Value="#263B35" />
     </Style>
 
-    <!-- =================== SỔ QUỸ - STYLE RIÊNG CHO MÀN HÌNH =================== -->
 
     <Style Selector="TextBlock.sq-label">
       <Setter Property="FontSize" Value="12" />
@@ -925,7 +922,6 @@
       <Setter Property="TextElement.Foreground" Value="#344B45" />
     </Style>
 
-    <!-- ============ CHIP CHỌN NHANH (dùng cho loại chứng từ ở bộ lọc) ============ -->
     <Style Selector="ToggleButton.locChip">
       <Setter Property="Height" Value="30" />
       <Setter Property="Padding" Value="4,0" />
@@ -980,7 +976,6 @@
       <Setter Property="Foreground" Value="#087F6E" />
     </Style>
 
-    <!-- ============ Ô CHỌN NGÀY TRONG BỘ LỌC SỔ QUỸ ============ -->
     <Style Selector="DatePicker.sq-date">
       <Setter Property="Height" Value="34" />
       <Setter Property="FontSize" Value="12" />
@@ -1348,19 +1343,6 @@
                     <TextBlock Text="Tổng tiền" Foreground="#163F38" FontWeight="Bold" FontSize="14" />
                     <TextBlock Grid.Column="1" Text="{Binding SaleTotal, StringFormat={}{0:N0} đ}" Foreground="#087F6E" FontWeight="Bold" FontSize="14" />
                   </Grid>
-=======
-                        <ComboBox ItemsSource="{Binding DiscountModes}"
-                          SelectedItem="{Binding SaleDiscountMode, Mode=TwoWay}"
-                          Padding="8,5" />
-
-                        <TextBox Grid.Column="1"
-                          Text="{Binding SaleDiscountInput, Mode=TwoWay, Converter={StaticResource ThousandsSeparatorConverter}}"
-                          Watermark="0"
-                          TextChanged="OnSaleDiscountTextChanged"
-                          HorizontalContentAlignment="Right"
-                          Padding="8,5" />
-                      </Grid>
-                    </Grid>
 
                     <!-- TIỀN KHÁCH ĐƯA -->
                     <Grid ColumnDefinitions="*,Auto"
@@ -1436,23 +1418,6 @@
                   </StackPanel>
                 </Border>
 
-                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right"
-                  Spacing="10" Margin="0,12,0,0">
-                  <Button Classes="secondary" Content="Đóng"
-                    Command="{Binding DongGiaoDienBanHangCommand}" />
-
-                  <Button Classes="secondary" Content="🧾 Đơn mới"
-                    Command="{Binding TaoDonMoiCommand}"
-                    IsVisible="{Binding CanCreateSale}" />
-
-                  <Button Classes="toolbar-primary"
-                    Content="{Binding TrangThaiXuLyThanhToan}"
-                    IsEnabled="{Binding CanThanhToan}"
-                    Command="{Binding ThanhToanCommand}"
-                    IsVisible="{Binding CanCreateSale}" />
->>>>>>> 457c618834c8e7a2bdccddf84087af71a0630da0
-                </StackPanel>
-              </Border>
             </ScrollViewer>
 
             <!-- NÚT THAO TÁC -->
@@ -1469,7 +1434,6 @@
         </Border>
 
       </Grid>
-<<<<<<< HEAD
     </Border>
   </Grid>
 
@@ -1620,11 +1584,9 @@
           </Grid>
         </StackPanel>
       </ScrollViewer>
-=======
       <Grid IsVisible="{Binding IsTongQuanSelected}">
         <views:TongQuanDashboardView DataContext="{Binding Dashboard}" />
       </Grid>
->>>>>>> 457c618834c8e7a2bdccddf84087af71a0630da0
 
       <TabControl Grid.RowSpan="2" Margin="0"
         SelectedIndex="{Binding SelectedDataTabIndex}"
@@ -3568,9 +3530,7 @@
         <TabItem Header="Nhập hàng">
           <Grid Margin="0,14,0,0">
 
-            <!-- ===================================================== -->
             <!-- MÀN 1: DANH SÁCH PHIẾU NHẬP (giữ nguyên giao diện cũ) -->
-            <!-- ===================================================== -->
             <Grid IsVisible="{Binding IsNhapHangListVisible}"
               RowDefinitions="Auto,Auto,*"
               RowSpacing="14">
@@ -3692,9 +3652,7 @@
 
             </Grid>
 
-            <!-- ===================================================== -->
             <!-- MÀN 2: LẬP PHIẾU NHẬP HÀNG (75% bảng / 25% panel) -->
-            <!-- ===================================================== -->
             <Grid IsVisible="{Binding IsNhapHangFormVisible}"
               ColumnDefinitions="3*,*"
               ColumnSpacing="16"
@@ -3726,9 +3684,7 @@
                   Margin="0" />
               </Grid>
 
-              <!-- =================================================== -->
               <!-- CỘT TRÁI - BẢNG HÀNG HÓA NHẬP                          -->
-              <!-- =================================================== -->
               <Grid Grid.Row="1" Grid.RowSpan="2" Grid.Column="0"
                 RowDefinitions="Auto,Auto,*"
                 RowSpacing="12">
@@ -4099,9 +4055,7 @@
                 </Border>
               </Grid>
 
-              <!-- =================================================== -->
               <!-- CỘT PHẢI - PANEL THÔNG TIN PHIẾU                        -->
-              <!-- =================================================== -->
               <Border Grid.Row="1" Grid.RowSpan="2" Grid.Column="1"
                 Background="White"
                 BorderBrush="#E2ECE8"
@@ -4419,17 +4373,13 @@
           </Grid>
         </TabItem>
 
-        <!-- ================================================================ -->
         <!-- TAB SỔ QUỸ - PHIẾU THU / PHIẾU CHI CÓ BỘ LỌC                    -->
         <!-- Bố cục: bộ lọc bên trái, danh sách + thống kê bên phải.          -->
         <!-- Mọi điều kiện lọc và cả 4 thẻ thống kê đều do MySQL tính.        -->
-        <!-- ================================================================ -->
         <TabItem Header="Sổ quỹ">
           <Grid ColumnDefinitions="272,*" ColumnSpacing="12">
 
-            <!-- ============================================================ -->
             <!-- BÊN TRÁI: BỘ LỌC                                            -->
-            <!-- ============================================================ -->
             <Border Grid.Column="0"
               Background="White"
               BorderBrush="#E2ECE8"
@@ -4439,7 +4389,6 @@
 
               <Grid RowDefinitions="Auto,*,Auto">
 
-                <!-- ========== Tiêu đề + nút xóa bộ lọc ========== -->
                 <Border Grid.Row="0"
                   Background="#F7FAF9"
                   BorderBrush="#E2ECE8"
@@ -4470,7 +4419,6 @@
                   </Grid>
                 </Border>
 
-                <!-- ========== Các nhóm điều kiện ========== -->
                 <ScrollViewer Grid.Row="1"
                   VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled"
@@ -4654,7 +4602,6 @@
                   </StackPanel>
                 </ScrollViewer>
 
-                <!-- ========== Nút xóa bộ lọc ========== -->
                 <Border Grid.Row="2"
                   Background="#F7FAF9"
                   BorderBrush="#E2ECE8"
@@ -4673,14 +4620,11 @@
               </Grid>
             </Border>
 
-            <!-- ============================================================ -->
             <!-- BÊN PHẢI: THANH TÌM KIẾM + DANH SÁCH + THỐNG KÊ            -->
-            <!-- ============================================================ -->
             <Grid Grid.Column="1"
               RowDefinitions="Auto,Auto,*"
               RowSpacing="12">
 
-              <!-- ============ 1. THANH TÌM KIẾM & THANH CHỨC NĂNG ============ -->
               <Grid Grid.Row="0"
                 ColumnDefinitions="Auto,*,Auto"
                 ColumnSpacing="10">
@@ -4770,7 +4714,6 @@
                 </StackPanel>
               </Grid>
 
-              <!-- ============ 2. BỐN THẺ THỐNG KÊ THEO BỘ LỌC ============ -->
               <Grid Grid.Row="1"
                 ColumnDefinitions="*,*,*,*"
                 ColumnSpacing="12">
@@ -4942,7 +4885,6 @@
                 </Border>
               </Grid>
 
-              <!-- ============ 3 + 4. DANH SÁCH PHIẾU & PHÂN TRANG ============ -->
               <Border Grid.Row="2"
                 Background="White"
                 BorderBrush="#E2ECE8"
@@ -5368,20 +5310,21 @@
         </TabItem>
       </TabControl>
 
-      <!-- ============================================================ -->
       <!-- BÁO CÁO CUỐI NGÀY                                           -->
       <!-- Grid ngoài bind vào MainWindowViewModel để đọc được           -->
       <!-- IsBaoCaoCuoiNgaySelected; UserControl bên trong nhận        -->
       <!-- DataContext là ViewModel báo cáo.                            -->
-      <!-- ============================================================ -->
       <Grid IsVisible="{Binding IsBaoCaoCuoiNgaySelected}">
         <views:BaoCaoCuoiNgayView DataContext="{Binding BaoCaoCuoiNgay}" />
       </Grid>
 
-      <!-- ============================================================ -->
+        <!-- BAO CAO BAN HANG -->
+        <Grid IsVisible="{Binding IsBaoCaoBanHangSelected}">
+          <views:BaoCaoBanHangView DataContext="{Binding BaoCaoBanHang}" />
+        </Grid>
+
       <!-- BÁO CÁO PHIẾU NHẬP HÀNG                                       -->
       <!-- (khác với Mua hàng → Nhập hàng: đây là màn đọc dữ liệu)      -->
-      <!-- ============================================================ -->
       <Grid IsVisible="{Binding IsBaoCaoPhieuNhapSelected}"
         RowDefinitions="Auto,Auto,Auto,*"
         RowSpacing="14">
@@ -5847,9 +5790,7 @@
 
       </Grid>
 
-      <!-- ================================================================ -->
       <!-- MODAL TẠO PHIẾU THU TIỀN MẶT (chỉ giao diện)                    -->
-      <!-- ================================================================ -->
       <Grid IsVisible="{Binding IsSoQuyPhieuThuVisible}"
         ZIndex="900"
         Background="#66101A2B">
@@ -5899,7 +5840,6 @@
 
               <Grid ColumnDefinitions="*,*" ColumnSpacing="22" RowSpacing="0">
 
-                <!-- ============ CỘT TRÁI ============ -->
                 <StackPanel Grid.Column="0" Spacing="14" Margin="0,0,0,0">
 
                   <!-- Mã phiếu (tự sinh) -->
@@ -6006,7 +5946,6 @@
                   </StackPanel>
                 </StackPanel>
 
-                <!-- ============ CỘT PHẢI ============ -->
                 <StackPanel Grid.Column="1" Spacing="14" Margin="0,0,0,0">
 
                   <!-- Thời gian (tự động) -->
@@ -6121,9 +6060,7 @@
         </Border>
       </Grid>
 
-      <!-- ================================================================ -->
       <!-- MODAL TẠO PHIẾU CHI TIỀN MẶT (cùng bố cục với phiếu thu)        -->
-      <!-- ================================================================ -->
       <Grid IsVisible="{Binding IsSoQuyPhieuChiVisible}"
         ZIndex="900"
         Background="#66101A2B">
@@ -6173,7 +6110,6 @@
 
               <Grid ColumnDefinitions="*,*" ColumnSpacing="22" RowSpacing="0">
 
-                <!-- ============ CỘT TRÁI ============ -->
                 <StackPanel Grid.Column="0" Spacing="14" Margin="0,0,0,0">
 
                   <!-- Mã phiếu (tự sinh) -->
@@ -6280,7 +6216,6 @@
                   </StackPanel>
                 </StackPanel>
 
-                <!-- ============ CỘT PHẢI ============ -->
                 <StackPanel Grid.Column="1" Spacing="14" Margin="0,0,0,0">
 
                   <!-- Thời gian (tự động) -->
@@ -6395,11 +6330,9 @@
         </Border>
       </Grid>
 
-    <!-- ================================================================ -->
       <!-- MODAL CHI TIẾT PHIẾU                                            -->
       <!-- Mở khi bấm nút "Xem" ở một dòng trong bảng sổ quỹ.              -->
       <!-- Sửa / Hủy đều xuất phát từ đây nên bảng chỉ cần một nút.       -->
-      <!-- ================================================================ -->
       <Grid IsVisible="{Binding IsSoQuyChiTietVisible}"
         ZIndex="950"
         Background="#66101A2B">
@@ -6602,11 +6535,9 @@
         </Border>
       </Grid>
 
-    <!-- ================================================================ -->
       <!-- MODAL SỬA PHIẾU                                                  -->
       <!-- Mở từ nút "Sửa" trong modal chi tiết.                             -->
       <!-- Không cho sửa thời gian: mã phiếu đã cấp và có thể đã in ra giấy.-->
-      <!-- ================================================================ -->
       <Grid IsVisible="{Binding IsSoQuySuaPhieuVisible}"
         ZIndex="960"
         Background="#66101A2B">

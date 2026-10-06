@@ -1,0 +1,736 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:models="using:ShopHoa.Models"
+  xmlns:vm="using:ShopHoa.ViewModels"
+  x:Class="ShopHoa.Views.BaoCaoBanHangView"
+  x:DataType="vm:BaoCaoCuoiNgayViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="Border.bcCard">
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="BorderBrush" Value="#E2ECE8" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BoxShadow" Value="0 2 10 0 #14000000" />
+    </Style>
+
+    <Style Selector="Border.bcMetric">
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="BorderBrush" Value="#E2ECE8" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BoxShadow" Value="0 1 6 0 #10000000" />
+      <Setter Property="Padding" Value="14,11" />
+      <Setter Property="MinWidth" Value="168" />
+    </Style>
+
+    <Style Selector="Border.bcRow">
+      <Setter Property="Padding" Value="0,8" />
+      <Setter Property="BorderBrush" Value="#EEF4F2" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+
+    <Style Selector="Border.bcChartBar">
+      <Setter Property="CornerRadius" Value="4,4,0,0" />
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="MinHeight" Value="2" />
+    </Style>
+
+    <Style Selector="Border.bcChartBarZero">
+      <Setter Property="CornerRadius" Value="4,4,0,0" />
+      <Setter Property="Background" Value="#DDE9E5" />
+      <Setter Property="MinHeight" Value="2" />
+    </Style>
+
+    <Style Selector="ProgressBar.bcBar">
+      <Setter Property="Height" Value="7" />
+      <Setter Property="Foreground" Value="#087F6E" />
+      <Setter Property="Background" Value="#EFF5F3" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Minimum" Value="0" />
+      <Setter Property="Maximum" Value="100" />
+    </Style>
+
+    <Style Selector="ProgressBar.bcBar /template/ ProgressBar#PART_Indicator">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+
+    <Style Selector="ProgressBar.bcBarAlt /template/ ProgressBar#PART_Indicator">
+      <Setter Property="Background" Value="#2F6F63" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+
+    <Style Selector="TextBlock.bcSectionTitle">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#164B40" />
+    </Style>
+
+    <Style Selector="TextBlock.bcSectionSub">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#61736E" />
+    </Style>
+
+    <Style Selector="TextBlock.bcMuted">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#61736E" />
+    </Style>
+
+    <Style Selector="TextBlock.bcMetricLabel">
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="Foreground" Value="#61736E" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.bcMetricValue">
+      <Setter Property="FontSize" Value="17" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#164B40" />
+      <Setter Property="Margin" Value="0,3,0,0" />
+    </Style>
+
+    <Style Selector="TextBlock.bcTableHead">
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#164B40" />
+    </Style>
+
+    <Style Selector="TextBlock.bcTableCell">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="#2C3A37" />
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="18" Spacing="14">
+
+      <!-- ============ THANH TIÃŠU Äá»€ + Bá»˜ Lá»ŒC NGÃ€Y ============ -->
+      <Border Classes="bcCard" Padding="16,13">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="BÃO CÃO CUá»I NGÃ€Y"
+              FontSize="18" FontWeight="SemiBold" Foreground="#164B40" />
+            <TextBlock Classes="bcSectionSub" Margin="0,3,0,0"
+              Text="ToÃ n bá»™ sá»‘ liá»‡u láº¥y trá»±c tiáº¿p tá»« database theo ngÃ y Ä‘ang chá»n" />
+          </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+              VerticalAlignment="Center">
+              <TextBlock Text="NgÃ y bÃ¡o cÃ¡o:" VerticalAlignment="Center" FontSize="14"
+                Foreground="#164B40" Margin="0,0,4,0" FontWeight="SemiBold" />
+
+              <Button Classes="toolbar-action"
+                MinWidth="180"
+                Height="38"
+                Padding="12,6"
+                BorderBrush="#C9D6D1"
+                BorderThickness="1"
+                Background="#FFFFFF"
+                CornerRadius="8"
+                VerticalContentAlignment="Center"
+                HorizontalContentAlignment="Left">
+                <Button.Flyout>
+                  <Flyout Placement="Bottom">
+                    <StackPanel Spacing="10" Width="280">
+                      <DatePicker SelectedDate="{Binding NgayChon}" HorizontalAlignment="Stretch" />
+                    </StackPanel>
+                  </Flyout>
+                </Button.Flyout>
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <TextBlock Text="ðŸ“…" FontSize="16" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding NgayHienThi}" FontSize="14" VerticalAlignment="Center" Foreground="#164B40" />
+                  <TextBlock Text="â–¼" FontSize="10" VerticalAlignment="Center" Foreground="#61736E" Margin="0,1,0,0" />
+                </StackPanel>
+              </Button>
+
+              <Button Classes="toolbar-action"
+                Content="HÃ´m nay"
+                Command="{Binding Vá»HÃ´mNayCommand}" />
+              <Button Classes="toolbar-action" Content="HÃ´m qua"
+                Command="{Binding Vá»NgayQuaCommand}" />
+              <Button Classes="toolbar-action" Content="LÃ m má»›i"
+                Command="{Binding TaiLaiCommand}" />
+              <Button Content="Xuáº¥t Excel"
+                Command="{Binding XuatExcelCommand}"
+                Background="#087F6E" Foreground="White"
+                Padding="14,7" CornerRadius="8" FontWeight="SemiBold"
+                BorderThickness="0" />
+            </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- ============ Cáº¢NH BÃO Lá»–I ============ -->
+      <Border IsVisible="{Binding CoLoi}" Background="#FDECEC"
+        BorderBrush="#F5C2C2" BorderThickness="1" CornerRadius="10" Padding="14,11">
+        <TextBlock Text="{Binding ThongBaoLoi}" TextWrapping="Wrap"
+          Foreground="#A32B2B" FontSize="12" />
+      </Border>
+
+      <!-- ============ Cáº¢NH BÃO Báº¤T BIáº¾N Sá» LIá»†U ============ -->
+      <Border IsVisible="{Binding CanhBaoCongNo}" Background="#FFF4E5"
+        BorderBrush="#F0D3A0" BorderThickness="1" CornerRadius="10" Padding="14,11">
+        <StackPanel Spacing="4">
+          <TextBlock Text="Cáº£nh bÃ¡o sá»‘ liá»‡u" FontWeight="SemiBold"
+            Foreground="#8A5A00" FontSize="12" />
+          <TextBlock Text="{Binding NoiDungCanhBao}" TextWrapping="Wrap"
+            Foreground="#8A5A00" FontSize="11.5" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============ Táº¢I ÄANG ============ -->
+      <ProgressBar IsIndeterminate="True" Height="3"
+        IsVisible="{Binding DangTai}" Foreground="#087F6E"
+        Background="#EAF9F5" BorderThickness="0" />
+
+      <!-- ============ THáºº Sá» LIá»†U BÃN HÃ€NG ============ -->
+      <StackPanel Spacing="9">
+        <TextBlock Classes="bcSectionTitle" Text="1. BÃN HÃ€NG â€” hÃ³a Ä‘Æ¡n tráº¡ng thÃ¡i HOAN_THANH" />
+
+        <WrapPanel Orientation="Horizontal" ItemSpacing="10" LineSpacing="10">
+          <Border Classes="bcMetric">
+            <StackPanel>
+              <TextBlock Classes="bcMetricLabel" Text="Doanh thu (khÃ¡ch pháº£i tráº£)" />
+              <TextBlock Classes="bcMetricValue" Text="{Binding TongKetBanHang.DoanhThuHienThi}" />
+              <TextBlock Classes="bcMuted" Margin="0,2,0,0"
+                Text="Tá»•ng tiá»n hÃ ng âˆ’ giáº£m giÃ¡" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="bcMetric">
+            <StackPanel>
+              <TextBlock Classes="bcMetricLabel" Text="Tá»•ng tiá»n hÃ ng" />
+              <TextBlock Classes="bcMetricValue" Text="{Binding TongKetBanHang.TongTienHangHienThi}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="bcMetric">
+            <StackPanel>
+              <TextBlock Classes="bcMetricLabel" Text="Giáº£m giÃ¡" />
+              <TextBlock Classes="bcMetricValue" Text="{Binding TongKetBanHang.GiamGiaHienThi}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="bcMetric">
+            <StackPanel>
+              <TextBlock Classes="bcMetricLabel" Text="ÄÃ£ thu" />
+              <TextBlock Classes="bcMetricValue" Foreground="#087F6E"
+                Text="{Binding TongKetBanHang.DaThuHienThi}" />
+              <TextBlock Classes="bcMuted" Margin="0,2,0,0"
+                Text="KhÃ´ng gá»“m tiá»n thá»‘i" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="bcMetric">
+            <StackPanel>
+              <TextBlock Classes="bcMetricLabel" Text="CÃ²n ná»£" />
+              <TextBlock Classes="bcMetricValue" Foreground="#C27803"
+                Text="{Binding TongKetBanHang.ConNoHienThi}" />
+              <TextBlock Classes="bcMuted" Margin="0,2,0,0"
+                Text="{Binding TongKetBanHang.SoHoaDonConCongNoChuThich}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="bcMetric">
+            <StackPanel>
+              <TextBlock Classes="bcMetricLabel" Text="Sá»‘ hÃ³a Ä‘Æ¡n" />
+              <TextBlock Classes="bcMetricValue" Text="{Binding TongKetBanHang.SoHoaDonHienThi}" />
+              <TextBlock Classes="bcMuted" Margin="0,2,0,0"
+                Text="{Binding TongKetBanHang.SoHoaDonDaThanhToanChuThich}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="bcMetric">
+            <StackPanel>
+              <TextBlock Classes="bcMetricLabel" Text="Tiá»n thá»‘i" />
+              <TextBlock Classes="bcMetricValue" Text="{Binding TongKetBanHang.TienThuaHienThi}" />
+              <TextBlock Classes="bcMuted" Margin="0,2,0,0"
+                Text="KhÃ´ng tÃ­nh vÃ o doanh thu" />
+            </StackPanel>
+          </Border>
+        </WrapPanel>
+      </StackPanel>
+
+      <!-- ============ Sá»” QUá»¸ + NHáº¬P HÃ€NG + KHÃCH HÃ€NG ============ -->
+      <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+
+        <!-- Sá»• quá»¹ -->
+        <Border Classes="bcCard" Padding="15">
+          <StackPanel Spacing="9">
+            <TextBlock Classes="bcSectionTitle" Text="2. Sá»” QUá»¸" />
+            <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
+              Text="Phiáº¿u thu PT / chi PC Ä‘Ã£ hoÃ n thÃ nh. LÃ  dÃ²ng tiá»n thá»±c, khÃ¡c vá»›i â€œÄ‘Ã£ thuâ€ trÃªn hÃ³a Ä‘Æ¡n." />
+
+            <Border Height="1" Background="#EEF4F2" />
+
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
+              <TextBlock Classes="bcTableCell" Text="Tá»•ng thu" />
+              <TextBlock Grid.Column="1" Classes="bcTableCell" Foreground="#087F6E"
+                FontWeight="SemiBold" Text="{Binding SoQuyTongHop.TongThuHienThi}" />
+
+              <TextBlock Grid.Row="1" Classes="bcTableCell" Text="Tá»•ng chi" Margin="0,7,0,0" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Classes="bcTableCell"
+                Foreground="#D64545" FontWeight="SemiBold" Margin="0,7,0,0"
+                Text="{Binding SoQuyTongHop.TongChiHienThi}" />
+
+              <TextBlock Grid.Row="2" Classes="bcTableCell" Text="ChÃªnh lá»‡ch" Margin="0,7,0,0" />
+              <TextBlock Grid.Row="2" Grid.Column="1" Classes="bcTableCell"
+                FontWeight="SemiBold" Margin="0,7,0,0"
+                Text="{Binding SoQuyTongHop.ChenhLechHienThi}" />
+            </Grid>
+
+            <Border Height="1" Background="#EEF4F2" />
+
+            <TextBlock Classes="bcMuted"
+              Text="{Binding SoQuyTongHop.SoPhieuThuChuThich}" />
+            <TextBlock Classes="bcMuted"
+              Text="{Binding SoQuyTongHop.SoPhieuChiChuThich}" />
+          </StackPanel>
+        </Border>
+
+        <!-- Nháº­p hÃ ng -->
+        <Border Grid.Column="1" Classes="bcCard" Padding="15">
+          <StackPanel Spacing="9">
+            <TextBlock Classes="bcSectionTitle" Text="3. NHáº¬P HÃ€NG" />
+            <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
+              Text="Loáº¡i trá»« phiáº¿u nháº­p tráº¡ng thÃ¡i HUY." />
+
+            <Border Height="1" Background="#EEF4F2" />
+
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
+              <TextBlock Classes="bcTableCell" Text="Sá»‘ phiáº¿u nháº­p" />
+              <TextBlock Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold"
+                Text="{Binding NhapHang.SoPhieuHienThi}" />
+
+              <TextBlock Grid.Row="1" Classes="bcTableCell" Text="Tá»•ng tiá»n nháº­p" Margin="0,7,0,0" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Classes="bcTableCell"
+                FontWeight="SemiBold" Margin="0,7,0,0"
+                Text="{Binding NhapHang.TongTienNhapHienThi}" />
+
+              <TextBlock Grid.Row="2" Classes="bcTableCell" Text="ÄÃ£ tráº£ nhÃ  cung cáº¥p" Margin="0,7,0,0" />
+              <TextBlock Grid.Row="2" Grid.Column="1" Classes="bcTableCell"
+                Foreground="#087F6E" Margin="0,7,0,0"
+                Text="{Binding NhapHang.DaThanhToanHienThi}" />
+
+              <TextBlock Grid.Row="3" Classes="bcTableCell" Text="CÃ²n ná»£ nhÃ  cung cáº¥p" Margin="0,7,0,0" />
+              <TextBlock Grid.Row="3" Grid.Column="1" Classes="bcTableCell"
+                Foreground="#C27803" FontWeight="SemiBold" Margin="0,7,0,0"
+                Text="{Binding NhapHang.ConNoHienThi}" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- KhÃ¡ch hÃ ng -->
+        <Border Grid.Column="2" Classes="bcCard" Padding="15">
+          <StackPanel Spacing="9">
+            <TextBlock Classes="bcSectionTitle" Text="4. KHÃCH HÃ€NG" />
+            <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
+              Text="Chá»‰ tÃ­nh khÃ¡ch cÃ³ há»“ sÆ¡. KhÃ¡ch láº» khÃ´ng gáº¯n há»“ sÆ¡ nÃªn khÃ´ng xáº¿p vÃ o má»›i / quay láº¡i." />
+
+            <Border Height="1" Background="#EEF4F2" />
+
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
+              <TextBlock Classes="bcTableCell" Text="Sá»‘ khÃ¡ch Ä‘Ã£ mua" />
+              <TextBlock Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold"
+                Text="{Binding KhachHangTongHop.SoKhachDaMuaHienThi}" />
+
+              <TextBlock Grid.Row="1" Classes="bcTableCell" Text="KhÃ¡ch má»›i" Margin="0,7,0,0" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Classes="bcTableCell"
+                Foreground="#087F6E" FontWeight="SemiBold" Margin="0,7,0,0"
+                Text="{Binding KhachHangTongHop.SoKhachMoiHienThi}" />
+
+              <TextBlock Grid.Row="2" Classes="bcTableCell" Text="KhÃ¡ch quay láº¡i" Margin="0,7,0,0" />
+              <TextBlock Grid.Row="2" Grid.Column="1" Classes="bcTableCell"
+                Foreground="#2F6F63" FontWeight="SemiBold" Margin="0,7,0,0"
+                Text="{Binding KhachHangTongHop.SoKhachQuayLaiHienThi}" />
+
+              <TextBlock Grid.Row="3" Classes="bcTableCell" Text="GiÃ¡ trá»‹ mua cá»§a nhÃ³m nÃ y"
+                Margin="0,7,0,0" TextWrapping="Wrap" />
+              <TextBlock Grid.Row="3" Grid.Column="1" Classes="bcTableCell"
+                FontWeight="SemiBold" Margin="0,7,0,0"
+                Text="{Binding KhachHangTongHop.TongGiaTriMuaHienThi}" />
+            </Grid>
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- ============ BIá»‚U Äá»’ DOANH THU THEO GIá»œ ============ -->
+      <Border Classes="bcCard" Padding="15">
+        <StackPanel Spacing="9">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel>
+              <TextBlock Classes="bcSectionTitle" Text="5. DOANH THU THEO GIá»œ" />
+              <TextBlock Classes="bcSectionSub" Margin="0,2,0,0"
+                Text="Chá»‰ tÃ­nh giá» cÃ³ hÃ³a Ä‘Æ¡n; trá»¥c Ä‘á»§ 24 giá». RÃª chuá»™t lÃªn cá»™t Ä‘á»ƒ xem chi tiáº¿t." />
+            </StackPanel>
+            <TextBlock Grid.Column="1" Classes="bcMuted" VerticalAlignment="Center"
+              Text="{Binding TongKetBanHang.DoanhThuChuThich}" />
+          </Grid>
+
+          <Border Height="1" Background="#EEF4F2" />
+
+          <Grid Height="196">
+            <Border VerticalAlignment="Bottom" Height="1" Background="#E2ECE8" />
+
+            <ScrollViewer VerticalScrollBarVisibility="Disabled"
+              HorizontalScrollBarVisibility="Auto" Margin="0,0,0,18">
+              <ItemsControl ItemsSource="{Binding DoanhThuTheoGio}"
+                VerticalAlignment="Stretch">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="models:BaoCaoDiemGio">
+                    <StackPanel Width="{Binding BeRongCot}" Margin="2,0"
+                      VerticalAlignment="Stretch"
+                      ToolTip.Tip="{Binding ToolTip}">
+                      <Border Height="{Binding ChieuCaoCot}"
+                        CornerRadius="4,4,0,0"
+                        VerticalAlignment="Bottom" HorizontalAlignment="Stretch"
+                        Margin="0,0,0,2"
+                        Background="{Binding MauCot}" />
+
+                      <TextBlock Text="{Binding GioHienThi}" FontSize="8.5"
+                        Foreground="#61736E" HorizontalAlignment="Center" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Grid>
+
+          <TextBlock Classes="bcMuted" HorizontalAlignment="Center"
+            Text="KhÃ´ng cÃ³ hÃ³a Ä‘Æ¡n nÃ o trong ngÃ y Ä‘Ã£ chá»n"
+            IsVisible="{Binding !CoDoanhThuTheoGio}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============ PHÆ¯Æ NG THá»¨C THANH TOÃN + TOP KHÃCH ============ -->
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+
+        <!-- PhÆ°Æ¡ng thá»©c thanh toÃ¡n -->
+        <Border Classes="bcCard" Padding="15">
+          <StackPanel Spacing="9">
+            <TextBlock Classes="bcSectionTitle" Text="6. PHÆ¯Æ NG THá»¨C THANH TOÃN" />
+            <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
+              Text="Láº¥y tá»« phieu_chi.phuong_thuc cá»§a sá»• quá»¹ â€” lÃ  dÃ²ng tiá»n sá»• quá»¹, KHÃ”NG pháº£i doanh thu hÃ³a Ä‘Æ¡n. Báº£ng chá»‰ hiá»‡n phÆ°Æ¡ng thá»©c thá»±c sá»± cÃ³ phÃ¡t sinh." />
+
+            <Border Height="1" Background="#EEF4F2" />
+
+            <ItemsControl ItemsSource="{Binding PhuongThucThanhToan}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="models:BaoCaoPhuongThucRow">
+                  <Border Classes="bcRow">
+                    <StackPanel Spacing="5">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="bcTableCell" Text="{Binding TenPhuongThucHienThi}" />
+                        <TextBlock Grid.Column="1" Classes="bcTableCell"
+                          FontWeight="SemiBold" Text="{Binding SoTienHienThi}" />
+                      </Grid>
+                      <ProgressBar Classes="bcBar"
+                        Value="{Binding TyLePhanTram, Mode=OneWay}" />
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="bcMuted"
+                          Text="{Binding SoGiaoDichHienThi}" />
+                        <TextBlock Grid.Column="1" Classes="bcMuted"
+                          Text="{Binding SoTienTuBanHangChuThich}" />
+                      </Grid>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Classes="bcMuted" TextWrapping="Wrap"
+              Text="KhÃ´ng cÃ³ phiáº¿u thu trong ngÃ y Ä‘Ã£ chá»n"
+              IsVisible="{Binding !CoPhuongThuc}" />
+          </StackPanel>
+        </Border>
+
+        <!-- Top khÃ¡ch hÃ ng -->
+        <Border Grid.Column="1" Classes="bcCard" Padding="15">
+          <StackPanel Spacing="9">
+            <TextBlock Classes="bcSectionTitle" Text="7. TOP KHÃCH HÃ€NG TRONG NGÃ€Y" />
+            <TextBlock Classes="bcSectionSub"
+              Text="Xáº¿p theo tá»•ng mua. HÃ³a Ä‘Æ¡n khÃ´ng gáº¯n há»“ sÆ¡ gá»™p thÃ nh dÃ²ng â€œKhÃ¡ch láº»â€." />
+
+            <Border Height="1" Background="#EEF4F2" />
+
+            <ScrollViewer MaxHeight="250" VerticalScrollBarVisibility="Auto"
+              HorizontalScrollBarVisibility="Disabled">
+              <ItemsControl ItemsSource="{Binding TopKhachHang}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="models:BaoCaoKhachHangRow">
+                    <Border Classes="bcRow">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                        <Border Width="24" Height="24" CornerRadius="8"
+                          Background="#EAF9F5" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding ThuTu}" FontSize="10.5"
+                            Foreground="#087F6E" FontWeight="SemiBold"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                          <TextBlock Classes="bcTableCell" Text="{Binding Ten}"
+                            TextTrimming="CharacterEllipsis" />
+                          <TextBlock Classes="bcMuted"
+                            Text="{Binding SoHoaDonChuThich}" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Column="2" Classes="bcTableCell"
+                          FontWeight="SemiBold" VerticalAlignment="Center"
+                          Text="{Binding TongMuaHienThi}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+
+            <TextBlock Classes="bcMuted" TextWrapping="Wrap"
+              Text="KhÃ´ng cÃ³ khÃ¡ch hÃ ng nÃ o trong ngÃ y Ä‘Ã£ chá»n"
+              IsVisible="{Binding !CoTopKhachHang}" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- ============ TOP Sáº¢N PHáº¨M ============ -->
+      <Border Classes="bcCard" Padding="15">
+        <StackPanel Spacing="9">
+          <TextBlock Classes="bcSectionTitle" Text="8. TOP 10 Sáº¢N PHáº¨M BÃN CHáº Y" />
+          <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
+            Text="Tiá»n hÃ ng tÃ­nh trÃªn dÃ²ng chi tiáº¿t, TRÆ¯á»šC giáº£m giÃ¡ á»Ÿ cáº¥p hÃ³a Ä‘Æ¡n â€” nÃªn tá»•ng cá»™t nÃ y báº±ng â€œtá»•ng tiá»n hÃ ngâ€, khÃ´ng báº±ng doanh thu." />
+
+          <Border Height="1" Background="#EEF4F2" />
+
+          <Grid ColumnDefinitions="44,140,*,110,130" RowDefinitions="Auto">
+            <TextBlock Classes="bcTableHead" Text="#" />
+            <TextBlock Grid.Column="1" Classes="bcTableHead" Text="MÃ£ sáº£n pháº©m" />
+            <TextBlock Grid.Column="2" Classes="bcTableHead" Text="TÃªn sáº£n pháº©m" />
+            <TextBlock Grid.Column="3" Classes="bcTableHead" Text="Sá»‘ lÆ°á»£ng"
+              HorizontalAlignment="Right" />
+            <TextBlock Grid.Column="4" Classes="bcTableHead" Text="Tiá»n hÃ ng"
+              HorizontalAlignment="Right" />
+          </Grid>
+
+          <ItemsControl ItemsSource="{Binding TopSanPham}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="models:BaoCaoSanPhamRow">
+                <Border Classes="bcRow">
+                  <Grid ColumnDefinitions="44,140,*,110,130">
+                    <TextBlock Classes="bcTableCell" Text="{Binding ThuTu}"
+                      VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Classes="bcTableCell"
+                      Text="{Binding MaSanPhamHienThi}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Classes="bcTableCell"
+                      Text="{Binding Ten}" TextTrimming="CharacterEllipsis"
+                      VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3" Classes="bcTableCell"
+                      Text="{Binding SoLuongHienThi}" HorizontalAlignment="Right"
+                      VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="4" Classes="bcTableCell"
+                      FontWeight="SemiBold" Text="{Binding DoanhThuHienThi}"
+                      HorizontalAlignment="Right" VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Classes="bcMuted" TextWrapping="Wrap"
+            Text="KhÃ´ng cÃ³ sáº£n pháº©m nÃ o bÃ¡n trong ngÃ y Ä‘Ã£ chá»n"
+            IsVisible="{Binding !CoTopSanPham}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============ CÃ”NG Ná»¢ KHÃCH HÃ€NG ============ -->
+      <Border Classes="bcCard" Padding="15">
+        <StackPanel Spacing="9">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel>
+              <TextBlock Classes="bcSectionTitle" Text="9. CÃ”NG Ná»¢ KHÃCH HÃ€NG PHÃT SINH TRONG NGÃ€Y" />
+              <TextBlock Classes="bcSectionSub" Margin="0,2,0,0"
+                Text="Tá»•ng giÃ¡ trá»‹, Ä‘Ã£ tráº£ vÃ  cÃ²n ná»£ láº¥y tháº³ng tá»« tá»«ng hÃ³a Ä‘Æ¡n, nÃªn khá»›p vá»›i mÃ n HÃ³a Ä‘Æ¡n." />
+            </StackPanel>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Classes="bcMuted" HorizontalAlignment="Right"
+                Text="{Binding CongNoTongHop.TongConNoChuThich}" />
+              <TextBlock Classes="bcMuted" HorizontalAlignment="Right"
+                Text="{Binding CongNoTongHop.SoHoaDonConNoChuThich}" />
+            </StackPanel>
+          </Grid>
+
+          <Border Height="1" Background="#EEF4F2" />
+
+          <Grid ColumnDefinitions="*,160,130,130,130,130" RowDefinitions="Auto">
+            <TextBlock Classes="bcTableHead" Text="KhÃ¡ch / HÃ³a Ä‘Æ¡n" />
+            <TextBlock Grid.Column="1" Classes="bcTableHead" Text="Thá»i gian" />
+            <TextBlock Grid.Column="2" Classes="bcTableHead" Text="Doanh thu"
+              HorizontalAlignment="Right" />
+            <TextBlock Grid.Column="3" Classes="bcTableHead" Text="ÄÃ£ tráº£"
+              HorizontalAlignment="Right" />
+            <TextBlock Grid.Column="4" Classes="bcTableHead" Text="CÃ²n ná»£"
+              HorizontalAlignment="Right" />
+            <TextBlock Grid.Column="5" Classes="bcTableHead" Text="Tráº¡ng thÃ¡i" />
+          </Grid>
+
+          <ItemsControl ItemsSource="{Binding CongNoPhatSinh}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="models:BaoCaoCongNoRow">
+                <Border Classes="bcRow" Background="{Binding MauNenTrangThai}">
+                  <Grid ColumnDefinitions="*,160,130,130,130,130">
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Classes="bcTableCell" Text="{Binding TenKhachHang}"
+                        TextTrimming="CharacterEllipsis" />
+                      <TextBlock Classes="bcMuted" Text="{Binding MaHoaDon}" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="1" Classes="bcTableCell"
+                      Text="{Binding ThoiGianHienThi}" VerticalAlignment="Center" />
+
+                    <TextBlock Grid.Column="2" Classes="bcTableCell"
+                      Text="{Binding DoanhThuHienThi}" HorizontalAlignment="Right"
+                      VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3" Classes="bcTableCell"
+                      Text="{Binding DaTraHienThi}" HorizontalAlignment="Right"
+                      VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="4" Classes="bcTableCell"
+                      FontWeight="SemiBold" Text="{Binding ConNoHienThi}"
+                      HorizontalAlignment="Right" VerticalAlignment="Center" />
+
+                    <Border Grid.Column="5" CornerRadius="9" Padding="8,3"
+                      Background="{Binding MauNenTrangThai}" VerticalAlignment="Center"
+                      HorizontalAlignment="Left">
+                      <TextBlock Text="{Binding TrangThaiHienThi}" FontSize="10"
+                        Foreground="{Binding MauTrangThai}" FontWeight="SemiBold" />
+                    </Border>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Classes="bcMuted" TextWrapping="Wrap"
+            Text="KhÃ´ng cÃ³ hÃ³a Ä‘Æ¡n phÃ¡t sinh trong ngÃ y Ä‘Ã£ chá»n"
+            IsVisible="{Binding !CoCongNo}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============ THU CHI ============ -->
+      <Border Classes="bcCard" Padding="15">
+        <StackPanel Spacing="9">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel>
+              <TextBlock Classes="bcSectionTitle" Text="10. THU CHI TRONG NGÃ€Y" />
+              <TextBlock Classes="bcSectionSub" Margin="0,2,0,0"
+                Text="Sá»• quá»¹: mÃ£ phiáº¿u báº¯t Ä‘áº§u PT lÃ  thu, PC lÃ  chi; chá»‰ tÃ­nh phiáº¿u Ä‘Ã£ hoÃ n thÃ nh." />
+            </StackPanel>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Classes="bcMuted" HorizontalAlignment="Right"
+                Text="{Binding SoQuyTongHop.TongThuChuThich}" />
+              <TextBlock Classes="bcMuted" HorizontalAlignment="Right"
+                Text="{Binding SoQuyTongHop.TongChiChuThich}" />
+              <TextBlock Classes="bcMuted" HorizontalAlignment="Right"
+                FontWeight="SemiBold"
+                Text="{Binding SoQuyTongHop.ChenhLechChuThich}" />
+            </StackPanel>
+          </Grid>
+
+          <Border Height="1" Background="#EEF4F2" />
+
+          <Grid ColumnDefinitions="90,80,150,*,160,150" RowDefinitions="Auto">
+            <TextBlock Classes="bcTableHead" Text="Thá»i gian" />
+            <TextBlock Grid.Column="1" Classes="bcTableHead" Text="Loáº¡i" />
+            <TextBlock Grid.Column="2" Classes="bcTableHead" Text="MÃ£ chá»©ng tá»«" />
+            <TextBlock Grid.Column="3" Classes="bcTableHead" Text="Ná»™i dung" />
+            <TextBlock Grid.Column="4" Classes="bcTableHead" Text="PhÆ°Æ¡ng thá»©c" />
+            <TextBlock Grid.Column="5" Classes="bcTableHead" Text="Sá»‘ tiá»n"
+              HorizontalAlignment="Right" />
+          </Grid>
+
+          <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto"
+            HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding ThuChi}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="models:BaoCaoThuChiRow">
+                  <Border Classes="bcRow" Background="{Binding MauNenLoai}">
+                    <Grid ColumnDefinitions="90,80,150,*,160,150">
+                      <TextBlock Classes="bcTableCell" Text="{Binding ThoiGianHienThi}"
+                        VerticalAlignment="Center" />
+
+                      <Border Grid.Column="1" CornerRadius="8" Padding="7,2"
+                        Background="{Binding MauNenLoai}"
+                        HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding LoaiHienThi}" FontSize="10"
+                          Foreground="{Binding MauSoTien}" FontWeight="SemiBold" />
+                      </Border>
+
+                      <TextBlock Grid.Column="2" Classes="bcTableCell"
+                        Text="{Binding MaChungTu}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="3" Classes="bcTableCell"
+                        Text="{Binding NoiDung}" TextTrimming="CharacterEllipsis"
+                        VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="4" Classes="bcMuted"
+                        Text="{Binding PhuongThucHienThi}" VerticalAlignment="Center" />
+
+                      <TextBlock Grid.Column="5" Classes="bcTableCell"
+                        FontWeight="SemiBold" Text="{Binding SoTienDayDu}"
+                        HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Foreground="{Binding MauSoTien}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+
+          <TextBlock Classes="bcMuted" TextWrapping="Wrap"
+            Text="KhÃ´ng cÃ³ phÃ¡t sinh thu chi trong ngÃ y Ä‘Ã£ chá»n"
+            IsVisible="{Binding !CoThuChi}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============ CHá»T Sá»” CUá»I NGÃ€Y ============ -->
+      <Border Classes="bcCard" Padding="16" Background="#F0F9F7" BorderBrush="#087F6E" BorderThickness="1.5">
+        <StackPanel Spacing="10">
+          <TextBlock Text="CHá»T Sá»” CUá»I NGÃ€Y" FontSize="16" FontWeight="Bold" Foreground="#087F6E" />
+          <Grid ColumnDefinitions="200,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="12">
+            <TextBlock Grid.Row="0" Classes="bcSectionSub" Text="NgÃ y:" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Text="{Binding NgayHienThi}" />
+
+            <TextBlock Grid.Row="1" Classes="bcSectionSub" Text="Doanh thu (khÃ¡ch pháº£i tráº£):" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Text="{Binding TongKetBanHang.DoanhThuHienThi}" />
+
+            <TextBlock Grid.Row="2" Classes="bcSectionSub" Text="ÄÃ£ thu:" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Foreground="#087F6E" Text="{Binding TongKetBanHang.DaThuHienThi}" />
+
+            <TextBlock Grid.Row="3" Classes="bcSectionSub" Text="CÃ´ng ná»£:" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Foreground="#C27803" Text="{Binding TongKetBanHang.ConNoHienThi}" />
+
+            <TextBlock Grid.Row="4" Classes="bcSectionSub" Text="Tá»•ng thu quá»¹ (PT hoÃ n thÃ nh):" />
+            <TextBlock Grid.Row="4" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Foreground="#087F6E" Text="{Binding SoQuyTongHop.TongThuHienThi}" />
+
+            <TextBlock Grid.Row="5" Classes="bcSectionSub" Text="Tá»•ng chi quá»¹ (PC hoÃ n thÃ nh):" />
+            <TextBlock Grid.Row="5" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Foreground="#D64545" Text="{Binding SoQuyTongHop.TongChiHienThi}" />
+
+            <TextBlock Grid.Row="6" Classes="bcSectionSub" Text="ChÃªnh lá»‡ch quá»¹ (Thu - Chi):" />
+            <TextBlock Grid.Row="6" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Text="{Binding SoQuyTongHop.ChenhLechHienThi}" />
+
+            <TextBlock Grid.Row="7" Classes="bcSectionSub" Text="Sá»‘ hÃ³a Ä‘Æ¡n / Sá»‘ phiáº¿u nháº­p:" />
+            <TextBlock Grid.Row="7" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold">
+              <Run Text="{Binding TongKetBanHang.SoHoaDonHienThi}" />
+              <Run Text=" / " />
+              <Run Text="{Binding NhapHang.SoPhieuHienThi}" />
+            </TextBlock>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <TextBlock Classes="bcMuted" HorizontalAlignment="Center" TextWrapping="Wrap"
+        Text="Sá»‘ liá»‡u bÃ¡o cÃ¡o ngÃ y nÃ y láº¥y tá»« database lÃºc má»Ÿ mÃ n hÃ¬nh. DÃ¹ng nÃºt â€œLÃ m má»›iâ€ Ä‘á»ƒ táº£i láº¡i." />
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
