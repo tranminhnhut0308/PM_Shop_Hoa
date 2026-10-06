@@ -32,8 +32,11 @@ public sealed class BaoCaoBanHangService
         CancellationToken token = default)
     {
         var (tu, denKeTiep) = (tuNgay.Date, denNgay.Date.AddDays(1));
-        using var conn = await _taoKetNoi();
-        await conn.OpenAsync(token);
+
+        // _taoKetNoi() (DatabaseService.TaoKetNoiAsync) đã mở connection sẵn,
+        // KHÔNG được gọi OpenAsync lần nữa (MySqlConnector ném
+        // "Cannot Open when State is Open"). Dùng connection đã mở trực tiếp.
+        await using var conn = await _taoKetNoi();
 
         var tongHop = await TaiTongHopAsync(conn, tu, denKeTiep, token);
         var bieuDo = await TaiBieuDoAsync(conn, tu, denKeTiep, kieuLoc, token);
@@ -61,8 +64,9 @@ public sealed class BaoCaoBanHangService
     {
         var tu = ngay.Date;
         var denKeTiep = tu.AddDays(1);
-        using var conn = await _taoKetNoi();
-        await conn.OpenAsync(token);
+
+        // Connection đã mở sẵn bởi _taoKetNoi() — không OpenAsync lần nữa.
+        await using var conn = await _taoKetNoi();
 
         string sql = @"
 SELECT 
@@ -109,25 +113,25 @@ WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
 
     private async Task<List<BaoCaoBanHangDiemThoiGian>> TaiBieuDoAsync(MySqlConnection conn, DateTime tu, DateTime denKeTiep, int kieuLoc, CancellationToken token)
     {
-        // Group by hour/day/week
-        string bucket;
-        string groupBy;
-        if ((denKeTiep - tu).TotalDays <= 1)
-        {
-            bucket = "DATE_FORMAT(hd.thoi_gian_ban, '%Y-%m-%d %H:00:00')";
-            groupBy = "DATE_FORMAT(hd.thoi_gian_ban, '%Y-%m-%d %H:00:00')";
-        }
-        else if ((denKeTiep - tu).TotalDays <= 60)
-        {
-            bucket = "DATE(hd.thoi_gian_ban)";
-            groupBy = "DATE(hd.thoi_gian_ban)";
-        }
-        else
-        {
-            bucket = "DATE(hd.thoi_gian_ban)";
-            groupBy = "DATE(hd.thoi_gian_ban)";
-        }
-        string sql = @"SELECT " + bucket + " AS ThoiGianStr, COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu, COUNT(*) AS SoHoaDon FROM hoa_don_ban_hang hd WHERE hd.trang_thai_hoa_don = 'HOAN_THANH' AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep GROUP BY " + groupBy + " ORDER BY ThoiGianStr ASC;";
+        bool theoGio = (denKeTiep - tu).TotalDays <= 1;
+        string bucket = theoGio
+            ? "DATE_FORMAT(hd.thoi_gian_ban, '%Y-%m-%d %H:00:00')"
+            : "DATE(hd.thoi_gian_ban)";
+        string groupBy = bucket;
+
+        string sql = @"
+SELECT
+  " + bucket + @" AS ThoiGianStr,
+  COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu,
+  COUNT(*) AS SoHoaDon,
+  COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThu,
+  COALESCE(SUM(hd.con_no), 0) AS CongNo
+FROM hoa_don_ban_hang hd
+WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+  AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep
+GROUP BY " + groupBy + @"
+ORDER BY ThoiGianStr ASC;
+";
         var rs = await conn.QueryAsync<dynamic>(new CommandDefinition(sql, new { TuNgay = tu, DenKeTiep = denKeTiep }, cancellationToken: token));
         var list = new List<BaoCaoBanHangDiemThoiGian>();
         foreach (var r in rs)
@@ -138,21 +142,40 @@ WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
                 ? trucTiep
                 : DateTime.Parse(raw.ToString() ?? string.Empty, CultureInfo.InvariantCulture);
 
+            // Dapper trả COUNT(*) kiểu long và SUM(decimal) có thể về long/decimal
+            // tuỳ MySQL — ép kiểu tường minh, tránh lỗi runtime
+            // "Cannot implicitly convert type 'long' to 'int'" với truy vấn dynamic.
             list.Add(new BaoCaoBanHangDiemThoiGian
             {
                 ThoiGian = tg,
-                DoanhThu = r.DoanhThu,
-                SoHoaDon = r.SoHoaDon,
-                NhanXet = tg.ToString((denKeTiep - tu).TotalDays <= 1 ? "HH:00" : "dd/MM")
+                DoanhThu = Convert.ToDecimal(r.DoanhThu),
+                SoHoaDon = Convert.ToInt32(r.SoHoaDon),
+                DaThu = Convert.ToDecimal(r.DaThu),
+                CongNo = Convert.ToDecimal(r.CongNo),
+                NhanXet = tg.ToString(theoGio ? "HH:00" : "dd/MM")
             });
         }
 
-        // Chiều cao cột tính sẵn theo điểm cao nhất để XAML bind thẳng.
         if (list.Count > 0)
         {
+            // Chiều cao cột tính sẵn theo điểm cao nhất để XAML bind thẳng.
             var max = list.Max(x => x.DoanhThu);
+
+            // Bề rộng cột giãn theo số điểm: ít điểm thì cột rộng, nhiều điểm thì hẹp
+            // để biểu đồ gọn trong màn hình, hạn chế cuộn ngang.
+            double beRongMongMuon = list.Count switch
+            {
+                <= 10 => 64,
+                <= 24 => 44,
+                <= 40 => 30,
+                _ => 22
+            };
+
             foreach (var x in list)
+            {
                 x.TyLeChieuCao = max <= 0 ? 0 : (double)(x.DoanhThu / max * 100m);
+                x.TyLeBeRong = beRongMongMuon / BaoCaoBanHangDiemThoiGian.BeRongToiDa * 100d;
+            }
         }
 
         return list;

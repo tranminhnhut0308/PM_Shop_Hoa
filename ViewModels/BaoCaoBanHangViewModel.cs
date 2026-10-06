@@ -70,10 +70,22 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
     /// <summary>Tên khoảng đang xem: "Hôm nay", "Tuần này", "Tùy chọn"...</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(KhoangHienThi))]
+    [NotifyPropertyChangedFor(nameof(DangChonHomNay))]
+    [NotifyPropertyChangedFor(nameof(DangChonHomQua))]
+    [NotifyPropertyChangedFor(nameof(DangChonTuanNay))]
+    [NotifyPropertyChangedFor(nameof(DangChonThangNay))]
+    [NotifyPropertyChangedFor(nameof(DangChonTuyChinh))]
     private string khoangThoiGian = "7 ngày";
 
     /// <summary>Cờ cho biết khoảng đang xem do người dùng tự chọn ngày.</summary>
     [ObservableProperty] private bool tuyChinh;
+
+    /// <summary>Đánh dấu nút khoảng thời gian đang được chọn trên header.</summary>
+    public bool DangChonHomNay => KhoangThoiGian == "Hôm nay";
+    public bool DangChonHomQua => KhoangThoiGian == "Hôm qua";
+    public bool DangChonTuanNay => KhoangThoiGian == "Tuần này";
+    public bool DangChonThangNay => KhoangThoiGian == "Tháng này";
+    public bool DangChonTuyChinh => KhoangThoiGian == "Tùy chọn";
 
     /// <summary>Từ ngày trên DatePicker (kiểu khớp với DatePicker.SelectedDate).</summary>
     [ObservableProperty]
@@ -88,7 +100,8 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
     /// <summary>Có đủ ngày bắt đầu/kết thúc để bấm "Áp dụng" không.</summary>
     public bool CoKhoangTuyChinh => TuNgayChon is not null && DenNgayChon is not null;
 
-    public string KhoangHienThi => $"{KhoangThoiGian} · {TuNgay:dd/MM/yyyy} → {DenNgay:dd/MM/yyyy}";
+    /// <summary>Khoảng thời gian đang xem, ví dụ: "Khoảng thời gian: 30/09/2026 - 06/10/2026".</summary>
+    public string KhoangHienThi => $"Khoảng thời gian: {TuNgay:dd/MM/yyyy} - {DenNgay:dd/MM/yyyy}";
 
     // ============================================================
     // DỮ LIỆU
