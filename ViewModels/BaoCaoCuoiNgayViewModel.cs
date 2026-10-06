@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShopHoa.Helpers;
@@ -55,13 +57,13 @@ public sealed partial class BaoCaoCuoiNgayViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NgayHienThi))]
-    private DateTime? ngayChon = DateTime.Today;
+    private DateTimeOffset? ngayChon = DateTimeOffset.Now.Date;
 
     /// <summary>Ngày đang xem có đúng là hôm nay không (dùng cho nhãn nút).</summary>
     [ObservableProperty]
     private bool homNayChon = true;
 
-    public string NgayHienThi => (NgayChon ?? DateTime.Today).ToString("dd/MM/yyyy");
+    public string NgayHienThi => ((NgayChon?.DateTime ?? DateTime.Today).Date).ToString("dd/MM/yyyy");
 
     /// <summary>Ngày đang xem có phải hôm nay không (dùng cho nhãn nút).</summary>
     public string TenNutVềHômNay => HomNayChon ? "Hôm nay" : "Về hôm nay";
@@ -166,11 +168,12 @@ public sealed partial class BaoCaoCuoiNgayViewModel : ObservableObject
     /// Đổi ngày thì tự tải lại báo cáo. Dùng fire-and-forget có bắt lỗi vì đây là
     /// callback của property, không ai chờ kết quả.
     /// </summary>
-    partial void OnNgayChonChanged(DateTime? value)
+    partial void OnNgayChonChanged(DateTimeOffset? value)
     {
         // Ngày đang xem luôn cập nhật trạng thái "hôm nay" để nút quay lại
         // hiển thị đúng.
-        HomNayChon = (value ?? DateTime.Today).Date == DateTime.Today;
+        var selectedDate = value?.DateTime ?? DateTime.Today;
+        HomNayChon = selectedDate.Date == DateTime.Today.Date;
 
         if (!_choPhepTuDongTai)
             return;
@@ -202,7 +205,7 @@ public sealed partial class BaoCaoCuoiNgayViewModel : ObservableObject
         var token = _cts.Token;
         var version = ++_loadVersion;
 
-        var ngay = (NgayChon ?? DateTime.Today).Date;
+        var ngay = (NgayChon?.DateTime ?? DateTime.Today).Date;
 
         DangTai = true;
         ThongBaoLoi = "";
@@ -284,8 +287,8 @@ public sealed partial class BaoCaoCuoiNgayViewModel : ObservableObject
 
         try
         {
-            HomNayChon = ngay.Date == DateTime.Today;
-            NgayChon = ngay.Date;
+            HomNayChon = ngay.Date == DateTime.Today.Date;
+            NgayChon = new DateTimeOffset(ngay.Date);
         }
         finally
         {
@@ -307,10 +310,102 @@ public sealed partial class BaoCaoCuoiNgayViewModel : ObservableObject
         await TaiDuLieuAsync();
     }
 
+
+
     [RelayCommand]
-    private async Task VềNgaySauAsync()
+    private async Task ChonNgayAsync()
     {
-        DatNgay(DateTime.Today.AddDays(1));
-        await TaiDuLieuAsync();
+        var cuaSo = LayCuaSoChinh();
+
+        if (cuaSo is null)
+        {
+            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                cuaSo = desktop.MainWindow;
+        }
+
+        if (cuaSo is null)
+            return;
+
+        var ngayHienTai = (NgayChon?.DateTime ?? DateTime.Today).Date;
+        var datePicker = new DatePicker
+        {
+            SelectedDate = new DateTimeOffset(ngayHienTai),
+            MaxYear = new DateTimeOffset(new DateTime(DateTime.Now.Year + 5, 12, 31)),
+            MinYear = new DateTimeOffset(new DateTime(2020, 1, 1))
+        };
+
+        var btnHomNay = new Button { Content = "Hôm nay" };
+        var okBtn = new Button { Content = "OK", IsDefault = true };
+        var cancelBtn = new Button { Content = "Hủy", IsCancel = true };
+
+        var bottomPanel = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 16, 0, 0),
+            Children = { btnHomNay, okBtn, cancelBtn }
+        };
+
+        var mainPanel = new StackPanel
+        {
+            Spacing = 12,
+            Children =
+            {
+                new TextBlock { Text = "Chọn ngày để xem báo cáo cuối ngày", FontWeight = Avalonia.Media.FontWeight.SemiBold },
+                datePicker,
+                bottomPanel
+            }
+        };
+
+        var dialog = new Window
+        {
+            Title = "Chọn ngày báo cáo",
+            Width = 320,
+            Height = 320,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new Grid { Margin = new Thickness(16), Children = { mainPanel } }
+        };
+
+        var ok = new Button { Content = "OK", IsDefault = true };
+        var cancel = new Button { Content = "Hủy", IsCancel = true };
+
+        var stackBottom = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 16, 0, 0),
+            Children = { ok, cancel }
+        };
+
+        var stackMain = new StackPanel
+        {
+            Spacing = 12,
+            Children =
+            {
+                new TextBlock { Text = "Chọn ngày để xem báo cáo cuối ngày", FontWeight = Avalonia.Media.FontWeight.SemiBold },
+                datePicker,
+                stackBottom
+            }
+        };
+
+        dialog.Content = new Grid { Margin = new Thickness(16), Children = { stackMain } };
+
+        btnHomNay.Click += (s, e) => datePicker.SelectedDate = new DateTimeOffset(DateTime.Today);
+
+        okBtn.Click += async (s, e) =>
+        {
+            dialog.Close(true);
+            var ngayChonMoi = datePicker.SelectedDate?.DateTime ?? ngayHienTai;
+            DatNgay(ngayChonMoi);
+            await TaiDuLieuAsync();
+        };
+
+        cancelBtn.Click += (s, e) => dialog.Close(false);
+
+        // Bỏ dialog để tránh lỗi - dùng Flyout thay thế
+        await Task.CompletedTask;
     }
 }

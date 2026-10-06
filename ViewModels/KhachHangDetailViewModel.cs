@@ -36,7 +36,6 @@ public sealed partial class KhachHangDetailViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(NgayTaoText))]
     [NotifyPropertyChangedFor(nameof(GioiTinh))]
     [NotifyPropertyChangedFor(nameof(NgaySinhText))]
-    [NotifyPropertyChangedFor(nameof(Facebook))]
     [NotifyPropertyChangedFor(nameof(GhiChu))]
     [NotifyPropertyChangedFor(nameof(MaSoThue))]
     [NotifyPropertyChangedFor(nameof(TenCongTy))]
@@ -107,7 +106,6 @@ public sealed partial class KhachHangDetailViewModel : ObservableObject
 
     public string NgayTaoText => Customer?.NgayTao?.ToString("dd/MM/yyyy HH:mm") ?? ChuaCo;
 
-    public string Facebook => HienThi(Customer?.Facebook);
 
     public string GhiChu => HienThi(Customer?.GhiChu);
 

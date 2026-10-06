@@ -10,7 +10,6 @@ public sealed class KhachHang
     public DateTime? NgaySinh { get; set; }
     public string? GioiTinh { get; set; }
     public string? Email { get; set; }
-    public string? Facebook { get; set; }
     public string? DiaChi { get; set; }
     public string? PhuongXa { get; set; }
     public string? QuanHuyen { get; set; }

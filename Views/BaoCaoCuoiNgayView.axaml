@@ -115,28 +115,48 @@
               Text="Toàn bộ số liệu lấy trực tiếp từ database theo ngày đang chọn" />
           </StackPanel>
 
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
-            VerticalAlignment="Center">
-            <TextBlock Text="Ngày" VerticalAlignment="Center" FontSize="12"
-              Foreground="#4B5D57" Margin="0,0,2,0" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+              VerticalAlignment="Center">
+              <TextBlock Text="Ngày báo cáo:" VerticalAlignment="Center" FontSize="14"
+                Foreground="#164B40" Margin="0,0,4,0" FontWeight="SemiBold" />
 
-            <DatePicker SelectedDate="{Binding NgayChon}"
-              
-              MinWidth="140" />
+              <Button Classes="toolbar-action"
+                MinWidth="180"
+                Height="38"
+                Padding="12,6"
+                BorderBrush="#C9D6D1"
+                BorderThickness="1"
+                Background="#FFFFFF"
+                CornerRadius="8"
+                VerticalContentAlignment="Center"
+                HorizontalContentAlignment="Left">
+                <Button.Flyout>
+                  <Flyout Placement="Bottom">
+                    <StackPanel Spacing="10" Width="280">
+                      <DatePicker SelectedDate="{Binding NgayChon}" HorizontalAlignment="Stretch" />
+                    </StackPanel>
+                  </Flyout>
+                </Button.Flyout>
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <TextBlock Text="📅" FontSize="16" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding NgayHienThi}" FontSize="14" VerticalAlignment="Center" Foreground="#164B40" />
+                  <TextBlock Text="▼" FontSize="10" VerticalAlignment="Center" Foreground="#61736E" Margin="0,1,0,0" />
+                </StackPanel>
+              </Button>
 
-            <Button Classes="toolbar-action"
-              Content="{Binding TenNutVềHômNay}"
-              Command="{Binding VềHômNayCommand}" />
-            <Button Classes="toolbar-action" Content="Hôm qua"
-              Command="{Binding VềNgayQuaCommand}" />
-            <Button Classes="toolbar-action" Content="Làm mới"
-              Command="{Binding TaiLaiCommand}" />
-            <Button Content="Xuất Excel"
-              Command="{Binding XuatExcelCommand}"
-              Background="#087F6E" Foreground="White"
-              Padding="14,7" CornerRadius="8" FontWeight="SemiBold"
-              BorderThickness="0" />
-          </StackPanel>
+              <Button Classes="toolbar-action"
+                Content="Hôm nay"
+                Command="{Binding VềHômNayCommand}" />
+              <Button Classes="toolbar-action" Content="Hôm qua"
+                Command="{Binding VềNgayQuaCommand}" />
+              <Button Classes="toolbar-action" Content="Làm mới"
+                Command="{Binding TaiLaiCommand}" />
+              <Button Content="Xuất Excel"
+                Command="{Binding XuatExcelCommand}"
+                Background="#087F6E" Foreground="White"
+                Padding="14,7" CornerRadius="8" FontWeight="SemiBold"
+                BorderThickness="0" />
+            </StackPanel>
         </Grid>
       </Border>
 
@@ -669,6 +689,42 @@
           <TextBlock Classes="bcMuted" TextWrapping="Wrap"
             Text="Không có phát sinh thu chi trong ngày đã chọn"
             IsVisible="{Binding !CoThuChi}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============ CHỐT SỔ CUỐI NGÀY ============ -->
+      <Border Classes="bcCard" Padding="16" Background="#F0F9F7" BorderBrush="#087F6E" BorderThickness="1.5">
+        <StackPanel Spacing="10">
+          <TextBlock Text="CHỐT SỔ CUỐI NGÀY" FontSize="16" FontWeight="Bold" Foreground="#087F6E" />
+          <Grid ColumnDefinitions="200,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="12">
+            <TextBlock Grid.Row="0" Classes="bcSectionSub" Text="Ngày:" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Text="{Binding NgayHienThi}" />
+
+            <TextBlock Grid.Row="1" Classes="bcSectionSub" Text="Doanh thu (khách phải trả):" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Text="{Binding TongKetBanHang.DoanhThuHienThi}" />
+
+            <TextBlock Grid.Row="2" Classes="bcSectionSub" Text="Đã thu:" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Foreground="#087F6E" Text="{Binding TongKetBanHang.DaThuHienThi}" />
+
+            <TextBlock Grid.Row="3" Classes="bcSectionSub" Text="Công nợ:" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Foreground="#C27803" Text="{Binding TongKetBanHang.ConNoHienThi}" />
+
+            <TextBlock Grid.Row="4" Classes="bcSectionSub" Text="Tổng thu quỹ (PT hoàn thành):" />
+            <TextBlock Grid.Row="4" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Foreground="#087F6E" Text="{Binding SoQuyTongHop.TongThuHienThi}" />
+
+            <TextBlock Grid.Row="5" Classes="bcSectionSub" Text="Tổng chi quỹ (PC hoàn thành):" />
+            <TextBlock Grid.Row="5" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Foreground="#D64545" Text="{Binding SoQuyTongHop.TongChiHienThi}" />
+
+            <TextBlock Grid.Row="6" Classes="bcSectionSub" Text="Chênh lệch quỹ (Thu - Chi):" />
+            <TextBlock Grid.Row="6" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold" Text="{Binding SoQuyTongHop.ChenhLechHienThi}" />
+
+            <TextBlock Grid.Row="7" Classes="bcSectionSub" Text="Số hóa đơn / Số phiếu nhập:" />
+            <TextBlock Grid.Row="7" Grid.Column="1" Classes="bcTableCell" FontWeight="SemiBold">
+              <Run Text="{Binding TongKetBanHang.SoHoaDonHienThi}" />
+              <Run Text=" / " />
+              <Run Text="{Binding NhapHang.SoPhieuHienThi}" />
+            </TextBlock>
+          </Grid>
         </StackPanel>
       </Border>
 

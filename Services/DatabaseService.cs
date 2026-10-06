@@ -1975,7 +1975,6 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
             kh.ngay_sinh AS NgaySinh,
             kh.gioi_tinh AS GioiTinh,
             kh.email AS Email,
-            kh.facebook AS Facebook,
             kh.dia_chi AS DiaChi,
             kh.phuong_xa AS PhuongXa,
             kh.quan_huyen AS QuanHuyen,
@@ -2367,7 +2366,6 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
                   kh.ngay_sinh AS NgaySinh,
                   kh.gioi_tinh AS GioiTinh,
                   kh.email AS Email,
-                  kh.facebook AS Facebook,
                   kh.dia_chi AS DiaChi,
                   kh.phuong_xa AS PhuongXa,
                   kh.quan_huyen AS QuanHuyen,
@@ -2456,7 +2454,6 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
             kh.ngay_sinh AS NgaySinh,
             kh.gioi_tinh AS GioiTinh,
             kh.email AS Email,
-            kh.facebook AS Facebook,
             kh.dia_chi AS DiaChi,
             kh.phuong_xa AS PhuongXa,
             kh.quan_huyen AS QuanHuyen,
@@ -2722,7 +2719,6 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
             ngay_sinh,
             gioi_tinh,
             email,
-            facebook,
             dia_chi,
             phuong_xa,
             quan_huyen,
@@ -2746,7 +2742,6 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
             @NgaySinh,
             @GioiTinh,
             @Email,
-            @Facebook,
             @DiaChi,
             @PhuongXa,
             @QuanHuyen,
@@ -2776,7 +2771,6 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
                 customer.NgaySinh,
                 customer.GioiTinh,
                 customer.Email,
-                customer.Facebook,
                 customer.DiaChi,
                 customer.PhuongXa,
                 customer.QuanHuyen,
@@ -2805,7 +2799,6 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
             ngay_sinh = @NgaySinh,
             gioi_tinh = @GioiTinh,
             email = @Email,
-            facebook = @Facebook,
             dia_chi = @DiaChi,
             phuong_xa = @PhuongXa,
             quan_huyen = @QuanHuyen,
@@ -2838,7 +2831,7 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
     /// </summary>
     private const string CotNhapKhachHang = """
         ma_khach_hang, ten_khach_hang, loai_khach_hang, so_dien_thoai, ngay_sinh, gioi_tinh,
-        email, facebook, dia_chi, phuong_xa, quan_huyen, tinh_thanh, nhom_khach_hang_id,
+        email, dia_chi, phuong_xa, quan_huyen, tinh_thanh, nhom_khach_hang_id,
         ma_so_thue, ten_nguoi_mua_hoa_don, ten_cong_ty, dia_chi_xuat_hoa_don, ghi_chu,
         chi_nhanh_tao, khu_vuc_giao_hang, nguoi_tao_ten, nguoi_tao_id, ngay_giao_dich_cuoi,
         ngay_nhap_excel, co_du_lieu_kiotviet, no_can_thu_hien_tai, tong_ban,
@@ -2851,7 +2844,7 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
     /// </summary>
     private const string GiaTriDongNhap = """
         @MaKhachHang, @TenKhachHang, @LoaiKhachHang, @SoDienThoai, @NgaySinh, @GioiTinh,
-        @Email, @Facebook, @DiaChi, @PhuongXa, @QuanHuyen, @TinhThanh, @NhomKhachHangId,
+        @Email, @DiaChi, @PhuongXa, @QuanHuyen, @TinhThanh, @NhomKhachHangId,
         @MaSoThue, @TenNguoiMuaHoaDon, @TenCongTy, @DiaChiXuatHoaDon, @GhiChu,
         @ChiNhanhTao, @KhuVucGiaoHang, @NguoiTaoTen, @NguoiTaoId, @NgayGiaoDichCuoi,
         @NgayNhapExcel, @CoDuLieuKiotViet, @NoCanThuHienTai, @TongBan,
@@ -3013,7 +3006,6 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
                 NgaySinh = customer.NgaySinh,
                 GioiTinh = CleanText(customer.GioiTinh),
                 Email = CleanText(customer.Email),
-                Facebook = CleanText(customer.Facebook),
                 DiaChi = CleanText(customer.DiaChi),
                 PhuongXa = CleanText(customer.PhuongXa),
                 QuanHuyen = CleanText(customer.QuanHuyen),
@@ -3300,7 +3292,6 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
         public DateTime? NgaySinh { get; set; }
         public string? GioiTinh { get; set; }
         public string? Email { get; set; }
-        public string? Facebook { get; set; }
         public string? DiaChi { get; set; }
         public string? PhuongXa { get; set; }
         public string? QuanHuyen { get; set; }
@@ -3572,7 +3563,6 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
             LoaiKhachHang = ChuanHoaLoaiKhachHang(GetCellValue(row, "loai_khach_hang", "loại khách hàng", "loai khach hang", "customer type", "loại khách", "loai khach", "loại")),
             SoDienThoai = GetCellValue(row, "so_dien_thoai", "số điện thoại", "so dien thoai", "dien thoai", "điện thoại", "phone", "sdt", "đt", "số điện thoại"),
             Email = GetCellValue(row, "email"),
-            Facebook = GetCellValue(row, "facebook"),
             DiaChi = GetCellValue(row, "dia_chi", "địa chỉ", "dia chi", "address", "địa chỉ"),
             PhuongXa = GetCellValue(row, "phuong_xa", "phường/xã", "phuong xa", "ward", "phường xã"),
             QuanHuyen = GetCellValue(row, "quan_huyen", "quận/huyện", "quan huyen", "district"),

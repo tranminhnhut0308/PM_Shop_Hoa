@@ -1,0 +1,232 @@
+﻿using System.Globalization;
+using Dapper;
+using MySqlConnector;
+using ShopHoa.Models;
+
+namespace ShopHoa.Services;
+
+/// <summary>
+/// Dịch vụ báo cáo bán hàng.
+/// </summary>
+public sealed class BaoCaoBanHangService
+{
+    private readonly Func<Task<MySqlConnection>> _taoKetNoi;
+
+    public BaoCaoBanHangService(Func<Task<MySqlConnection>> taoKetNoi)
+    {
+        _taoKetNoi = taoKetNoi;
+    }
+
+    public static (DateTime TuNgay, DateTime DenNgay) TinhKhoang(DateTime tuNgay, DateTime denNgay)
+    {
+        var tu = tuNgay.Date;
+        var den = denNgay.Date;
+        return (tu, den.AddDays(1));
+    }
+
+    public async Task<BaoCaoBanHangDuLieu> TaiDuLieuAsync(
+        DateTime tuNgay,
+        DateTime denNgay,
+        int kieuLoc,
+        bool tuyChinh,
+        CancellationToken token = default)
+    {
+        var (tu, denKeTiep) = (tuNgay.Date, denNgay.Date.AddDays(1));
+        using var conn = await _taoKetNoi();
+        await conn.OpenAsync(token);
+
+        var tongHop = await TaiTongHopAsync(conn, tu, denKeTiep, token);
+        var bieuDo = await TaiBieuDoAsync(conn, tu, denKeTiep, kieuLoc, token);
+        var bangDuLieu = await TaiBangDuLieuAsync(conn, tu, denKeTiep, kieuLoc, token);
+        var topSanPham = await TaiTopSanPhamAsync(conn, tu, denKeTiep, token);
+        var topKhachHang = await TaiTopKhachHangAsync(conn, tu, denKeTiep, token);
+        var phuongThuc = await TaiPhuongThucThanhToanAsync(conn, tu, denKeTiep, token);
+
+        return new BaoCaoBanHangDuLieu
+        {
+            TuNgay = tu,
+            DenNgay = denNgay.Date,
+            TongHop = tongHop,
+            BieuDo = bieuDo,
+            BangDuLieu = bangDuLieu,
+            TopSanPham = topSanPham,
+            TopKhachHang = topKhachHang,
+            PhuongThucThanhToan = phuongThuc
+        };
+    }
+
+    public async Task<List<BaoCaoBanHangChiTietHoaDon>> TaiChiTietHoaDonAsync(
+        DateTime ngay,
+        CancellationToken token = default)
+    {
+        var tu = ngay.Date;
+        var denKeTiep = tu.AddDays(1);
+        using var conn = await _taoKetNoi();
+        await conn.OpenAsync(token);
+
+        string sql = @"
+SELECT 
+  hd.id AS Id,
+  hd.ma_hoa_don AS MaHoaDon,
+  hd.thoi_gian_ban AS ThoiGianBan,
+  COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS KhachHang,
+  hd.tong_tien_hang AS TongTienHang,
+  hd.giam_gia AS GiamGia,
+  hd.khach_can_tra AS DoanhThu,
+  hd.khach_da_thanh_toan AS DaThu,
+  hd.con_no AS CongNo,
+  COALESCE(hd.trang_thai_thanh_toan, '') AS TrangThai
+FROM hoa_don_ban_hang hd
+LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
+WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+  AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep
+ORDER BY hd.thoi_gian_ban ASC, hd.id ASC;
+";
+        var rs = await conn.QueryAsync<BaoCaoBanHangChiTietHoaDon>(new CommandDefinition(sql, new { TuNgay = tu, DenKeTiep = denKeTiep }, cancellationToken: token));
+        return rs.AsList();
+    }
+
+    private async Task<BaoCaoBanHangTongHop> TaiTongHopAsync(MySqlConnection conn, DateTime tu, DateTime denKeTiep, CancellationToken token)
+    {
+        string sql = @"
+SELECT
+  COUNT(*) AS SoHoaDon,
+  COALESCE(SUM(hd.tong_tien_hang), 0) AS TongTienHang,
+  COALESCE(SUM(hd.giam_gia), 0) AS GiamGia,
+  COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu,
+  COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThu,
+  COALESCE(SUM(hd.con_no), 0) AS CongNo
+FROM hoa_don_ban_hang hd
+WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+  AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep;
+";
+        var r = await conn.QueryFirstOrDefaultAsync<BaoCaoBanHangTongHop>(new CommandDefinition(sql, new { TuNgay = tu, DenKeTiep = denKeTiep }, cancellationToken: token)) ?? new BaoCaoBanHangTongHop();
+        r.TuNgay = tu;
+        r.DenNgay = denKeTiep.AddDays(-1);
+        return r;
+    }
+
+
+    private async Task<List<BaoCaoBanHangDiemThoiGian>> TaiBieuDoAsync(MySqlConnection conn, DateTime tu, DateTime denKeTiep, int kieuLoc, CancellationToken token)
+    {
+        // Group by hour/day/week
+        string bucket;
+        string groupBy;
+        if ((denKeTiep - tu).TotalDays <= 1)
+        {
+            bucket = "DATE_FORMAT(hd.thoi_gian_ban, '%Y-%m-%d %H:00:00')";
+            groupBy = "DATE_FORMAT(hd.thoi_gian_ban, '%Y-%m-%d %H:00:00')";
+        }
+        else if ((denKeTiep - tu).TotalDays <= 60)
+        {
+            bucket = "DATE(hd.thoi_gian_ban)";
+            groupBy = "DATE(hd.thoi_gian_ban)";
+        }
+        else
+        {
+            bucket = "DATE(hd.thoi_gian_ban)";
+            groupBy = "DATE(hd.thoi_gian_ban)";
+        }
+        string sql = @"SELECT " + bucket + " AS ThoiGianStr, COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu, COUNT(*) AS SoHoaDon FROM hoa_don_ban_hang hd WHERE hd.trang_thai_hoa_don = 'HOAN_THANH' AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep GROUP BY " + groupBy + " ORDER BY ThoiGianStr ASC;";
+        var rs = await conn.QueryAsync<dynamic>(new CommandDefinition(sql, new { TuNgay = tu, DenKeTiep = denKeTiep }, cancellationToken: token));
+        var list = new List<BaoCaoBanHangDiemThoiGian>();
+        foreach (var r in rs)
+        {
+            DateTime tg = r.ThoiGianStr;
+            list.Add(new BaoCaoBanHangDiemThoiGian { ThoiGian = tg, DoanhThu = r.DoanhThu, SoHoaDon = r.SoHoaDon, NhanXet = tg.ToString((denKeTiep - tu).TotalDays <= 1 ? "HH:00" : "dd/MM") });
+        }
+        // Fill zeros if needed? Keep as is for chart (can extend if short range)
+        return list;
+    }
+
+
+
+    private async Task<List<BaoCaoBanHangBangRow>> TaiBangDuLieuAsync(MySqlConnection conn, DateTime tu, DateTime denKeTiep, int kieuLoc, CancellationToken token)
+    {
+        string bucket = "DATE(hd.thoi_gian_ban)";
+        string groupBy = "DATE(hd.thoi_gian_ban)";
+        string sql = @"SELECT DATE(hd.thoi_gian_ban) AS ThoiGian, COUNT(*) AS SoHoaDon, COALESCE(SUM(hd.tong_tien_hang), 0) AS TongTienHang, COALESCE(SUM(hd.giam_gia), 0) AS GiamGia, COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu, COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThu, COALESCE(SUM(hd.con_no), 0) AS CongNo FROM hoa_don_ban_hang hd WHERE hd.trang_thai_hoa_don = 'HOAN_THANH' AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep GROUP BY DATE(hd.thoi_gian_ban) ORDER BY ThoiGian ASC;";
+        var rs = await conn.QueryAsync<BaoCaoBanHangBangRow>(new CommandDefinition(sql, new { TuNgay = tu, DenKeTiep = denKeTiep }, cancellationToken: token));
+        var list = rs.AsList();
+        foreach (var x in list) x.ThoiGianHienThi = x.ThoiGian.ToString("dd/MM/yyyy");
+        return list;
+    }
+
+    private async Task<List<BaoCaoBanHangTopSanPham>> TaiTopSanPhamAsync(MySqlConnection conn, DateTime tu, DateTime denKeTiep, CancellationToken token)
+    {
+        string sql = @"
+SELECT 
+  ct.ten_san_pham AS SanPham,
+  COALESCE(SUM(ct.so_luong), 0) AS SoLuongBan,
+  COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu
+FROM chi_tiet_hoa_don_ban_hang ct
+INNER JOIN hoa_don_ban_hang hd ON hd.id = ct.hoa_don_id
+WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+  AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep
+GROUP BY ct.san_pham_id, ct.ten_san_pham
+ORDER BY SoLuongBan DESC, DoanhThu DESC
+LIMIT 10;
+";
+        var rs = await conn.QueryAsync<BaoCaoBanHangTopSanPham>(new CommandDefinition(sql, new { TuNgay = tu, DenKeTiep = denKeTiep }, cancellationToken: token));
+        var list = rs.AsList();
+        for (int i = 0; i < list.Count; i++) list[i].Stt = i + 1;
+        return list;
+    }
+    private async Task<List<BaoCaoBanHangTopKhachHang>> TaiTopKhachHangAsync(MySqlConnection conn, DateTime tu, DateTime denKeTiep, CancellationToken token)
+    {
+        string sql = @"
+SELECT 
+  COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS KhachHang,
+  COUNT(*) AS SoHoaDon,
+  COALESCE(SUM(hd.khach_can_tra), 0) AS TongMua,
+  COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThanhToan,
+  COALESCE(SUM(hd.con_no), 0) AS CongNo
+FROM hoa_don_ban_hang hd
+LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
+WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+  AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep
+GROUP BY hd.khach_hang_id, COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ')
+ORDER BY TongMua DESC, SoHoaDon DESC
+LIMIT 10;
+";
+        var rs = await conn.QueryAsync<BaoCaoBanHangTopKhachHang>(new CommandDefinition(sql, new { TuNgay = tu, DenKeTiep = denKeTiep }, cancellationToken: token));
+        var list = rs.AsList();
+        for (int i = 0; i < list.Count; i++) list[i].Stt = i + 1;
+        return list;
+    }
+    private async Task<List<BaoCaoBanHangPhuongThucRow>> TaiPhuongThucThanhToanAsync(MySqlConnection conn, DateTime tu, DateTime denKeTiep, CancellationToken token)
+    {
+        string sql = @"
+SELECT 
+  UPPER(TRIM(pc.phuong_thuc)) AS PhuongThuc,
+  COUNT(*) AS SoGiaoDich,
+  COALESCE(SUM(pc.so_tien), 0) AS SoTien
+FROM phieu_chi pc
+WHERE pc.trang_thai = 'HOAN_THANH'
+  AND pc.ma_phieu_chi LIKE 'PT%'
+  AND pc.thoi_gian_chi >= @TuNgay AND pc.thoi_gian_chi < @DenKeTiep
+GROUP BY UPPER(TRIM(pc.phuong_thuc))
+ORDER BY SoTien DESC;
+";
+        var rs = await conn.QueryAsync<BaoCaoBanHangPhuongThucRow>(new CommandDefinition(sql, new { TuNgay = tu, DenKeTiep = denKeTiep }, cancellationToken: token));
+        var list = rs.AsList();
+        foreach (var x in list)
+        {
+            x.PhuongThucHienThi = x.PhuongThuc switch
+            {
+                "TIEN_MAT" => "Tiền mặt",
+                "CHUYEN_KHOAN" => "Chuyển khoản",
+                "NGAN_HANG" => "Chuyển khoản",
+                "CHUYEN_KHOAN_NGAN_HANG" => "Chuyển khoản",
+                "QR" => "QR",
+                "VI_DIEN_TU" => "Ví điện tử",
+                "THE" => "Thẻ",
+                "THE_TIN_DUNG" => "Thẻ",
+                "VI" => "Ví",
+                "KHAC" => "Khác",
+                _ => string.IsNullOrWhiteSpace(x.PhuongThuc) ? "Khác" : x.PhuongThuc
+            };
+        }
+        return list;
+    }
+}

@@ -1,0 +1,121 @@
+﻿using System.Collections.ObjectModel;
+using Avalonia.Controls;
+using Avalonia.Platform.Storage;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using ShopHoa.Helpers;
+using ShopHoa.Models;
+using ShopHoa.Services;
+
+
+namespace ShopHoa.ViewModels;
+
+public enum BaoCaoBanHangKieuHienThi
+{
+    BieuDo,
+    BaoCao
+}
+
+public enum BaoCaoBanHangMocQuanTam
+{
+    ThoiGian,
+    SanPham,
+    KhachHang,
+    PhuongThucThanhToan
+}
+
+public sealed partial class BaoCaoBanHangViewModel : ObservableObject
+{
+    private readonly BaoCaoBanHangService _service;
+    private CancellationTokenSource _cts = new();
+    private int _loadVersion;
+    private bool _choPhepTuDongTai = true;
+
+    public Func<Window?> LayCuaSoChinh { get; set; } = static () => null;
+
+    public BaoCaoBanHangViewModel(DatabaseService db)
+    {
+        _service = new BaoCaoBanHangService(db.TaoKetNoiAsync);
+        KieuHienThi = BaoCaoBanHangKieuHienThi.BieuDo;
+        MocQuanTam = BaoCaoBanHangMocQuanTam.ThoiGian;
+        TuNgay = DateTime.Today.AddDays(-6);
+        DenNgay = DateTime.Today;
+        KhoangThoiGian = "7 ngày";
+        TuyChinh = false;
+        _ = TaiDuLieuAsync();
+    }
+
+    [ObservableProperty] private BaoCaoBanHangKieuHienThi kieuHienThi;
+    [ObservableProperty] private BaoCaoBanHangMocQuanTam mocQuanTam;
+    [ObservableProperty] private bool dangTai;
+    [ObservableProperty] private string thongBaoLoi = string.Empty;
+    [ObservableProperty] private DateTime tuNgay;
+    [ObservableProperty] private DateTime denNgay;
+    [ObservableProperty] private bool tuyChinh;
+    [ObservableProperty] private string khoangThoiGian = "Hôm nay";
+    [ObservableProperty] private BaoCaoBanHangDuLieu duLieu = new();
+    [ObservableProperty] private DateTime? ngayChiTiet;
+
+    public ObservableCollection<BaoCaoBanHangDiemThoiGian> BieuDoItems => new(DuLieu.BieuDo);
+    public ObservableCollection<BaoCaoBanHangBangRow> BangItems => new(DuLieu.BangDuLieu);
+    public ObservableCollection<BaoCaoBanHangTopSanPham> TopSanPham => new(DuLieu.TopSanPham);
+    public ObservableCollection<BaoCaoBanHangTopKhachHang> TopKhachHang => new(DuLieu.TopKhachHang);
+    public ObservableCollection<BaoCaoBanHangPhuongThucRow> PhuongThuc => new(DuLieu.PhuongThucThanhToan);
+    public ObservableCollection<BaoCaoBanHangChiTietHoaDon> ChiTietHoaDonList { get; } = new();
+
+    public bool CoLoi => !string.IsNullOrWhiteSpace(ThongBaoLoi);
+    public bool CoDuLieu => !CoLoi && !DangTai;
+    public bool HienThiBieuDo => KieuHienThi == BaoCaoBanHangKieuHienThi.BieuDo;
+    public bool HienThiBaoCao => KieuHienThi == BaoCaoBanHangKieuHienThi.BaoCao;
+
+    partial void OnKieuHienThiChanged(BaoCaoBanHangKieuHienThi value) { OnPropertyChanged(nameof(HienThiBieuDo)); OnPropertyChanged(nameof(HienThiBaoCao)); }
+    partial void OnMocQuanTamChanged(BaoCaoBanHangMocQuanTam value) { }
+
+    [RelayCommand] public async Task TaiLaiAsync() => await TaiDuLieuAsync();
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (version != _loadVersion) return;
+            ThongBaoLoi = ex.Message;
+        }
+        finally
+        {
+            if (version == _loadVersion) DangTai = false;
+        }
+    }
+
+    private void CapNhatDanhSach()
+    {
+        OnPropertyChanged(nameof(TongHop));
+        OnPropertyChanged(nameof(BieuDoItems));
+        OnPropertyChanged(nameof(BangItems));
+        OnPropertyChanged(nameof(TopSanPham));
+        OnPropertyChanged(nameof(TopKhachHang));
+        OnPropertyChanged(nameof(PhuongThuc));
+    }
+
+    [RelayCommand]
+    public async Task XemChiTietNgayAsync(DateTime ngay)
+    {
+        try
+        {
+            NgayChiTiet = ngay;
+            ChiTietHoaDonList.Clear();
+            var items = await _service.TaiChiTietHoaDonAsync(ngay);
+            foreach (var x in items) ChiTietHoaDonList.Add(x);
+        }
+        catch (Exception ex)
+        {
+            ThongBaoLoi = ex.Message;
+        }
+    }
+
+        catch (Exception ex)
+        {
+            ThongBaoLoi = ex.Message;
+        }
+    }
+
+    public BaoCaoBanHangTongHop TongHop => DuLieu.TongHop;
+}
+
