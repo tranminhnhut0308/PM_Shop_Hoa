@@ -35,7 +35,7 @@ public sealed partial class BaoCaoCuoiNgayViewModel
             return;
 
         // Đặt tên file trước để hiện sẵn trong hộp thoại lưu.
-        var ngay = (NgayChon ?? DateTime.Today).Date;
+        var ngay = (NgayChon?.DateTime ?? DateTime.Today).Date;
         var tenFileMacDinh = new BaoCaoCuoiNgayDuLieu { Ngay = ngay }.TenFileXuat();
 
         var file = await cuaSo.StorageProvider.SaveFilePickerAsync(
