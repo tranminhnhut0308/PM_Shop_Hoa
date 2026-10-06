@@ -456,7 +456,7 @@
       <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
-         CHỈNH GIÁ NHANH NGAY TRÊN DANH SÁCH HÀNG HÓA
+    <!-- ============ CHỈNH GIÁ NHANH NGAY TRÊN DANH SÁCH HÀNG HÓA ============ -->
 
     <!-- Nút ✏ mở ô nhập giá: ẩn cho tới khi rê chuột vào dòng -->
     <Style Selector="Button.priceEditTrigger">
@@ -5339,7 +5339,6 @@
         <views:BaoCaoCuoiNgayView DataContext="{Binding BaoCaoCuoiNgay}" />
       </Grid>
 
-<<<<<<< HEAD
       <!-- ============================================================ -->
       <!-- THÔNG TIN TIỆM                                              -->
       <!-- Nội dung thông tin tiệm mà hóa đơn sử dụng, nằm ngoài       -->
@@ -5350,13 +5349,12 @@
       </Grid>
 
       <!-- ============================================================ -->
-=======
-        <!-- BAO CAO BAN HANG -->
-        <Grid IsVisible="{Binding IsBaoCaoBanHangSelected}">
-          <views:BaoCaoBanHangView DataContext="{Binding BaoCaoBanHang}" />
-        </Grid>
+      <!-- BÁO CÁO BÁN HÀNG                                            -->
+      <Grid IsVisible="{Binding IsBaoCaoBanHangSelected}">
+        <views:BaoCaoBanHangView DataContext="{Binding BaoCaoBanHang}" />
+      </Grid>
 
->>>>>>> origin/main
+      <!-- ============================================================ -->
       <!-- BÁO CÁO PHIẾU NHẬP HÀNG                                       -->
       <!-- (khác với Mua hàng → Nhập hàng: đây là màn đọc dữ liệu)      -->
       <Grid IsVisible="{Binding IsBaoCaoPhieuNhapSelected}"

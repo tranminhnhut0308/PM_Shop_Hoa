@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using Avalonia.Platform.Storage;
 using ClosedXML.Excel;
 using System.Threading;
@@ -31,20 +31,22 @@ public partial class MainWindowViewModel : ObservableObject
     private CancellationTokenSource? _baoCaoPhieuNhapSearchCts;
     private int _baoCaoPhieuNhapLoadVersion;
     private bool _baoCaoPhieuNhapLoaded;
-    private bool _baoCaoBanHangLoaded;
     private bool _baoCaoCuoiNgayLoaded;
+    private bool _baoCaoBanHangLoaded;
 
     /// <summary>
-    /// MÃ n "Tá»•ng quan" cÃ³ ViewModel riÃªng. Giá»¯ má»™t instance sá»‘ng suá»‘t phiÃªn Ä‘á»ƒ
-    /// giá»¯ nguyÃªn bá»™ lá»c ngÆ°á»i dÃ¹ng Ä‘ang chá»n khi chuyá»ƒn sang mÃ n khÃ¡c rá»“i quay láº¡i.
+    /// Màn "Tổng quan" có ViewModel riêng. Giữ một instance sống suốt phiên để
+    /// giữ nguyên bộ lọc người dùng đang chọn khi chuyển sang màn khác rồi quay lại.
     /// </summary>
     public DashboardViewModel Dashboard { get; }
 
     /// <summary>
-    /// MÃ n "BÃ¡o cÃ¡o cuá»‘i ngÃ y" cÅ©ng giá»¯ má»™t instance sá»‘ng suá»‘t phiÃªn Ä‘á»ƒ nhá»› ngÃ y
-    /// Ä‘ang xem giá»¯a cÃ¡c láº§n chuyá»ƒn mÃ n.
+    /// Màn "Báo cáo cuối ngày" cũng giữ một instance sống suốt phiên để nhớ ngày
+    /// đang xem giữa các lần chuyển màn.
     /// </summary>
+    /// <summary>Màn "Báo cáo bán hàng" cũng giữ một instance sống suốt phiên.</summary>
     public BaoCaoBanHangViewModel BaoCaoBanHang { get; }
+
     public BaoCaoCuoiNgayViewModel BaoCaoCuoiNgay { get; }
 
     /// <summary>
@@ -59,21 +61,17 @@ public partial class MainWindowViewModel : ObservableObject
     public MainWindowViewModel()
     {
         Dashboard = new DashboardViewModel(_db);
-<<<<<<< HEAD
         _storeInfo = new StoreInfoService(_db.TaoKetNoiAsync);
-=======
         BaoCaoBanHang = new BaoCaoBanHangViewModel(_db);
->>>>>>> origin/main
         BaoCaoCuoiNgay = new BaoCaoCuoiNgayViewModel(_db)
         {
-            // Cá»­a sá»• chÃ­nh chá»‰ cÃ³ sau khi ViewModel Ä‘Æ°á»£c táº¡o, nÃªn cÃ¡c callback
-            // Ä‘á»c nÃ³ theo thá»i Ä‘iá»ƒm dÃ¹ng thay vÃ¬ chá»¥p giÃ¡ trá»‹ lÃºc khá»Ÿi táº¡o.
+            // Cửa sổ chính chỉ có sau khi ViewModel được tạo, nên các callback
+            // đọc nó theo thời điểm dùng thay vì chụp giá trị lúc khởi tạo.
             LayCuaSoChinh = () => OwnerWindow,
             CapNhatTrangThai = message => StatusMessage = message,
             HienThiHopNhat = (tieuDe, noiDung) => ShowMessageAsync(tieuDe, noiDung)
         };
 
-<<<<<<< HEAD
         ThongTinTiem = new ThongTinTiemViewModel(_storeInfo)
         {
             LayCuaSoChinh = () => OwnerWindow,
@@ -97,25 +95,17 @@ public partial class MainWindowViewModel : ObservableObject
         => await _storeInfo.LayThongTinKemLogoAsync();
 
     [ObservableProperty] private string selectedMenu = "Tổng quan";
-=======
-        // Giá» hÃ ng thÃªm/bá»›t dÃ²ng thÃ¬ tráº¡ng thÃ¡i nÃºt "Thanh toÃ¡n" pháº£i cáº­p nháº­t
-        // theo, náº¿u khÃ´ng nÃºt sáº½ má»Ÿ khi giá» hÃ ng váº«n cÃ²n trá»‘ng.
-        SaleCart.CollectionChanged += (_, _) => OnPropertyChanged(nameof(CanThanhToan));
-    }
-
-    [ObservableProperty] private string selectedMenu = "Tá»•ng quan";
->>>>>>> origin/main
     [ObservableProperty] private int selectedDataTabIndex = 0;
     [ObservableProperty] private string selectedReportKey = "";
-    [ObservableProperty] private string statusMessage = "Sáºµn sÃ ng";
+    [ObservableProperty] private string statusMessage = "Sẵn sàng";
     [ObservableProperty] private bool isImporting;
     [ObservableProperty]
     private string importStatus = "";
 
     /// <summary>
-    /// Thanh tiáº¿n Ä‘á»™ xÃ¡c Ä‘á»‹nh 0-100 cho cÃ¡c luá»“ng import biáº¿t trÆ°á»›c tá»•ng sá»‘
-    /// Ä‘Æ¡n vá»‹ cÃ´ng viá»‡c. Luá»“ng khÃ´ng biáº¿t trÆ°á»›c thÃ¬ Ä‘á»ƒ false Ä‘á»ƒ hiá»‡n thanh
-    /// cháº¡y vÃ´ háº¡n nhÆ° cÅ©.
+    /// Thanh tiến độ xác định 0-100 cho các luồng import biết trước tổng số
+    /// đơn vị công việc. Luồng không biết trước thì để false để hiện thanh
+    /// chạy vô hạn như cũ.
     /// </summary>
     [ObservableProperty] private bool importHasProgress;
 
@@ -130,27 +120,27 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<SanPham> SanPhams { get; } = new();
 
     /// <summary>
-    /// Tá»•ng sá»‘ hÃ ng hÃ³a trong database khá»›p tá»« khÃ³a Ä‘ang gÃµ.
-    /// ÄÆ°á»£c MySQL Ä‘áº¿m trÃªn toÃ n bá»™ báº£ng san_pham, khÃ´ng phá»¥ thuá»™c sá»‘ dÃ²ng Ä‘ang hiá»ƒn thá»‹.
+    /// Tổng số hàng hóa trong database khớp từ khóa đang gõ.
+    /// Được MySQL đếm trên toàn bộ bảng san_pham, không phụ thuộc số dòng đang hiển thị.
     /// </summary>
     [ObservableProperty] private int productTotalCount;
 
     public bool IsSanPhamListEmpty => SanPhams.Count == 0;
 
-    /// <summary>DÃ²ng tiÃªu Ä‘á» hiá»ƒn thá»‹ khi báº£ng hÃ ng hÃ³a rá»—ng, Ä‘á»•i theo tá»« khÃ³a Ä‘ang tÃ¬m.</summary>
+    /// <summary>Dòng tiêu đề hiển thị khi bảng hàng hóa rỗng, đổi theo từ khóa đang tìm.</summary>
     public string SanPhamEmptyText =>
         string.IsNullOrWhiteSpace(ProductSearch)
-            ? "ChÆ°a cÃ³ hÃ ng hÃ³a nÃ o trong há»‡ thá»‘ng"
-            : $"KhÃ´ng tÃ¬m tháº¥y hÃ ng hÃ³a vá»›i tá»« khÃ³a \"{ProductSearch.Trim()}\"";
+            ? "Chưa có hàng hóa nào trong hệ thống"
+            : $"Không tìm thấy hàng hóa với từ khóa \"{ProductSearch.Trim()}\"";
 
     public string SanPhamEmptyHint =>
         string.IsNullOrWhiteSpace(ProductSearch)
-            ? "Báº¥m â€œï¼‹ Nháº­p hÃ ngâ€ hoáº·c â€œâ‡© Import fileâ€ Ä‘á»ƒ thÃªm hÃ ng hÃ³a."
-            : "Thá»­ tá»« khÃ³a khÃ¡c hoáº·c xÃ³a ná»™i dung Ã´ tÃ¬m kiáº¿m.";
+            ? "Bấm “＋ Nhập hàng” hoặc “⇩ Import file” để thêm hàng hóa."
+            : "Thử từ khóa khác hoặc xóa nội dung ô tìm kiếm.";
 
     /// <summary>
-    /// Ã” tÃ¬m kiáº¿m hÃ ng hÃ³a bind TwoWay nÃªn khi ngÆ°á»i dÃ¹ng gÃµ thÃ¬ SearchText Ä‘á»•i.
-    /// Tá»± tÃ¬m láº¡i ngay á»Ÿ Ä‘Ã¢y, khÃ´ng cáº§n nháº¥n Enter vÃ  khÃ´ng cáº§n báº¥m nÃºt tÃ¬m kiáº¿m.
+    /// Ô tìm kiếm hàng hóa bind TwoWay nên khi người dùng gõ thì SearchText đổi.
+    /// Tự tìm lại ngay ở đây, không cần nhấn Enter và không cần bấm nút tìm kiếm.
     /// </summary>
     partial void OnProductSearchChanged(string value)
     {
@@ -160,18 +150,18 @@ public partial class MainWindowViewModel : ObservableObject
         TimKiemSanPhamTuDong();
     }
 
-    /// <summary>CÃ¡c dÃ²ng khÃ¡ch hÃ ng cá»§a trang hiá»‡n táº¡i (Ä‘Ã£ phÃ¢n trang).</summary>
+    /// <summary>Các dòng khách hàng của trang hiện tại (đã phân trang).</summary>
     public ObservableCollection<KhachHangRowViewModel> CustomerRows { get; } = new();
 
     public ObservableCollection<HoaDon> HoaDons { get; } = new();
     public ObservableCollection<SanPham> ProductSearchResults { get; } = new();
     public ObservableCollection<SaleCartItem> SaleCart { get; } = new();
     public ObservableCollection<KhachHang> SaleCustomerSuggestions { get; } = new();
-    public IReadOnlyList<string> DiscountModes { get; } = ["Sá»‘ tiá»n", "Pháº§n trÄƒm"];
+    public IReadOnlyList<string> DiscountModes { get; } = ["Số tiền", "Phần trăm"];
 
     [ObservableProperty] private string saleSearchText = "";
     [ObservableProperty] private bool isSalesPanelVisible;
-    [ObservableProperty] private string saleCustomerName = "KhÃ¡ch láº»";
+    [ObservableProperty] private string saleCustomerName = "Khách lẻ";
     [ObservableProperty] private decimal saleTotal;
     [ObservableProperty] private decimal saleSubtotal;
     [ObservableProperty] private decimal saleDiscountInput;
@@ -187,44 +177,44 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private string trangThaiThanhToan = "";
-    [ObservableProperty] private string saleDiscountMode = "Sá»‘ tiá»n";
+    [ObservableProperty] private string saleDiscountMode = "Số tiền";
     [ObservableProperty] private NhaCungCap? selectedNhaCungCap;
     [ObservableProperty] private KhachHang? selectedSaleCustomer;
 
     // =========================================================
-    // TRáº NG THÃI ÄÆ N HÃ€NG ÄANG BÃN
+    // TRẠNG THÁI ĐƠN HÀNG ĐANG BÁN
     // =========================================================
 
     /// <summary>
-    /// KhoÃ¡ chá»‘ng báº¥m nÃºt "Thanh toÃ¡n" nhiá»u láº§n / gá»i lá»‡nh chá»“ng nhau.
-    /// TrÆ°á»›c Ä‘Ã¢y lá»‡nh thanh toÃ¡n khÃ´ng cÃ³ cá» nÃ y nÃªn báº¥m hai láº§n lÃ  táº¡o hai hÃ³a Ä‘Æ¡n.
+    /// Khoá chống bấm nút "Thanh toán" nhiều lần / gọi lệnh chồng nhau.
+    /// Trước đây lệnh thanh toán không có cờ này nên bấm hai lần là tạo hai hóa đơn.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanThanhToan))]
     [NotifyPropertyChangedFor(nameof(TrangThaiXuLyThanhToan))]
     private bool isThanhToanDangXuLy;
 
-    /// <summary>CÃ³ thá»ƒ báº¥m "Thanh toÃ¡n" hay khÃ´ng.</summary>
+    /// <summary>Có thể bấm "Thanh toán" hay không.</summary>
     public bool CanThanhToan => !IsThanhToanDangXuLy && SaleCart.Count > 0;
 
-    /// <summary>Chá»¯ hiá»ƒn thá»‹ trÃªn nÃºt thanh toÃ¡n khi Ä‘ang xá»­ lÃ½.</summary>
+    /// <summary>Chữ hiển thị trên nút thanh toán khi đang xử lý.</summary>
     public string TrangThaiXuLyThanhToan =>
-        IsThanhToanDangXuLy ? "Äang lÆ°u..." : "Thanh toÃ¡n";
+        IsThanhToanDangXuLy ? "Đang lưu..." : "Thanh toán";
 
-    /// <summary>MÃ£ hÃ³a Ä‘Æ¡n cá»§a Ä‘Æ¡n Ä‘ang bÃ¡n (xem trÆ°á»›c, do database sinh khi lÆ°u).</summary>
+    /// <summary>Mã hóa đơn của đơn đang bán (xem trước, do database sinh khi lưu).</summary>
     [ObservableProperty] private string saleMaHoaDonHienThi = "";
 
     // =========================================================
-    // DANH SÃCH KHÃCH HÃ€NG: PHÃ‚N TRANG + Má»ž Rá»˜NG CHI TIáº¾T
+    // DANH SÁCH KHÁCH HÀNG: PHÂN TRANG + MỞ RỘNG CHI TIẾT
     // =========================================================
 
-    /// <summary>Trang Ä‘ang xem (báº¯t Ä‘áº§u tá»« 1).</summary>
+    /// <summary>Trang đang xem (bắt đầu từ 1).</summary>
     [ObservableProperty] private int customerPage = 1;
 
-    /// <summary>Sá»‘ khÃ¡ch hÃ ng hiá»ƒn thá»‹ trÃªn má»™t trang.</summary>
+    /// <summary>Số khách hàng hiển thị trên một trang.</summary>
     [ObservableProperty] private int customerPageSize = 20;
 
-    /// <summary>Tá»•ng sá»‘ khÃ¡ch hÃ ng khá»›p Ä‘iá»u kiá»‡n tÃ¬m kiáº¿m (trÃªn toÃ n database).</summary>
+    /// <summary>Tổng số khách hàng khớp điều kiện tìm kiếm (trên toàn database).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CustomerTotalPages))]
     [NotifyPropertyChangedFor(nameof(CustomerRangeText))]
@@ -235,41 +225,41 @@ public partial class MainWindowViewModel : ObservableObject
     private int customerTotalCount;
 
     /// <summary>
-    /// Tá»•ng sá»‘ khÃ¡ch hÃ ng Ä‘ang cÃ³ trong há»‡ thá»‘ng, khÃ´ng phá»¥ thuá»™c tá»« khÃ³a tÃ¬m kiáº¿m.
-    /// ÄÃ¢y lÃ  con sá»‘ hiá»ƒn thá»‹ trÃªn tháº» "Tá»•ng khÃ¡ch hÃ ng".
+    /// Tổng số khách hàng đang có trong hệ thống, không phụ thuộc từ khóa tìm kiếm.
+    /// Đây là con số hiển thị trên thẻ "Tổng khách hàng".
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CustomerRangeText))]
     private int customerAllCount;
 
-    /// <summary>Sá»‘ khÃ¡ch hÃ ng má»›i phÃ¡t sinh trong khoáº£ng sá»‘ ngÃ y gáº§n nháº¥t.</summary>
+    /// <summary>Số khách hàng mới phát sinh trong khoảng số ngày gần nhất.</summary>
     [ObservableProperty] private int customerNewCount;
 
     /// <summary>
-    /// Chá»¯ dÆ°á»›i tháº» "KhÃ¡ch hÃ ng má»›i". Láº¥y tá»« Ä‘Ãºng háº±ng sá»‘ mÃ  query dÃ¹ng Ä‘á»ƒ Ä‘áº¿m
-    /// Ä‘á»ƒ chá»¯ nÃ y khÃ´ng bao giá» lá»‡ch vá»›i sá»‘ liá»‡u Ä‘ang hiá»ƒn thá»‹.
+    /// Chữ dưới thẻ "Khách hàng mới". Lấy từ đúng hằng số mà query dùng để đếm
+    /// để chữ này không bao giờ lệch với số liệu đang hiển thị.
     /// </summary>
     public string CustomerNewCountCaption =>
-        $"PhÃ¡t sinh trong {DatabaseService.SoNgayKhachMoiMacDinh} ngÃ y gáº§n nháº¥t";
+        $"Phát sinh trong {DatabaseService.SoNgayKhachMoiMacDinh} ngày gần nhất";
 
-    /// <summary>Tá»•ng ná»£ hiá»‡n táº¡i cá»§a toÃ n bá»™ khÃ¡ch hÃ ng (cÃ¹ng cÃ¡ch tÃ­nh vá»›i cá»™t tiá»n trong báº£ng).</summary>
+    /// <summary>Tổng nợ hiện tại của toàn bộ khách hàng (cùng cách tính với cột tiền trong bảng).</summary>
     [ObservableProperty] private decimal customerTotalDebt;
 
-    /// <summary>Tá»•ng tiá»n bÃ¡n cá»§a toÃ n bá»™ khÃ¡ch hÃ ng.</summary>
+    /// <summary>Tổng tiền bán của toàn bộ khách hàng.</summary>
     [ObservableProperty] private decimal customerTotalSales;
 
-    /// <summary>Checkbox "chá»n táº¥t cáº£" cá»§a báº£ng danh sÃ¡ch.</summary>
+    /// <summary>Checkbox "chọn tất cả" của bảng danh sách.</summary>
     [ObservableProperty] private bool isAllCustomerRowsSelected;
 
-    /// <summary>Äang Ã¡p tráº¡ng thÃ¡i "chá»n táº¥t cáº£" xuá»‘ng cÃ¡c dÃ²ng, trÃ¡nh cáº­p nháº­t ngÆ°á»£c.</summary>
+    /// <summary>Đang áp trạng thái "chọn tất cả" xuống các dòng, tránh cập nhật ngược.</summary>
     private bool _dangApDungChonTatCa;
 
     [ObservableProperty] private bool isLoadingCustomers;
 
-    /// <summary>Id cá»§a khÃ¡ch hÃ ng Ä‘ang má»Ÿ vÃ¹ng chi tiáº¿t. null = khÃ´ng cÃ³ khÃ¡ch hÃ ng nÃ o Ä‘ang má»Ÿ.</summary>
+    /// <summary>Id của khách hàng đang mở vùng chi tiết. null = không có khách hàng nào đang mở.</summary>
     [ObservableProperty] private uint? selectedCustomerId;
 
-    /// <summary>DÃ²ng khÃ¡ch hÃ ng Ä‘ang má»Ÿ chi tiáº¿t.</summary>
+    /// <summary>Dòng khách hàng đang mở chi tiết.</summary>
     [ObservableProperty] private KhachHangRowViewModel? selectedCustomer;
 
     public int CustomerTotalPages =>
@@ -278,8 +268,8 @@ public partial class MainWindowViewModel : ObservableObject
             : (int)Math.Ceiling(CustomerTotalCount / (double)CustomerPageSize);
 
     /// <summary>
-    /// VÃ­ dá»¥ khÃ´ng tÃ¬m kiáº¿m: "1 - 20 trong 850 khÃ¡ch hÃ ng".
-    /// Khi Ä‘ang tÃ¬m kiáº¿m: "1 - 20 trong 29 khÃ¡ch hÃ ng tÃ¬m theo \"Thá»§y\" (tá»•ng 850)".
+    /// Ví dụ không tìm kiếm: "1 - 20 trong 850 khách hàng".
+    /// Khi đang tìm kiếm: "1 - 20 trong 29 khách hàng tìm theo \"Thủy\" (tổng 850)".
     /// </summary>
     public string CustomerRangeText
     {
@@ -289,16 +279,16 @@ public partial class MainWindowViewModel : ObservableObject
 
             if (CustomerTotalCount == 0)
                 return dangTimKiem
-                    ? $"0 khÃ¡ch hÃ ng tÃ¬m theo \"{CustomerSearch.Trim()}\" (tá»•ng {CustomerAllCount:N0})"
-                    : "0 khÃ¡ch hÃ ng";
+                    ? $"0 khách hàng tìm theo \"{CustomerSearch.Trim()}\" (tổng {CustomerAllCount:N0})"
+                    : "0 khách hàng";
 
             var from = (CustomerPage - 1) * CustomerPageSize + 1;
             var to = Math.Min(from + CustomerPageSize - 1, CustomerTotalCount);
 
             if (dangTimKiem)
-                return $"{from} - {to} trong {CustomerTotalCount:N0} khÃ¡ch hÃ ng tÃ¬m theo \"{CustomerSearch.Trim()}\" (tá»•ng {CustomerAllCount:N0})";
+                return $"{from} - {to} trong {CustomerTotalCount:N0} khách hàng tìm theo \"{CustomerSearch.Trim()}\" (tổng {CustomerAllCount:N0})";
 
-            return $"{from} - {to} trong {CustomerTotalCount:N0} khÃ¡ch hÃ ng";
+            return $"{from} - {to} trong {CustomerTotalCount:N0} khách hàng";
         }
     }
 
@@ -306,16 +296,16 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool IsCustomerListEmpty => CustomerRows.Count == 0;
 
-    /// <summary>ThÃ´ng bÃ¡o khi danh sÃ¡ch rá»—ng, thay Ä‘á»•i theo tá»« khÃ³a Ä‘ang tÃ¬m.</summary>
+    /// <summary>Thông báo khi danh sách rỗng, thay đổi theo từ khóa đang tìm.</summary>
     public string CustomerEmptyText =>
         string.IsNullOrWhiteSpace(CustomerSearch)
-            ? "ChÆ°a cÃ³ khÃ¡ch hÃ ng nÃ o trong há»‡ thá»‘ng"
-            : $"KhÃ´ng tÃ¬m tháº¥y khÃ¡ch hÃ ng vá»›i tá»« khÃ³a \"{CustomerSearch.Trim()}\"";
+            ? "Chưa có khách hàng nào trong hệ thống"
+            : $"Không tìm thấy khách hàng với từ khóa \"{CustomerSearch.Trim()}\"";
 
     public string CustomerEmptyHint =>
         string.IsNullOrWhiteSpace(CustomerSearch)
-            ? "Báº¥m â€œï¼‹ ThÃªm má»›iâ€ Ä‘á»ƒ táº¡o khÃ¡ch hÃ ng Ä‘áº§u tiÃªn."
-            : "Thá»­ tá»« khÃ³a khÃ¡c hoáº·c xÃ³a ná»™i dung Ã´ tÃ¬m kiáº¿m.";
+            ? "Bấm “＋ Thêm mới” để tạo khách hàng đầu tiên."
+            : "Thử từ khóa khác hoặc xóa nội dung ô tìm kiếm.";
 
     partial void OnCustomerSearchChanged(string value)
     {
@@ -327,31 +317,31 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool CanCustomerTrangSau => CustomerPage < CustomerTotalPages;
 
-    public string CustomerTotalDebtText => MoneyInput.Format(CustomerTotalDebt) + " Ä‘";
+    public string CustomerTotalDebtText => MoneyInput.Format(CustomerTotalDebt) + " đ";
 
-    public string CustomerTotalSalesText => MoneyInput.Format(CustomerTotalSales) + " Ä‘";
+    public string CustomerTotalSalesText => MoneyInput.Format(CustomerTotalSales) + " đ";
 
-    /// <summary>Sá»‘ khÃ¡ch hÃ ng Ä‘ang Ä‘Æ°á»£c tick trÃªn trang hiá»‡n táº¡i.</summary>
+    /// <summary>Số khách hàng đang được tick trên trang hiện tại.</summary>
     public int CustomerSelectedCount => CustomerRows.Count(row => row.IsSelected);
 
     public string CustomerSelectedCountText =>
         CustomerSelectedCount == 0
-            ? "ChÆ°a chá»n khÃ¡ch hÃ ng nÃ o"
-            : $"ÄÃ£ chá»n {CustomerSelectedCount:N0} khÃ¡ch hÃ ng";
+            ? "Chưa chọn khách hàng nào"
+            : $"Đã chọn {CustomerSelectedCount:N0} khách hàng";
 
     public bool HasSelectedCustomerRows => CustomerSelectedCount > 0;
 
     /// <summary>
-    /// Khi ngÆ°á»i dÃ¹ng tick Ã´ "chá»n táº¥t cáº£" á»Ÿ tiÃªu Ä‘á» báº£ng thÃ¬ Ã¡p dá»¥ng
-    /// tráº¡ng thÃ¡i Ä‘Ã³ cho táº¥t cáº£ dÃ²ng cá»§a trang Ä‘ang xem.
+    /// Khi người dùng tick ô "chọn tất cả" ở tiêu đề bảng thì áp dụng
+    /// trạng thái đó cho tất cả dòng của trang đang xem.
     /// </summary>
     partial void OnIsAllCustomerRowsSelectedChanged(bool value)
     {
         if (_dangApDungChonTatCa || CustomerRows.Count == 0)
             return;
 
-        // Cá» nÃ y trÃ¡nh viá»‡c tá»«ng dÃ²ng bÃ¡o láº¡i ngÆ°á»£c láº¡i lÃ m Ä‘áº£o tráº¡ng thÃ¡i
-        // cá»§a Ã´ "chá»n táº¥t cáº£" giá»¯a chá»«ng lÃºc Ä‘ang Ã¡p dá»¥ng.
+        // Cờ này tránh việc từng dòng báo lại ngược lại làm đảo trạng thái
+        // của ô "chọn tất cả" giữa chừng lúc đang áp dụng.
         _dangApDungChonTatCa = true;
 
         try
@@ -367,12 +357,12 @@ public partial class MainWindowViewModel : ObservableObject
         CapNhatTrangThaiChonCustomer();
     }
 
-    /// <summary>Tick/bá» tick toÃ n bá»™ khÃ¡ch hÃ ng cá»§a trang Ä‘ang xem.</summary>
+    /// <summary>Tick/bỏ tick toàn bộ khách hàng của trang đang xem.</summary>
     [RelayCommand]
     private void ChonTatCaCustomerRows()
         => IsAllCustomerRowsSelected = !IsAllCustomerRowsSelected;
 
-    /// <summary>Bá» tick toÃ n bá»™ khÃ¡ch hÃ ng Ä‘ang chá»n.</summary>
+    /// <summary>Bỏ tick toàn bộ khách hàng đang chọn.</summary>
     [RelayCommand]
     private void BoChonTatCaCustomerRows()
     {
@@ -390,7 +380,7 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HasSelectedCustomerRows));
     }
 
-    /// <summary>KhÃ¡ch hÃ ng Ä‘ang má»Ÿ chi tiáº¿t (dáº¡ng model, phá»¥c vá»¥ nghiá»‡p vá»¥).</summary>
+    /// <summary>Khách hàng đang mở chi tiết (dạng model, phục vụ nghiệp vụ).</summary>
     public KhachHang? ExpandedCustomer => SelectedCustomer?.Customer;
 
     partial void OnCustomerPageChanged(int value)
@@ -430,7 +420,7 @@ public partial class MainWindowViewModel : ObservableObject
     private void ChonKhachLe()
     {
         SelectedSaleCustomer = null;
-        SaleCustomerName = "KhÃ¡ch láº»";
+        SaleCustomerName = "Khách lẻ";
         SaleCustomerSuggestions.Clear();
     }
 
@@ -445,12 +435,12 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ táº£i danh sÃ¡ch khÃ¡ch hÃ ng: " + ex.Message;
+            StatusMessage = "Không thể tải danh sách khách hàng: " + ex.Message;
         }
     }
 
     /// <summary>
-    /// TÃ¬m kiáº¿m khÃ¡ch hÃ ng (nÃºt "TÃ¬m kiáº¿m"): luÃ´n quay vá» trang Ä‘áº§u.
+    /// Tìm kiếm khách hàng (nút "Tìm kiếm"): luôn quay về trang đầu.
     /// </summary>
     [RelayCommand]
     private async Task TimKiemKhachHangAsync()
@@ -461,13 +451,13 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Táº£i láº¡i trang Ä‘áº§u sau khi ngÆ°á»i dÃ¹ng Ä‘á»•i sá»‘ báº£n ghi má»—i trang.
+    /// Tải lại trang đầu sau khi người dùng đổi số bản ghi mỗi trang.
     /// </summary>
     public Task TaiLaiDanhSachKhachHangAsync() => TimKiemKhachHangAsync();
 
     /// <summary>
-    /// TÃ¬m kiáº¿m realtime khi ngÆ°á»i dÃ¹ng gÃµ: chá»‘ng debounce 350ms
-    /// Ä‘á»ƒ khÃ´ng gá»i database liÃªn tá»¥c.
+    /// Tìm kiếm realtime khi người dùng gõ: chống debounce 350ms
+    /// để không gọi database liên tục.
     /// </summary>
     public void TimKiemKhachHangTuDong()
     {
@@ -492,18 +482,18 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            // NgÆ°á»i dÃ¹ng gÃµ tiáº¿p -> huá»· láº§n tÃ¬m kiáº¿m cÅ©
+            // Người dùng gõ tiếp -> huỷ lần tìm kiếm cũ
         }
     }
 
     // =========================================================
-    // Má»ž / ÄÃ“NG VÃ™NG CHI TIáº¾T NGAY DÆ¯á»šI DÃ’NG
+    // MỞ / ĐÓNG VÙNG CHI TIẾT NGAY DƯỚI DÒNG
     // =========================================================
 
     /// <summary>
-    /// NgÆ°á»i dÃ¹ng click vÃ o má»™t dÃ²ng khÃ¡ch hÃ ng:
-    /// click khÃ¡c dÃ²ng Ä‘ang má»Ÿ -> chuyá»ƒn sang dÃ²ng má»›i (Ä‘Ã³ng dÃ²ng cÅ©, má»Ÿ dÃ²ng má»›i);
-    /// click Ä‘Ãºng dÃ²ng Ä‘ang má»Ÿ -> Ä‘Ã³ng láº¡i. Chá»‰ má»™t khÃ¡ch hÃ ng má»Ÿ táº¡i má»™t thá»i Ä‘iá»ƒm.
+    /// Người dùng click vào một dòng khách hàng:
+    /// click khác dòng đang mở -> chuyển sang dòng mới (đóng dòng cũ, mở dòng mới);
+    /// click đúng dòng đang mở -> đóng lại. Chỉ một khách hàng mở tại một thời điểm.
     /// </summary>
     [RelayCommand]
     private async Task MoRongDongKhachHangAsync(KhachHangRowViewModel? row)
@@ -515,7 +505,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             DongChiTietKhachHang();
 
-            StatusMessage = "ÄÃ£ Ä‘Ã³ng chi tiáº¿t khÃ¡ch hÃ ng";
+            StatusMessage = "Đã đóng chi tiết khách hàng";
 
             return;
         }
@@ -525,7 +515,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task MoChiTietKhachHangAsync(KhachHangRowViewModel row)
     {
-        // ÄÃ³ng vÃ¹ng chi tiáº¿t cá»§a khÃ¡ch hÃ ng Ä‘ang má»Ÿ trÆ°á»›c (náº¿u cÃ³)
+        // Đóng vùng chi tiết của khách hàng đang mở trước (nếu có)
         if (SelectedCustomer is not null && SelectedCustomer.CustomerId != row.CustomerId)
         {
             SelectedCustomer.IsExpanded = false;
@@ -541,17 +531,17 @@ public partial class MainWindowViewModel : ObservableObject
         detail.SelectedTab = "thongtin";
         detail.IsLoading = true;
 
-        StatusMessage = $"Äang táº£i chi tiáº¿t {row.TenKhachHang}...";
+        StatusMessage = $"Đang tải chi tiết {row.TenKhachHang}...";
 
         try
         {
-            // Chá»‰ Ä‘á»c Ä‘Ãºng dá»¯ liá»‡u cá»§a khÃ¡ch hÃ ng Ä‘ang xem
+            // Chỉ đọc đúng dữ liệu của khách hàng đang xem
             var full = await _db.GetKhachHangByIdAsync(row.CustomerId);
 
             if (full is null)
             {
                 detail.IsLoading = false;
-                StatusMessage = "KhÃ´ng tÃ¬m tháº¥y khÃ¡ch hÃ ng trong database";
+                StatusMessage = "Không tìm thấy khách hàng trong database";
 
                 return;
             }
@@ -579,7 +569,7 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             detail.IsLoading = false;
-            StatusMessage = "KhÃ´ng thá»ƒ táº£i chi tiáº¿t khÃ¡ch hÃ ng: " + ex.Message;
+            StatusMessage = "Không thể tải chi tiết khách hàng: " + ex.Message;
         }
     }
 
@@ -596,7 +586,7 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     // =========================================================
-    // PHÃ‚N TRANG DANH SÃCH KHÃCH HÃ€NG
+    // PHÂN TRANG DANH SÁCH KHÁCH HÀNG
     // =========================================================
 
     [RelayCommand]
@@ -636,7 +626,7 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task ThemMoiKhachHangAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersCreate, "Báº¡n khÃ´ng cÃ³ quyá»n thÃªm khÃ¡ch hÃ ng."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersCreate, "Bạn không có quyền thêm khách hàng."))
         {
             return;
         }
@@ -666,22 +656,22 @@ public partial class MainWindowViewModel : ObservableObject
 
             editor.Customer.Id = newId;
 
-            // KhÃ¡ch má»›i tÃªn khÃ´ng rá»—ng, cÃ³ thá»ƒ náº±m á»Ÿ trang khÃ¡c -> táº£i láº¡i trang Ä‘áº§u
+            // Khách mới tên không rỗng, có thể nằm ở trang khác -> tải lại trang đầu
             CustomerPage = 1;
             await LoadCustomersAsync();
 
-            StatusMessage = $"ÄÃ£ thÃªm khÃ¡ch hÃ ng: {editor.Customer.TenKhachHang}";
+            StatusMessage = $"Đã thêm khách hàng: {editor.Customer.TenKhachHang}";
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ thÃªm khÃ¡ch hÃ ng: " + ex.Message;
+            StatusMessage = "Không thể thêm khách hàng: " + ex.Message;
         }
     }
 
     [RelayCommand]
     private async Task ThemKhachHangTuFileAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersImport, "Báº¡n khÃ´ng cÃ³ quyá»n import khÃ¡ch hÃ ng."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersImport, "Bạn không có quyền import khách hàng."))
         {
             return;
         }
@@ -691,7 +681,7 @@ public partial class MainWindowViewModel : ObservableObject
         var files = await OwnerWindow.StorageProvider.OpenFilePickerAsync(
             new FilePickerOpenOptions
             {
-                Title = "Chá»n file danh sÃ¡ch khÃ¡ch hÃ ng",
+                Title = "Chọn file danh sách khách hàng",
                 AllowMultiple = false,
                 FileTypeFilter =
                 [
@@ -705,29 +695,29 @@ public partial class MainWindowViewModel : ObservableObject
         var file = files.FirstOrDefault();
         if (file is null)
         {
-            StatusMessage = "Báº¡n chÆ°a chá»n file Ä‘á»ƒ nháº­p khÃ¡ch hÃ ng hÃ ng loáº¡t.";
+            StatusMessage = "Bạn chưa chọn file để nhập khách hàng hàng loạt.";
             return;
         }
 
         try
         {
             IsImporting = true;
-            StatusMessage = $"â³ ÄÃ£ chá»n file \"{file.Name}\". Äang Ä‘á»c dá»¯ liá»‡u...";
+            StatusMessage = $"⏳ Đã chọn file \"{file.Name}\". Đang đọc dữ liệu...";
             await Task.Yield();
 
             var doc = await Task.Run(() => _db.DocKhachHangTuFile(file.Path.LocalPath));
 
             if (doc.KhachHangs.Count == 0)
             {
-                StatusMessage = $"âŒ File \"{file.Name}\" khÃ´ng cÃ³ dá»¯ liá»‡u khÃ¡ch hÃ ng há»£p lá»‡.";
+                StatusMessage = $"❌ File \"{file.Name}\" không có dữ liệu khách hàng hợp lệ.";
                 return;
             }
 
             StatusMessage =
-                $"â³ ÄÃ£ Ä‘á»c {doc.SoDongExcel:N0} dÃ²ng, há»£p lá»‡ {doc.SoKhachHangHopLe:N0} khÃ¡ch hÃ ng. Äang kiá»ƒm tra dá»¯ liá»‡u trÃ¹ng...";
+                $"⏳ Đã đọc {doc.SoDongExcel:N0} dòng, hợp lệ {doc.SoKhachHangHopLe:N0} khách hàng. Đang kiểm tra dữ liệu trùng...";
             await Task.Yield();
 
-            // Chá»‰ náº¡p mÃ£ vÃ  sá»‘ Ä‘iá»‡n thoáº¡i Ä‘ang cÃ³ Ä‘á»ƒ Ä‘áº¿m trÃ¹ng, khÃ´ng táº£i cáº£ danh sÃ¡ch lÃªn giao diá»‡n.
+            // Chỉ nạp mã và số điện thoại đang có để đếm trùng, không tải cả danh sách lên giao diện.
             var existingKeys = await _db.LayKhoaTrungKhopKhachHangAsync();
             var duplicateCustomers = doc.KhachHangs
                 .Where(customer => IsDuplicateCustomer(customer, existingKeys))
@@ -738,20 +728,20 @@ public partial class MainWindowViewModel : ObservableObject
             if (duplicateCustomers.Count > 0)
             {
                 var replace = await ShowConfirmationAsync(
-                    "KhÃ¡ch hÃ ng bá»‹ trÃ¹ng",
-                    $"PhÃ¡t hiá»‡n {duplicateCustomers.Count:N0} khÃ¡ch hÃ ng trong file Ä‘Ã£ tá»“n táº¡i.\n\nBáº¡n muá»‘n giá»¯ dá»¯ liá»‡u khÃ¡ch hÃ ng cÅ© hay thay tháº¿ báº±ng dá»¯ liá»‡u trong file?",
-                    "Thay tháº¿",
-                    "Giá»¯ khÃ¡ch hÃ ng cÅ©");
+                    "Khách hàng bị trùng",
+                    $"Phát hiện {duplicateCustomers.Count:N0} khách hàng trong file đã tồn tại.\n\nBạn muốn giữ dữ liệu khách hàng cũ hay thay thế bằng dữ liệu trong file?",
+                    "Thay thế",
+                    "Giữ khách hàng cũ");
 
                 replaceExisting = replace;
 
                 StatusMessage = replaceExisting
-                    ? "â³ ÄÃ£ chá»n thay tháº¿. Äang nháº­p vÃ  cáº­p nháº­t dá»¯ liá»‡u..."
-                    : "â³ ÄÃ£ chá»n giá»¯ dá»¯ liá»‡u cÅ©. Äang bá» qua khÃ¡ch hÃ ng trÃ¹ng vÃ  nháº­p khÃ¡ch hÃ ng má»›i...";
+                    ? "⏳ Đã chọn thay thế. Đang nhập và cập nhật dữ liệu..."
+                    : "⏳ Đã chọn giữ dữ liệu cũ. Đang bỏ qua khách hàng trùng và nhập khách hàng mới...";
             }
             else
             {
-                StatusMessage = $"â³ KhÃ´ng cÃ³ khÃ¡ch hÃ ng trÃ¹ng. Äang nháº­p {doc.SoKhachHangHopLe:N0} khÃ¡ch hÃ ng...";
+                StatusMessage = $"⏳ Không có khách hàng trùng. Đang nhập {doc.SoKhachHangHopLe:N0} khách hàng...";
             }
 
             await Task.Yield();
@@ -759,28 +749,28 @@ public partial class MainWindowViewModel : ObservableObject
             var result = await Task.Run(() =>
                 _db.ImportKhachHangTuFileAsync(file.Path.LocalPath, doc, replaceExisting));
 
-            StatusMessage = "â³ Äang lÃ m má»›i danh sÃ¡ch khÃ¡ch hÃ ng...";
+            StatusMessage = "⏳ Đang làm mới danh sách khách hàng...";
 
-            // XÃ³a tá»« khÃ³a tÃ¬m kiáº¿m cÃ²n sÃ³t láº¡i Ä‘á»ƒ tháº» "Tá»•ng khÃ¡ch hÃ ng" vÃ  báº£ng
-            // hiá»ƒn thá»‹ Ä‘Ãºng toÃ n bá»™ khÃ¡ch hÃ ng sau khi nháº­p.
+            // Xóa từ khóa tìm kiếm còn sót lại để thẻ "Tổng khách hàng" và bảng
+            // hiển thị đúng toàn bộ khách hàng sau khi nhập.
             CustomerSearch = string.Empty;
             CustomerPage = 1;
             await LoadCustomersAsync();
 
             var thongBao = new System.Text.StringBuilder();
-            thongBao.Append($"âœ… {file.Name}: Ä‘á»c {result.SoDongExcel:N0} dÃ²ng, "
-                            + $"thÃªm má»›i {result.SoThemMoi:N0}, cáº­p nháº­t {result.SoCapNhat:N0}");
+            thongBao.Append($"✅ {file.Name}: đọc {result.SoDongExcel:N0} dòng, "
+                            + $"thêm mới {result.SoThemMoi:N0}, cập nhật {result.SoCapNhat:N0}");
 
             if (result.SoBoQua > 0)
-                thongBao.Append($", giá»¯ nguyÃªn {result.SoBoQua:N0}");
+                thongBao.Append($", giữ nguyên {result.SoBoQua:N0}");
 
-            thongBao.Append($", lá»—i {result.SoLoi:N0}");
+            thongBao.Append($", lỗi {result.SoLoi:N0}");
 
             if (result.SoNhomKhachHangKhongKhop > 0)
-                thongBao.Append($" | {result.SoNhomKhachHangKhongKhop:N0} nhÃ³m khÃ¡ch hÃ ng chÆ°a cÃ³ trong pháº§n má»m");
+                thongBao.Append($" | {result.SoNhomKhachHangKhongKhop:N0} nhóm khách hàng chưa có trong phần mềm");
 
             if (result.SoNguoiTaoKhongKhop > 0)
-                thongBao.Append($" | {result.SoNguoiTaoKhongKhop:N0} ngÆ°á»i táº¡o chÆ°a cÃ³ tÃ i khoáº£n");
+                thongBao.Append($" | {result.SoNguoiTaoKhongKhop:N0} người tạo chưa có tài khoản");
 
             thongBao.Append($" ({result.ThoiGian.TotalSeconds:F1}s)");
 
@@ -788,7 +778,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusMessage = "âŒ KhÃ´ng thá»ƒ nháº­p khÃ¡ch hÃ ng tá»« file: " + ex.Message;
+            StatusMessage = "❌ Không thể nhập khách hàng từ file: " + ex.Message;
         }
         finally
         {
@@ -808,13 +798,13 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// NÃºt "Chá»‰nh sá»­a" á»Ÿ cuá»‘i vÃ¹ng chi tiáº¿t: má»Ÿ form sá»­a khÃ¡ch hÃ ng Ä‘ang chá»n.
-    /// Sau khi lÆ°u chá»‰ refresh láº¡i Ä‘Ãºng dÃ²ng Ä‘Ã³, khÃ´ng táº£i láº¡i cáº£ á»©ng dá»¥ng.
+    /// Nút "Chỉnh sửa" ở cuối vùng chi tiết: mở form sửa khách hàng đang chọn.
+    /// Sau khi lưu chỉ refresh lại đúng dòng đó, không tải lại cả ứng dụng.
     /// </summary>
     [RelayCommand]
     private async Task SuaKhachHangAsync(KhachHangRowViewModel? row)
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersEdit, "Báº¡n khÃ´ng cÃ³ quyá»n sá»­a khÃ¡ch hÃ ng."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersEdit, "Bạn không có quyền sửa khách hàng."))
         {
             return;
         }
@@ -825,7 +815,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (customer is null)
         {
-            StatusMessage = "KhÃ´ng tÃ¬m tháº¥y khÃ¡ch hÃ ng Ä‘á»ƒ sá»­a";
+            StatusMessage = "Không tìm thấy khách hàng để sửa";
 
             return;
         }
@@ -842,7 +832,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             await _db.CapNhatKhachHangAsync(editor.Customer);
 
-            // Refresh Ä‘Ãºng dÃ²ng vá»«a sá»­a, vÃ¹ng chi tiáº¿t váº«n má»Ÿ
+            // Refresh đúng dòng vừa sửa, vùng chi tiết vẫn mở
             var updated = await _db.GetKhachHangByIdAsync(row.CustomerId);
 
             if (updated is null)
@@ -857,11 +847,11 @@ public partial class MainWindowViewModel : ObservableObject
             if (row.Detail is not null)
                 row.Detail.Customer = updated;
 
-            StatusMessage = $"ÄÃ£ cáº­p nháº­t khÃ¡ch hÃ ng: {updated.TenKhachHang}";
+            StatusMessage = $"Đã cập nhật khách hàng: {updated.TenKhachHang}";
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ cáº­p nháº­t khÃ¡ch hÃ ng: " + ex.Message;
+            StatusMessage = "Không thể cập nhật khách hàng: " + ex.Message;
         }
     }
 
@@ -878,13 +868,13 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// NÃºt "XÃ³a" á»Ÿ cuá»‘i vÃ¹ng chi tiáº¿t: xÃ¡c nháº­n trÆ°á»›c, xÃ³a xong cáº­p nháº­t
-    /// danh sÃ¡ch ngay mÃ  khÃ´ng táº£i láº¡i toÃ n bá»™ á»©ng dá»¥ng.
+    /// Nút "Xóa" ở cuối vùng chi tiết: xác nhận trước, xóa xong cập nhật
+    /// danh sách ngay mà không tải lại toàn bộ ứng dụng.
     /// </summary>
     [RelayCommand]
     private async Task XoaKhachHangAsync(KhachHangRowViewModel? row)
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersDelete, "Báº¡n khÃ´ng cÃ³ quyá»n xÃ³a khÃ¡ch hÃ ng."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersDelete, "Bạn không có quyền xóa khách hàng."))
         {
             return;
         }
@@ -894,8 +884,8 @@ public partial class MainWindowViewModel : ObservableObject
         var customer = row.Customer;
 
         var confirmed = await ShowConfirmationAsync(
-            "XÃ³a khÃ¡ch hÃ ng",
-            $"Báº¡n cÃ³ cháº¯c muá»‘n xÃ³a khÃ¡ch hÃ ng \"{row.TenKhachHang}\" khÃ´ng? KhÃ¡ch hÃ ng sáº½ khÃ´ng cÃ²n hiá»ƒn thá»‹ trong danh sÃ¡ch.");
+            "Xóa khách hàng",
+            $"Bạn có chắc muốn xóa khách hàng \"{row.TenKhachHang}\" không? Khách hàng sẽ không còn hiển thị trong danh sách.");
 
         if (!confirmed)
             return;
@@ -925,34 +915,34 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(CustomerRangeText));
             OnPropertyChanged(nameof(CanCustomerTrangSau));
 
-            // Trang cuá»‘i vá»«a bá»‹ rá»—ng -> lÃ¹i vá» trang trÆ°á»›c Ä‘á»ƒ khÃ´ng bá»‹ trang tráº¯ng
+            // Trang cuối vừa bị rỗng -> lùi về trang trước để không bị trang trắng
             if (CustomerRows.Count == 0 && CustomerPage > 1)
                 CustomerPage--;
 
-            // Bá»‘n tháº» thá»‘ng kÃª pháº£i Ä‘á»c láº¡i tá»« database thay vÃ¬ tá»± trá»« tay:
-            // "KhÃ¡ch hÃ ng má»›i" chá»‰ giáº£m khi khÃ¡ch vá»«a xÃ³a náº±m trong khoáº£ng ngÃ y
-            // Ä‘ang Ä‘áº¿m, cÃ²n "Ná»£ hiá»‡n táº¡i"/"Tá»•ng bÃ¡n" cÃ²n phá»¥ thuá»™c hÃ³a Ä‘Æ¡n, sá»• cÃ¡i
-            // cÃ´ng ná»£ vÃ  phiáº¿u tráº£ hÃ ng nÃªn khÃ´ng thá»ƒ suy ra tá»« thao tÃ¡c xÃ³a.
+            // Bốn thẻ thống kê phải đọc lại từ database thay vì tự trừ tay:
+            // "Khách hàng mới" chỉ giảm khi khách vừa xóa nằm trong khoảng ngày
+            // đang đếm, còn "Nợ hiện tại"/"Tổng bán" còn phụ thuộc hóa đơn, sổ cái
+            // công nợ và phiếu trả hàng nên không thể suy ra từ thao tác xóa.
             await LoadCustomersAsync();
 
-            StatusMessage = $"ÄÃ£ xÃ³a khÃ¡ch hÃ ng {customer.TenKhachHang}";
+            StatusMessage = $"Đã xóa khách hàng {customer.TenKhachHang}";
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ xÃ³a khÃ¡ch hÃ ng: " + ex.Message;
+            StatusMessage = "Không thể xóa khách hàng: " + ex.Message;
         }
     }
 
     private bool _isInitialized;
 
     // =========================================================
-    // THÃ”NG TIN NGÆ¯á»œI DÃ™NG ÄANG ÄÄ‚NG NHáº¬P
-    // Láº¥y tá»« Session, khÃ´ng gáº¯n cá»©ng tÃ i khoáº£n nÃ o trong giao diá»‡n.
+    // THÔNG TIN NGƯỜI DÙNG ĐANG ĐĂNG NHẬP
+    // Lấy từ Session, không gắn cứng tài khoản nào trong giao diện.
     // =========================================================
 
     public string TenDangNhapHienThi =>
         string.IsNullOrWhiteSpace(Session.CurrentUser?.TenDangNhap)
-            ? "ChÆ°a Ä‘Äƒng nháº­p"
+            ? "Chưa đăng nhập"
             : Session.CurrentUser!.TenDangNhap;
 
     public string HoTenHienThi =>
@@ -962,7 +952,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     public string VaiTroHienThi =>
         string.IsNullOrWhiteSpace(Session.CurrentUser?.VaiTro)
-            ? "NhÃ¢n viÃªn"
+            ? "Nhân viên"
             : Session.CurrentUser!.VaiTro;
 
     public string ChuiChuCaiHienThi
@@ -986,21 +976,21 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     public string ChaoMungNguoiDung =>
-        $"ChÃ o má»«ng trá»Ÿ láº¡i, {HoTenHienThi}";
+        $"Chào mừng trở lại, {HoTenHienThi}";
 
     public bool DaDangNhap => Session.IsLoggedIn;
 
     // =========================================================
-    // ÄÄ‚NG XUáº¤T
+    // ĐĂNG XUẤT
     // =========================================================
 
     /// <summary>
-    /// Káº¿t thÃºc phiÃªn hiá»‡n táº¡i rá»“i má»Ÿ láº¡i cá»­a sá»• Ä‘Äƒng nháº­p.
+    /// Kết thúc phiên hiện tại rồi mở lại cửa sổ đăng nhập.
     ///
-    /// - KhÃ´ng Ä‘á»¥ng tá»›i database nÃªn tÃ i khoáº£n váº«n cÃ²n nguyÃªn.
-    /// - XoÃ¡ thÃ´ng tin Ä‘Äƒng nháº­p Ä‘Ã£ ghi nhá»› Ä‘á»ƒ láº§n sau má»Ÿ app
-    ///   KHÃ”NG tá»± Ä‘á»™ng Ä‘Äƒng nháº­p láº¡i (Ä‘Ãºng nhÆ° Chrome/Firefox).
-    ///   Checkbox "Ghi nhá»› Ä‘Äƒng nháº­p" váº«n Ä‘Æ°á»£c giá»¯, chá»‰ máº¥t credential.
+    /// - Không đụng tới database nên tài khoản vẫn còn nguyên.
+    /// - Xoá thông tin đăng nhập đã ghi nhớ để lần sau mở app
+    ///   KHÔNG tự động đăng nhập lại (đúng như Chrome/Firefox).
+    ///   Checkbox "Ghi nhớ đăng nhập" vẫn được giữ, chỉ mất credential.
     /// </summary>
     [RelayCommand]
     private async Task DangXuatAsync()
@@ -1009,10 +999,10 @@ public partial class MainWindowViewModel : ObservableObject
             OwnerWindow is not null)
         {
             var confirm = new ConfirmationWindow(
-                "ÄÄƒng xuáº¥t",
-                "Báº¡n cÃ³ cháº¯c cháº¯n muá»‘n Ä‘Äƒng xuáº¥t?",
-                "ÄÄƒng xuáº¥t",
-                "Há»§y");
+                "Đăng xuất",
+                "Bạn có chắc chắn muốn đăng xuất?",
+                "Đăng xuất",
+                "Hủy");
 
             var confirmed = await confirm.ShowDialog<bool>(OwnerWindow);
 
@@ -1053,13 +1043,13 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadAsync()
     {
-        StatusMessage = "Äang táº£i dá»¯ liá»‡u...";
+        StatusMessage = "Đang tải dữ liệu...";
 
-        var error = await LoadSafelyAsync("sáº£n pháº©m", LoadProductsAsync);
+        var error = await LoadSafelyAsync("sản phẩm", LoadProductsAsync);
 
         StatusMessage = error is null
-            ? "ÄÃ£ káº¿t ná»‘i database"
-            : $"ÄÃ£ táº£i {SanPhams.Count} sáº£n pháº©m. Lá»—i: {error}";
+            ? "Đã kết nối database"
+            : $"Đã tải {SanPhams.Count} sản phẩm. Lỗi: {error}";
     }
 
     private static async Task<string?> LoadSafelyAsync(
@@ -1082,40 +1072,39 @@ public partial class MainWindowViewModel : ObservableObject
         {
             switch (menu)
             {
-                case "Tá»•ng quan":
+                case "Tổng quan":
                     await LoadOverviewAsync();
                     _overviewLoaded = true;
                     break;
 
-                case "KhÃ¡ch hÃ ng":
+                case "Khách hàng":
                     await LoadCustomersAsync();
                     _customersLoaded = true;
                     break;
 
-                case "HÃ³a Ä‘Æ¡n":
-                    // Má»—i láº§n vÃ o HÃ³a Ä‘Æ¡n Ä‘á»u Ä‘á»c láº¡i database
+                case "Hóa đơn":
+                    // Mỗi lần vào Hóa đơn đều đọc lại database
                     await LoadInvoicesAsync();
                     _invoicesLoaded = true;
                     break;
 
-                case "NhÃ  cung cáº¥p":
+                case "Nhà cung cấp":
                     await LoadSuppliersAsync();
                     break;
 
-                case "Nháº­p hÃ ng":
-                    // Má»—i láº§n báº¥m menu "Nháº­p hÃ ng" pháº£i khá»Ÿi táº¡o phiáº¿u má»›i:
-                    // sinh mÃ£ phiáº¿u, gÃ¡n nhÃ¢n viÃªn/ngÃ y/tráº¡ng thÃ¡i vÃ  náº¡p danh sÃ¡ch hÃ ng hÃ³a.
-                    // Thiáº¿u bÆ°á»›c nÃ y thÃ¬ PhieuNhapMa rá»—ng => lÆ°u phiáº¿u sáº½ lá»—i
+                case "Nhập hàng":
+                    // Mỗi lần bấm menu "Nhập hàng" phải khởi tạo phiếu mới:
+                    // sinh mã phiếu, gán nhân viên/ngày/trạng thái và nạp danh sách hàng hóa.
+                    // Thiếu bước này thì PhieuNhapMa rỗng => lưu phiếu sẽ lỗi
                     // "Duplicate entry '' for key 'uk_pnh_ma'".
                     await MoPhieuNhapHangAsync();
                     break;
 
-                case "Sá»• quá»¹":
+                case "Sổ quỹ":
                     await TaiSoQuyBoLocOptionsAsync();
                     await TaiLaiSoQuyAsync();
                     break;
 
-<<<<<<< HEAD
                 case "Thông tin tiệm":
                     // Luôn đọc lại database mỗi lần mở màn để thấy đúng thông
                     // tin đã lưu, kể cả khi vừa sửa xong ở phiên trước.
@@ -1124,14 +1113,10 @@ public partial class MainWindowViewModel : ObservableObject
 
                 case "Báo cáo":
                     // Báo cáo chưa chọn mục nào thì mở mặc định báo cáo phiếu nhập
-=======
-                case "BÃ¡o cÃ¡o":
-                    // BÃ¡o cÃ¡o chÆ°a chá»n má»¥c nÃ o thÃ¬ má»Ÿ máº·c Ä‘á»‹nh bÃ¡o cÃ¡o phiáº¿u nháº­p
->>>>>>> origin/main
                     if (string.IsNullOrEmpty(SelectedReportKey))
                         SelectedReportKey = BaoCaoMenuItems.FirstOrDefault()?.Key ?? "";
 
-                    // Chá»‰ táº£i láº§n Ä‘áº§u khi vÃ o mÃ n, cÃ¡c láº§n sau giá»¯ nguyÃªn trang/tÃ¬m kiáº¿m Ä‘ang xem
+                    // Chỉ tải lần đầu khi vào màn, các lần sau giữ nguyên trang/tìm kiếm đang xem
                     if (SelectedReportKey == "phieu-nhap-hang" && !_baoCaoPhieuNhapLoaded)
                     {
                         _baoCaoPhieuNhapLoaded = true;
@@ -1141,18 +1126,18 @@ public partial class MainWindowViewModel : ObservableObject
                     break;
             }
 
-            StatusMessage = $"ÄÃ£ táº£i {menu.ToLowerInvariant()}";
+            StatusMessage = $"Đã tải {menu.ToLowerInvariant()}";
         }
         catch (Exception ex)
         {
-            StatusMessage = $"KhÃ´ng thá»ƒ táº£i {menu}: {ex.Message}";
+            StatusMessage = $"Không thể tải {menu}: {ex.Message}";
         }
     }
     private async Task LoadProductsAsync()
     {
-        // DÃ¹ng chung version guard vá»›i tÃ¬m kiáº¿m: náº¿u ngÆ°á»i dÃ¹ng gÃµ tá»« khÃ³a ngay
-        // lÃºc vá»«a vÃ o mÃ n hÃ¬nh thÃ¬ káº¿t quáº£ táº£i Ä‘áº§u tiÃªn bá»‹ bá», khÃ´ng ghi Ä‘Ã¨
-        // danh sÃ¡ch Ä‘ang lá»c theo tá»« khÃ³a.
+        // Dùng chung version guard với tìm kiếm: nếu người dùng gõ từ khóa ngay
+        // lúc vừa vào màn hình thì kết quả tải đầu tiên bị bỏ, không ghi đè
+        // danh sách đang lọc theo từ khóa.
         var version = ++_productLoadVersion;
 
         var (products, tongSoKhop) = await _db.GetSanPhamPagedAsync(
@@ -1179,16 +1164,16 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task LoadOverviewAsync()
     {
-        // Dashboard tá»± táº£i sá»‘ liá»‡u cá»§a nÃ³ (COUNT/SUM/GROUP BY á»Ÿ táº§ng SQL).
-        // CÃ¡c danh sÃ¡ch dÃ¹ng chung vá»›i cÃ¡c tab khÃ¡c khÃ´ng cÃ²n cáº§n náº¡p á»Ÿ Ä‘Ã¢y
-        // vÃ¬ mÃ n Tá»•ng quan khÃ´ng hiá»ƒn thá»‹ chÃºng ná»¯a.
+        // Dashboard tự tải số liệu của nó (COUNT/SUM/GROUP BY ở tầng SQL).
+        // Các danh sách dùng chung với các tab khác không còn cần nạp ở đây
+        // vì màn Tổng quan không hiển thị chúng nữa.
         await Dashboard.TaiDuLieuAsync();
     }
 
     /// <summary>
-    /// LÃ m má»›i sá»‘ liá»‡u Tá»•ng quan sau khi ghi xong má»™t nghiá»‡p vá»¥ (bÃ¡n hÃ ng, nháº­p
-    /// hÃ ng, ghi sá»• quá»¹). Chá»‰ náº¡p láº¡i khi mÃ n Ä‘ang má»Ÿ Ä‘á»ƒ khÃ´ng tá»‘n truy váº¥n
-    /// ná»n, nhÆ°ng dá»¯ liá»‡u váº«n luÃ´n sáºµn sÃ ng khi ngÆ°á»i dÃ¹ng quay láº¡i mÃ n nÃ y.
+    /// Làm mới số liệu Tổng quan sau khi ghi xong một nghiệp vụ (bán hàng, nhập
+    /// hàng, ghi sổ quỹ). Chỉ nạp lại khi màn đang mở để không tốn truy vấn
+    /// nền, nhưng dữ liệu vẫn luôn sẵn sàng khi người dùng quay lại màn này.
     /// </summary>
     public async Task LamMoiTongQuanNeuDangMoAsync()
     {
@@ -1197,13 +1182,13 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Táº£i trang khÃ¡ch hÃ ng hiá»‡n táº¡i.
-    /// Chá»‰ Ä‘á»c Ä‘Ãºng dá»¯ liá»‡u cá»§a trang Ä‘ang xem (LIMIT/OFFSET) nÃªn khÃ´ng bá»‹ ngháº½n
-    /// khi database cÃ³ hÃ ng nghÃ¬n khÃ¡ch hÃ ng.
+    /// Tải trang khách hàng hiện tại.
+    /// Chỉ đọc đúng dữ liệu của trang đang xem (LIMIT/OFFSET) nên không bị nghẽn
+    /// khi database có hàng nghìn khách hàng.
     /// </summary>
     private async Task LoadCustomersAsync()
     {
-        // Chá» láº§n táº£i Ä‘ang cháº¡y xong Ä‘á»ƒ khÃ´ng bá» sÃ³t tá»« khÃ³a tÃ¬m kiáº¿m má»›i nháº¥t
+        // Chờ lần tải đang chạy xong để không bỏ sót từ khóa tìm kiếm mới nhất
         if (_customerLoadTask is { IsCompleted: false })
         {
             try
@@ -1212,7 +1197,7 @@ public partial class MainWindowViewModel : ObservableObject
             }
             catch
             {
-                // Lá»—i cá»§a láº§n táº£i trÆ°á»›c Ä‘Ã£ Ä‘Æ°á»£c bÃ¡o trong hÃ m bÃªn trong
+                // Lỗi của lần tải trước đã được báo trong hàm bên trong
             }
         }
 
@@ -1225,7 +1210,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         IsLoadingCustomers = true;
 
-        // Version guard: bá» qua káº¿t quáº£ cá»§a láº§n táº£i cÅ© náº¿u ngÆ°á»i dÃ¹ng Ä‘Ã£ tÃ¬m/chuyá»ƒn trang má»›i
+        // Version guard: bỏ qua kết quả của lần tải cũ nếu người dùng đã tìm/chuyển trang mới
         var version = ++_customerLoadVersion;
 
         try
@@ -1243,7 +1228,7 @@ public partial class MainWindowViewModel : ObservableObject
                 ? 0
                 : (int)Math.Ceiling(tongSoBanGhi / (double)CustomerPageSize);
 
-            // Trang vÆ°á»£t quÃ¡ sá»‘ trang thá»±c táº¿ (vÃ­ dá»¥ sau khi tÃ¬m kiáº¿m) -> quay vá» trang cuá»‘i
+            // Trang vượt quá số trang thực tế (ví dụ sau khi tìm kiếm) -> quay về trang cuối
             if (items.Count == 0 && totalPages > 0 && page > totalPages)
             {
                 CustomerPage = totalPages;
@@ -1253,8 +1238,8 @@ public partial class MainWindowViewModel : ObservableObject
                 return;
             }
 
-            // Danh sÃ¡ch Ä‘Æ°á»£c dá»±ng láº¡i tá»« Ä‘áº§u nÃªn Ä‘Ã³ng vÃ¹ng chi tiáº¿t cÅ©,
-            // trÃ¡nh tráº¡ng thÃ¡i "Ä‘ang má»Ÿ" trá» vÃ o dÃ²ng khÃ´ng cÃ²n tá»“n táº¡i.
+            // Danh sách được dựng lại từ đầu nên đóng vùng chi tiết cũ,
+            // tránh trạng thái "đang mở" trỏ vào dòng không còn tồn tại.
             if (SelectedCustomer is not null)
                 DongChiTietKhachHang();
 
@@ -1269,7 +1254,7 @@ public partial class MainWindowViewModel : ObservableObject
                 CustomerRows.Add(row);
             }
 
-            // Sang trang má»›i thÃ¬ bá» cÃ¡c tick cÅ© Ä‘á»ƒ khÃ´ng chá»n nháº§m sang khÃ¡ch hÃ ng khÃ¡c.
+            // Sang trang mới thì bỏ các tick cũ để không chọn nhầm sang khách hàng khác.
             IsAllCustomerRowsSelected = false;
             CapNhatTrangThaiChonCustomer();
 
@@ -1296,14 +1281,14 @@ public partial class MainWindowViewModel : ObservableObject
 
             StatusMessage = CustomerRows.Count == 0
                 ? (string.IsNullOrWhiteSpace(CustomerSearch)
-                    ? "ChÆ°a cÃ³ khÃ¡ch hÃ ng nÃ o trong há»‡ thá»‘ng"
-                    : "KhÃ´ng tÃ¬m tháº¥y khÃ¡ch hÃ ng phÃ¹ há»£p")
+                    ? "Chưa có khách hàng nào trong hệ thống"
+                    : "Không tìm thấy khách hàng phù hợp")
                 : $"{CustomerRangeText} - trang {CustomerPage}/{Math.Max(1, totalPages)}";
         }
         catch (Exception ex)
         {
             if (version == _customerLoadVersion)
-                StatusMessage = "KhÃ´ng thá»ƒ táº£i danh sÃ¡ch khÃ¡ch hÃ ng: " + ex.Message;
+                StatusMessage = "Không thể tải danh sách khách hàng: " + ex.Message;
         }
         finally
         {
@@ -1313,8 +1298,8 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Khi ngÆ°á»i dÃ¹ng tick má»™t dÃ²ng thÃ¬ checkbox "chá»n táº¥t cáº£" vÃ  sá»‘ khÃ¡ch hÃ ng
-    /// Ä‘ang chá»n pháº£i cáº­p nháº­t theo.
+    /// Khi người dùng tick một dòng thì checkbox "chọn tất cả" và số khách hàng
+    /// đang chọn phải cập nhật theo.
     /// </summary>
     private void OnCustomerRowPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -1344,13 +1329,13 @@ public partial class MainWindowViewModel : ObservableObject
             foreach (var item in invoices)
                 HoaDons.Add(item);
 
-            StatusMessage = $"ÄÃ£ táº£i {HoaDons.Count} hÃ³a Ä‘Æ¡n";
+            StatusMessage = $"Đã tải {HoaDons.Count} hóa đơn";
         }
         catch (Exception ex)
         {
             HoaDons.Clear();
 
-            StatusMessage = $"Lá»—i táº£i hÃ³a Ä‘Æ¡n: {ex.Message}";
+            StatusMessage = $"Lỗi tải hóa đơn: {ex.Message}";
         }
     }
 
@@ -1358,8 +1343,8 @@ public partial class MainWindowViewModel : ObservableObject
         => await LoadSupplierPageAsync();
 
     /// <summary>
-    /// TÃ¬m kiáº¿m hÃ ng hÃ³a theo tá»« khÃ³a (nÃºt "TÃ¬m kiáº¿m").
-    /// Ã” tÃ¬m kiáº¿m Ä‘Ã£ tá»± tÃ¬m realtime nÃªn lá»‡nh nÃ y chá»‰ phá»¥c vá»¥ khi cáº§n tÃ¬m láº¡i ngay.
+    /// Tìm kiếm hàng hóa theo từ khóa (nút "Tìm kiếm").
+    /// Ô tìm kiếm đã tự tìm realtime nên lệnh này chỉ phục vụ khi cần tìm lại ngay.
     /// </summary>
     [RelayCommand]
     private async Task SearchProductsAsync(string? searchText)
@@ -1367,16 +1352,16 @@ public partial class MainWindowViewModel : ObservableObject
         if (searchText is not null)
             ProductSearch = searchText;
 
-        // GÃ¡n SearchText á»Ÿ trÃªn Ä‘Ã£ lÃªn lá»‹ch má»™t láº§n tÃ¬m kiáº¿m tá»± Ä‘á»™ng,
-        // huá»· Ä‘i á»Ÿ Ä‘Ã¢y Ä‘á»ƒ khÃ´ng cháº¡y truy váº¥n hai láº§n.
+        // Gán SearchText ở trên đã lên lịch một lần tìm kiếm tự động,
+        // huỷ đi ở đây để không chạy truy vấn hai lần.
         HuyDongTimKiemSanPham();
 
         await RefreshProductsAsync();
     }
 
     /// <summary>
-    /// TÃ¬m kiáº¿m realtime: chá» ngÆ°á»i dÃ¹ng ngá»«ng gÃµ 300ms má»›i gá»i database,
-    /// trÃ¡nh má»—i kÃ½ tá»± láº¡i cháº¡y má»™t cÃ¢u truy váº¥n lÃ m giao diá»‡n bá»‹ giáº­t.
+    /// Tìm kiếm realtime: chờ người dùng ngừng gõ 300ms mới gọi database,
+    /// tránh mỗi ký tự lại chạy một câu truy vấn làm giao diện bị giật.
     /// </summary>
     public void TimKiemSanPhamTuDong()
     {
@@ -1401,7 +1386,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            // NgÆ°á»i dÃ¹ng gÃµ tiáº¿p: huá»· láº§n tÃ¬m kiáº¿m trÆ°á»›c, khÃ´ng cáº§n bÃ¡o lá»—i.
+            // Người dùng gõ tiếp: huỷ lần tìm kiếm trước, không cần báo lỗi.
         }
     }
 
@@ -1421,8 +1406,8 @@ public partial class MainWindowViewModel : ObservableObject
         ProductFilter = filter ?? "";
         await RefreshProductsAsync();
         StatusMessage = string.IsNullOrWhiteSpace(ProductFilter)
-            ? $"Hiá»ƒn thá»‹ {SanPhams.Count} sáº£n pháº©m"
-            : $"Lá»c Ä‘Æ°á»£c {SanPhams.Count} sáº£n pháº©m";
+            ? $"Hiển thị {SanPhams.Count} sản phẩm"
+            : $"Lọc được {SanPhams.Count} sản phẩm";
     }
 
     [RelayCommand]
@@ -1437,57 +1422,57 @@ public partial class MainWindowViewModel : ObservableObject
         foreach (var product in sorted)
             SanPhams.Add(product);
 
-        StatusMessage = _sortByPrice ? "ÄÃ£ sáº¯p xáº¿p theo giÃ¡ tÄƒng dáº§n" : "ÄÃ£ sáº¯p xáº¿p theo tÃªn";
+        StatusMessage = _sortByPrice ? "Đã sắp xếp theo giá tăng dần" : "Đã sắp xếp theo tên";
     }
 
     // =========================================================
-    // HÃ€NG HÃ“A: CHá»ˆNH GIÃ BÃN
+    // HÀNG HÓA: CHỈNH GIÁ BÁN
     // =========================================================
 
     /// <summary>
-    /// NgÆ°á»i dÃ¹ng hiá»‡n táº¡i cÃ³ quyá»n sá»­a hÃ ng hÃ³a / giÃ¡ bÃ¡n khÃ´ng.
-    /// Láº¥y tá»« vai trÃ² trong database (vai_tro.ma_vai_tro), khÃ´ng gáº¯n cá»©ng tÃ i khoáº£n.
+    /// Người dùng hiện tại có quyền sửa hàng hóa / giá bán không.
+    /// Lấy từ vai trò trong database (vai_tro.ma_vai_tro), không gắn cứng tài khoản.
     /// </summary>
     public bool DuocSuaGiaBan => Quyen.DuocSuaHangHoa(Session.CurrentUser);
 
     /// <summary>
-    /// Má»Ÿ Ã´ nháº­p giÃ¡ ngay táº¡i dÃ²ng sáº£n pháº©m (chá»‰nh nhanh).
-    /// Chá»‰ má»™t dÃ²ng Ä‘Æ°á»£c má»Ÿ táº¡i má»™t thá»i Ä‘iá»ƒm Ä‘á»ƒ khÃ´ng láº«n giÃ¡ cá»§a sáº£n pháº©m khÃ¡c.
+    /// Mở ô nhập giá ngay tại dòng sản phẩm (chỉnh nhanh).
+    /// Chỉ một dòng được mở tại một thời điểm để không lẫn giá của sản phẩm khác.
     /// </summary>
     [RelayCommand(CanExecute = nameof(DuocSuaGiaBan))]
     private void BatDauChinhGiaBan(SanPham? product)
     {
         if (!DuocSuaGiaBan)
         {
-            StatusMessage = "Báº¡n khÃ´ng cÃ³ quyá»n chá»‰nh giÃ¡ bÃ¡n hÃ ng hÃ³a.";
+            StatusMessage = "Bạn không có quyền chỉnh giá bán hàng hóa.";
             return;
         }
 
         if (product is null || product.Id == 0)
         {
-            StatusMessage = "Sáº£n pháº©m nÃ y chÆ°a cÃ³ mÃ£ dá»¯ liá»‡u Ä‘á»ƒ chá»‰nh giÃ¡ bÃ¡n.";
+            StatusMessage = "Sản phẩm này chưa có mã dữ liệu để chỉnh giá bán.";
             return;
         }
 
-        // ÄÃ³ng cÃ¡c dÃ²ng Ä‘ang má»Ÿ khÃ¡c, trÃ¡nh sá»­a nháº§m sang sáº£n pháº©m khÃ¡c
+        // Đóng các dòng đang mở khác, tránh sửa nhầm sang sản phẩm khác
         foreach (var item in SanPhams)
         {
             if (!ReferenceEquals(item, product))
                 item.DongGiaBanNhanh();
         }
 
-        // Náº¡p Ä‘Ãºng giÃ¡ cá»§a sáº£n pháº©m Ä‘ang chá»n, bá» dáº¥u phÃ¢n cÃ¡ch cho dá»… gÃµ
+        // Nạp đúng giá của sản phẩm đang chọn, bỏ dấu phân cách cho dễ gõ
         product.DangChinhGia = true;
         product.GiaBanDangNhap = MoneyInput.ToRawText(product.GiaBan);
         product.LoiGiaBanNhanh = null;
         product.DangLuGiaBan = false;
     }
 
-    /// <summary>Nháº¥n âœ“: validate, UPDATE Ä‘Ãºng má»™t dÃ²ng, rá»“i Ä‘Ã³ng Ã´ nháº­p.</summary>
+    /// <summary>Nhấn ✓: validate, UPDATE đúng một dòng, rồi đóng ô nhập.</summary>
     [RelayCommand(CanExecute = nameof(DuocSuaGiaBan))]
     private async Task LuuGiaBanNhanhAsync(SanPham? product)
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsUpdatePrice, "Báº¡n khÃ´ng cÃ³ quyá»n cáº­p nháº­t giÃ¡ bÃ¡n hÃ ng hÃ³a."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsUpdatePrice, "Bạn không có quyền cập nhật giá bán hàng hóa."))
         {
             return;
         }
@@ -1496,11 +1481,11 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (!DuocSuaGiaBan)
         {
-            product.LoiGiaBanNhanh = "Báº¡n khÃ´ng cÃ³ quyá»n chá»‰nh giÃ¡ bÃ¡n hÃ ng hÃ³a.";
+            product.LoiGiaBanNhanh = "Bạn không có quyền chỉnh giá bán hàng hóa.";
             return;
         }
 
-        // Validate ngay trÃªn dÃ²ng, chÆ°a Ä‘á»¥ng database
+        // Validate ngay trên dòng, chưa đụng database
         if (!MoneyInput.TryParse(
                 product.GiaBanDangNhap,
                 true,
@@ -1514,7 +1499,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (giaBan == product.GiaBan)
         {
             product.DongGiaBanNhanh();
-            StatusMessage = "GiÃ¡ bÃ¡n khÃ´ng thay Ä‘á»•i.";
+            StatusMessage = "Giá bán không thay đổi.";
             return;
         }
 
@@ -1526,7 +1511,7 @@ public partial class MainWindowViewModel : ObservableObject
             var updated =
                 await _db.CapNhatGiaBanSanPhamAsync(product.Id, giaBan);
 
-            // Sáº£n pháº©m Ä‘Ã£ bá»‹ ngÆ°á»i khÃ¡c xÃ³a: Ä‘Ã³ng Ã´ nháº­p, bá» dÃ²ng, táº£i láº¡i danh sÃ¡ch
+            // Sản phẩm đã bị người khác xóa: đóng ô nhập, bỏ dòng, tải lại danh sách
             if (!updated)
             {
                 product.DongGiaBanNhanh();
@@ -1534,25 +1519,25 @@ public partial class MainWindowViewModel : ObservableObject
 
                 await RefreshProductsAsync();
 
-                // NÃ³i sau khi táº£i láº¡i danh sÃ¡ch Ä‘á»ƒ khÃ´ng bá»‹ thÃ´ng Ä‘iá»‡p
-                // "Ä‘Ã£ táº£i N sáº£n pháº©m" cá»§a láº§n táº£i nÃ y ghi Ä‘Ã¨ máº¥t.
-                StatusMessage = "Sáº£n pháº©m khÃ´ng cÃ²n tá»“n táº¡i trong há»‡ thá»‘ng.";
+                // Nói sau khi tải lại danh sách để không bị thông điệp
+                // "đã tải N sản phẩm" của lần tải này ghi đè mất.
+                StatusMessage = "Sản phẩm không còn tồn tại trong hệ thống.";
                 return;
             }
 
             DongBoGiaBan(product.Id, giaBan);
 
             product.DongGiaBanNhanh();
-            StatusMessage = "Cáº­p nháº­t giÃ¡ bÃ¡n thÃ nh cÃ´ng";
+            StatusMessage = "Cập nhật giá bán thành công";
         }
         catch (Exception ex)
         {
-            SafeLog.WriteError("Cáº­p nháº­t giÃ¡ bÃ¡n sáº£n pháº©m", ex);
+            SafeLog.WriteError("Cập nhật giá bán sản phẩm", ex);
 
             var message = SafeLog.Redact(ex.Message);
 
             product.LoiGiaBanNhanh = message;
-            StatusMessage = "KhÃ´ng thá»ƒ cáº­p nháº­t giÃ¡ bÃ¡n: " + message;
+            StatusMessage = "Không thể cập nhật giá bán: " + message;
         }
         finally
         {
@@ -1561,8 +1546,8 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Nháº¥n âœ•: Ä‘Ã³ng Ã´ nháº­p vÃ  giá»¯ nguyÃªn giÃ¡ cÅ© trong database
-    /// (khÃ´ng gá»i UPDATE, khÃ´ng Ä‘á»¥ng vÃ o SanPham.GiaBan).
+    /// Nhấn ✕: đóng ô nhập và giữ nguyên giá cũ trong database
+    /// (không gọi UPDATE, không đụng vào SanPham.GiaBan).
     /// </summary>
     [RelayCommand]
     private void HuyChinhGiaBan(SanPham? product)
@@ -1572,13 +1557,13 @@ public partial class MainWindowViewModel : ObservableObject
 
         product.DongGiaBanNhanh();
 
-        StatusMessage = "ÄÃ£ há»§y chá»‰nh giÃ¡ bÃ¡n.";
+        StatusMessage = "Đã hủy chỉnh giá bán.";
     }
 
     /// <summary>
-    /// Äá»“ng bá»™ giÃ¡ bÃ¡n má»›i cho má»i báº£n sao cá»§a sáº£n pháº©m Ä‘ang náº¡p trong bá»™ nhá»›
-    /// (danh sÃ¡ch hÃ ng hÃ³a, tÃ¬m kiáº¿m bÃ¡n hÃ ng, giá» hÃ ng) Ä‘á»ƒ khÃ´ng mÃ n hÃ¬nh nÃ o
-    /// cÃ²n giá»¯ giÃ¡ cÅ©. Chá»‰ cáº­p nháº­t vÃ i Ä‘á»‘i tÆ°á»£ng, khÃ´ng SELECT láº¡i toÃ n báº£ng.
+    /// Đồng bộ giá bán mới cho mọi bản sao của sản phẩm đang nạp trong bộ nhớ
+    /// (danh sách hàng hóa, tìm kiếm bán hàng, giỏ hàng) để không màn hình nào
+    /// còn giữ giá cũ. Chỉ cập nhật vài đối tượng, không SELECT lại toàn bảng.
     /// </summary>
     private void DongBoGiaBan(uint productId, decimal giaBan)
     {
@@ -1613,57 +1598,57 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task XoaSanPhamAsync(SanPham? product)
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsDelete, "Báº¡n khÃ´ng cÃ³ quyá»n xÃ³a hÃ ng hÃ³a."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsDelete, "Bạn không có quyền xóa hàng hóa."))
         {
             return;
         }
         if (product is null || product.Id == 0)
         {
-            StatusMessage = "Sáº£n pháº©m nÃ y chÆ°a cÃ³ mÃ£ dá»¯ liá»‡u Ä‘á»ƒ xÃ³a.";
+            StatusMessage = "Sản phẩm này chưa có mã dữ liệu để xóa.";
             return;
         }
 
         try
         {
             var confirmed = await ShowConfirmationAsync(
-                "XÃ³a sáº£n pháº©m",
-                $"Báº¡n cÃ³ cháº¯c muá»‘n xÃ³a sáº£n pháº©m \"{product.TenSanPham}\" khÃ´ng?");
+                "Xóa sản phẩm",
+                $"Bạn có chắc muốn xóa sản phẩm \"{product.TenSanPham}\" không?");
 
             if (!confirmed)
                 return;
 
             await _db.XoaSanPhamAsync(product.Id);
             SanPhams.Remove(product);
-            StatusMessage = $"ÄÃ£ xÃ³a sáº£n pháº©m {product.MaSanPham}";
+            StatusMessage = $"Đã xóa sản phẩm {product.MaSanPham}";
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ xÃ³a sáº£n pháº©m: " + ex.Message;
+            StatusMessage = "Không thể xóa sản phẩm: " + ex.Message;
         }
     }
 
     [RelayCommand]
     private async Task SuaSanPhamAsync(SanPham? product)
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsEdit, "Báº¡n khÃ´ng cÃ³ quyá»n sá»­a hÃ ng hÃ³a."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsEdit, "Bạn không có quyền sửa hàng hóa."))
         {
             return;
         }
         if (product is null)
         {
-            StatusMessage = "Vui lÃ²ng chá»n sáº£n pháº©m cáº§n sá»­a.";
+            StatusMessage = "Vui lòng chọn sản phẩm cần sửa.";
             return;
         }
 
         if (product.Id == 0)
         {
-            StatusMessage = "Sáº£n pháº©m nÃ y chÆ°a cÃ³ mÃ£ dá»¯ liá»‡u Ä‘á»ƒ sá»­a.";
+            StatusMessage = "Sản phẩm này chưa có mã dữ liệu để sửa.";
             return;
         }
 
         var (groups, units) = await LoadProductOptionsAsync();
 
-        // Ã” giÃ¡ bÃ¡n chá»‰ má»Ÿ khi ngÆ°á»i dÃ¹ng cÃ³ quyá»n sá»­a hÃ ng hÃ³a
+        // Ô giá bán chỉ mở khi người dùng có quyền sửa hàng hóa
         var editor = new ProductEditorWindow(
             product,
             groups,
@@ -1672,7 +1657,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         var saved = OwnerWindow is not null && await editor.ShowDialog<bool>(OwnerWindow);
 
-        // Há»§y thÃ¬ khÃ´ng gá»i UPDATE: giÃ¡ cÅ© giá»¯ nguyÃªn trong database
+        // Hủy thì không gọi UPDATE: giá cũ giữ nguyên trong database
         if (!saved)
             return;
 
@@ -1680,40 +1665,40 @@ public partial class MainWindowViewModel : ObservableObject
         {
             await _db.CapNhatSanPhamAsync(product);
 
-            // Äá»“ng bá»™ giÃ¡ bÃ¡n má»›i sang bÃ¡n hÃ ng / tÃ¬m kiáº¿m / giá» hÃ ng
+            // Đồng bộ giá bán mới sang bán hàng / tìm kiếm / giỏ hàng
             DongBoGiaBan(product.Id, product.GiaBan);
 
             product.DongGiaBanNhanh();
-            StatusMessage = $"ÄÃ£ cáº­p nháº­t sáº£n pháº©m {product.MaSanPham}";
+            StatusMessage = $"Đã cập nhật sản phẩm {product.MaSanPham}";
         }
         catch (Exception ex)
         {
-            SafeLog.WriteError("Cáº­p nháº­t sáº£n pháº©m", ex);
-            StatusMessage = "KhÃ´ng thá»ƒ cáº­p nháº­t sáº£n pháº©m: " + SafeLog.Redact(ex.Message);
+            SafeLog.WriteError("Cập nhật sản phẩm", ex);
+            StatusMessage = "Không thể cập nhật sản phẩm: " + SafeLog.Redact(ex.Message);
         }
     }
 
     [RelayCommand]
     private async Task CapNhatHinhAnhAsync(SanPham? product)
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsEdit, "Báº¡n khÃ´ng cÃ³ quyá»n cáº­p nháº­t hÃ ng hÃ³a."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsEdit, "Bạn không có quyền cập nhật hàng hóa."))
         {
             return;
         }
         if (product is null || product.Id == 0 || OwnerWindow is null)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ má»Ÿ chá»n áº£nh cho sáº£n pháº©m nÃ y.";
+            StatusMessage = "Không thể mở chọn ảnh cho sản phẩm này.";
             return;
         }
 
         var files = await OwnerWindow.StorageProvider.OpenFilePickerAsync(
             new FilePickerOpenOptions
             {
-                Title = "Chá»n áº£nh sáº£n pháº©m",
+                Title = "Chọn ảnh sản phẩm",
                 AllowMultiple = false,
                 FileTypeFilter =
                 [
-                    new FilePickerFileType("áº¢nh")
+                    new FilePickerFileType("Ảnh")
                     {
                         Patterns = ["*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp"]
                     }
@@ -1731,18 +1716,18 @@ public partial class MainWindowViewModel : ObservableObject
             await _db.CapNhatHinhAnhSanPhamAsync(product.Id, imagePath);
             product.HinhAnh = imagePath;
             product.HinhAnhBitmap = new Bitmap(imagePath);
-            StatusMessage = $"ÄÃ£ cáº­p nháº­t áº£nh cho {product.MaSanPham}";
+            StatusMessage = $"Đã cập nhật ảnh cho {product.MaSanPham}";
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ cáº­p nháº­t áº£nh: " + ex.Message;
+            StatusMessage = "Không thể cập nhật ảnh: " + ex.Message;
         }
     }
 
     [RelayCommand]
     private async Task ThemSanPhamAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsCreate, "Báº¡n khÃ´ng cÃ³ quyá»n thÃªm hÃ ng hÃ³a."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsCreate, "Bạn không có quyền thêm hàng hóa."))
         {
             return;
         }
@@ -1758,17 +1743,17 @@ public partial class MainWindowViewModel : ObservableObject
         {
             editor.Product.Id = await _db.ThemSanPhamAsync(editor.Product);
             SanPhams.Add(editor.Product);
-            StatusMessage = $"ÄÃ£ thÃªm sáº£n pháº©m {editor.Product.MaSanPham}";
+            StatusMessage = $"Đã thêm sản phẩm {editor.Product.MaSanPham}";
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ thÃªm sáº£n pháº©m: " + ex.Message;
+            StatusMessage = "Không thể thêm sản phẩm: " + ex.Message;
         }
     }
     [RelayCommand]
     private async Task ThemSanPhamTuFileAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsImport, "Báº¡n khÃ´ng cÃ³ quyá»n import hÃ ng hÃ³a."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsImport, "Bạn không có quyền import hàng hóa."))
         {
             return;
         }
@@ -1778,7 +1763,7 @@ public partial class MainWindowViewModel : ObservableObject
         var files = await OwnerWindow.StorageProvider.OpenFilePickerAsync(
             new FilePickerOpenOptions
             {
-                Title = "Chá»n file danh sÃ¡ch hÃ ng hÃ³a",
+                Title = "Chọn file danh sách hàng hóa",
                 AllowMultiple = false,
                 FileTypeFilter =
                 [
@@ -1793,7 +1778,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (file is null)
         {
-            StatusMessage = "Báº¡n chÆ°a chá»n file Ä‘á»ƒ nháº­p hÃ ng loáº¡t.";
+            StatusMessage = "Bạn chưa chọn file để nhập hàng loạt.";
             return;
         }
 
@@ -1802,13 +1787,13 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             IsImporting = true;
-            ImportStatus = $"Äang Ä‘á»c dá»¯ liá»‡u tá»« file \"{file.Name}\"...";
+            ImportStatus = $"Đang đọc dữ liệu từ file \"{file.Name}\"...";
             StatusMessage = ImportStatus;
 
             await Task.Delay(100);
 
-            // 1. Äá»ŒC FILE â€” Ä‘á»c háº¿t má»i dÃ²ng, khÃ´ng giá»›i háº¡n 20/30/50/100 dÃ²ng.
-            // DÃ²ng Ä‘á»c lá»—i khÃ´ng bá»‹ loáº¡i Ã¢m tháº§m mÃ  Ä‘Æ°á»£c giá»¯ láº¡i Ä‘á»ƒ bÃ¡o trong káº¿t quáº£.
+            // 1. ĐỌC FILE — đọc hết mọi dòng, không giới hạn 20/30/50/100 dòng.
+            // Dòng đọc lỗi không bị loại âm thầm mà được giữ lại để báo trong kết quả.
             var productsFromFile = _db.ParseProductsFromFile(file.Path.LocalPath, out var loiDocFile);
             var tongSoDongTrongFile = productsFromFile.Count + loiDocFile.Count;
 
@@ -1816,7 +1801,7 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 IsImporting = false;
 
-                // Váº«n pháº£i bÃ¡o cÃ¡o náº¿u má»i dÃ²ng Ä‘á»u lá»—i, khÃ´ng pháº£i chá»‰ nÃ³i "khÃ´ng cÃ³ dá»¯ liá»‡u".
+                // Vẫn phải báo cáo nếu mọi dòng đều lỗi, không phải chỉ nói "không có dữ liệu".
                 var ketQuaLoi = new KetQuaImportSanPham
                 {
                     TenFile = file.Name,
@@ -1830,22 +1815,22 @@ public partial class MainWindowViewModel : ObservableObject
                     await KetQuaImportWindow.ShowAsync(OwnerWindow, ketQuaLoi);
                 else
                     await ShowConfirmationAsync(
-                        "File khÃ´ng cÃ³ dá»¯ liá»‡u",
-                        $"File \"{file.Name}\" khÃ´ng cÃ³ sáº£n pháº©m há»£p lá»‡ nÃ o Ä‘á»ƒ nháº­p.",
-                        "ÄÃ£ hiá»ƒu",
-                        "ÄÃ³ng");
+                        "File không có dữ liệu",
+                        $"File \"{file.Name}\" không có sản phẩm hợp lệ nào để nhập.",
+                        "Đã hiểu",
+                        "Đóng");
 
                 return;
             }
 
-            ImportStatus = $"ÄÃ£ Ä‘á»c {tongSoDongTrongFile:N0} dÃ²ng"
-                + (loiDocFile.Count > 0 ? $", trong Ä‘Ã³ {loiDocFile.Count:N0} dÃ²ng lá»—i" : "")
-                + ". Äang kiá»ƒm tra trÃ¹ng...";
+            ImportStatus = $"Đã đọc {tongSoDongTrongFile:N0} dòng"
+                + (loiDocFile.Count > 0 ? $", trong đó {loiDocFile.Count:N0} dòng lỗi" : "")
+                + ". Đang kiểm tra trùng...";
             StatusMessage = ImportStatus;
 
             await Task.Delay(100);
 
-            // 2. PHÃT HIá»†N TRÃ™NG â€” khÃ³a chÃ­nh lÃ  MÃƒ HÃ€NG, kiá»ƒm tra thÃªm MÃƒ Váº CH.
+            // 2. PHÁT HIỆN TRÙNG — khóa chính là MÃ HÀNG, kiểm tra thêm MÃ VẠCH.
             var sanPhamTrung = await _db.TimSanPhamTrungAsync(productsFromFile);
 
             var quyetDinh = await HoiQuyetDinhSanPhamTrungAsync(
@@ -1855,11 +1840,11 @@ public partial class MainWindowViewModel : ObservableObject
             if (quyetDinh == XuLySanPhamTrung.Huy)
             {
                 IsImporting = false;
-                StatusMessage = "ÄÃ£ há»§y nháº­p file. KhÃ´ng cÃ³ dá»¯ liá»‡u nÃ o Ä‘Æ°á»£c thay Ä‘á»•i.";
+                StatusMessage = "Đã hủy nhập file. Không có dữ liệu nào được thay đổi.";
                 return;
             }
 
-            // 3. Láº¬P DANH SÃCH THAO TÃC cho tá»«ng dÃ²ng
+            // 3. LẬP DANH SÁCH THAO TÁC cho từng dòng
             var danhSachHang = new List<HangNhapSanPham>(productsFromFile.Count);
             var thongTinTrung = TaoDanhSachHangNhap(
                 productsFromFile,
@@ -1875,10 +1860,10 @@ public partial class MainWindowViewModel : ObservableObject
 
                 var soGiu = danhSachHang.Count(h => h.hanDong == HanDong.GiuCu);
                 StatusMessage =
-                    $"ÄÃ£ giá»¯ nguyÃªn {soGiu:N0} sáº£n pháº©m trÃ¹ng, khÃ´ng ghi thÃªm dá»¯ liá»‡u nÃ o.";
+                    $"Đã giữ nguyên {soGiu:N0} sản phẩm trùng, không ghi thêm dữ liệu nào.";
 
-                // Váº«n pháº£i bÃ¡o cÃ¡c dÃ²ng lá»—i khi Ä‘á»c file, náº¿u khÃ´ng ngÆ°á»i dÃ¹ng
-                // khÃ´ng biáº¿t vÃ¬ sao tá»•ng sá»‘ dÃ²ng khÃ´ng khá»›p vá»›i sá»‘ sáº£n pháº©m nháº­p.
+                // Vẫn phải báo các dòng lỗi khi đọc file, nếu không người dùng
+                // không biết vì sao tổng số dòng không khớp với số sản phẩm nhập.
                 var ketQuaGiu = new KetQuaImportSanPham
                 {
                     TenFile = file.Name,
@@ -1895,8 +1880,8 @@ public partial class MainWindowViewModel : ObservableObject
                 return;
             }
 
-            // 4. GHI XUá»NG DATABASE trong má»™t transaction
-            ImportStatus = $"Äang nháº­p {soGhi:N0} sáº£n pháº©m vÃ o database...";
+            // 4. GHI XUỐNG DATABASE trong một transaction
+            ImportStatus = $"Đang nhập {soGhi:N0} sản phẩm vào database...";
             StatusMessage = ImportStatus;
 
             await Task.Delay(100);
@@ -1907,11 +1892,11 @@ public partial class MainWindowViewModel : ObservableObject
                             tongSoDongTrongFile,
                             loiDocFile);
 
-            // Sá»‘ giá»¯ cÅ© do ngÆ°á»i dÃ¹ng quyáº¿t Ä‘á»‹nh, khÃ´ng pháº£i do database ghi.
+            // Số giữ cũ do người dùng quyết định, không phải do database ghi.
             ketQua.SoGiuCu = thongTinTrung.SoGiuCu;
 
-            // 5. RELOAD Láº I Tá»ª DATABASE, khÃ´ng chá»‰ thÃªm vÃ o collection táº¡m.
-            ImportStatus = "Äang táº£i láº¡i danh sÃ¡ch hÃ ng hÃ³a tá»« database...";
+            // 5. RELOAD LẠI TỪ DATABASE, không chỉ thêm vào collection tạm.
+            ImportStatus = "Đang tải lại danh sách hàng hóa từ database...";
             StatusMessage = ImportStatus;
 
             await Task.Delay(100);
@@ -1920,29 +1905,29 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ nháº­p hÃ ng loáº¡t tá»« file: " + ex.Message;
+            StatusMessage = "Không thể nhập hàng loạt từ file: " + ex.Message;
         }
         finally
         {
             IsImporting = false;
         }
 
-        // 6. BÃO CÃO Káº¾T QUáº¢ cho ngÆ°á»i dÃ¹ng
+        // 6. BÁO CÁO KẾT QUẢ cho người dùng
         if (ketQua is not null && OwnerWindow is not null)
         {
             StatusMessage = ketQua.DaRollback
-                ? "Nháº­p file tháº¥t báº¡i, Ä‘Ã£ rollback toÃ n bá»™."
-                : $"Nháº­p xong: thÃªm má»›i {ketQua.SoThemMoi:N0}, "
-                  + $"thay tháº¿ {ketQua.SoThayThe:N0}, giá»¯ cÅ© {ketQua.SoGiuCu:N0}, "
-                  + $"lá»—i {ketQua.SoLoi:N0}.";
+                ? "Nhập file thất bại, đã rollback toàn bộ."
+                : $"Nhập xong: thêm mới {ketQua.SoThemMoi:N0}, "
+                  + $"thay thế {ketQua.SoThayThe:N0}, giữ cũ {ketQua.SoGiuCu:N0}, "
+                  + $"lỗi {ketQua.SoLoi:N0}.";
 
             await KetQuaImportWindow.ShowAsync(OwnerWindow, ketQua);
         }
     }
 
     /// <summary>
-    /// Há»i ngÆ°á»i dÃ¹ng xá»­ lÃ½ sáº£n pháº©m trÃ¹ng: giá»¯ cÅ© / thay tháº¿ / há»§y.
-    /// Tráº£ vá» lá»±a chá»n, hoáº·c null náº¿u khÃ´ng cÃ³ gÃ¬ trÃ¹ng.
+    /// Hỏi người dùng xử lý sản phẩm trùng: giữ cũ / thay thế / hủy.
+    /// Trả về lựa chọn, hoặc null nếu không có gì trùng.
     /// </summary>
     private async Task<XuLySanPhamTrung?> HoiQuyetDinhSanPhamTrungAsync(
         IReadOnlyList<SanPham> productsFromFile,
@@ -1956,7 +1941,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (danhSachTrung.Count == 0)
             return null;
 
-        // Táº¯t loading Ä‘á»ƒ há»™p thoáº¡i hiá»‡n Ä‘Æ°á»£c trÃªn UI thread.
+        // Tắt loading để hộp thoại hiện được trên UI thread.
         IsImporting = false;
         await Task.Delay(50);
 
@@ -1964,9 +1949,9 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// GhÃ©p tá»«ng sáº£n pháº©m trong file vá»›i báº£n ghi Ä‘ang cÃ³ trong database.
-    /// MÃ£ hÃ ng lÃ  khÃ³a chÃ­nh; mÃ£ váº¡ch chá»‰ dÃ¹ng khi khÃ´ng trÃ¹ng mÃ£ hÃ ng.
-    /// Cá»‘ tÃ¬nh khÃ´ng so tÃªn hÃ ng vÃ¬ hai mÃ³n khÃ¡c tÃªn dá»… bá»‹ trÃ¹ng tÃªn.
+    /// Ghép từng sản phẩm trong file với bản ghi đang có trong database.
+    /// Mã hàng là khóa chính; mã vạch chỉ dùng khi không trùng mã hàng.
+    /// Cố tình không so tên hàng vì hai món khác tên dễ bị trùng tên.
     /// </summary>
     private static List<SanPhamTrung> TaoDanhSachSanPhamTrung(
         IReadOnlyList<SanPham> productsFromFile,
@@ -2003,19 +1988,19 @@ public partial class MainWindowViewModel : ObservableObject
                 && theoMaSanPham.TryGetValue(maSanPham, out var theoMa))
             {
                 cu = theoMa;
-                lyDo = "MÃ£ hÃ ng";
+                lyDo = "Mã hàng";
             }
             else if (!string.IsNullOrWhiteSpace(maVach)
                      && theoMaVach.TryGetValue(maVach, out var theoVach))
             {
                 cu = theoVach;
-                lyDo = "MÃ£ váº¡ch";
+                lyDo = "Mã vạch";
             }
 
             if (cu is null)
                 continue;
 
-            // Sáº£n pháº©m trÃ¹ng cáº£ mÃ£ hÃ ng láº«n mÃ£ váº¡ch chá»‰ bÃ¡o má»™t láº§n.
+            // Sản phẩm trùng cả mã hàng lẫn mã vạch chỉ báo một lần.
             if (!daThem.Add(cu.Id.ToString()))
                 continue;
 
@@ -2032,8 +2017,8 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Biáº¿n danh sÃ¡ch sáº£n pháº©m Ä‘á»c tá»« file thÃ nh danh sÃ¡ch quyáº¿t Ä‘á»‹nh cho tá»«ng dÃ²ng:
-    /// thÃªm má»›i / thay tháº¿ / giá»¯ cÅ©.
+    /// Biến danh sách sản phẩm đọc từ file thành danh sách quyết định cho từng dòng:
+    /// thêm mới / thay thế / giữ cũ.
     /// </summary>
     private static (int SoGiuCu, List<SanPhamTrung> DanhSachTrung) TaoDanhSachHangNhap(
         IReadOnlyList<SanPham> productsFromFile,
@@ -2104,11 +2089,11 @@ public partial class MainWindowViewModel : ObservableObject
                     SoDongExcel = product.SoDongExcel,
                     LyDoTrung = string.Equals(cu.MaSanPham?.Trim(), maSanPham,
                         StringComparison.OrdinalIgnoreCase)
-                        ? "MÃ£ hÃ ng"
-                        : "MÃ£ váº¡ch"
+                        ? "Mã hàng"
+                        : "Mã vạch"
                 });
 
-                // Giá»¯ cÅ©: KHÃ”NG UPDATE, giá»¯ nguyÃªn toÃ n bá»™ dá»¯ liá»‡u database.
+                // Giữ cũ: KHÔNG UPDATE, giữ nguyên toàn bộ dữ liệu database.
                 danhSachHang.Add(new HangNhapSanPham(
                     product,
                     product.SoDongExcel,
@@ -2121,14 +2106,14 @@ public partial class MainWindowViewModel : ObservableObject
         return (soGiuCu, danhSachTrung);
     }
     /// <summary>
-    /// Táº£i láº¡i danh sÃ¡ch hÃ ng hÃ³a theo tá»« khÃ³a Ä‘ang gÃµ.
-    /// Tá»« khÃ³a Ä‘Æ°á»£c MySQL lá»c trÃªn TOÃ€N Bá»˜ báº£ng san_pham rá»“i má»›i cáº¯t báº±ng LIMIT,
-    /// nÃªn sáº£n pháº©m náº±m á»Ÿ trang khÃ¡c / ngoÃ i pháº§n Ä‘ang hiá»ƒn thá»‹ váº«n tÃ¬m ra Ä‘Æ°á»£c.
+    /// Tải lại danh sách hàng hóa theo từ khóa đang gõ.
+    /// Từ khóa được MySQL lọc trên TOÀN BỘ bảng san_pham rồi mới cắt bằng LIMIT,
+    /// nên sản phẩm nằm ở trang khác / ngoài phần đang hiển thị vẫn tìm ra được.
     /// </summary>
     private async Task RefreshProductsAsync()
     {
-        // Version guard: ngÆ°á»i dÃ¹ng gÃµ tiáº¿p trong lÃºc chá» database thÃ¬ bá» káº¿t quáº£ cÅ©,
-        // trÃ¡nh danh sÃ¡ch bá»‹ nháº£y ngÆ°á»£c vá» tá»« khÃ³a cÅ©.
+        // Version guard: người dùng gõ tiếp trong lúc chờ database thì bỏ kết quả cũ,
+        // tránh danh sách bị nhảy ngược về từ khóa cũ.
         var version = ++_productLoadVersion;
 
         try
@@ -2167,9 +2152,9 @@ public partial class MainWindowViewModel : ObservableObject
                 ? SanPhamEmptyText
                 : (dangTimKiem
                     ? SanPhams.Count < tongSoKhop
-                        ? $"TÃ¬m tháº¥y {tongSoKhop:N0} sáº£n pháº©m theo \"{ProductSearch.Trim()}\" (Ä‘ang hiá»‡n {SanPhams.Count:N0})"
-                        : $"TÃ¬m tháº¥y {tongSoKhop:N0} sáº£n pháº©m theo \"{ProductSearch.Trim()}\""
-                    : $"ÄÃ£ táº£i {SanPhams.Count:N0} sáº£n pháº©m");
+                        ? $"Tìm thấy {tongSoKhop:N0} sản phẩm theo \"{ProductSearch.Trim()}\" (đang hiện {SanPhams.Count:N0})"
+                        : $"Tìm thấy {tongSoKhop:N0} sản phẩm theo \"{ProductSearch.Trim()}\""
+                    : $"Đã tải {SanPhams.Count:N0} sản phẩm");
         }
         catch (Exception ex)
         {
@@ -2181,10 +2166,10 @@ public partial class MainWindowViewModel : ObservableObject
 
             OnPropertyChanged(nameof(IsSanPhamListEmpty));
 
-            SafeLog.WriteError("Táº£i danh sÃ¡ch hÃ ng hÃ³a", ex);
+            SafeLog.WriteError("Tải danh sách hàng hóa", ex);
 
             StatusMessage =
-                "KhÃ´ng thá»ƒ táº£i danh sÃ¡ch hÃ ng hÃ³a: " + SafeLog.Redact(ex.Message);
+                "Không thể tải danh sách hàng hóa: " + SafeLog.Redact(ex.Message);
         }
     }
 
@@ -2230,7 +2215,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             Title = title,
             Width = 430,
-            // Cao theo ná»™i dung: tiÃªu Ä‘á»/nguyÃªn nhÃ¢n dÃ i khÃ´ng bá»‹ cáº¯t chá»¯.
+            // Cao theo nội dung: tiêu đề/nguyên nhân dài không bị cắt chữ.
             SizeToContent = Avalonia.Controls.SizeToContent.Height,
             MinHeight = 230,
             CanResize = false,
@@ -2261,7 +2246,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         var okButton = new Button
         {
-            Content = "ÄÃ£ hiá»ƒu",
+            Content = "Đã hiểu",
             Width = 110,
             Height = 38,
             Background = Avalonia.Media.Brush.Parse("#078C7A"),
@@ -2301,7 +2286,7 @@ public partial class MainWindowViewModel : ObservableObject
         await dialog.ShowDialog(OwnerWindow);
     }
     private async Task<bool> ShowConfirmationAsync(string title, string message)
-            => await ShowConfirmationAsync(title, message, "XÃ³a", "Há»§y");
+            => await ShowConfirmationAsync(title, message, "Xóa", "Hủy");
 
     private async Task<bool> ShowConfirmationAsync(string title, string message, string confirmButtonText, string cancelButtonText)
     {
@@ -2313,20 +2298,20 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// BÃ¡o lá»—i khi lÆ°u phiáº¿u nháº­p: hiá»‡n há»™p thoáº¡i "Tháº¥t báº¡i" kÃ¨m nguyÃªn nhÃ¢n vÃ 
-    /// giá»¯ nguyÃªn toÃ n bá»™ form Ä‘á»ƒ ngÆ°á»i dÃ¹ng sá»­a rá»“i báº¥m láº¡i.
+    /// Báo lỗi khi lưu phiếu nhập: hiện hộp thoại "Thất bại" kèm nguyên nhân và
+    /// giữ nguyên toàn bộ form để người dùng sửa rồi bấm lại.
     /// </summary>
     private async Task BaoLoiLuuPhieuNhapAsync(string lyDo)
     {
         var noiDung = string.IsNullOrWhiteSpace(lyDo)
-            ? "Lá»—i khÃ´ng xÃ¡c Ä‘á»‹nh. Vui lÃ²ng thá»­ láº¡i."
+            ? "Lỗi không xác định. Vui lòng thử lại."
             : lyDo.Trim();
 
-        StatusMessage = "âŒ Tháº¥t báº¡i â€“ KhÃ´ng thá»ƒ lÆ°u phiáº¿u nháº­p: " + noiDung;
+        StatusMessage = "❌ Thất bại – Không thể lưu phiếu nhập: " + noiDung;
 
         await ShowMessageAsync(
-            "Tháº¥t báº¡i â€“ KhÃ´ng thá»ƒ lÆ°u phiáº¿u nháº­p.",
-            $"{noiDung}\n\nDá»¯ liá»‡u Ä‘ang nháº­p váº«n Ä‘Æ°á»£c giá»¯ nguyÃªn, hÃ£y sá»­a vÃ  báº¥m HoÃ n thÃ nh láº¡i.");
+            "Thất bại – Không thể lưu phiếu nhập.",
+            $"{noiDung}\n\nDữ liệu đang nhập vẫn được giữ nguyên, hãy sửa và bấm Hoàn thành lại.");
     }
 
     private async Task<(IReadOnlyList<ProductOption> Groups, IReadOnlyList<ProductOption> Units)> LoadProductOptionsAsync()
@@ -2340,14 +2325,14 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ táº£i nhÃ³m hÃ ng/Ä‘Æ¡n vá»‹ tÃ­nh: " + ex.Message;
+            StatusMessage = "Không thể tải nhóm hàng/đơn vị tính: " + ex.Message;
             return (Array.Empty<ProductOption>(), Array.Empty<ProductOption>());
         }
     }
 
     private static bool IsDuplicateProduct(SanPham product, IReadOnlyList<SanPham> existingProducts)
     {
-        // CÃ²n dÃ¹ng cho luá»“ng nháº­p KHÃCH HÃ€NG, giá»¯ nguyÃªn logic cÅ© á»Ÿ Ä‘Ã¢y.
+        // Còn dùng cho luồng nhập KHÁCH HÀNG, giữ nguyên logic cũ ở đây.
         var trimmedMaSanPham = product.MaSanPham.Trim();
         var trimmedMaVach = product.MaVach?.Trim();
         var trimmedTenSanPham = product.TenSanPham.Trim();
@@ -2371,7 +2356,7 @@ public partial class MainWindowViewModel : ObservableObject
             SaleCustomerSuggestions.Clear();
 
             if (string.IsNullOrWhiteSpace(keyword) ||
-                keyword.Equals("KhÃ¡ch láº»", StringComparison.OrdinalIgnoreCase))
+                keyword.Equals("Khách lẻ", StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -2385,7 +2370,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ tÃ¬m khÃ¡ch hÃ ng: " + ex.Message;
+            StatusMessage = "Không thể tìm khách hàng: " + ex.Message;
         }
     }
     [RelayCommand]
@@ -2396,7 +2381,7 @@ public partial class MainWindowViewModel : ObservableObject
             HoaDons.Clear();
             foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch))
                 HoaDons.Add(item);
-            StatusMessage = $"TÃ¬m tháº¥y {HoaDons.Count} hÃ³a Ä‘Æ¡n";
+            StatusMessage = $"Tìm thấy {HoaDons.Count} hóa đơn";
         }
         catch (Exception ex) { StatusMessage = ex.Message; }
     }
@@ -2412,17 +2397,17 @@ public partial class MainWindowViewModel : ObservableObject
             foreach (var item in await _db.GetHoaDonAsync())
                 HoaDons.Add(item);
 
-            StatusMessage = $"ÄÃ£ táº£i {HoaDons.Count} hÃ³a Ä‘Æ¡n";
+            StatusMessage = $"Đã tải {HoaDons.Count} hóa đơn";
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ táº£i hÃ³a Ä‘Æ¡n: " + ex.Message;
+            StatusMessage = "Không thể tải hóa đơn: " + ex.Message;
         }
     }
     [RelayCommand]
     private async Task ThemNhaCungCapAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersCreate, "Báº¡n khÃ´ng cÃ³ quyá»n thÃªm nhÃ  cung cáº¥p."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersCreate, "Bạn không có quyền thêm nhà cung cấp."))
         {
             return;
         }
@@ -2432,19 +2417,19 @@ public partial class MainWindowViewModel : ObservableObject
             return;
 
         StatusMessage =
-            $"ÄÃ£ thÃªm nhÃ  cung cáº¥p {supplier.TenNhaCungCap}";
+            $"Đã thêm nhà cung cấp {supplier.TenNhaCungCap}";
     }
 
     /// <summary>
-    /// Má»Ÿ form thÃªm nhÃ  cung cáº¥p dÃ¹ng chung cho cáº£ module quáº£n lÃ½
-    /// vÃ  mÃ n láº­p phiáº¿u nháº­p. Tráº£ vá» nhÃ  cung cáº¥p vá»«a lÆ°u, null náº¿u ngÆ°á»i dÃ¹ng há»§y.
+    /// Mở form thêm nhà cung cấp dùng chung cho cả module quản lý
+    /// và màn lập phiếu nhập. Trả về nhà cung cấp vừa lưu, null nếu người dùng hủy.
     /// </summary>
     private async Task<NhaCungCap?> HienThiFormThemNhaCungCapAsync()
     {
         if (OwnerWindow is null)
             return null;
 
-        // Tá»± phÃ¡t sinh mÃ£ NCC tá»« database
+        // Tự phát sinh mã NCC từ database
         var generatedCode = await _db.TaoMaNhaCungCapMoiAsync();
 
         var newSupplier = new NhaCungCap
@@ -2454,7 +2439,7 @@ public partial class MainWindowViewModel : ObservableObject
             TrangThai = true
         };
 
-        // Má»Ÿ giao diá»‡n nháº­p thÃ´ng tin nhÃ  cung cáº¥p
+        // Mở giao diện nhập thông tin nhà cung cấp
         var editor = new NhaCungCapEditorWindow(newSupplier);
 
         var saved = await editor.ShowDialog<bool>(OwnerWindow);
@@ -2462,12 +2447,12 @@ public partial class MainWindowViewModel : ObservableObject
         if (!saved)
             return null;
 
-        // LÆ°u database
+        // Lưu database
         editor.Supplier.Id =
             await _db.ThemNhaCungCapAsync(editor.Supplier);
 
-        // Danh sÃ¡ch Ä‘ang phÃ¢n trang theo database nÃªn táº£i láº¡i trang hiá»‡n táº¡i
-        // thay vÃ¬ thÃªm thá»§ cÃ´ng má»™t dÃ²ng cÃ³ thá»ƒ khÃ´ng thuá»™c trang Ä‘ang xem.
+        // Danh sách đang phân trang theo database nên tải lại trang hiện tại
+        // thay vì thêm thủ công một dòng có thể không thuộc trang đang xem.
         await LoadSupplierPageAsync();
 
         return editor.Supplier;
@@ -2475,7 +2460,7 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task SuaNhaCungCapAsync(NhaCungCap? supplier)
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersEdit, "Báº¡n khÃ´ng cÃ³ quyá»n sá»­a nhÃ  cung cáº¥p."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersEdit, "Bạn không có quyền sửa nhà cung cấp."))
         {
             return;
         }
@@ -2495,22 +2480,22 @@ public partial class MainWindowViewModel : ObservableObject
             await _db.CapNhatNhaCungCapAsync(editor.Supplier);
 
             StatusMessage =
-                $"ÄÃ£ cáº­p nháº­t nhÃ  cung cáº¥p {editor.Supplier.TenNhaCungCap}";
+                $"Đã cập nhật nhà cung cấp {editor.Supplier.TenNhaCungCap}";
 
-            // Thá»© tá»± hiá»ƒn thá»‹ cÃ³ thá»ƒ Ä‘á»•i theo tÃªn nÃªn táº£i láº¡i Ä‘Ãºng trang Ä‘ang xem.
+            // Thứ tự hiển thị có thể đổi theo tên nên tải lại đúng trang đang xem.
             await LoadSupplierPageAsync();
         }
         catch (Exception ex)
         {
             StatusMessage =
-                "KhÃ´ng thá»ƒ cáº­p nháº­t nhÃ  cung cáº¥p: " + ex.Message;
+                "Không thể cập nhật nhà cung cấp: " + ex.Message;
         }
     }
 
     [RelayCommand]
     private async Task ThemNhaCungCapTuFileAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersImport, "Báº¡n khÃ´ng cÃ³ quyá»n import nhÃ  cung cáº¥p."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersImport, "Bạn không có quyền import nhà cung cấp."))
         {
             return;
         }
@@ -2520,7 +2505,7 @@ public partial class MainWindowViewModel : ObservableObject
         var files = await OwnerWindow.StorageProvider.OpenFilePickerAsync(
             new FilePickerOpenOptions
             {
-                Title = "Chá»n file danh sÃ¡ch nhÃ  cung cáº¥p",
+                Title = "Chọn file danh sách nhà cung cấp",
                 AllowMultiple = false,
                 FileTypeFilter =
                 [
@@ -2535,7 +2520,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (file is null)
         {
-            StatusMessage = "Báº¡n chÆ°a chá»n file nhÃ  cung cáº¥p.";
+            StatusMessage = "Bạn chưa chọn file nhà cung cấp.";
             return;
         }
 
@@ -2543,30 +2528,30 @@ public partial class MainWindowViewModel : ObservableObject
         {
             IsImporting = true;
 
-            ImportStatus = $"Äang Ä‘á»c file \"{file.Name}\"...";
+            ImportStatus = $"Đang đọc file \"{file.Name}\"...";
             StatusMessage = ImportStatus;
 
             await Task.Yield();
 
-            // Äá»c file Excel/CSV
+            // Đọc file Excel/CSV
             var suppliersFromFile = await Task.Run(() =>
                 _db.ParseNhaCungCapFromFile(file.Path.LocalPath));
 
             if (suppliersFromFile.Count == 0)
             {
                 StatusMessage =
-                    $"âŒ File \"{file.Name}\" khÃ´ng cÃ³ dá»¯ liá»‡u nhÃ  cung cáº¥p há»£p lá»‡.";
+                    $"❌ File \"{file.Name}\" không có dữ liệu nhà cung cấp hợp lệ.";
                 return;
             }
 
             ImportStatus =
-                $"ÄÃ£ Ä‘á»c {suppliersFromFile.Count:N0} nhÃ  cung cáº¥p. Äang kiá»ƒm tra...";
+                $"Đã đọc {suppliersFromFile.Count:N0} nhà cung cấp. Đang kiểm tra...";
 
             StatusMessage = ImportStatus;
 
             await Task.Yield();
 
-            // Chá»‰ há»i database vá» cÃ¡c mÃ£ cÃ³ tháº­t trong file, khÃ´ng táº£i toÃ n bá»™ NCC.
+            // Chỉ hỏi database về các mã có thật trong file, không tải toàn bộ NCC.
             var existingCodes = await _db.LayMaNhaCungCapDaTonTaiAsync(
                 suppliersFromFile.Select(x => x.MaNhaCungCap));
 
@@ -2576,31 +2561,31 @@ public partial class MainWindowViewModel : ObservableObject
 
             if (duplicateCount > 0)
             {
-                // Táº¯t loading trÆ°á»›c khi hiá»‡n há»™p thoáº¡i
+                // Tắt loading trước khi hiện hộp thoại
                 IsImporting = false;
 
                 var shouldUpdate = await ShowConfirmationAsync(
-                    "NhÃ  cung cáº¥p bá»‹ trÃ¹ng",
-                    $"PhÃ¡t hiá»‡n {duplicateCount:N0} nhÃ  cung cáº¥p trong file " +
-                    $"Ä‘Ã£ tá»“n táº¡i trong database.\n\n" +
-                    "\"Cáº­p nháº­t dá»¯ liá»‡u\" sáº½ ghi Ä‘Ã¨ thÃ´ng tin (kÃ¨m sá»‘ tiá»n Ä‘Ã£ mua, " +
-                    "cÃ´ng ná»£) theo Ä‘Ãºng file. NgÆ°á»£c láº¡i cÃ¡c mÃ£ bá»‹ trÃ¹ng sáº½ Ä‘Æ°á»£c bá» qua " +
-                    "vÃ  chá»‰ nhá»¯ng nhÃ  cung cáº¥p má»›i Ä‘Æ°á»£c nháº­p.",
-                    "Cáº­p nháº­t dá»¯ liá»‡u",
-                    "Bá» qua nhÃ  cung cáº¥p trÃ¹ng");
+                    "Nhà cung cấp bị trùng",
+                    $"Phát hiện {duplicateCount:N0} nhà cung cấp trong file " +
+                    $"đã tồn tại trong database.\n\n" +
+                    "\"Cập nhật dữ liệu\" sẽ ghi đè thông tin (kèm số tiền đã mua, " +
+                    "công nợ) theo đúng file. Ngược lại các mã bị trùng sẽ được bỏ qua " +
+                    "và chỉ những nhà cung cấp mới được nhập.",
+                    "Cập nhật dữ liệu",
+                    "Bỏ qua nhà cung cấp trùng");
 
                 IsImporting = true;
 
                 if (shouldUpdate)
                 {
-                    ImportStatus = "Äang cáº­p nháº­t dá»¯ liá»‡u nhÃ  cung cáº¥p bá»‹ trÃ¹ng...";
+                    ImportStatus = "Đang cập nhật dữ liệu nhà cung cấp bị trùng...";
                     StatusMessage = ImportStatus;
 
                     await Task.Yield();
                 }
                 else
                 {
-                    ImportStatus = "Äang loáº¡i bá» dá»¯ liá»‡u nhÃ  cung cáº¥p bá»‹ trÃ¹ng...";
+                    ImportStatus = "Đang loại bỏ dữ liệu nhà cung cấp bị trùng...";
                     StatusMessage = ImportStatus;
 
                     await Task.Yield();
@@ -2616,22 +2601,22 @@ public partial class MainWindowViewModel : ObservableObject
             if (suppliersFromFile.Count == 0)
             {
                 StatusMessage =
-                    "âŒ Táº¥t cáº£ nhÃ  cung cáº¥p trong file Ä‘á»u Ä‘Ã£ tá»“n táº¡i.";
+                    "❌ Tất cả nhà cung cấp trong file đều đã tồn tại.";
                 return;
             }
 
             ImportStatus =
-                $"Äang nháº­p {suppliersFromFile.Count:N0} nhÃ  cung cáº¥p vÃ o database...";
+                $"Đang nhập {suppliersFromFile.Count:N0} nhà cung cấp vào database...";
 
             StatusMessage = ImportStatus;
 
             await Task.Yield();
 
-            // BÃ¡o tiáº¿n Ä‘á»™ theo sá»‘ dÃ²ng Ä‘Ã£ xá»­ lÃ½ Ä‘á»ƒ ngÆ°á»i dÃ¹ng khÃ´ng tÆ°á»Ÿng á»©ng cá»©ng.
+            // Báo tiến độ theo số dòng đã xử lý để người dùng không tưởng ứng cứng.
             var progress = new Progress<int>(daXuLy =>
             {
                 ImportStatus =
-                    $"Äang nháº­p dÃ²ng {daXuLy:N0}/{suppliersFromFile.Count:N0}...";
+                    $"Đang nhập dòng {daXuLy:N0}/{suppliersFromFile.Count:N0}...";
             });
 
             var ketQua = await Task.Run(() =>
@@ -2641,20 +2626,20 @@ public partial class MainWindowViewModel : ObservableObject
                     progress,
                     capNhatNhaCungCapDaTonTai: true));
 
-            ImportStatus = "Äang cáº­p nháº­t danh sÃ¡ch nhÃ  cung cáº¥p...";
+            ImportStatus = "Đang cập nhật danh sách nhà cung cấp...";
             StatusMessage = ImportStatus;
 
             await LoadSuppliersAsync();
 
             StatusMessage = (ketQua.SoThemMoi > 0 || ketQua.SoCapNhat > 0)
-                ? $"âœ… ÄÃ£ nháº­p thÃ nh cÃ´ng {ketQua.SoThemMoi:N0}, cáº­p nháº­t {ketQua.SoCapNhat:N0} nhÃ  cung cáº¥p tá»« file \"{file.Name}\". {ketQua.ThongBaoTatCa}"
-                : $"âš ï¸ KhÃ´ng cÃ³ nhÃ  cung cáº¥p má»›i nÃ o Ä‘Æ°á»£c nháº­p. {ketQua.ThongBaoTatCa}";
+                ? $"✅ Đã nhập thành công {ketQua.SoThemMoi:N0}, cập nhật {ketQua.SoCapNhat:N0} nhà cung cấp từ file \"{file.Name}\". {ketQua.ThongBaoTatCa}"
+                : $"⚠️ Không có nhà cung cấp mới nào được nhập. {ketQua.ThongBaoTatCa}";
 
             if (ketQua.SoTrungTenVaDienThoai > 0)
             {
                 StatusMessage +=
-                    $" Cáº£nh bÃ¡o: {ketQua.SoTrungTenVaDienThoai:N0} nhÃ  cung cáº¥p " +
-                    "trÃ¹ng tÃªn vÃ  sá»‘ Ä‘iá»‡n thoáº¡i vá»›i nhÃ  cung cáº¥p Ä‘Ã£ cÃ³.";
+                    $" Cảnh báo: {ketQua.SoTrungTenVaDienThoai:N0} nhà cung cấp " +
+                    "trùng tên và số điện thoại với nhà cung cấp đã có.";
             }
 
             if (ketQua.DanhSachLoi.Count > 0)
@@ -2665,7 +2650,7 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage =
-                "âŒ KhÃ´ng thá»ƒ nháº­p nhÃ  cung cáº¥p tá»« file: " + ex.Message;
+                "❌ Không thể nhập nhà cung cấp từ file: " + ex.Message;
         }
         finally
         {
@@ -2676,7 +2661,7 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task XoaNhaCungCapAsync(NhaCungCap? supplier)
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersDelete, "Báº¡n khÃ´ng cÃ³ quyá»n xÃ³a nhÃ  cung cáº¥p."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersDelete, "Bạn không có quyền xóa nhà cung cấp."))
         {
             return;
         }
@@ -2686,15 +2671,15 @@ public partial class MainWindowViewModel : ObservableObject
         if (supplier.Id == 0)
         {
             StatusMessage =
-                "NhÃ  cung cáº¥p nÃ y chÆ°a cÃ³ ID trong database.";
+                "Nhà cung cấp này chưa có ID trong database.";
 
             return;
         }
 
         var confirmed = await ShowConfirmationAsync(
-            "XÃ³a nhÃ  cung cáº¥p",
-            $"Báº¡n cÃ³ cháº¯c muá»‘n xÃ³a nhÃ  cung cáº¥p " +
-            $"\"{supplier.TenNhaCungCap}\" khÃ´ng?");
+            "Xóa nhà cung cấp",
+            $"Bạn có chắc muốn xóa nhà cung cấp " +
+            $"\"{supplier.TenNhaCungCap}\" không?");
 
         if (!confirmed)
             return;
@@ -2706,15 +2691,15 @@ public partial class MainWindowViewModel : ObservableObject
             SelectedNhaCungCap = null;
 
             StatusMessage =
-                $"ÄÃ£ xÃ³a nhÃ  cung cáº¥p {supplier.TenNhaCungCap}";
+                $"Đã xóa nhà cung cấp {supplier.TenNhaCungCap}";
 
-            // Táº£i láº¡i trang Ä‘á»ƒ sá»‘ trang, tá»•ng vÃ  thá»‘ng kÃª khá»›p vá»›i database.
+            // Tải lại trang để số trang, tổng và thống kê khớp với database.
             await LoadSupplierPageAsync();
         }
         catch (Exception ex)
         {
             StatusMessage =
-                "KhÃ´ng thá»ƒ xÃ³a nhÃ  cung cáº¥p: " + ex.Message;
+                "Không thể xóa nhà cung cấp: " + ex.Message;
         }
     }
 
@@ -2730,14 +2715,14 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Äáº·t láº¡i TOÃ€N Bá»˜ tráº¡ng thÃ¡i cá»§a Ä‘Æ¡n hÃ ng Ä‘ang bÃ¡n.
+    /// Đặt lại TOÀN BỘ trạng thái của đơn hàng đang bán.
     /// <para>
-    /// Báº£n cÅ© chá»‰ xoÃ¡ SaleCart vÃ  vÃ i Ã´ tá»•ng tiá»n, giá»¯ láº¡i TienKhachDua,
-    /// TienThoi, TienCongNo, TrangThaiThanhToan, SelectedSaleCustomer vÃ 
-    /// SaleCustomerName â€” nÃªn Ä‘Æ¡n thá»© hai káº¿ thá»«a tiá»n cá»§a Ä‘Æ¡n thá»© nháº¥t vÃ 
-    /// khÃ¡ch hÃ ng cá»§a Ä‘Æ¡n trÆ°á»›c. HÃ m nÃ y gom táº¥t cáº£ vÃ o má»™t chá»— Ä‘á»ƒ má»i Ä‘Æ°á»ng
-    /// vÃ o (má»Ÿ mÃ n bÃ¡n hÃ ng, Ä‘Ã³ng mÃ n, thanh toÃ¡n xong, báº¥m "ÄÆ¡n má»›i") Ä‘á»u
-    /// xoÃ¡ tráº¡ng thÃ¡i cÅ© giá»‘ng nhau.
+    /// Bản cũ chỉ xoá SaleCart và vài ô tổng tiền, giữ lại TienKhachDua,
+    /// TienThoi, TienCongNo, TrangThaiThanhToan, SelectedSaleCustomer và
+    /// SaleCustomerName — nên đơn thứ hai kế thừa tiền của đơn thứ nhất và
+    /// khách hàng của đơn trước. Hàm này gom tất cả vào một chỗ để mọi đường
+    /// vào (mở màn bán hàng, đóng màn, thanh toán xong, bấm "Đơn mới") đều
+    /// xoá trạng thái cũ giống nhau.
     /// </para>
     /// </summary>
     private void ResetDonHangVeMacDinh()
@@ -2750,14 +2735,14 @@ public partial class MainWindowViewModel : ObservableObject
         ProductSearchResults.Clear();
 
         SelectedSaleCustomer = null;
-        SaleCustomerName = "KhÃ¡ch láº»";
+        SaleCustomerName = "Khách lẻ";
         SaleSearchText = "";
 
         SaleTotal = 0;
         SaleSubtotal = 0;
         SaleDiscountInput = 0;
         SaleDiscountAmount = 0;
-        SaleDiscountMode = "Sá»‘ tiá»n";
+        SaleDiscountMode = "Số tiền";
 
         TienKhachDua = 0;
         TienThoi = 0;
@@ -2769,13 +2754,13 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Báº¯t Ä‘áº§u má»™t Ä‘Æ¡n hÃ ng má»›i: xoÃ¡ sáº¡ch Ä‘Æ¡n cÅ© rá»“i táº£i láº¡i danh sÃ¡ch sáº£n pháº©m.
-    /// DÃ¹ng chung cho lá»‡nh "ðŸ›’ BÃ¡n hÃ ng" vÃ  lá»‡nh "ÄÆ¡n má»›i".
+    /// Bắt đầu một đơn hàng mới: xoá sạch đơn cũ rồi tải lại danh sách sản phẩm.
+    /// Dùng chung cho lệnh "🛒 Bán hàng" và lệnh "Đơn mới".
     /// </summary>
     [RelayCommand]
     private async Task MoGiaoDienBanHangAsync()
     {
-if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ quyá»n má»Ÿ mÃ n hÃ¬nh bÃ¡n hÃ ng."))
+if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền mở màn hình bán hàng."))
         {
             return;
         }
@@ -2784,9 +2769,9 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
 
         IsSalesPanelVisible = true;
 
-        StatusMessage = "ÄÃ£ táº¡o Ä‘Æ¡n hÃ ng má»›i. Chá»n sáº£n pháº©m Ä‘á»ƒ báº¯t Ä‘áº§u.";
+        StatusMessage = "Đã tạo đơn hàng mới. Chọn sản phẩm để bắt đầu.";
 
-        // Táº¢I DANH SÃCH Sáº¢N PHáº¨M KHI Má»ž BÃN HÃ€NG
+        // TẢI DANH SÁCH SẢN PHẨM KHI MỞ BÁN HÀNG
         try
         {
             var products = await _db.GetSanPhamAsync();
@@ -2796,13 +2781,13 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ táº£i danh sÃ¡ch sáº£n pháº©m: " + ex.Message;
+            StatusMessage = "Không thể tải danh sách sản phẩm: " + ex.Message;
         }
 
         RecalculateSaleTotal();
     }
 
-    /// <summary>NÃºt "ÄÆ¡n má»›i" trÃªn mÃ n bÃ¡n hÃ ng: xoÃ¡ sáº¡ch Ä‘Æ¡n hiá»‡n táº¡i Ä‘á»ƒ bÃ¡n tiáº¿p.</summary>
+    /// <summary>Nút "Đơn mới" trên màn bán hàng: xoá sạch đơn hiện tại để bán tiếp.</summary>
     [RelayCommand]
     private async Task TaoDonMoiAsync()
     {
@@ -2813,22 +2798,22 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
 
         if (owner is null)
         {
-            StatusMessage = "KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c cá»­a sá»• bÃ¡n hÃ ng.";
+            StatusMessage = "Không xác định được cửa sổ bán hàng.";
             return;
         }
 
-        // ÄÆ¡n Ä‘ang cÃ³ hÃ ng chÆ°a thanh toÃ¡n thÃ¬ pháº£i há»i trÆ°á»›c khi xoÃ¡.
+        // Đơn đang có hàng chưa thanh toán thì phải hỏi trước khi xoá.
         if (SaleCart.Count > 0)
         {
             var confirm = new ConfirmationWindow(
-                "Táº¡o Ä‘Æ¡n má»›i",
-                "ÄÆ¡n hÃ ng hiá»‡n táº¡i chÆ°a thanh toÃ¡n. XoÃ¡ Ä‘Æ¡n nÃ y vÃ  báº¯t Ä‘áº§u Ä‘Æ¡n má»›i?",
-                "Táº¡o Ä‘Æ¡n má»›i",
-                "Huá»·");
+                "Tạo đơn mới",
+                "Đơn hàng hiện tại chưa thanh toán. Xoá đơn này và bắt đầu đơn mới?",
+                "Tạo đơn mới",
+                "Huỷ");
 
             if (!await confirm.ShowDialog<bool>(owner))
             {
-                StatusMessage = "ÄÃ£ giá»¯ nguyÃªn Ä‘Æ¡n hÃ ng hiá»‡n táº¡i.";
+                StatusMessage = "Đã giữ nguyên đơn hàng hiện tại.";
                 return;
             }
         }
@@ -2850,12 +2835,12 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         if (product is null)
             return;
 
-        // Sáº£n pháº©m chÆ°a cÃ³ giÃ¡ bÃ¡n
+        // Sản phẩm chưa có giá bán
         if (product.GiaBan <= 0)
         {
             if (OwnerWindow is null)
             {
-                StatusMessage = "KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c cá»­a sá»• bÃ¡n hÃ ng.";
+                StatusMessage = "Không xác định được cửa sổ bán hàng.";
                 return;
             }
 
@@ -2865,14 +2850,14 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
 
                 var giaBan = await window.ShowDialog<decimal?>(OwnerWindow);
 
-                // NgÆ°á»i dÃ¹ng báº¥m Há»§y hoáº·c nháº­p giÃ¡ khÃ´ng há»£p lá»‡
+                // Người dùng bấm Hủy hoặc nhập giá không hợp lệ
                 if (!giaBan.HasValue || giaBan.Value <= 0)
                 {
-                    StatusMessage = "ChÆ°a nháº­p giÃ¡ bÃ¡n. Sáº£n pháº©m chÆ°a Ä‘Æ°á»£c thÃªm vÃ o giá».";
+                    StatusMessage = "Chưa nhập giá bán. Sản phẩm chưa được thêm vào giỏ.";
                     return;
                 }
 
-                // LÆ°u giÃ¡ bÃ¡n vÃ o database
+                // Lưu giá bán vào database
                 var updated =
                     await _db.CapNhatGiaBanSanPhamAsync(
                         product.Id,
@@ -2880,21 +2865,21 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
 
                 if (!updated)
                 {
-                    StatusMessage = "Sáº£n pháº©m khÃ´ng cÃ²n tá»“n táº¡i trong há»‡ thá»‘ng.";
+                    StatusMessage = "Sản phẩm không còn tồn tại trong hệ thống.";
                     return;
                 }
 
-                // Cáº­p nháº­t giÃ¡ cá»§a sáº£n pháº©m Ä‘ang hiá»ƒn thá»‹ vÃ  cÃ¡c mÃ n hÃ¬nh khÃ¡c
+                // Cập nhật giá của sản phẩm đang hiển thị và các màn hình khác
                 DongBoGiaBan(product.Id, giaBan.Value);
             }
             catch (Exception ex)
             {
-                StatusMessage = "KhÃ´ng thá»ƒ cáº­p nháº­t giÃ¡ bÃ¡n: " + ex.Message;
+                StatusMessage = "Không thể cập nhật giá bán: " + ex.Message;
                 return;
             }
         }
 
-        // CÃ³ giÃ¡ rá»“i thÃ¬ thÃªm vÃ o giá»
+        // Có giá rồi thì thêm vào giỏ
         var existing = SaleCart.FirstOrDefault(
             item => item.SanPham.Id == product.Id);
 
@@ -2957,7 +2942,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
     {
         SaleSubtotal = SaleCart.Sum(item => item.ThanhTien);
 
-        SaleDiscountAmount = SaleDiscountMode == "Pháº§n trÄƒm"
+        SaleDiscountAmount = SaleDiscountMode == "Phần trăm"
             ? SaleSubtotal * Math.Clamp(SaleDiscountInput, 0, 100) / 100
             : Math.Clamp(SaleDiscountInput, 0, SaleSubtotal);
 
@@ -2969,27 +2954,27 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
     }
 
     // ============================================================
-    // BÃO CÃO
+    // BÁO CÁO
     // ============================================================
 
     /// <summary>
-    /// Danh sÃ¡ch cÃ¡c bÃ¡o cÃ¡o trong nhÃ³m menu "BÃ¡o cÃ¡o".
-    /// Muá»‘n thÃªm bÃ¡o cÃ¡o má»›i (bÃ¡n hÃ ng, tá»“n kho, doanh thu...) chá»‰ cáº§n
-    /// thÃªm má»™t pháº§n tá»­ ná»¯a vÃ o Ä‘Ã¢y, giao diá»‡n tá»± hiá»ƒn thá»‹ theo.
+    /// Danh sách các báo cáo trong nhóm menu "Báo cáo".
+    /// Muốn thêm báo cáo mới (bán hàng, tồn kho, doanh thu...) chỉ cần
+    /// thêm một phần tử nữa vào đây, giao diện tự hiển thị theo.
     /// </summary>
     public ObservableCollection<BaoCaoMenuItem> BaoCaoMenuItems { get; } = new()
     {
         new BaoCaoMenuItem
         {
             Key = "cuoi-ngay",
-            TieuDe = "BÃ¡o cÃ¡o cuá»‘i ngÃ y",
-            BieuTuong = "ðŸ—“"
+            TieuDe = "Báo cáo cuối ngày",
+            BieuTuong = "🗓"
         },
         new BaoCaoMenuItem
         {
             Key = "phieu-nhap-hang",
-            TieuDe = "BÃ¡o cÃ¡o phiáº¿u nháº­p hÃ ng",
-            BieuTuong = "ðŸ“¥"
+            TieuDe = "Báo cáo phiếu nhập hàng",
+            BieuTuong = "📥"
         }
     };
 
@@ -3006,18 +2991,18 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
             ? 0
             : (int)Math.Ceiling(BaoCaoPhieuNhapTotalCount / (double)BaoCaoPhieuNhapPageSize);
 
-    /// <summary>VÃ­ dá»¥: "1 - 15 trong 367 giao dá»‹ch"</summary>
+    /// <summary>Ví dụ: "1 - 15 trong 367 giao dịch"</summary>
     public string BaoCaoPhieuNhapRangeText
     {
         get
         {
             if (BaoCaoPhieuNhapTotalCount == 0)
-                return "0 giao dá»‹ch";
+                return "0 giao dịch";
 
             var from = (BaoCaoPhieuNhapPage - 1) * BaoCaoPhieuNhapPageSize + 1;
             var to = Math.Min(from + BaoCaoPhieuNhapPageSize - 1, BaoCaoPhieuNhapTotalCount);
 
-            return $"{from} - {to} trong {BaoCaoPhieuNhapTotalCount} giao dá»‹ch";
+            return $"{from} - {to} trong {BaoCaoPhieuNhapTotalCount} giao dịch";
         }
     }
 
@@ -3025,7 +3010,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
 
     public bool IsBaoCaoPhieuNhapEmpty => BaoCaoPhieuNhaps.Count == 0;
 
-    /// <summary>Tráº¡ng thÃ¡i Ã´ "chá»n táº¥t cáº£" á»Ÿ Ä‘áº§u báº£ng: Ä‘Ã£ chá»n / chá»n má»™t pháº§n / chÆ°a chá»n.</summary>
+    /// <summary>Trạng thái ô "chọn tất cả" ở đầu bảng: đã chọn / chọn một phần / chưa chọn.</summary>
     public bool? IsBaoCaoPhieuNhapAllSelected
     {
         get
@@ -3048,18 +3033,20 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
 
     public bool CanBaoCaoPhieuNhapTrangSau => BaoCaoPhieuNhapPage < BaoCaoPhieuNhapTotalPages;
 
-    public bool IsBaoCaoSectionSelected => SelectedMenu == "BÃ¡o cÃ¡o";
+    public bool IsBaoCaoSectionSelected => SelectedMenu == "Báo cáo";
 
     public bool IsBaoCaoPhieuNhapSelected =>
-        SelectedMenu == "BÃ¡o cÃ¡o" && SelectedReportKey == "phieu-nhap-hang";
+        SelectedMenu == "Báo cáo" && SelectedReportKey == "phieu-nhap-hang";
 
-    public bool IsBaoCaoBanHangSelected => SelectedMenu == "BAo cáo" && SelectedReportKey == "ban-hang";
+    public bool IsBaoCaoBanHangSelected =>
+        IsBaoCaoSectionSelected && SelectedReportKey == "ban-hang";
+
     public bool IsBaoCaoCuoiNgaySelected =>
-        SelectedMenu == "BÃ¡o cÃ¡o" && SelectedReportKey == "cuoi-ngay";
+        SelectedMenu == "Báo cáo" && SelectedReportKey == "cuoi-ngay";
 
     partial void OnBaoCaoPhieuNhapSearchChanged(string value)
     {
-        // Má»—i láº§n tÃ¬m kiáº¿m luÃ´n quay vá» trang Ä‘áº§u
+        // Mỗi lần tìm kiếm luôn quay về trang đầu
         if (BaoCaoPhieuNhapPage != 1)
             BaoCaoPhieuNhapPage = 1;
     }
@@ -3097,10 +3084,10 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         if (item is null)
             return;
 
-        SelectedMenu = "BÃ¡o cÃ¡o";
+        SelectedMenu = "Báo cáo";
         SelectedReportKey = item.Key;
 
-        // Má»—i bÃ¡o cÃ¡o cÃ³ danh sÃ¡ch riÃªng
+        // Mỗi báo cáo có danh sách riêng
         BaoCaoPhieuNhapPage = 1;
 
         if (item.Key == "phieu-nhap-hang" && !_baoCaoPhieuNhapLoaded)
@@ -3109,10 +3096,17 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
             _ = LoadBaoCaoPhieuNhapAsync();
         }
 
-        // BÃ¡o cÃ¡o cuá»‘i ngÃ y chá»‰ táº£i khi má»Ÿ láº§n Ä‘áº§u, sau Ä‘Ã³ giá»¯ nguyÃªn ngÃ y Ä‘ang
-        // xem trong suá»‘t phiÃªn (ngÆ°á»i dÃ¹ng tá»± báº¥m "LÃ m má»›i" khi cáº§n).
-        if (item.Key == "ban-hang" && !_baoCaoBanHangLoaded) { _baoCaoBanHangLoaded = true; _ = BaoCaoBanHang.TaiLaiAsync(); }
-          if (item.Key == "cuoi-ngay" && !_baoCaoCuoiNgayLoaded)
+        // Báo cáo bán hàng cũng chỉ tải một lần đầu, các lần sau giữ nguyên
+        // bộ lọc ngày người dùng đang xem.
+        if (item.Key == "ban-hang" && !_baoCaoBanHangLoaded)
+        {
+            _baoCaoBanHangLoaded = true;
+            _ = BaoCaoBanHang.TaiLaiAsync();
+        }
+
+        // Báo cáo cuối ngày chỉ tải khi mở lần đầu, sau đó giữ nguyên ngày đang
+        // xem trong suốt phiên (người dùng tự bấm "Làm mới" khi cần).
+        if (item.Key == "cuoi-ngay" && !_baoCaoCuoiNgayLoaded)
         {
             _baoCaoCuoiNgayLoaded = true;
             _ = BaoCaoCuoiNgay.TaiDuLieuAsync();
@@ -3129,7 +3123,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
 
         IsLoadingBaoCaoPhieuNhap = true;
 
-        // Version guard: bá» qua káº¿t quáº£ cá»§a láº§n táº£i cÅ© náº¿u ngÆ°á»i dÃ¹ng Ä‘Ã£ tÃ¬m/chuyá»ƒn trang má»›i
+        // Version guard: bỏ qua kết quả của lần tải cũ nếu người dùng đã tìm/chuyển trang mới
         var version = ++_baoCaoPhieuNhapLoadVersion;
 
         try
@@ -3143,7 +3137,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
             if (version != _baoCaoPhieuNhapLoadVersion)
                 return;
 
-            // Trang vÆ°á»£t quÃ¡ sá»‘ trang thá»±c táº¿ (vÃ­ dá»¥ sau khi tÃ¬m kiáº¿m) -> quay vá» trang cuá»‘i
+            // Trang vượt quá số trang thực tế (ví dụ sau khi tìm kiếm) -> quay về trang cuối
             var totalPages = BaoCaoPhieuNhapPageSize <= 0
                 ? 0
                 : (int)Math.Ceiling(tongSoBanGhi / (double)BaoCaoPhieuNhapPageSize);
@@ -3172,13 +3166,13 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
             OnPropertyChanged(nameof(BaoCaoPhieuNhapSelectedCount));
 
             StatusMessage = BaoCaoPhieuNhaps.Count == 0
-                ? "KhÃ´ng cÃ³ dá»¯ liá»‡u phiáº¿u nháº­p phÃ¹ há»£p"
-                : $"ÄÃ£ táº£i {BaoCaoPhieuNhaps.Count} phiáº¿u nháº­p (trang {BaoCaoPhieuNhapPage}/{Math.Max(1, totalPages)})";
+                ? "Không có dữ liệu phiếu nhập phù hợp"
+                : $"Đã tải {BaoCaoPhieuNhaps.Count} phiếu nhập (trang {BaoCaoPhieuNhapPage}/{Math.Max(1, totalPages)})";
         }
         catch (Exception ex)
         {
             if (version == _baoCaoPhieuNhapLoadVersion)
-                StatusMessage = "KhÃ´ng thá»ƒ táº£i bÃ¡o cÃ¡o phiáº¿u nháº­p: " + ex.Message;
+                StatusMessage = "Không thể tải báo cáo phiếu nhập: " + ex.Message;
         }
         finally
         {
@@ -3195,7 +3189,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
     }
 
     /// <summary>
-    /// TÃ¬m kiáº¿m khi ngÆ°á»i dÃ¹ng gÃµ: chá»‘ng debounce Ä‘á»ƒ khÃ´ng gá»i database liÃªn tá»¥c.
+    /// Tìm kiếm khi người dùng gõ: chống debounce để không gọi database liên tục.
     /// </summary>
     public void TimKiemBaoCaoPhieuNhapTuDong()
     {
@@ -3220,7 +3214,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         }
         catch (OperationCanceledException)
         {
-            // NgÆ°á»i dÃ¹ng gÃµ tiáº¿p -> huá»· láº§n tÃ¬m kiáº¿m cÅ©
+            // Người dùng gõ tiếp -> huỷ lần tìm kiếm cũ
         }
     }
 
@@ -3275,7 +3269,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         item.IsYeuThich = !item.IsYeuThich;
     }
 
-    /// <summary>Äá»“ng bá»™ láº¡i tráº¡ng thÃ¡i Ã´ "chá»n táº¥t cáº£" khi ngÆ°á»i dÃ¹ng báº¥m checkbox cá»§a má»™t dÃ²ng.</summary>
+    /// <summary>Đồng bộ lại trạng thái ô "chọn tất cả" khi người dùng bấm checkbox của một dòng.</summary>
     public void CapNhatTrangThaiChonTatCaBaoCaoPhieuNhap()
     {
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapAllSelected));
@@ -3285,16 +3279,16 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
     [RelayCommand]
     private async Task MoGiaoDienNhapHangTuBaoCaoAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesView, "Báº¡n khÃ´ng cÃ³ quyá»n má»Ÿ mÃ n hÃ¬nh nháº­p hÃ ng."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesView, "Bạn không có quyền mở màn hình nhập hàng."))
         {
             return;
         }
-        // NÃºt "+ Nháº­p hÃ ng" trong bÃ¡o cÃ¡o: chuyá»ƒn sang mÃ n láº­p phiáº¿u nháº­p hÃ ng
+        // Nút "+ Nhập hàng" trong báo cáo: chuyển sang màn lập phiếu nhập hàng
         await MoGiaoDienNhapHangAsync();
     }
 
     // ============================================================
-    // PHIáº¾U NHáº¬P HÃ€NG
+    // PHIẾU NHẬP HÀNG
     // ============================================================
 
     public ObservableCollection<ChiTietPhieuNhapHang> PhieuNhapItems { get; } = new();
@@ -3317,7 +3311,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
 
     [ObservableProperty] private bool isSavingPhieuNhap;
 
-    /// <summary>NgÃ y nháº­p luÃ´n dÃ¹ng kiá»ƒu DateTime vÃ¬ cá»™t thoi_gian_nhap trong database lÃ  DATETIME.</summary>
+    /// <summary>Ngày nhập luôn dùng kiểu DateTime vì cột thoi_gian_nhap trong database là DATETIME.</summary>
     [ObservableProperty] private bool isPhieuNhapCalendarOpen;
 
     private uint _phieuNhapId;
@@ -3326,11 +3320,11 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
 
     public string PhieuNhapTongTienNhapText => PhieuNhapTongTienNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
 
-    /// <summary>NgÃ y nháº­p hiá»ƒn thá»‹ theo Ä‘á»‹nh dáº¡ng Viá»‡t Nam dd/MM/yyyy HH:mm.</summary>
+    /// <summary>Ngày nhập hiển thị theo định dạng Việt Nam dd/MM/yyyy HH:mm.</summary>
     public string PhieuNhapNgayNhapText => PhieuNhapNgayNhap?.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
                                            ?? string.Empty;
 
-    /// <summary>CÃ´ng ná»£ cÃ²n pháº£i tráº£ cho nhÃ  cung cáº¥p, khá»›p vá»›i cá»™t con_no trong database.</summary>
+    /// <summary>Công nợ còn phải trả cho nhà cung cấp, khớp với cột con_no trong database.</summary>
     public decimal PhieuNhapConNo => Math.Max(0, PhieuNhapTongTienNhap - PhieuNhapDaThanhToan);
 
     public string PhieuNhapConNoText => PhieuNhapConNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
@@ -3375,7 +3369,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
     {
         OnPropertyChanged(nameof(PhieuNhapNgayNhapText));
 
-        // Chá»n xong ngÃ y thÃ¬ Ä‘Ã³ng lá»‹ch luÃ´n
+        // Chọn xong ngày thì đóng lịch luôn
         IsPhieuNhapCalendarOpen = false;
     }
 
@@ -3390,7 +3384,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
     [RelayCommand]
     private async Task MoPhieuNhapHangAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesCreate, "Báº¡n khÃ´ng cÃ³ quyá»n táº¡o phiáº¿u nháº­p hÃ ng."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesCreate, "Bạn không có quyền tạo phiếu nhập hàng."))
         {
             return;
         }
@@ -3412,7 +3406,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         ImportSupplierSearch = "";
         SelectedPhieuNhapNcc = null;
 
-        PhieuNhapNhanVien = Session.CurrentUser?.HoTen ?? "ChÆ°a Ä‘Äƒng nháº­p";
+        PhieuNhapNhanVien = Session.CurrentUser?.HoTen ?? "Chưa đăng nhập";
         PhieuNhapNgayNhap = DateTime.Now;
 
         try
@@ -3421,17 +3415,17 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         }
         catch (Exception ex)
         {
-            // KhÃ´ng nuá»‘t lá»—i: in ra console/debug Ä‘á»ƒ tháº¥y Ä‘Ãºng lá»—i SQL/connection.
-            // Tuyá»‡t Ä‘á»‘i khÃ´ng gÃ¡n chuá»—i táº¡m vÃ o PhieuNhapMa vÃ¬ mÃ n hÃ¬nh sáº½ lÆ°u
-            // tháº³ng giÃ¡ trá»‹ nÃ y xuá»‘ng phieu_nhap_hang (lÃ m há»ng dá»¯ liá»‡u mÃ£ phiáº¿u).
-            Console.WriteLine("========== Lá»–I Táº O MÃƒ PHIáº¾U NHáº¬P ==========");
+            // Không nuốt lỗi: in ra console/debug để thấy đúng lỗi SQL/connection.
+            // Tuyệt đối không gán chuỗi tạm vào PhieuNhapMa vì màn hình sẽ lưu
+            // thẳng giá trị này xuống phieu_nhap_hang (làm hỏng dữ liệu mã phiếu).
+            Console.WriteLine("========== LỖI TẠO MÃ PHIẾU NHẬP ==========");
             Console.WriteLine(ex.ToString());
             Console.WriteLine("==========================================");
 
             PhieuNhapMa = "";
             StatusMessage =
-                "KhÃ´ng thá»ƒ táº¡o mÃ£ phiáº¿u nháº­p tá»± Ä‘á»™ng: " + ex.Message
-                + " (xem console Ä‘á»ƒ biáº¿t chi tiáº¿t lá»—i SQL/káº¿t ná»‘i)";
+                "Không thể tạo mã phiếu nhập tự động: " + ex.Message
+                + " (xem console để biết chi tiết lỗi SQL/kết nối)";
         }
 
         RecalculatePhieuNhapTongTienHang();
@@ -3442,21 +3436,21 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
     [RelayCommand]
     private async Task MoGiaoDienNhapHangAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesView, "Báº¡n khÃ´ng cÃ³ quyá»n má»Ÿ mÃ n hÃ¬nh nháº­p hÃ ng."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesView, "Bạn không có quyền mở màn hình nhập hàng."))
         {
             return;
         }
-        // Náº¿u Ä‘ang Ä‘á»©ng á»Ÿ mÃ n Nháº­p hÃ ng thÃ¬ SelectedMenu khÃ´ng Ä‘á»•i,
-        // LoadSelectedSectionAsync sáº½ khÃ´ng cháº¡y nÃªn pháº£i tá»± khá»Ÿi táº¡o phiáº¿u má»›i.
-        if (SelectedMenu == "Nháº­p hÃ ng")
+        // Nếu đang đứng ở màn Nhập hàng thì SelectedMenu không đổi,
+        // LoadSelectedSectionAsync sẽ không chạy nên phải tự khởi tạo phiếu mới.
+        if (SelectedMenu == "Nhập hàng")
         {
             await MoPhieuNhapHangAsync();
             return;
         }
 
-        // SelectedMenu Ä‘á»•i => case "Nháº­p hÃ ng" trong LoadSelectedSectionAsync gá»i
-        // MoPhieuNhapHangAsync() giÃºp, khÃ´ng gá»i á»Ÿ Ä‘Ã¢y Ä‘á»ƒ trÃ¡nh cháº¡y 2 láº§n.
-        SelectedMenu = "Nháº­p hÃ ng";
+        // SelectedMenu đổi => case "Nhập hàng" trong LoadSelectedSectionAsync gọi
+        // MoPhieuNhapHangAsync() giúp, không gọi ở đây để tránh chạy 2 lần.
+        SelectedMenu = "Nhập hàng";
     }
 
     [RelayCommand]
@@ -3465,10 +3459,10 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         if (PhieuNhapItems.Count > 0)
         {
             var confirmed = await ShowConfirmationAsync(
-                "ThoÃ¡t láº­p phiáº¿u nháº­p",
-                "Phiáº¿u nháº­p Ä‘ang cÃ³ dá»¯ liá»‡u chÆ°a Ä‘Æ°á»£c lÆ°u. Báº¡n cÃ³ cháº¯c muá»‘n thoÃ¡t?",
-                "ThoÃ¡t",
-                "Tiáº¿p tá»¥c nháº­p");
+                "Thoát lập phiếu nhập",
+                "Phiếu nhập đang có dữ liệu chưa được lưu. Bạn có chắc muốn thoát?",
+                "Thoát",
+                "Tiếp tục nhập");
 
             if (!confirmed)
                 return;
@@ -3493,8 +3487,8 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
     [RelayCommand]
     private async Task TimKiemSanPhamNhapAsync(string? keyword)
     {
-        // KhÃ´ng gÃ¡n Ä‘Ã¨ khi lá»‡nh Ä‘Æ°á»£c gá»i khÃ´ng cÃ³ tham sá»‘,
-        // náº¿u khÃ´ng TextBox sáº½ bá»‹ xoÃ¡ ngay khi vá»«a gÃµ kÃ½ tá»± Ä‘áº§u tiÃªn.
+        // Không gán đè khi lệnh được gọi không có tham số,
+        // nếu không TextBox sẽ bị xoá ngay khi vừa gõ ký tự đầu tiên.
         if (keyword is not null && keyword != ImportProductSearch)
             ImportProductSearch = keyword;
 
@@ -3504,7 +3498,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ tÃ¬m hÃ ng hÃ³a: " + ex.Message;
+            StatusMessage = "Không thể tìm hàng hóa: " + ex.Message;
         }
     }
 
@@ -3512,7 +3506,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
     {
         var keyword = ImportProductSearch.Trim();
 
-        // RÃºt gá»n danh sÃ¡ch gá»£i Ã½: sáº£n pháº©m Ä‘Ã£ cÃ³ trong phiáº¿u thÃ¬ áº©n Ä‘i
+        // Rút gọn danh sách gợi ý: sản phẩm đã có trong phiếu thì ẩn đi
         var sanPhamDaChon = PhieuNhapItems
             .Select(item => item.SanPham.Id)
             .ToHashSet();
@@ -3544,13 +3538,13 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         {
             existing.SoLuong += 1;
             RecalculatePhieuNhapTongTienHang();
-            StatusMessage = $"ÄÃ£ tÄƒng sá»‘ lÆ°á»£ng {product.TenSanPham} lÃªn {existing.SoLuong:N0}";
+            StatusMessage = $"Đã tăng số lượng {product.TenSanPham} lên {existing.SoLuong:N0}";
             return;
         }
 
         var dongMoi = new ChiTietPhieuNhapHang(product);
 
-        // Nghe thay Ä‘á»•i sá»‘ lÆ°á»£ng / giÃ¡ nháº­p / giáº£m giÃ¡ Ä‘á»ƒ tÃ­nh láº¡i tá»•ng realtime
+        // Nghe thay đổi số lượng / giá nhập / giảm giá để tính lại tổng realtime
         dongMoi.PropertyChanged += ChiTietPhieuNhapHang_OnPropertyChanged;
 
         PhieuNhapItems.Add(dongMoi);
@@ -3561,7 +3555,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
 
         RecalculatePhieuNhapTongTienHang();
 
-        StatusMessage = $"ÄÃ£ thÃªm {product.TenSanPham} vÃ o phiáº¿u nháº­p";
+        StatusMessage = $"Đã thêm {product.TenSanPham} vào phiếu nhập";
     }
 
     private void ChiTietPhieuNhapHang_OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -3593,32 +3587,32 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
     {
         if (PhieuNhapItems.Count == 0)
         {
-            StatusMessage = "Phiáº¿u nháº­p khÃ´ng cÃ³ dÃ²ng hÃ ng nÃ o Ä‘á»ƒ xÃ³a.";
+            StatusMessage = "Phiếu nhập không có dòng hàng nào để xóa.";
             return;
         }
 
         var soDong = PhieuNhapItems.Count;
 
         var confirmed = await ShowConfirmationAsync(
-            "XÃ³a táº¥t cáº£ dÃ²ng hÃ ng",
-            $"Báº¡n cÃ³ cháº¯c muá»‘n xÃ³a táº¥t cáº£ hÃ ng hÃ³a trong phiáº¿u nháº­p? ({soDong} dÃ²ng sáº½ bá»‹ xÃ³a khá»i phiáº¿u, sáº£n pháº©m trong database khÃ´ng bá»‹ áº£nh hÆ°á»Ÿng)",
-            "XÃ³a táº¥t cáº£",
-            "Há»§y");
+            "Xóa tất cả dòng hàng",
+            $"Bạn có chắc muốn xóa tất cả hàng hóa trong phiếu nhập? ({soDong} dòng sẽ bị xóa khỏi phiếu, sản phẩm trong database không bị ảnh hưởng)",
+            "Xóa tất cả",
+            "Hủy");
 
         if (!confirmed)
         {
-            StatusMessage = "ÄÃ£ há»§y xÃ³a táº¥t cáº£ dÃ²ng hÃ ng.";
+            StatusMessage = "Đã hủy xóa tất cả dòng hàng.";
             return;
         }
 
         BoDangKyPhieuNhapItems();
         PhieuNhapItems.Clear();
 
-        // Tá»•ng tiá»n hÃ ng = 0, Tá»•ng tiá»n nháº­p = Chi phÃ­ khÃ¡c, CÃ²n pháº£i tráº£ = Tá»•ng tiá»n nháº­p - ÄÃ£ thanh toÃ¡n
+        // Tổng tiền hàng = 0, Tổng tiền nhập = Chi phí khác, Còn phải trả = Tổng tiền nhập - Đã thanh toán
         RecalculatePhieuNhapTongTienHang();
         RecalculatePhieuNhapTotal();
 
-        StatusMessage = $"ÄÃ£ xÃ³a toÃ n bá»™ {soDong} dÃ²ng hÃ ng khá»i phiáº¿u nháº­p";
+        StatusMessage = $"Đã xóa toàn bộ {soDong} dòng hàng khỏi phiếu nhập";
     }
 
     [RelayCommand]
@@ -3653,8 +3647,8 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
     }
 
     /// <summary>
-    /// Ã” tÃ¬m nhÃ  cung cáº¥p Ä‘ang chá»©a Ä‘Ãºng tÃªn NCC vá»«a chá»n
-    /// thÃ¬ khÃ´ng cáº§n tÃ¬m láº¡i láº§n ná»¯a.
+    /// Ô tìm nhà cung cấp đang chứa đúng tên NCC vừa chọn
+    /// thì không cần tìm lại lần nữa.
     /// </summary>
     private bool DaChonNhaCungCapNhap =>
         SelectedPhieuNhapNcc is not null &&
@@ -3664,8 +3658,8 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
     [RelayCommand]
     private async Task TimKiemNhaCungCapNhapAsync(string? keyword)
     {
-        // KhÃ´ng gÃ¡n Ä‘Ã¨ khi lá»‡nh Ä‘Æ°á»£c gá»i khÃ´ng cÃ³ tham sá»‘,
-        // náº¿u khÃ´ng TextBox sáº½ bá»‹ xoÃ¡ ngay khi vá»«a gÃµ kÃ½ tá»± Ä‘áº§u tiÃªn.
+        // Không gán đè khi lệnh được gọi không có tham số,
+        // nếu không TextBox sẽ bị xoá ngay khi vừa gõ ký tự đầu tiên.
         if (keyword is not null && keyword != ImportSupplierSearch)
             ImportSupplierSearch = keyword;
 
@@ -3677,7 +3671,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
             if (string.IsNullOrWhiteSpace(ImportSupplierSearch))
                 return;
 
-            // ÄÃ£ chá»n xong NCC thÃ¬ khÃ´ng tÃ¬m láº¡i, trÃ¡nh má»Ÿ láº¡i danh sÃ¡ch gá»£i Ã½
+            // Đã chọn xong NCC thì không tìm lại, tránh mở lại danh sách gợi ý
             if (DaChonNhaCungCapNhap)
                 return;
 
@@ -3689,7 +3683,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ tÃ¬m nhÃ  cung cáº¥p: " + ex.Message;
+            StatusMessage = "Không thể tìm nhà cung cấp: " + ex.Message;
         }
     }
 
@@ -3705,42 +3699,42 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         PhieuNhapSupplierSuggestions.Clear();
         OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
 
-        StatusMessage = $"ÄÃ£ chá»n nhÃ  cung cáº¥p {supplier.TenNhaCungCap}";
+        StatusMessage = $"Đã chọn nhà cung cấp {supplier.TenNhaCungCap}";
     }
 
     [RelayCommand]
     private async Task ThemNhaCungCapNhapNhanhAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersCreate, "Báº¡n khÃ´ng cÃ³ quyá»n thÃªm nhÃ  cung cáº¥p."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersCreate, "Bạn không có quyền thêm nhà cung cấp."))
         {
             return;
         }
         try
         {
-            // TÃ¡i sá»­ dá»¥ng Ä‘Ãºng form thÃªm nhÃ  cung cáº¥p sáºµn cÃ³
+            // Tái sử dụng đúng form thêm nhà cung cấp sẵn có
             var supplier = await HienThiFormThemNhaCungCapAsync();
 
             if (supplier is null)
                 return;
 
-            // Tá»± Ä‘á»™ng chá»n nhÃ  cung cáº¥p vá»«a thÃªm cho phiáº¿u nháº­p
+            // Tự động chọn nhà cung cấp vừa thêm cho phiếu nhập
             SelectedPhieuNhapNcc = supplier;
             ImportSupplierSearch = supplier.TenNhaCungCap;
             PhieuNhapSupplierSuggestions.Clear();
             OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
 
-            StatusMessage = $"ÄÃ£ thÃªm vÃ  chá»n nhÃ  cung cáº¥p {supplier.TenNhaCungCap}";
+            StatusMessage = $"Đã thêm và chọn nhà cung cấp {supplier.TenNhaCungCap}";
         }
         catch (Exception ex)
         {
-            StatusMessage = "KhÃ´ng thá»ƒ thÃªm nhÃ  cung cáº¥p: " + ex.Message;
+            StatusMessage = "Không thể thêm nhà cung cấp: " + ex.Message;
         }
     }
 
     [RelayCommand]
     private async Task HoanThanhPhieuNhapAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesCreate, "Báº¡n khÃ´ng cÃ³ quyá»n lÆ°u phiáº¿u nháº­p hÃ ng."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesCreate, "Bạn không có quyền lưu phiếu nhập hàng."))
         {
             return;
         }
@@ -3749,20 +3743,20 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
 
         // ------------------------------------------
         // VALIDATE
-        // Má»i lá»—i nghiá»‡p vá»¥ Ä‘á»u bÃ¡o qua há»™p thoáº¡i vÃ  GIá»® NGUYÃŠN form,
-        // khÃ´ng bao giá» xÃ³a dá»¯ liá»‡u Ä‘ang nháº­p.
-        // Má»i lá»—i nghiá»‡p vá»¥ Ä‘á»u bÃ¡o qua há»™p thoáº¡i vÃ  GIá»® NGUYÃŠN form,
-        // khÃ´ng bao giá» xÃ³a dá»¯ liá»‡u Ä‘ang nháº­p.
+        // Mọi lỗi nghiệp vụ đều báo qua hộp thoại và GIỮ NGUYÊN form,
+        // không bao giờ xóa dữ liệu đang nhập.
+        // Mọi lỗi nghiệp vụ đều báo qua hộp thoại và GIỮ NGUYÊN form,
+        // không bao giờ xóa dữ liệu đang nhập.
         // ------------------------------------------
 
-        // 1. Phiáº¿u pháº£i cÃ³ Ã­t nháº¥t 1 hÃ ng hÃ³a
+        // 1. Phiếu phải có ít nhất 1 hàng hóa
         if (PhieuNhapItems.Count == 0)
         {
-            await BaoLoiLuuPhieuNhapAsync("Phiáº¿u nháº­p chÆ°a cÃ³ hÃ ng hÃ³a.");
+            await BaoLoiLuuPhieuNhapAsync("Phiếu nhập chưa có hàng hóa.");
             return;
         }
 
-        // 2. Sá»‘ lÆ°á»£ng má»—i hÃ ng pháº£i > 0
+        // 2. Số lượng mỗi hàng phải > 0
         var dongSoLuongSai = PhieuNhapItems
             .Where(item => item.SanPham.Id != 0 && item.SoLuong <= 0)
             .ToList();
@@ -3770,12 +3764,12 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         if (dongSoLuongSai.Count > 0)
         {
             await BaoLoiLuuPhieuNhapAsync(dongSoLuongSai.Count == 1
-                ? $"Vui lÃ²ng kiá»ƒm tra sá»‘ lÆ°á»£ng cá»§a hÃ ng \"{dongSoLuongSai[0].SanPham.TenSanPham}\" (pháº£i lá»›n hÆ¡n 0)."
-                : $"Vui lÃ²ng kiá»ƒm tra sá»‘ lÆ°á»£ng hÃ ng hÃ³a: cÃ²n {dongSoLuongSai.Count} dÃ²ng chÆ°a nháº­p sá»‘ lÆ°á»£ng.");
+                ? $"Vui lòng kiểm tra số lượng của hàng \"{dongSoLuongSai[0].SanPham.TenSanPham}\" (phải lớn hơn 0)."
+                : $"Vui lòng kiểm tra số lượng hàng hóa: còn {dongSoLuongSai.Count} dòng chưa nhập số lượng.");
             return;
         }
 
-        // 3. GiÃ¡ nháº­p pháº£i há»£p lá»‡ (khÃ´ng Ã¢m)
+        // 3. Giá nhập phải hợp lệ (không âm)
         var dongGiaSai = PhieuNhapItems
             .Where(item => item.SanPham.Id != 0 && item.DonGiaNhap < 0)
             .ToList();
@@ -3783,48 +3777,48 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
         if (dongGiaSai.Count > 0)
         {
             await BaoLoiLuuPhieuNhapAsync(dongGiaSai.Count == 1
-                ? $"Vui lÃ²ng kiá»ƒm tra giÃ¡ nháº­p cá»§a hÃ ng \"{dongGiaSai[0].SanPham.TenSanPham}\"."
-                : $"Vui lÃ²ng kiá»ƒm tra giÃ¡ nháº­p: cÃ²n {dongGiaSai.Count} dÃ²ng cÃ³ giÃ¡ nháº­p khÃ´ng há»£p lá»‡.");
+                ? $"Vui lòng kiểm tra giá nhập của hàng \"{dongGiaSai[0].SanPham.TenSanPham}\"."
+                : $"Vui lòng kiểm tra giá nhập: còn {dongGiaSai.Count} dòng có giá nhập không hợp lệ.");
             return;
         }
 
-        // Chá»‰ láº¥y nhá»¯ng dÃ²ng thá»±c sá»± gáº¯n vá»›i má»™t sáº£n pháº©m trong database
+        // Chỉ lấy những dòng thực sự gắn với một sản phẩm trong database
         var dongHopLe = PhieuNhapItems
             .Where(item => item.SanPham.Id != 0 && item.SoLuong > 0)
             .ToList();
 
         if (dongHopLe.Count == 0)
         {
-            await BaoLoiLuuPhieuNhapAsync("Phiáº¿u nháº­p chÆ°a cÃ³ hÃ ng hÃ³a há»£p lá»‡ nÃ o Ä‘á»ƒ hoÃ n thÃ nh.");
+            await BaoLoiLuuPhieuNhapAsync("Phiếu nhập chưa có hàng hóa hợp lệ nào để hoàn thành.");
             return;
         }
 
-        // 4. NhÃ  cung cáº¥p lÃ  trÆ°á»ng báº¯t buá»™c khi hoÃ n thÃ nh phiáº¿u
+        // 4. Nhà cung cấp là trường bắt buộc khi hoàn thành phiếu
         if (SelectedPhieuNhapNcc is null || SelectedPhieuNhapNcc.Id == 0)
         {
-            await BaoLoiLuuPhieuNhapAsync("Vui lÃ²ng chá»n nhÃ  cung cáº¥p.");
+            await BaoLoiLuuPhieuNhapAsync("Vui lòng chọn nhà cung cấp.");
             return;
         }
 
-        // 5. NgÃ y nháº­p há»£p lá»‡
+        // 5. Ngày nhập hợp lệ
         if (PhieuNhapNgayNhap is null)
         {
-            await BaoLoiLuuPhieuNhapAsync("Vui lÃ²ng chá»n ngÃ y nháº­p.");
+            await BaoLoiLuuPhieuNhapAsync("Vui lòng chọn ngày nhập.");
             return;
         }
 
-        // 6. MÃ£ phiáº¿u pháº£i sinh Ä‘Æ°á»£c trÆ°á»›c khi lÆ°u
+        // 6. Mã phiếu phải sinh được trước khi lưu
         if (string.IsNullOrWhiteSpace(PhieuNhapMa))
         {
-            await BaoLoiLuuPhieuNhapAsync("ChÆ°a táº¡o Ä‘Æ°á»£c mÃ£ phiáº¿u nháº­p, vui lÃ²ng má»Ÿ láº¡i mÃ n hÃ¬nh vÃ  thá»­ láº¡i.");
+            await BaoLoiLuuPhieuNhapAsync("Chưa tạo được mã phiếu nhập, vui lòng mở lại màn hình và thử lại.");
             return;
         }
 
         var confirmed = await ShowConfirmationAsync(
-            "HoÃ n thÃ nh phiáº¿u nháº­p",
-            "Tá»“n kho sáº½ Ä‘Æ°á»£c cá»™ng thÃªm sá»‘ lÆ°á»£ng vá»«a nháº­p vÃ  giÃ¡ vá»‘n Ä‘Æ°á»£c cáº­p nháº­t. Báº¡n cÃ³ cháº¯c muá»‘n tiáº¿p tá»¥c?",
-            "HoÃ n thÃ nh",
-            "Há»§y");
+            "Hoàn thành phiếu nhập",
+            "Tồn kho sẽ được cộng thêm số lượng vừa nhập và giá vốn được cập nhật. Bạn có chắc muốn tiếp tục?",
+            "Hoàn thành",
+            "Hủy");
 
         if (!confirmed)
             return;
@@ -3849,14 +3843,14 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
                 SoHoaDonDauVao = PhieuNhapSoHoaDonDauVao
             };
 
-            // LÆ°u header + chi tiáº¿t + tá»“n kho + giÃ¡ vá»‘n + cÃ´ng ná»£ trong Má»˜T transaction.
-            // Service tá»± rollback toÃ n bá»™ náº¿u báº¥t ká»³ bÆ°á»›c nÃ o lá»—i.
+            // Lưu header + chi tiết + tồn kho + giá vốn + công nợ trong MỘT transaction.
+            // Service tự rollback toàn bộ nếu bất kỳ bước nào lỗi.
             _phieuNhapId = await _db.LuuPhieuNhapHangAsync(phieu, dongHopLe);
         }
         catch (Exception ex)
         {
-            // LÆ°u tháº¥t báº¡i: KHÃ”NG reset, KHÃ”NG chuyá»ƒn mÃ n hÃ¬nh, giá»¯ nguyÃªn
-            // toÃ n bá»™ dá»¯ liá»‡u Ä‘ang nháº­p Ä‘á»ƒ ngÆ°á»i dÃ¹ng sá»­a rá»“i báº¥m láº¡i.
+            // Lưu thất bại: KHÔNG reset, KHÔNG chuyển màn hình, giữ nguyên
+            // toàn bộ dữ liệu đang nhập để người dùng sửa rồi bấm lại.
             SafeLog.WriteError("Loi luu phieu nhap hang", ex);
 
             await BaoLoiLuuPhieuNhapAsync(ex.Message);
@@ -3867,18 +3861,18 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
             IsSavingPhieuNhap = false;
         }
 
-        // ---- ÄÃ£ lÆ°u thÃ nh cÃ´ng ----
+        // ---- Đã lưu thành công ----
 
-        // Phiáº¿u vá»«a lÆ°u pháº£i xuáº¥t hiá»‡n trong "BÃ¡o cÃ¡o â†’ BÃ¡o cÃ¡o phiáº¿u nháº­p hÃ ng"
-        // nÃªn Ä‘Ã¡nh dáº¥u cáº§n táº£i láº¡i thay vÃ¬ giá»¯ cache cÅ©.
+        // Phiếu vừa lưu phải xuất hiện trong "Báo cáo → Báo cáo phiếu nhập hàng"
+        // nên đánh dấu cần tải lại thay vì giữ cache cũ.
         _baoCaoPhieuNhapLoaded = false;
 
-        // Dashboard thá»‘ng kÃª phiáº¿u nháº­p trong hoáº¡t Ä‘á»™ng gáº§n Ä‘Ã¢y vÃ  thá»‘ng kÃª kho.
+        // Dashboard thống kê phiếu nhập trong hoạt động gần đây và thống kê kho.
         _ = LamMoiTongQuanNeuDangMoAsync();
 
-        // Tá»“n kho vÃ  giÃ¡ vá»‘n Ä‘Ã£ Ä‘á»•i -> náº¡p láº¡i danh sÃ¡ch sáº£n pháº©m.
-        // Bá»c try/catch riÃªng: náº¡p láº¡i tháº¥t báº¡i khÃ´ng Ä‘Æ°á»£c lÃ m há»ng káº¿t quáº£
-        // Ä‘Ã£ commit (phiáº¿u váº«n lÆ°u thÃ nh cÃ´ng).
+        // Tồn kho và giá vốn đã đổi -> nạp lại danh sách sản phẩm.
+        // Bọc try/catch riêng: nạp lại thất bại không được làm hỏng kết quả
+        // đã commit (phiếu vẫn lưu thành công).
         try
         {
             await LoadProductsAsync();
@@ -3888,26 +3882,26 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
             SafeLog.WriteError("Loi tai lai danh sach san pham sau khi nhap hang", ex);
         }
 
-        // BÃ¡o thÃ nh cÃ´ng vÃ  CHá»œ ngÆ°á»i dÃ¹ng Ä‘Ã³ng há»™p thoáº¡i.
+        // Báo thành công và CHỜ người dùng đóng hộp thoại.
         StatusMessage =
-            $"âœ… Phiáº¿u nháº­p {maPhieuVuaLuu} Ä‘Ã£ Ä‘Æ°á»£c lÆ°u - tá»•ng {tongTienVuaLuu} Ä‘.";
+            $"✅ Phiếu nhập {maPhieuVuaLuu} đã được lưu - tổng {tongTienVuaLuu} đ.";
 
         await ShowMessageAsync(
-            "ThÃ nh cÃ´ng â€“ Phiáº¿u nháº­p Ä‘Ã£ Ä‘Æ°á»£c lÆ°u.",
-            $"MÃ£ phiáº¿u: {maPhieuVuaLuu}\nTá»•ng tiá»n nháº­p: {tongTienVuaLuu} Ä‘");
+            "Thành công – Phiếu nhập đã được lưu.",
+            $"Mã phiếu: {maPhieuVuaLuu}\nTổng tiền nhập: {tongTienVuaLuu} đ");
 
-        // Chá»‰ reset SAU khi há»™p thoáº¡i thÃ nh cÃ´ng Ä‘Ã£ Ä‘Ã³ng, vÃ  váº«n giá»¯ nguyÃªn
-        // mÃ n hÃ¬nh "Láº­p phiáº¿u nháº­p hÃ ng" (IsNhapHangFormVisible váº«n = true).
-        // MoPhieuNhapHangAsync() xÃ³a hÃ ng hÃ³a, nhÃ  cung cáº¥p, sá»‘ hÃ³a Ä‘Æ¡n Ä‘áº§u vÃ o,
-        // ghi chÃº, chi phÃ­ khÃ¡c, Ä‘Ã£ thanh toÃ¡n, ngÃ y nháº­p vá» hÃ´m nay,
-        // tÃ­nh láº¡i tá»•ng tiá»n vÃ  SINH MÃƒ PHIáº¾U Má»šI tá»« database.
+        // Chỉ reset SAU khi hộp thoại thành công đã đóng, và vẫn giữ nguyên
+        // màn hình "Lập phiếu nhập hàng" (IsNhapHangFormVisible vẫn = true).
+        // MoPhieuNhapHangAsync() xóa hàng hóa, nhà cung cấp, số hóa đơn đầu vào,
+        // ghi chú, chi phí khác, đã thanh toán, ngày nhập về hôm nay,
+        // tính lại tổng tiền và SINH MÃ PHIẾU MỚI từ database.
         await MoPhieuNhapHangAsync();
 
-        // MoPhieuNhapHangAsync() Ä‘á»ƒ PhieuNhapMa = "" náº¿u sinh mÃ£ tháº¥t báº¡i
-        // (lá»—i SQL/káº¿t ná»‘i). KhÃ´ng Ä‘Æ°á»£c bÃ¡o "sáºµn sÃ ng" khi mÃ£ cÃ²n rá»—ng.
+        // MoPhieuNhapHangAsync() để PhieuNhapMa = "" nếu sinh mã thất bại
+        // (lỗi SQL/kết nối). Không được báo "sẵn sàng" khi mã còn rỗng.
         StatusMessage = string.IsNullOrWhiteSpace(PhieuNhapMa)
-            ? $"âœ… ÄÃ£ lÆ°u phiáº¿u nháº­p {maPhieuVuaLuu}. KhÃ´ng táº¡o Ä‘Æ°á»£c mÃ£ phiáº¿u má»›i, vui lÃ²ng má»Ÿ láº¡i mÃ n hÃ¬nh."
-            : $"âœ… ÄÃ£ lÆ°u phiáº¿u nháº­p {maPhieuVuaLuu}. Sáºµn sÃ ng láº­p phiáº¿u má»›i: {PhieuNhapMa}";
+            ? $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Không tạo được mã phiếu mới, vui lòng mở lại màn hình."
+            : $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Sẵn sàng lập phiếu mới: {PhieuNhapMa}";
     }
 
     partial void OnTienKhachDuaChanged(decimal value)
@@ -3916,10 +3910,10 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Báº¡n khÃ´ng cÃ³ 
 }
 
 /// <summary>
-/// Tá»•ng tiá»n thay Ä‘á»•i thÃ¬ tiá»n thá»‘i / cÃ´ng ná»£ / tráº¡ng thÃ¡i pháº£i tÃ­nh láº¡i.
-/// Báº£n cÅ© chá»‰ gáº¯n hook cho TienKhachDua nÃªn khi tá»•ng tiá»n Ä‘á»•i (thÃªm hÃ ng,
-/// Ä‘á»•i sá»‘ lÆ°á»£ng, giáº£m giÃ¡) cÃ¡c Ã´ nÃ y giá»¯ sá»‘ cÅ© â€” vÃ  sau khi thanh toÃ¡n
-/// xong chÃºng cÅ©ng khÃ´ng tá»± vá» 0.
+/// Tổng tiền thay đổi thì tiền thối / công nợ / trạng thái phải tính lại.
+/// Bản cũ chỉ gắn hook cho TienKhachDua nên khi tổng tiền đổi (thêm hàng,
+/// đổi số lượng, giảm giá) các ô này giữ số cũ — và sau khi thanh toán
+/// xong chúng cũng không tự về 0.
 /// </summary>
 partial void OnSaleTotalChanged(decimal value)
 {
@@ -3943,7 +3937,7 @@ private void RecalculatePayment()
     {
         TienThoi = khachDua - canTra;
         TienCongNo = 0;
-        TrangThaiThanhToan = "ÄÃ£ thanh toÃ¡n Ä‘á»§ - Tiá»n thá»‘i";
+        TrangThaiThanhToan = "Đã thanh toán đủ - Tiền thối";
     }
     else if (khachDua < canTra)
     {
@@ -3951,20 +3945,20 @@ private void RecalculatePayment()
         TienCongNo = canTra - khachDua;
 
         if (khachDua == 0)
-            TrangThaiThanhToan = "ChÆ°a thanh toÃ¡n - CÃ´ng ná»£";
+            TrangThaiThanhToan = "Chưa thanh toán - Công nợ";
         else
-            TrangThaiThanhToan = "Thanh toÃ¡n thiáº¿u - CÃ´ng ná»£";
+            TrangThaiThanhToan = "Thanh toán thiếu - Công nợ";
     }
     else
     {
         TienThoi = 0;
         TienCongNo = 0;
-        TrangThaiThanhToan = "ÄÃ£ thanh toÃ¡n Ä‘á»§";
+        TrangThaiThanhToan = "Đã thanh toán đủ";
     }
 }
 partial void OnSaleDiscountInputChanged(decimal value)
 {
-    if (SaleDiscountMode == "Sá»‘ tiá»n")
+    if (SaleDiscountMode == "Số tiền")
     {
         var maxDiscount = Math.Max(0, SaleSubtotal);
 
@@ -3981,32 +3975,32 @@ partial void OnSaleDiscountInputChanged(decimal value)
 partial void OnSaleDiscountModeChanged(string value) => RecalculateSaleTotal();
 
 /// <summary>
-/// Thanh toÃ¡n Ä‘Æ¡n hÃ ng Ä‘ang bÃ¡n.
+/// Thanh toán đơn hàng đang bán.
 /// <para>
-/// Thá»© tá»± báº¯t buá»™c: khoÃ¡ chá»‘ng báº¥m hai láº§n â†’ kiá»ƒm tra dá»¯ liá»‡u â†’ xÃ¡c nháº­n
-/// ngÆ°á»i dÃ¹ng â†’ LÆ¯U VÃ€O DATABASE (hÃ³a Ä‘Æ¡n + chi tiáº¿t + tá»“n kho + cÃ´ng ná»£
-/// trong má»™t transaction) â†’ chá»‰ khi lÆ°u thÃ nh cÃ´ng má»›i má»Ÿ hÃ³a Ä‘Æ¡n vÃ  bÃ¡o
-/// "thanh toÃ¡n thÃ nh cÃ´ng" â†’ cuá»‘i cÃ¹ng xoÃ¡ sáº¡ch Ä‘Æ¡n cÅ© Ä‘á»ƒ bÃ¡n Ä‘Æ¡n tiáº¿p theo.
-/// Náº¿u database lá»—i thÃ¬ rollback toÃ n bá»™, giá»¯ nguyÃªn Ä‘Æ¡n hÃ ng vÃ  bÃ¡o lá»—i
-/// tháº­t, tuyá»‡t Ä‘á»‘i khÃ´ng bÃ¡o thÃ nh cÃ´ng giáº£.
+/// Thứ tự bắt buộc: khoá chống bấm hai lần → kiểm tra dữ liệu → xác nhận
+/// người dùng → LƯU VÀO DATABASE (hóa đơn + chi tiết + tồn kho + công nợ
+/// trong một transaction) → chỉ khi lưu thành công mới mở hóa đơn và báo
+/// "thanh toán thành công" → cuối cùng xoá sạch đơn cũ để bán đơn tiếp theo.
+/// Nếu database lỗi thì rollback toàn bộ, giữ nguyên đơn hàng và báo lỗi
+/// thật, tuyệt đối không báo thành công giả.
 /// </para>
 /// </summary>
 [RelayCommand]
 private async Task ThanhToanAsync()
 {
-if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Báº¡n khÃ´ng cÃ³ quyá»n bÃ¡n hÃ ng."))
+if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Bạn không có quyền bán hàng."))
     {
         return;
     }
 
-    // 1. Chá»‘ng báº¥m nÃºt nhiá»u láº§n / gá»i lá»‡nh chá»“ng nhau
+    // 1. Chống bấm nút nhiều lần / gọi lệnh chồng nhau
     if (IsThanhToanDangXuLy)
         return;
 
-    // 2. Kiá»ƒm tra dá»¯ liá»‡u
+    // 2. Kiểm tra dữ liệu
     if (SaleCart.Count == 0)
     {
-        StatusMessage = "Vui lÃ²ng chá»n Ã­t nháº¥t má»™t sáº£n pháº©m trÆ°á»›c khi thanh toÃ¡n.";
+        StatusMessage = "Vui lòng chọn ít nhất một sản phẩm trước khi thanh toán.";
         return;
     }
 
@@ -4015,7 +4009,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Báº¡n khÃ´ng cÃ�
     if (sanPhamChuaCoGia is not null)
     {
         StatusMessage =
-            $"Sáº£n pháº©m \"{sanPhamChuaCoGia.SanPham.TenSanPham}\" chÆ°a cÃ³ giÃ¡ bÃ¡n, khÃ´ng thá»ƒ thanh toÃ¡n.";
+            $"Sản phẩm \"{sanPhamChuaCoGia.SanPham.TenSanPham}\" chưa có giá bán, không thể thanh toán.";
         return;
     }
 
@@ -4024,33 +4018,33 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Báº¡n khÃ´ng cÃ�
     if (soLuongSai is not null)
     {
         StatusMessage =
-            $"Sá»‘ lÆ°á»£ng cá»§a \"{soLuongSai.SanPham.TenSanPham}\" pháº£i lá»›n hÆ¡n 0.";
+            $"Số lượng của \"{soLuongSai.SanPham.TenSanPham}\" phải lớn hơn 0.";
         return;
     }
 
     if (SaleTotal < 0)
     {
-        StatusMessage = "Tá»•ng tiá»n khÃ´ng há»£p lá»‡. Vui lÃ²ng kiá»ƒm tra láº¡i giá» hÃ ng.";
+        StatusMessage = "Tổng tiền không hợp lệ. Vui lòng kiểm tra lại giỏ hàng.";
         return;
     }
 
     if (OwnerWindow is null)
     {
-        StatusMessage = "KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c cá»­a sá»• bÃ¡n hÃ ng.";
+        StatusMessage = "Không xác định được cửa sổ bán hàng.";
         return;
     }
 
     var owner = OwnerWindow;
 
-    // Chá»¥p láº¡i dá»¯ liá»‡u Ä‘Æ¡n hÃ ng TRÆ¯á»šC khi má»Ÿ há»™p thoáº¡i, trÃ¡nh viá»‡c ngÆ°á»i
-    // dÃ¹ng sá»­a giá» hÃ ng lÃºc Ä‘ang xÃ¡c nháº­n lÃ m lá»‡ch sá»‘ liá»‡u.
+    // Chụp lại dữ liệu đơn hàng TRƯỚC khi mở hộp thoại, tránh việc người
+    // dùng sửa giỏ hàng lúc đang xác nhận làm lệch số liệu.
     var cartSnapshot = SaleCart.ToList();
     var customer = SelectedSaleCustomer;
-    var customerName = customer?.TenKhachHang ?? "KhÃ¡ch láº»";
+    var customerName = customer?.TenKhachHang ?? "Khách lẻ";
     var discountSnapshot = SaleDiscountAmount;
     var cashSnapshot = TienKhachDua;
 
-    // 3. XÃ¡c nháº­n thanh toÃ¡n
+    // 3. Xác nhận thanh toán
     var confirmWindow = new ThanhToanConfirmWindow(
         customerName,
         SaleTotal,
@@ -4060,15 +4054,15 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Báº¡n khÃ´ng cÃ�
 
     if (!await confirmWindow.ShowDialog<bool>(owner))
     {
-        StatusMessage = "ÄÃ£ há»§y thanh toÃ¡n.";
+        StatusMessage = "Đã hủy thanh toán.";
         return;
     }
 
-    // 4. LÆ°u vÃ o database
+    // 4. Lưu vào database
     HoaDonBanHangReceipt? receipt = null;
 
     IsThanhToanDangXuLy = true;
-    StatusMessage = "Äang lÆ°u hÃ³a Ä‘Æ¡n...";
+    StatusMessage = "Đang lưu hóa đơn...";
 
     try
     {
@@ -4080,10 +4074,10 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Báº¡n khÃ´ng cÃ�
     }
     catch (Exception ex)
     {
-        // Giao dá»‹ch Ä‘Ã£ Ä‘Æ°á»£c rollback trong DatabaseService: giá»¯ nguyÃªn Ä‘Æ¡n
-        // hÃ ng Ä‘á»ƒ ngÆ°á»i dÃ¹ng sá»­a rá»“i thá»­ láº¡i, tuyá»‡t Ä‘á»‘i khÃ´ng bÃ¡o thÃ nh cÃ´ng.
+        // Giao dịch đã được rollback trong DatabaseService: giữ nguyên đơn
+        // hàng để người dùng sửa rồi thử lại, tuyệt đối không báo thành công.
         StatusMessage =
-            $"KHÃ”NG thanh toÃ¡n Ä‘Æ°á»£c - dá»¯ liá»‡u chÆ°a Ä‘Æ°á»£c lÆ°u vÃ o database: {ex.Message}";
+            $"KHÔNG thanh toán được - dữ liệu chưa được lưu vào database: {ex.Message}";
 
         SafeLog.WriteError("Loi thanh toan ban hang", ex);
 
@@ -4094,31 +4088,31 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Báº¡n khÃ´ng cÃ�
         IsThanhToanDangXuLy = false;
     }
 
-    // 5. LÆ°u thÃ nh cÃ´ng má»›i dá»n Ä‘Æ¡n cÅ©, khÃ´ng lÃ m máº¥t dá»¯ liá»‡u Ä‘Æ¡n vá»«a bÃ¡n
+    // 5. Lưu thành công mới dọn đơn cũ, không làm mất dữ liệu đơn vừa bán
     var maHoaDon = receipt.MaHoaDon;
 
     ResetDonHangVeMacDinh();
 
     _invoicesLoaded = false;
-    ChonMenu("HÃ³a Ä‘Æ¡n");
+    ChonMenu("Hóa đơn");
 
-    // Dashboard pháº£i tháº¥y ngay hÃ³a Ä‘Æ¡n vá»«a táº¡o (doanh thu, sá»‘ hÃ³a Ä‘Æ¡n,
-    // hoáº¡t Ä‘á»™ng gáº§n Ä‘Ã¢y, top hÃ ng bÃ¡n cháº¡y, top khÃ¡ch hÃ ng).
+    // Dashboard phải thấy ngay hóa đơn vừa tạo (doanh thu, số hóa đơn,
+    // hoạt động gần đây, top hàng bán chạy, top khách hàng).
     _ = LamMoiTongQuanNeuDangMoAsync();
 
-    // Sá»• quá»¹ tá»± Ä‘á»c láº¡i database má»—i láº§n má»Ÿ menu nÃªn phiáº¿u thu má»›i sáº½
-    // hiá»‡n ra ngay khi ngÆ°á»i dÃ¹ng chuyá»ƒn sang tab "Sá»• quá»¹".
+    // Sổ quỹ tự đọc lại database mỗi lần mở menu nên phiếu thu mới sẽ
+    // hiện ra ngay khi người dùng chuyển sang tab "Sổ quỹ".
     var thongTinPhieuThu = string.IsNullOrWhiteSpace(receipt.MaPhieuThu)
         ? ""
-        : $" ÄÃ£ ghi phiáº¿u thu {receipt.MaPhieuThu} vÃ o sá»• quá»¹.";
+        : $" Đã ghi phiếu thu {receipt.MaPhieuThu} vào sổ quỹ.";
 
     var thongBaoThanhToan = receipt.CanhBao.Count > 0
-        ? $"ÄÃ£ táº¡o hÃ³a Ä‘Æ¡n {maHoaDon}. {string.Join(" ", receipt.CanhBao)}"
-        : $"ÄÃ£ táº¡o hÃ³a Ä‘Æ¡n {maHoaDon} thÃ nh cÃ´ng.";
+        ? $"Đã tạo hóa đơn {maHoaDon}. {string.Join(" ", receipt.CanhBao)}"
+        : $"Đã tạo hóa đơn {maHoaDon} thành công.";
 
     StatusMessage = thongBaoThanhToan + thongTinPhieuThu;
 
-    // 6. Hiá»ƒn thá»‹ hÃ³a Ä‘Æ¡n vá»«a bÃ¡n (Ä‘á»c láº¡i tá»« database nÃªn khá»›p dá»¯ liá»‡u Ä‘Ã£ lÆ°u)
+    // 6. Hiển thị hóa đơn vừa bán (đọc lại từ database nên khớp dữ liệu đã lưu)
     try
     {
         // Gắn thông tin tiệm lúc mở hóa đơn (không phải lúc thanh toán) để người
@@ -4131,13 +4125,13 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Báº¡n khÃ´ng cÃ�
     catch (Exception ex)
     {
         StatusMessage =
-            $"ÄÃ£ táº¡o hÃ³a Ä‘Æ¡n {maHoaDon} nhÆ°ng khÃ´ng má»Ÿ Ä‘Æ°á»£c cá»­a sá»• hÃ³a Ä‘Æ¡n: {ex.Message}";
+            $"Đã tạo hóa đơn {maHoaDon} nhưng không mở được cửa sổ hóa đơn: {ex.Message}";
 
         SafeLog.WriteError("Loi mo cua so hoa don", ex);
     }
 }
 
-/// <summary>Má»Ÿ láº¡i má»™t hÃ³a Ä‘Æ¡n Ä‘Ã£ cÃ³ Ä‘á»ƒ xem / in (Ä‘á»c dá»¯ liá»‡u tá»« database).</summary>
+/// <summary>Mở lại một hóa đơn đã có để xem / in (đọc dữ liệu từ database).</summary>
 [RelayCommand]
 private async Task XemHoaDonAsync(HoaDon? hoaDon)
 {
@@ -4155,7 +4149,7 @@ private async Task XemHoaDonAsync(HoaDon? hoaDon)
 
         if (receipt is null)
         {
-            StatusMessage = $"KhÃ´ng tÃ¬m tháº¥y hÃ³a Ä‘Æ¡n {maHoaDon} trong database.";
+            StatusMessage = $"Không tìm thấy hóa đơn {maHoaDon} trong database.";
             return;
         }
 
@@ -4166,7 +4160,7 @@ private async Task XemHoaDonAsync(HoaDon? hoaDon)
     }
     catch (Exception ex)
     {
-        StatusMessage = $"KhÃ´ng má»Ÿ Ä‘Æ°á»£c hÃ³a Ä‘Æ¡n {maHoaDon}: {ex.Message}";
+        StatusMessage = $"Không mở được hóa đơn {maHoaDon}: {ex.Message}";
 
         SafeLog.WriteError("Loi xem hoa don", ex);
     }
@@ -4183,34 +4177,30 @@ partial void OnSelectedMenuChanged(string value)
 {
     SelectedDataTabIndex = value switch
     {
-        "KhÃ¡ch hÃ ng" => 1,
-        "HÃ³a Ä‘Æ¡n" => 2,
-        "NhÃ  cung cáº¥p" => 3,
-        "Nháº­p hÃ ng" => 4,
-        "Sá»• quá»¹" => 5,
+        "Khách hàng" => 1,
+        "Hóa đơn" => 2,
+        "Nhà cung cấp" => 3,
+        "Nhập hàng" => 4,
+        "Sổ quỹ" => 5,
         _ => 0
     };
 
-    // Rá»i khá»i mÃ n láº­p phiáº¿u nháº­p thÃ¬ Ä‘Ã³ng láº¡i lá»‹ch Ä‘ang má»Ÿ
-    if (value != "Nháº­p hÃ ng")
+    // Rời khỏi màn lập phiếu nhập thì đóng lại lịch đang mở
+    if (value != "Nhập hàng")
         IsPhieuNhapCalendarOpen = false;
 
     OnPropertyChanged(nameof(IsTongQuanSelected));
     OnPropertyChanged(nameof(IsDataSectionSelected));
     OnPropertyChanged(nameof(IsBaoCaoSectionSelected));
     OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
-<<<<<<< HEAD
+    OnPropertyChanged(nameof(IsBaoCaoBanHangSelected));
     OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
     OnPropertyChanged(nameof(IsThongTinTiemSelected));
-=======
-    OnPropertyChanged(nameof(IsBaoCaoBanHangSelected));
-        OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
->>>>>>> origin/main
 
     _ = LoadSelectedSectionAsync(value);
 }
 
-/// <summary>ThÃ´ng bÃ¡o láº¡i toÃ n bá»™ cá» quyá»n chi tiáº¿t sau khi phiÃªn Ä‘Äƒng nháº­p thay Ä‘á»•i.</summary>
+/// <summary>Thông báo lại toàn bộ cờ quyền chi tiết sau khi phiên đăng nhập thay đổi.</summary>
 public void RaiseAllCanProperties()
 {
     string[] names =
@@ -4239,9 +4229,8 @@ public void RaiseAllCanProperties()
     }
 }
 
-public bool IsTongQuanSelected => SelectedMenu == "Tá»•ng quan";
+public bool IsTongQuanSelected => SelectedMenu == "Tổng quan";
 
-<<<<<<< HEAD
 // Báo cáo có vùng nội dung riêng nên không dùng chung TabControl dữ liệu
 // Màn nào có vùng nội dung riêng thì không được bật TabControl dữ liệu,
 // nếu không TabControl sẽ hiện chồng lên màn đó.
@@ -4258,10 +4247,6 @@ public bool CanViewStoreInfo => CanViewSettings;
 
 /// <summary>Được phép sửa thông tin tiệm (cùng nhóm quyền Cài đặt).</summary>
 public bool CanEditStoreInfo => CanEditSettings;
-=======
-// BÃ¡o cÃ¡o cÃ³ vÃ¹ng ná»™i dung riÃªng nÃªn khÃ´ng dÃ¹ng chung TabControl dá»¯ liá»‡u
-public bool IsDataSectionSelected => !IsTongQuanSelected && !IsBaoCaoSectionSelected;
->>>>>>> origin/main
 public bool CanViewDashboard => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.DashboardView) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewProducts => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsView) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewPurchases => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.PurchasesView) || Quyen.IsAdmin(Session.CurrentUser);
@@ -4285,11 +4270,11 @@ public bool CanManageUsers
     }
 }
 
-// ===== Quyá»n theo tá»«ng chá»©c nÄƒng chi tiáº¿t (dÃ¹ng cho IsVisible/IsEnabled cá»§a nÃºt) =====
+// ===== Quyền theo từng chức năng chi tiết (dùng cho IsVisible/IsEnabled của nút) =====
 
 private static bool CoQuyen(string key) => Quyen.HasPermission(Session.CurrentUser, key);
 
-// HÃ ng hÃ³a
+// Hàng hóa
 public bool CanCreateProduct => CoQuyen(PermissionKeys.ProductsCreate);
 public bool CanEditProduct => CoQuyen(PermissionKeys.ProductsEdit);
 public bool CanDeleteProduct => CoQuyen(PermissionKeys.ProductsDelete);
@@ -4297,7 +4282,7 @@ public bool CanImportProduct => CoQuyen(PermissionKeys.ProductsImport);
 public bool CanExportProduct => CoQuyen(PermissionKeys.ProductsExport);
 public bool CanUpdateProductPrice => CoQuyen(PermissionKeys.ProductsUpdatePrice);
 
-// BÃ¡n hÃ ng / HÃ³a Ä‘Æ¡n
+// Bán hàng / Hóa đơn
 public bool CanCreateSale => CoQuyen(PermissionKeys.SalesCreate);
 public bool CanEditSale => CoQuyen(PermissionKeys.SalesEdit);
 public bool CanDeleteSale => CoQuyen(PermissionKeys.SalesDelete);
@@ -4307,20 +4292,20 @@ public bool CanPrintInvoice => CoQuyen(PermissionKeys.InvoicesPrint);
 public bool CanImportInvoice => CoQuyen(PermissionKeys.InvoicesImport);
 public bool CanCancelInvoice => CoQuyen(PermissionKeys.InvoicesCancel);
 
-// KhÃ¡ch hÃ ng
+// Khách hàng
 public bool CanCreateCustomer => CoQuyen(PermissionKeys.CustomersCreate);
 public bool CanEditCustomer => CoQuyen(PermissionKeys.CustomersEdit);
 public bool CanDeleteCustomer => CoQuyen(PermissionKeys.CustomersDelete);
 public bool CanImportCustomer => CoQuyen(PermissionKeys.CustomersImport);
 
-// NhÃ  cung cáº¥p
+// Nhà cung cấp
 public bool CanCreateSupplier => CoQuyen(PermissionKeys.SuppliersCreate);
 public bool CanEditSupplier => CoQuyen(PermissionKeys.SuppliersEdit);
 public bool CanDeleteSupplier => CoQuyen(PermissionKeys.SuppliersDelete);
 public bool CanImportSupplier => CoQuyen(PermissionKeys.SuppliersImport);
 public bool CanExportSupplier => CoQuyen(PermissionKeys.SuppliersExport);
 
-// Phiáº¿u nháº­p
+// Phiếu nhập
 public bool CanCreatePurchase => CoQuyen(PermissionKeys.PurchasesCreate);
 public bool CanEditPurchase => CoQuyen(PermissionKeys.PurchasesEdit);
 public bool CanDeletePurchase => CoQuyen(PermissionKeys.PurchasesDelete);
@@ -4328,7 +4313,7 @@ public bool CanImportPurchase => CoQuyen(PermissionKeys.PurchasesImport);
 public bool CanExportPurchase => CoQuyen(PermissionKeys.PurchasesExport);
 public bool CanPrintPurchase => CoQuyen(PermissionKeys.PurchasesPrint);
 
-// Sá»• quá»¹
+// Sổ quỹ
 public bool CanCreateReceipt => CoQuyen(PermissionKeys.CashBookCreateReceipt);
 public bool CanCreatePayment => CoQuyen(PermissionKeys.CashBookCreatePayment);
 public bool CanEditCashBook => CoQuyen(PermissionKeys.CashBookEdit);
@@ -4337,16 +4322,16 @@ public bool CanCancelCashBook => CoQuyen(PermissionKeys.CashBookCancel);
 public bool CanImportCashBook => CoQuyen(PermissionKeys.CashBookImport);
 public bool CanExportCashBook => CoQuyen(PermissionKeys.CashBookExport);
 
-// TÃ i khoáº£n
+// Tài khoản
 public bool CanCreateUser => CoQuyen(PermissionKeys.UsersCreate);
 public bool CanEditUser => CoQuyen(PermissionKeys.UsersEdit);
 public bool CanDeleteUser => CoQuyen(PermissionKeys.UsersDelete);
 public bool CanAssignPermission => CoQuyen(PermissionKeys.UsersAssignPermission);
 
-// CÃ i Ä‘áº·t
+// Cài đặt
 public bool CanEditSettings => CoQuyen(PermissionKeys.SettingsEdit);
 
-/// <summary>Kiá»ƒm tra quyá»n ngay táº¡i thá»i Ä‘iá»ƒm gá»i lá»‡nh (báº¯t Ä‘Æ°á»£c cáº£ trÆ°á»ng há»£p gá»i trá»±c tiáº¿p).</summary>
+/// <summary>Kiểm tra quyền ngay tại thời điểm gọi lệnh (bắt được cả trường hợp gọi trực tiếp).</summary>
 private async Task<bool> KiemTraQuyenAsync(string key, string message)
 {
     if (CoQuyen(key))
@@ -4354,12 +4339,8 @@ private async Task<bool> KiemTraQuyenAsync(string key, string message)
         return true;
     }
 
-    await ShowMessageAsync("ThÃ´ng bÃ¡o", message);
+    await ShowMessageAsync("Thông báo", message);
     return false;
 }
 
 }
-
-
-
-
