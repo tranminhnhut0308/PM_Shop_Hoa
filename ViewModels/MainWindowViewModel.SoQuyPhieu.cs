@@ -394,6 +394,10 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private async Task HuyNhieuPhieuDaChonAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CashBookCancel, "Bạn không có quyền hủy phiếu quỹ."))
+        {
+            return;
+        }
         if (_soQuyDangHuyPhieu)
             return;
 
@@ -429,6 +433,8 @@ public sealed partial class MainWindowViewModel
             StatusMessage = $"Đã hủy {soDaHuy:N0} phiếu.";
 
             await TaiLaiSoQuyAsync();
+
+            _ = LamMoiTongQuanNeuDangMoAsync();
         }
         catch (Exception ex)
         {
@@ -708,6 +714,13 @@ public sealed partial class MainWindowViewModel
 
     private async Task LuuSoQuyPhieuAsync(bool laPhieuThu)
     {
+        if (!await KiemTraQuyenAsync(
+                laPhieuThu ? PermissionKeys.CashBookCreateReceipt : PermissionKeys.CashBookCreatePayment,
+                laPhieuThu ? "Bạn không có quyền tạo phiếu thu." : "Bạn không có quyền tạo phiếu chi."))
+        {
+            return;
+        }
+
         if (IsSoQuyPhieuDangLuu)
             return;
 
@@ -751,6 +764,9 @@ public sealed partial class MainWindowViewModel
             ResetSoQuyPhieuForm();
 
             await TaiLaiSoQuyAsync();
+
+            // Dashboard có khoản thu/chi trong "Hoạt động gần đây".
+            _ = LamMoiTongQuanNeuDangMoAsync();
         }
         catch (Exception ex)
         {
@@ -771,6 +787,10 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private async Task MoSoQuyPhieuThuAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CashBookCreateReceipt, "Bạn không có quyền tạo phiếu thu."))
+        {
+            return;
+        }
         await MoSoQuyPhieuFormAsync("PT");
 
         IsSoQuyPhieuThuVisible = true;
@@ -779,6 +799,10 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private async Task MoSoQuyPhieuChiAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CashBookCreatePayment, "Bạn không có quyền tạo phiếu chi."))
+        {
+            return;
+        }
         await MoSoQuyPhieuFormAsync("PC");
 
         IsSoQuyPhieuChiVisible = true;
@@ -823,6 +847,10 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private async Task HuyPhieuHienTaiAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CashBookCancel, "Bạn không có quyền hủy phiếu quỹ."))
+        {
+            return;
+        }
         var chiTiet = SoQuyChiTietDangXem;
 
         if (chiTiet is null || chiTiet.DaHuy || _soQuyDangHuyPhieu)
@@ -942,6 +970,10 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private async Task SuaPhieuHienTaiAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CashBookEdit, "Bạn không có quyền sửa phiếu quỹ."))
+        {
+            return;
+        }
         var chiTiet = SoQuyChiTietDangXem;
 
         if (chiTiet is null || chiTiet.DaHuy)
@@ -976,6 +1008,10 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private async Task LuuSoQuySuaPhieuAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CashBookEdit, "Bạn không có quyền sửa phiếu quỹ."))
+        {
+            return;
+        }
         var chiTiet = SoQuyPhieuDangSua;
 
         if (chiTiet is null || IsSoQuySuaPhieuDangLuu)
@@ -1017,6 +1053,8 @@ public sealed partial class MainWindowViewModel
             StatusMessage = $"Đã sửa phiếu {maPhieu} thành công.";
 
             await TaiLaiSoQuyAsync();
+
+            _ = LamMoiTongQuanNeuDangMoAsync();
 
             // Mở lại chi tiết để người dùng thấy ngay giá trị vừa sửa.
             var gd = SoQuyGiaoDichs.FirstOrDefault(x => x.MaPhieu == maPhieu);
@@ -1154,6 +1192,10 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private async Task XuatFileSoQuyAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CashBookExport, "Bạn không có quyền export sổ quỹ."))
+        {
+            return;
+        }
         if (OwnerWindow is null)
             return;
 
@@ -1340,6 +1382,10 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private async Task NhapFileSoQuyAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CashBookImport, "Bạn không có quyền import sổ quỹ."))
+        {
+            return;
+        }
         if (OwnerWindow is null || IsSoQuyDangNhap)
             return;
 

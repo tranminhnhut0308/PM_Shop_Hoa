@@ -1,0 +1,52 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:ShopHoa.ViewModels"
+        xmlns:m="clr-namespace:ShopHoa.Models"
+        x:Class="ShopHoa.Views.UsersWindow"
+        x:DataType="vm:UsersViewModel"
+        Title="Quản lý tài khoản"
+        Width="1000" Height="650"
+        WindowStartupLocation="CenterOwner"
+        RequestedThemeVariant="Light">
+  <Border Background="White"><Grid Margin="20" RowDefinitions="Auto,Auto,*,Auto">
+    <StackPanel Spacing="4">
+      <TextBlock Text="Quản lý tài khoản" FontSize="20" FontWeight="Bold" />
+      <TextBlock Text="Quản lý tài khoản nhân viên và phân quyền sử dụng phần mềm" Foreground="#6B7280" />
+    </StackPanel>
+    <Grid Grid.Row="1" Margin="0,16,0,12" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+      <TextBox Watermark="Tìm kiếm tài khoản..." Text="{Binding SearchText}" />
+      <Button Grid.Column="1" Content="Tìm kiếm" Command="{Binding TimKiemCommand}" />
+      <Button Grid.Column="2" Content="Tải lại" Command="{Binding ReloadCommand}" />
+      <Button Grid.Column="3" Content="+ Thêm tài khoản" Command="{Binding MoThemTaiKhoanCommand}" Background="#0F766E" Foreground="White" IsVisible="{Binding CanCreateUser}" />
+    </Grid>
+    <DataGrid Grid.Row="2" ItemsSource="{Binding Users}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="Tài khoản" Binding="{Binding TenDangNhap}" Width="120" />
+        <DataGridTextColumn Header="Họ và tên" Binding="{Binding HoTen}" Width="*" />
+        <DataGridTextColumn Header="Vai trò" Binding="{Binding VaiTro}" Width="140" />
+        <DataGridTextColumn Header="Trạng thái" Binding="{Binding TrangThaiText}" Width="110" />
+        <DataGridTextColumn Header="Quyền truy cập" Binding="{Binding MaVaiTro}" Width="160" />
+        <DataGridTextColumn Header="Đăng nhập gần nhất" Binding="{Binding LanDangNhapCuoi, StringFormat={}{0:dd/MM/yyyy HH:mm}}" Width="150" />
+        <DataGridTemplateColumn Header="Thao tác" Width="220">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="m:UserListItem">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <Button Content="Sửa" IsVisible="{Binding $parent[Window].DataContext.CanEditUser}" Command="{Binding $parent[Window].DataContext.MoSuaTaiKhoanCommand}" CommandParameter="{Binding}" />
+                <Button Content="Phân quyền" IsVisible="{Binding $parent[Window].DataContext.CanAssignPermission}" Command="{Binding $parent[Window].DataContext.MoPhanQuyenCommand}" CommandParameter="{Binding}" />
+                <Button Content="Khóa" IsVisible="{Binding TrangThai}" IsEnabled="{Binding $parent[Window].DataContext.CanLockUser}" Command="{Binding $parent[Window].DataContext.KhoaTaiKhoanCommand}" CommandParameter="{Binding}" />
+                <Button Content="Mở khóa" IsVisible="{Binding !TrangThai}" IsEnabled="{Binding $parent[Window].DataContext.CanUnlockUser}" Command="{Binding $parent[Window].DataContext.MoKhoaTaiKhoanCommand}" CommandParameter="{Binding}" />
+                <Button Content="Xóa" IsVisible="{Binding $parent[Window].DataContext.CanDeleteUser}" Command="{Binding $parent[Window].DataContext.XoaTaiKhoanCommand}" CommandParameter="{Binding}" />
+              </StackPanel>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+      </DataGrid.Columns>
+    </DataGrid>
+    <Grid Grid.Row="3" Margin="0,12,0,0" ColumnDefinitions="*,Auto">
+      <TextBlock VerticalAlignment="Center" Text="{Binding Users.Count, StringFormat=Tổng số tài khoản: {0}}" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+        <Button Content="Đóng" Click="Close_Click" />
+      </StackPanel>
+    </Grid>
+  </Grid></Border>
+</Window>

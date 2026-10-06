@@ -14,6 +14,7 @@ public sealed class DatabaseService
     private readonly DatabaseConfigService _configService;
     private bool? _hasPhieuNhapExtraColumns;
     private bool? _hasPhieuQuyExtraColumns;
+    private bool? _hasPhieuQuyHoaDonColumns;
     private bool? _hasBangTraHang;
     private bool? _coCotDuLieuKiotViet;
     private bool? _cotNgayTaoSanPhamChoPhepNull;
@@ -22,6 +23,20 @@ public sealed class DatabaseService
     public DatabaseService()
     {
         _configService = new DatabaseConfigService();
+    }
+
+    /// <summary>
+    /// Mở kết nối mới tới database. Công khai để các service khác (ví dụ
+    /// <see cref="DashboardService"/>) dùng chung đúng một cách cấu hình kết nối
+    /// thay vì tự dựng connection string riêng.
+    /// </summary>
+    public async Task<MySqlConnection> TaoKetNoiAsync()
+    {
+        var connection = new MySqlConnection(GetConnectionString());
+
+        await connection.OpenAsync();
+
+        return connection;
     }
 
     private string GetConnectionString()
@@ -74,7 +89,7 @@ public sealed class DatabaseService
         await using var connection = await OpenAsync();
     }
 
-    public async Task<NguoiDung?> DangNhapAsync(
+    public async Task<LoginResultExtended> DangNhapAsync(
         string tenDangNhap,
         string matKhau)
     {
@@ -91,6 +106,7 @@ public sealed class DatabaseService
             nd.email AS Email,
             nd.chi_nhanh_id AS ChiNhanhId,
             cn.ten_chi_nhanh AS TenChiNhanh,
+            nd.trang_thai AS TrangThai,
             GROUP_CONCAT(
                 vt.ten_vai_tro
                 ORDER BY vt.id
@@ -114,7 +130,6 @@ public sealed class DatabaseService
             ON vt.id = ndvt.vai_tro_id
 
         WHERE nd.ten_dang_nhap = @TenDangNhap
-          AND nd.trang_thai = 1
 
         GROUP BY
             nd.id,
@@ -125,53 +140,69 @@ public sealed class DatabaseService
             nd.so_dien_thoai,
             nd.email,
             nd.chi_nhanh_id,
+            nd.trang_thai,
             cn.ten_chi_nhanh
 
         LIMIT 1;
         """;
 
-        var user =
-            await connection.QuerySingleOrDefaultAsync<NguoiDung>(
-                sql,
-                new
-                {
-                    TenDangNhap = tenDangNhap
-                });
+        var row = await connection.QuerySingleOrDefaultAsync<dynamic>(
+            sql,
+            new { TenDangNhap = tenDangNhap });
 
-        if (user is null)
+        if (row is null)
         {
-            return null;
+            return new LoginResultExtended { IsValid = false, IsLocked = false };
+        }
+
+        var user = new NguoiDung
+        {
+            Id = (uint)row.Id,
+            MaNguoiDung = row.MaNguoiDung,
+            TenDangNhap = row.TenDangNhap,
+            MatKhau = row.MatKhau,
+            HoTen = row.HoTen,
+            SoDienThoai = row.SoDienThoai,
+            Email = row.Email,
+            ChiNhanhId = row.ChiNhanhId,
+            TenChiNhanh = row.TenChiNhanh,
+            VaiTro = row.VaiTro,
+            MaVaiTro = row.MaVaiTro
+        };
+
+        bool trangThai = true;
+        if (row.TrangThai != null)
+        {
+            var t = row.TrangThai;
+            if (t is bool b) trangThai = b;
+            else if (int.TryParse(t.ToString(), out int iv)) trangThai = iv == 1;
+            else if (bool.TryParse(t.ToString(), out bool bv)) trangThai = bv;
+            else trangThai = t.ToString() == "1";
+        }
+        if (!trangThai)
+        {
+            return new LoginResultExtended { IsValid = false, IsLocked = true, ErrorMessage = "Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên." };
         }
 
         bool validPassword;
-
-        if (user.MatKhau.StartsWith("$2a$") ||
-            user.MatKhau.StartsWith("$2b$") ||
-            user.MatKhau.StartsWith("$2y$"))
+        var pwd = user.MatKhau ?? "";
+        if (pwd.StartsWith("$2a$") || pwd.StartsWith("$2b$") || pwd.StartsWith("$2y$"))
         {
-            validPassword =
-                BCrypt.Net.BCrypt.Verify(
-                    matKhau,
-                    user.MatKhau);
+            validPassword = BCrypt.Net.BCrypt.Verify(matKhau, pwd);
         }
         else
         {
-            validPassword =
-                string.Equals(
-                    matKhau,
-                    user.MatKhau,
-                    StringComparison.Ordinal);
+            validPassword = string.Equals(matKhau, pwd, StringComparison.Ordinal);
         }
 
         if (!validPassword)
         {
-            return null;
+            return new LoginResultExtended { IsValid = false, IsLocked = false };
         }
 
-        return user;
+        return new LoginResultExtended { IsValid = true, IsLocked = false, User = user };
     }
 
-    // Đây là thông tin nhật ký, không cần chặn thao tác đăng nhập của người dùng.
     public async Task CapNhatLanDangNhapCuoiAsync(uint userId)
     {
         try
@@ -617,6 +648,7 @@ foreach (var character in khongDau)
 
     public async Task CapNhatHinhAnhSanPhamAsync(uint productId, string imagePath)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsEdit, "Bạn không có quyền cập nhật hàng hóa.");
         await using var connection = await OpenAsync();
 
         await connection.ExecuteAsync(
@@ -635,6 +667,7 @@ foreach (var character in khongDau)
 
     public async Task<uint> ThemSanPhamAsync(SanPham product)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsCreate, "Bạn không có quyền thêm hàng hóa.");
         await using var connection = await OpenAsync();
 
         const string sql = """
@@ -692,6 +725,7 @@ foreach (var character in khongDau)
 
     public async Task CapNhatSanPhamAsync(SanPham product)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsEdit, "Bạn không có quyền sửa hàng hóa.");
         await using var connection = await OpenAsync();
 
         await connection.ExecuteAsync(
@@ -735,6 +769,7 @@ foreach (var character in khongDau)
         uint productId,
         decimal giaBan)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsUpdatePrice, "Bạn không có quyền cập nhật giá bán hàng hóa.");
         if (productId == 0)
             throw new ArgumentException(
                 "Sản phẩm chưa có mã dữ liệu để cập nhật giá bán.",
@@ -774,6 +809,7 @@ foreach (var character in khongDau)
 
     public async Task XoaSanPhamAsync(uint productId)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsDelete, "Bạn không có quyền xóa hàng hóa.");
         await using var connection = await OpenAsync();
 
         await connection.ExecuteAsync(
@@ -1014,6 +1050,7 @@ foreach (var character in khongDau)
         int tongSoDongExcel,
         IReadOnlyCollection<LoiDongNhap>? loiDocFile = null)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsImport, "Bạn không có quyền import hàng hóa.");
         var ketQua = new KetQuaImportSanPham
         {
             TenFile = tenFile,
@@ -1973,6 +2010,7 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
 
     public async Task XoaKhachHangAsync(uint customerId)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CustomersDelete, "Bạn không có quyền xóa khách hàng.");
         await using var connection = await OpenAsync();
 
         // Giữ lại lịch sử hóa đơn/công nợ; danh sách khách hàng chỉ hiển thị bản ghi còn hoạt động.
@@ -2643,6 +2681,7 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
 
     public async Task<uint> ThemKhachHangAsync(KhachHang customer)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CustomersCreate, "Bạn không có quyền thêm khách hàng.");
         await using var connection = await OpenAsync();
 
         if (string.IsNullOrWhiteSpace(customer.MaKhachHang))
@@ -2748,6 +2787,7 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
     }
     public async Task CapNhatKhachHangAsync(KhachHang customer)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CustomersEdit, "Bạn không có quyền sửa khách hàng.");
         await using var connection = await OpenAsync();
 
         const string sql = """
@@ -2856,6 +2896,7 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
         KetQuaDocKhachHang doc,
         bool replaceExisting = false)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CustomersImport, "Bạn không có quyền import khách hàng.");
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
 
@@ -3773,6 +3814,7 @@ LIMIT 500;
     /// <summary>Lấy mã hóa đơn kế tiếp (dùng ngoài giao dịch bán hàng).</summary>
     public async Task<string> TaoMaHoaDonMoiAsync()
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SalesCreate, "Bạn không có quyền tạo hóa đơn bán hàng.");
         await using var connection = await OpenAsync();
 
         return await TaoMaHoaDonMoiTrongGiaoDichAsync(connection, null);
@@ -3882,6 +3924,7 @@ LIMIT 500;
     decimal discount,
     decimal tienKhachDua)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SalesCreate, "Bạn không có quyền tạo hóa đơn bán hàng.");
         if (items.Count == 0)
             throw new InvalidOperationException("Giỏ hàng đang trống.");
 
@@ -3941,10 +3984,18 @@ LIMIT 500;
         var branchId = Session.CurrentUser?.ChiNhanhId ?? 1;
         var userId = Session.CurrentUser?.Id;
 
+        // Đảm bảo cột liên kết phiếu thu tồn tại TRƯỚC khi mở giao dịch.
+        // ALTER TABLE bên trong transaction sẽ làm MySQL báo
+        // "Table definition has changed" và huỷ cả giao dịch.
+        var coCotPhieuThuLienKet = await EnsurePhieuQuyHoaDonColumnsAsync();
+
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
 
         var daCommit = false;
+
+        // Mã phiếu thu sổ quỹ sinh ra từ hóa đơn này (rỗng nếu khách trả 0 đồng).
+        var maPhieuThu = "";
 
         try
         {
@@ -4207,14 +4258,36 @@ LIMIT 500;
             }
 
             // ============================================================
-            // 5. COMMIT
+            // 5. GHI PHIẾU THU SỔ QUỸ
+            //    Chỉ ghi phần tiền khách trả thật (không kể tiền thối và
+            //    không tính phần còn nợ) và ghi trong CÙNG giao dịch với hóa đơn
+            //    nên không bao giờ có hóa đơn không kèm phiếu thu, hoặc phiếu thu
+            //    mồ côi khi hóa đơn bị rollback.
+            // ============================================================
+
+            maPhieuThu = await GhiPhieuThuBanHangAsync(
+                connection,
+                transaction,
+                branchId,
+                userId,
+                invoiceId,
+                invoiceCode,
+                paidAmount,
+                changeAmount,
+                debtAmount,
+                customer,
+                now,
+                coCotPhieuThuLienKet);
+
+            // ============================================================
+            // 6. COMMIT
             // ============================================================
 
             await transaction.CommitAsync();
             daCommit = true;
 
             // ============================================================
-            // 6. ĐỌC LẠI HÓA ĐƠN ĐÃ LƯU ĐỂ HIỂN THỊ
+            // 7. ĐỌC LẠI HÓA ĐƠN ĐÃ LƯU ĐỂ HIỂN THỊ
             //    Lấy dữ liệu thật trong database thay vì dựng lại từ RAM, nhờ
             //    vậy mã hóa đơn, tổng tiền, tiền thối, công nợ và danh sách hàng
             //    trên hóa đơn luôn khớp với dữ liệu đã lưu.
@@ -4227,6 +4300,8 @@ LIMIT 500;
                     $"Đã lưu hóa đơn {invoiceCode} nhưng không đọc lại được. Hãy kiểm tra danh sách hóa đơn.");
 
             receipt.CanhBao.AddRange(canhBao);
+
+            receipt.MaPhieuThu = maPhieuThu;
 
             return receipt;
         }
@@ -4384,6 +4459,133 @@ LIMIT 500;
                 GhiChu = $"Xuất kho bán hàng theo hóa đơn {invoiceCode}"
             },
             transaction);
+    }
+
+    /// <summary>
+    /// Ghi phiếu Thu trong sổ quỹ cho một hóa đơn bán hàng, dùng CHUNG connection
+    /// và transaction với lần ghi hóa đơn nên hai thao tác cùng thành công hoặc
+    /// cùng bị rollback.
+    /// Chỉ ghi khi khách trả thật (&gt; 0); tiền thối và phần còn nợ không ghi vào quỹ.
+    /// Trả về mã phiếu Thu vừa tạo, rỗng nếu không tạo phiếu.
+    /// </summary>
+    private async Task<string> GhiPhieuThuBanHangAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        uint branchId,
+        uint? userId,
+        uint invoiceId,
+        string invoiceCode,
+        decimal paidAmount,
+        decimal changeAmount,
+        decimal debtAmount,
+        KhachHang? customer,
+        DateTime thoiGian,
+        bool coCotLienKet)
+    {
+        if (paidAmount <= 0)
+            return "";
+
+        // Chống tạo trùng: nếu hóa đơn này đã có phiếu thu thì lấy lại mã cũ,
+        // không ghi thêm (an toàn kể cả khi giao dịch bị chạy lại).
+        if (coCotLienKet)
+        {
+            var maPhieuDaCo = await connection.QueryFirstOrDefaultAsync<string>(
+                "SELECT ma_phieu_chi FROM phieu_chi WHERE hoa_don_ban_hang_id = @HoaDonId LIMIT 1;",
+                new { HoaDonId = invoiceId },
+                transaction);
+
+            if (!string.IsNullOrWhiteSpace(maPhieuDaCo))
+                return maPhieuDaCo;
+        }
+
+        // Cấp mã PT ngay trong giao dịch để không trùng với phiếu đang mở ở máy khác.
+        var maPhieu = await SinhMaPhieuThuTrongGiaoDichAsync(connection, transaction);
+
+        var ghiChu = $"Thu tiền thanh toán hóa đơn {invoiceCode}.";
+
+        if (changeAmount > 0)
+            ghiChu += $" Tiền thối {changeAmount:N0} đã trả lại khách, không tính vào quỹ.";
+
+        if (debtAmount > 0)
+            ghiChu += $" Còn nợ {debtAmount:N0} ghi vào sổ công nợ khách hàng.";
+
+        var sql = coCotLienKet
+            ? """
+              INSERT INTO phieu_chi
+              (
+                  ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                  noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
+                  nguoi_thuc_hien_id, trang_thai, hoa_don_ban_hang_id, ma_hoa_don
+              )
+              VALUES
+              (
+                  @MaPhieu, @ChiNhanhId, NULL, @SoTien, 'TIEN_MAT',
+                  @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
+                  @NguoiTaoId, @TrangThai, @HoaDonId, @MaHoaDon
+              );
+              """
+            : """
+              INSERT INTO phieu_chi
+              (
+                  ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                  noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
+                  nguoi_thuc_hien_id, trang_thai
+              )
+              VALUES
+              (
+                  @MaPhieu, @ChiNhanhId, NULL, @SoTien, 'TIEN_MAT',
+                  @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
+                  @NguoiTaoId, @TrangThai
+              );
+              """;
+
+        await connection.ExecuteAsync(
+            sql,
+            new
+            {
+                MaPhieu = maPhieu,
+                ChiNhanhId = branchId,
+                SoTien = paidAmount,
+                NoiDung = $"Thu tiền bán hàng - hóa đơn {invoiceCode}",
+                NguoiNopNhan = Truncate150(customer?.TenKhachHang),
+                GhiChu = ghiChu,
+                ThoiGian = thoiGian,
+                NguoiTaoId = userId,
+                TrangThai = TrangThaiPhieuHoanThanh,
+                HoaDonId = invoiceId,
+                MaHoaDon = invoiceCode
+            },
+            transaction);
+
+        return maPhieu;
+    }
+
+    /// <summary>
+    /// Cấp mã phiếu Thu kế tiếp (PT0001, PT0002...) bằng chính connection và
+    /// transaction của giao dịch đang chạy, tránh mở thêm kết nối và tránh trùng mã.
+    /// </summary>
+    private async Task<string> SinhMaPhieuThuTrongGiaoDichAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction)
+    {
+        var nextNumber = await DocSoThuTuMaPhieuQuyAsync(connection, transaction, "PT");
+
+        for (var i = 0; i < 100; i++)
+        {
+            var candidate = "PT" + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
+
+            var daTonTai = await connection.ExecuteScalarAsync<int?>(
+                "SELECT 1 FROM phieu_chi WHERE ma_phieu_chi = @Ma LIMIT 1;",
+                new { Ma = candidate },
+                transaction);
+
+            if (daTonTai is null)
+                return candidate;
+
+            nextNumber++;
+        }
+
+        return "PT" + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
     }
 
     public async Task<IReadOnlyList<NhaCungCap>> GetNhaCungCapAsync(
@@ -4916,6 +5118,7 @@ LIMIT 500;
 
     public async Task<uint> ThemNhaCungCapAsync(NhaCungCap supplier)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SuppliersCreate, "Bạn không có quyền thêm nhà cung cấp.");
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
 
         await using var connection = await OpenAsync();
@@ -4995,6 +5198,7 @@ LIMIT 500;
 
     public async Task CapNhatNhaCungCapAsync(NhaCungCap supplier)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SuppliersEdit, "Bạn không có quyền sửa nhà cung cấp.");
         await using var connection = await OpenAsync();
 
         const string sql = """
@@ -5026,6 +5230,7 @@ LIMIT 500;
     /// </summary>
     public async Task CapNhatNhaCungCapTuFileAsync(NhaCungCap supplier)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SuppliersEdit, "Bạn không có quyền sửa nhà cung cấp.");
         await using var connection = await OpenAsync();
 
         const string sql = """
@@ -5061,6 +5266,7 @@ LIMIT 500;
 
     public async Task XoaNhaCungCapAsync(uint supplierId)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SuppliersDelete, "Bạn không có quyền xóa nhà cung cấp.");
         await using var connection = await OpenAsync();
 
         var affectedRows = await connection.ExecuteAsync(
@@ -5090,6 +5296,7 @@ LIMIT 500;
         IProgress<int>? progress,
         bool capNhatNhaCungCapDaTonTai = false)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SuppliersImport, "Bạn không có quyền import nhà cung cấp.");
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("Đường dẫn file không hợp lệ.", nameof(filePath));
 
@@ -5521,6 +5728,7 @@ LIMIT 500;
 
     public async Task<uint> ThemNhomSanPhamAsync(string tenNhom)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền thêm nhóm hàng hóa.");
         await using var connection = await OpenAsync();
         const string sql = """
             INSERT INTO nhom_san_pham (ten_nhom, trang_thai)
@@ -5532,6 +5740,7 @@ LIMIT 500;
 
     public async Task XoaNhomSanPhamAsync(uint id)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền xóa nhóm hàng hóa.");
         await using var connection = await OpenAsync();
         const string sql = "UPDATE nhom_san_pham SET trang_thai = 0 WHERE id = @Id;";
         await connection.ExecuteAsync(sql, new { Id = id });
@@ -5539,6 +5748,7 @@ LIMIT 500;
 
     public async Task<uint> ThemDonViTinhAsync(string tenDonVi)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền thêm đơn vị tính.");
         await using var connection = await OpenAsync();
         const string sql = """
             INSERT INTO don_vi_tinh (ten_don_vi, trang_thai)
@@ -5550,6 +5760,7 @@ LIMIT 500;
 
     public async Task XoaDonViTinhAsync(uint id)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền xóa đơn vị tính.");
         await using var connection = await OpenAsync();
         const string sql = "UPDATE don_vi_tinh SET trang_thai = 0 WHERE id = @Id;";
         await connection.ExecuteAsync(sql, new { Id = id });
@@ -5569,6 +5780,7 @@ LIMIT 500;
     /// </summary>
     public async Task<string> TaoMaPhieuNhapMoiAsync()
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.PurchasesCreate, "Bạn không có quyền tạo phiếu nhập hàng.");
         await using var connection = await OpenAsync();
 
         // SUBSTRING(ma, 3) bỏ đúng 2 ký tự tiền tố "PN" (SQL đếm từ 1).
@@ -5741,6 +5953,7 @@ LIMIT 500;
         PhieuNhapHang phieu,
         IReadOnlyList<ChiTietPhieuNhapHang> items)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.PurchasesCreate, "Bạn không có quyền lưu phiếu nhập hàng.");
         if (phieu is null)
             throw new ArgumentNullException(nameof(phieu));
 
@@ -5959,6 +6172,18 @@ LIMIT 500;
                 phieu,
                 dongHopLe);
 
+            // ============================================================
+            // 4. CÔNG NỢ NHÀ CUNG CẤP
+            //    Ghi vào lich_su_cong_no_nha_cung_cap ngay trong giao dịch này
+            //    để số dư công nợ khách mới luôn khớp với phiếu vừa lưu.
+            // ============================================================
+
+            await GhiCongNoNhaCungCapPhieuNhapAsync(
+                connection,
+                transaction,
+                phieu,
+                branchId);
+
             await transaction.CommitAsync();
 
             return phieu.Id;
@@ -5968,6 +6193,122 @@ LIMIT 500;
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Ghi sổ cái công nợ nhà cung cấp cho một phiếu nhập, trong CÙNG transaction
+    /// với lần lưu phiếu: một dòng ghi khoản phải trả khi nhập hàng và một dòng
+    /// ghi khoản đã trả nếu phiếu có ghi "đã thanh toán".
+    /// Tổng ghi nợ - ghi có của mỗi phiếu luôn bằng <c>phieu.ConNo</c> nên số dư
+    /// công nợ khớp với cột con_no trên đầu phiếu.
+    /// </summary>
+    private static async Task GhiCongNoNhaCungCapPhieuNhapAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        PhieuNhapHang phieu,
+        uint branchId)
+    {
+        if (phieu.NhaCungCapId is not uint nccId || nccId == 0)
+            return;
+
+        // Chống ghi trùng khi một phiếu được sửa rồi hoàn thành lại:
+        // xoá các dòng cũ của chính mã phiếu này trước khi ghi lại.
+        await connection.ExecuteAsync(
+            "DELETE FROM lich_su_cong_no_nha_cung_cap WHERE ma_chung_tu = @MaChungTu;",
+            new { phieu.MaPhieuNhap },
+            transaction);
+
+        // Khoản mua làm tăng nợ phải trả, nên ghi nợ.
+        if (phieu.TongTienNhap > 0)
+        {
+            await GhiMotDongCongNoNhaCungCapAsync(
+                connection,
+                transaction,
+                nccId,
+                branchId,
+                "NHAP_HANG",
+                phieu.MaPhieuNhap,
+                phieu.TongTienNhap,
+                0,
+                phieu.ThoiGianNhap,
+                phieu.NguoiNhapId,
+                $"Nhập hàng tạo khoản phải trả {phieu.TongTienNhap:N0} cho phiếu {phieu.MaPhieuNhap}");
+        }
+
+        // Khoản đã trả làm giảm nợ phải trả, nên ghi có.
+        if (phieu.DaThanhToan > 0)
+        {
+            await GhiMotDongCongNoNhaCungCapAsync(
+                connection,
+                transaction,
+                nccId,
+                branchId,
+                "THANH_TOAN_NHAP",
+                phieu.MaPhieuNhap,
+                0,
+                phieu.DaThanhToan,
+                phieu.ThoiGianNhap,
+                phieu.NguoiNhapId,
+                $"Đã thanh toán {phieu.DaThanhToan:N0} cho phiếu {phieu.MaPhieuNhap}");
+        }
+    }
+
+    /// <summary>
+    /// Ghi một dòng vào sổ công nợ nhà cung cấp, tự tính lại số dư cộng dồn
+    /// (đọc khoá dòng hiện tại để hai phiếu song song không ghi đè số dư của nhau).
+    /// </summary>
+    private static async Task GhiMotDongCongNoNhaCungCapAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        uint nccId,
+        uint branchId,
+        string loaiGiaoDich,
+        string maChungTu,
+        decimal ghiNo,
+        decimal ghiCo,
+        DateTime thoiGian,
+        uint? nguoiThucHienId,
+        string ghiChu)
+    {
+        var soDuHienTai = await connection.ExecuteScalarAsync<decimal>(
+            """
+            SELECT COALESCE(SUM(ghi_no - ghi_co), 0)
+            FROM lich_su_cong_no_nha_cung_cap
+            WHERE nha_cung_cap_id = @NhaCungCapId
+            FOR UPDATE;
+            """,
+            new { NhaCungCapId = nccId },
+            transaction);
+
+        await connection.ExecuteAsync(
+            """
+            INSERT INTO lich_su_cong_no_nha_cung_cap
+            (
+                nha_cung_cap_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu,
+                ma_chung_tu, ghi_no, ghi_co, so_du,
+                thoi_gian, nguoi_thuc_hien_id, ghi_chu
+            )
+            VALUES
+            (
+                @NhaCungCapId, @ChiNhanhId, @LoaiGiaoDich, 'PHIEU_NHAP',
+                @MaChungTu, @GhiNo, @GhiCo, @SoDu,
+                @ThoiGian, @NguoiThucHienId, @GhiChu
+            );
+            """,
+            new
+            {
+                NhaCungCapId = nccId,
+                ChiNhanhId = branchId,
+                LoaiGiaoDich = loaiGiaoDich,
+                MaChungTu = maChungTu,
+                GhiNo = ghiNo,
+                GhiCo = ghiCo,
+                SoDu = soDuHienTai + ghiNo - ghiCo,
+                ThoiGian = thoiGian,
+                NguoiThucHienId = nguoiThucHienId,
+                GhiChu = ghiChu
+            },
+            transaction);
     }
 
     private async Task CapNhatTonKhoPhieuNhapAsync(
@@ -6220,6 +6561,80 @@ LIMIT 500;
         return _hasPhieuQuyExtraColumns.Value;
     }
 
+    /// <summary>
+    /// Bảo đảm <c>phieu_chi</c> có 2 cột liên kết hóa đơn bán hàng:
+    /// <c>hoa_don_ban_hang_id</c> (UNIQUE) và <c>ma_hoa_don</c>.
+    /// Phiếu thu sinh ra khi bán hàng sẽ gắn vào đây nên mỗi hóa đơn chỉ có
+    /// tối đa một phiếu thu — UNIQUE index chặn trùng ngay ở tầng database, không
+    /// phụ thuộc code kiểm tra của ứng dụng.
+    /// </summary>
+    private async Task<bool> EnsurePhieuQuyHoaDonColumnsAsync()
+    {
+        if (_hasPhieuQuyHoaDonColumns.HasValue)
+            return _hasPhieuQuyHoaDonColumns.Value;
+
+        await using var connection = await OpenAsync();
+
+        try
+        {
+            var coCot = (await connection.QueryAsync<string>(
+                """
+                SELECT COLUMN_NAME FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'phieu_chi'
+                  AND COLUMN_NAME IN ('hoa_don_ban_hang_id', 'ma_hoa_don');
+                """)).AsList();
+
+            var daCoHoaDonId = false;
+            var daCoMaHoaDon = false;
+
+            foreach (var cot in coCot)
+            {
+                if (string.Equals(cot, "hoa_don_ban_hang_id", StringComparison.OrdinalIgnoreCase))
+                    daCoHoaDonId = true;
+                else if (string.Equals(cot, "ma_hoa_don", StringComparison.OrdinalIgnoreCase))
+                    daCoMaHoaDon = true;
+            }
+
+            // MySQL không có ADD COLUMN IF NOT EXISTS nên phải kiểm tra từng cột.
+            if (!daCoHoaDonId)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE phieu_chi ADD COLUMN hoa_don_ban_hang_id int(10) unsigned DEFAULT NULL AFTER trang_thai;");
+            }
+
+            if (!daCoMaHoaDon)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE phieu_chi ADD COLUMN ma_hoa_don varchar(50) DEFAULT NULL AFTER hoa_don_ban_hang_id;");
+            }
+
+            var coIndex = await connection.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*) FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'phieu_chi'
+                  AND INDEX_NAME = 'uk_phieu_chi_hoa_don';
+                """);
+
+            if (coIndex == 0)
+            {
+                // Cột cho phép NULL nên phiếu thu/chi tay vẫn insert bình thường,
+                // chỉ mỗi hóa đơn bán hàng mới bị giới hạn 1 phiếu thu.
+                await connection.ExecuteAsync(
+                    "CREATE UNIQUE INDEX uk_phieu_chi_hoa_don ON phieu_chi (hoa_don_ban_hang_id);");
+            }
+
+            _hasPhieuQuyHoaDonColumns = true;
+        }
+        catch
+        {
+            // Thiếu quyền ALTER: vẫn chạy tiếp, code sẽ tự kiểm tra trùng
+            // bằng SELECT trước khi INSERT.
+            _hasPhieuQuyHoaDonColumns = false;
+        }
+
+        return _hasPhieuQuyHoaDonColumns.Value;
+    }
+
     private static decimal ToDecimal(object? value)
     {
         if (value is null || value is DBNull)
@@ -6369,7 +6784,7 @@ LIMIT 500;
             + " OR pc.ma_phieu_chi LIKE @TimKiemLike"
             + " OR COALESCE(pc.noi_dung, '') LIKE @TimKiemLike"
             + " OR COALESCE(nd.ho_ten, '') LIKE @TimKiemLike"
-            + " OR COALESCE(ncp.ten_nhom, '') LIKE @TimKiemLike)");
+            + " OR COALESCE(ncp.ten_nhom, '') LIKE @TimKiemLike");
 
         // Hai cột này chỉ tồn tại khi migration đã chạy thành công.
         if (coCotNguoiNopNhanGhiChu)
@@ -6572,6 +6987,7 @@ LIMIT 500;
     /// </summary>
     public async Task<int> HuyPhieuQuyAsync(string maPhieu)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CashBookCancel, "Bạn không có quyền hủy phiếu thu/chi.");
         if (string.IsNullOrWhiteSpace(maPhieu))
             return 0;
 
@@ -6600,6 +7016,7 @@ LIMIT 500;
     /// </summary>
     public async Task<int> HuyNhieuPhieuQuyAsync(IReadOnlyCollection<string> maPhieus)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CashBookCancel, "Bạn không có quyền hủy phiếu thu/chi.");
         var danhSach = maPhieus
             .Where(ma => !string.IsNullOrWhiteSpace(ma))
             .Select(ma => ma.Trim())
@@ -7106,6 +7523,7 @@ LIMIT 500;
         XuLyPhieuTrung xuLyTrung,
         Func<SoQuyImportProgress, Task>? baoTienDo = null)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CashBookImport, "Bạn không có quyền import sổ quỹ.");
         var ketQua = new SoQuyImportResult
         {
             XuLyTrung = xuLyTrung
@@ -7362,6 +7780,12 @@ LIMIT 500;
         if (string.IsNullOrWhiteSpace(maPhieu))
             throw new InvalidOperationException("Thiếu mã phiếu khi lưu sổ quỹ.");
 
+        var laPhieuThu = maPhieu.StartsWith("PT", StringComparison.OrdinalIgnoreCase);
+        Quyen.RequirePermission(
+            Session.CurrentUser,
+            laPhieuThu ? PermissionKeys.CashBookCreateReceipt : PermissionKeys.CashBookCreatePayment,
+            laPhieuThu ? "Bạn không có quyền tạo phiếu thu." : "Bạn không có quyền tạo phiếu chi.");
+
         if (soTien <= 0)
             throw new InvalidOperationException("Số tiền phải lớn hơn 0.");
 
@@ -7429,6 +7853,7 @@ LIMIT 500;
         string? noiDung,
         string? ghiChu)
     {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CashBookEdit, "Bạn không có quyền sửa phiếu thu/chi.");
         if (string.IsNullOrWhiteSpace(maPhieu))
             throw new InvalidOperationException("Thiếu mã phiếu khi sửa sổ quỹ.");
 
@@ -7468,5 +7893,455 @@ LIMIT 500;
             TrangThaiHuy = TrangThaiPhieuHuy
         });
     }
+
+    #region User Management & Permissions
+    public async Task<IReadOnlyList<UserListItem>> GetUsersAsync(string? search = null)
+    {
+        await using var connection = await OpenAsync();
+        var keyword = (search ?? string.Empty).Trim();
+        var sql = """
+        SELECT 
+            nd.id AS Id,
+            nd.ma_nguoi_dung AS MaNguoiDung,
+            nd.ten_dang_nhap AS TenDangNhap,
+            nd.ho_ten AS HoTen,
+            nd.trang_thai AS TrangThai,
+            nd.ngay_tao AS NgayTao,
+            nd.lan_dang_nhap_cuoi AS LanDangNhapCuoi,
+            GROUP_CONCAT(DISTINCT vt.ten_vai_tro ORDER BY vt.id SEPARATOR ', ') AS VaiTro,
+            GROUP_CONCAT(DISTINCT vt.ma_vai_tro ORDER BY vt.id SEPARATOR ',') AS MaVaiTro
+        FROM nguoi_dung nd
+        LEFT JOIN nguoi_dung_vai_tro ndvt ON ndvt.nguoi_dung_id = nd.id
+        LEFT JOIN vai_tro vt ON vt.id = ndvt.vai_tro_id
+        WHERE (@Search = '' OR nd.ten_dang_nhap LIKE CONCAT('%', @Search, '%') OR nd.ho_ten LIKE CONCAT('%', @Search, '%') OR nd.ma_nguoi_dung LIKE CONCAT('%', @Search, '%'))
+        GROUP BY nd.id, nd.ma_nguoi_dung, nd.ten_dang_nhap, nd.ho_ten, nd.trang_thai, nd.ngay_tao, nd.lan_dang_nhap_cuoi
+        ORDER BY nd.id ASC
+        """;
+        var items = await connection.QueryAsync<UserListItem>(sql, new { Search = keyword });
+        return items.ToList();
+    }
+
+    public async Task<UserWithRoles?> GetUserWithRolesAsync(uint userId)
+    {
+        await using var connection = await OpenAsync();
+        var sqlUser = """
+        SELECT nd.id AS Id, nd.ma_nguoi_dung AS MaNguoiDung, nd.ten_dang_nhap AS TenDangNhap, nd.ho_ten AS HoTen, nd.trang_thai AS TrangThai,
+               GROUP_CONCAT(DISTINCT vt.ten_vai_tro ORDER BY vt.id SEPARATOR ', ') AS VaiTro,
+               GROUP_CONCAT(DISTINCT vt.ma_vai_tro ORDER BY vt.id SEPARATOR ',') AS MaVaiTro
+        FROM nguoi_dung nd
+        LEFT JOIN nguoi_dung_vai_tro ndvt ON ndvt.nguoi_dung_id = nd.id
+        LEFT JOIN vai_tro vt ON vt.id = ndvt.vai_tro_id
+        WHERE nd.id = @Id
+        GROUP BY nd.id, nd.ma_nguoi_dung, nd.ten_dang_nhap, nd.ho_ten, nd.trang_thai
+        """;
+        var user = await connection.QuerySingleOrDefaultAsync<UserWithRoles>(sqlUser, new { Id = userId });
+        if (user == null) return null;
+        var roles = await connection.QueryAsync<uint>("SELECT vai_tro_id FROM nguoi_dung_vai_tro WHERE nguoi_dung_id = @Id", new { Id = userId });
+        user.RoleIds = roles.ToList();
+        return user;
+    }
+
+    public async Task<string?> GetUserPermissionsAsStringAsync(uint userId)
+    {
+        var list = await GetUserPermissionKeysAsync(userId);
+        return list.Count == 0 ? null : string.Join(',', list);
+    }
+
+    /// <summary>
+    /// Tài khoản này có quyền được gán riêng hay không.
+    /// Nếu cột phan_quyen_rieng đã tồn tại thì dùng cột đó (xử lý được cả trường hợp
+    /// quản trị bỏ chọn tất cả). Nếu chưa chạy migration thì lùi về cách đếm dòng
+    /// trong nguoi_dung_quyen.
+    /// </summary>
+    private async Task<bool> CoQuyenGanRiengAsync(uint userId)
+    {
+        var sql = """
+        SELECT CASE
+          WHEN EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND table_name = 'nguoi_dung'
+              AND column_name = 'phan_quyen_rieng'
+          )
+          THEN (SELECT COUNT(*) FROM nguoi_dung WHERE id = @UserId AND phan_quyen_rieng = 1)
+          ELSE (SELECT COUNT(*) FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId)
+        END
+        """;
+        await using var connection = await OpenAsync();
+        return await connection.ExecuteScalarAsync<int>(sql, new { UserId = userId }) > 0;
+    }
+
+    public async Task<List<string>> GetUserPermissionKeysAsync(uint userId)
+    {
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            // Đã có quyền gán riêng cho tài khoản => dùng đúng danh sách này,
+            // không cộng thêm quyền kế thừa từ vai trò.
+            var hasExplicit = await CoQuyenGanRiengAsync(userId);
+
+            var sql = hasExplicit
+                ? """
+                SELECT DISTINCT q.ma_quyen
+                FROM quyen q
+                JOIN nguoi_dung_quyen ndq ON ndq.quyen_id = q.id
+                WHERE ndq.nguoi_dung_id = @UserId AND ndq.cho_phep = 1
+                """
+                : """
+                SELECT DISTINCT q.ma_quyen
+                FROM quyen q
+                WHERE EXISTS (
+                  SELECT 1 FROM vai_tro_quyen vtq 
+                  JOIN nguoi_dung_vai_tro ndvt ON ndvt.vai_tro_id = vtq.vai_tro_id 
+                  WHERE vtq.quyen_id = q.id AND ndvt.nguoi_dung_id = @UserId
+                )
+                """;
+
+            var res = await connection.QueryAsync<string>(sql, new { UserId = userId });
+            return res.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    public async Task<IReadOnlyList<Role>> GetRolesAsync()
+    {
+        await using var connection = await OpenAsync();
+        var sql = "SELECT id AS Id, ma_vai_tro AS MaVaiTro, ten_vai_tro AS TenVaiTro, mo_ta AS MoTa, trang_thai AS TrangThai FROM vai_tro WHERE trang_thai = 1 ORDER BY id ASC";
+        var items = await connection.QueryAsync<Role>(sql);
+        return items.ToList();
+    }
+
+    public async Task<IReadOnlyList<Permission>> GetPermissionsAsync()
+    {
+        try {
+            await using var connection = await OpenAsync();
+            var sql = "SELECT id AS Id, ma_quyen AS MaQuyen, ten_quyen AS TenQuyen, nhom AS Nhom, loai AS Loai, mo_ta AS MoTa, thu_tu AS ThuTu, trang_thai AS TrangThai FROM quyen WHERE trang_thai = 1 ORDER BY nhom, thu_tu, id ASC";
+            var items = await connection.QueryAsync<Permission>(sql);
+            return items.ToList();
+        } catch { return new List<Permission>(); }
+    }
+
+    public async Task<IReadOnlyList<uint>> GetRolePermissionIdsAsync(uint roleId)
+    {
+        await using var connection = await OpenAsync();
+        var sql = "SELECT quyen_id FROM vai_tro_quyen WHERE vai_tro_id = @RoleId";
+        var items = await connection.QueryAsync<uint>(sql, new { RoleId = roleId });
+        return items.ToList();
+    }
+
+    public async Task<IReadOnlyList<UserPermissionDto>> GetUserPermissionsDetailAsync(uint userId)
+    {
+        await using var connection = await OpenAsync();
+        var hasExplicit = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId",
+            new { UserId = userId }) > 0;
+
+        var sql = hasExplicit
+            ? """
+            SELECT q.id AS QuyenId, q.ma_quyen AS MaQuyen, q.ten_quyen AS TenQuyen, q.nhom AS Nhom, q.loai AS Loai, 1 AS ChoPhep
+            FROM quyen q
+            JOIN nguoi_dung_quyen ndq ON ndq.quyen_id = q.id
+            WHERE ndq.nguoi_dung_id = @UserId AND ndq.cho_phep = 1
+            ORDER BY q.nhom, q.thu_tu, q.id
+            """
+            : """
+            SELECT q.id AS QuyenId, q.ma_quyen AS MaQuyen, q.ten_quyen AS TenQuyen, q.nhom AS Nhom, q.loai AS Loai, 1 AS ChoPhep
+            FROM quyen q
+            WHERE EXISTS (
+              SELECT 1 FROM vai_tro_quyen vtq 
+              JOIN nguoi_dung_vai_tro ndvt ON ndvt.vai_tro_id = vtq.vai_tro_id 
+              WHERE vtq.quyen_id = q.id AND ndvt.nguoi_dung_id = @UserId
+            )
+            ORDER BY q.nhom, q.thu_tu, q.id
+            """;
+        var items = await connection.QueryAsync<UserPermissionDto>(sql, new { UserId = userId });
+        return items.ToList();
+    }
+
+    /// <summary>Tài khoản đang có ít nhất một quyền được gán riêng (không kế thừa vai trò).</summary>
+    public async Task<bool> HasExplicitUserPermissionsAsync(uint userId)
+    {
+        await using var connection = await OpenAsync();
+        return await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId",
+            new { UserId = userId }) > 0;
+    }
+
+    public async Task<bool> UserHasPermissionAsync(uint userId, string maQuyen)
+    {
+        await using var connection = await OpenAsync();
+        var sql = """
+        SELECT 1 FROM quyen q
+        WHERE q.ma_quyen = @MaQuyen
+        AND (EXISTS (
+          SELECT 1 FROM vai_tro_quyen vtq 
+          JOIN nguoi_dung_vai_tro ndvt ON ndvt.vai_tro_id = vtq.vai_tro_id 
+          WHERE vtq.quyen_id = q.id AND ndvt.nguoi_dung_id = @UserId
+        ) OR EXISTS (
+          SELECT 1 FROM nguoi_dung_quyen ndq 
+          WHERE ndq.quyen_id = q.id AND ndq.nguoi_dung_id = @UserId AND ndq.cho_phep = 1
+        ))
+        LIMIT 1
+        """;
+        var res = await connection.QueryFirstOrDefaultAsync<int?>(sql, new { UserId = userId, MaQuyen = maQuyen });
+        return res.HasValue;
+    }
+
+    public async Task SaveUserRolesAsync(uint userId, IEnumerable<uint> roleIds, uint? actorId = null)
+    {
+        await using var connection = await OpenAsync();
+        await using var tx = await connection.BeginTransactionAsync();
+        try
+        {
+            await connection.ExecuteAsync("DELETE FROM nguoi_dung_vai_tro WHERE nguoi_dung_id = @UserId", new { UserId = userId }, tx);
+            foreach (var rid in roleIds.Distinct())
+            {
+                await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_vai_tro (nguoi_dung_id, vai_tro_id) VALUES (@UserId, @RoleId)", new { UserId = userId, RoleId = rid }, tx);
+            }
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task SaveUserPermissionsAsync(uint userId, IEnumerable<uint> permissionIds, uint? actorId = null)
+    {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersAssignPermission, "Bạn không có quyền phân quyền tài khoản.");
+        await using var connection = await OpenAsync();
+        await using var tx = await connection.BeginTransactionAsync();
+        try
+        {
+            await connection.ExecuteAsync("DELETE FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId", new { UserId = userId }, tx);
+            foreach (var pid in permissionIds.Distinct())
+            {
+                await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = userId, QuyenId = pid, ActorId = actorId }, tx);
+            }
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task SaveRolePermissionsAsync(uint roleId, IEnumerable<uint> permissionIds, uint? actorId = null)
+    {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersAssignPermission, "Bạn không có quyền phân quyền vai trò.");
+        await using var connection = await OpenAsync();
+        await using var tx = await connection.BeginTransactionAsync();
+        try
+        {
+            await connection.ExecuteAsync("DELETE FROM vai_tro_quyen WHERE vai_tro_id = @RoleId", new { RoleId = roleId }, tx);
+            foreach (var pid in permissionIds.Distinct())
+            {
+                await connection.ExecuteAsync("INSERT IGNORE INTO vai_tro_quyen (vai_tro_id, quyen_id, nguoi_cap_nhat_id) VALUES (@RoleId, @QuyenId, @ActorId)", new { RoleId = roleId, QuyenId = pid, ActorId = actorId }, tx);
+            }
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<uint> CreateUserAsync(UserCreateDto dto, uint? actorId = null)
+    {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersCreate, "Bạn không có quyền tạo tài khoản.");
+        await using var connection = await OpenAsync();
+        await using var tx = await connection.BeginTransactionAsync();
+        try
+        {
+            var maNguoiDung = await GenerateMaNguoiDungAsync(connection, tx);
+            var hashed = BCrypt.Net.BCrypt.HashPassword(dto.MatKhau);
+            var sql = """
+            INSERT INTO nguoi_dung (ma_nguoi_dung, ten_dang_nhap, mat_khau, ho_ten, trang_thai, ngay_tao, ngay_cap_nhat)
+            VALUES (@MaNguoiDung, @TenDangNhap, @MatKhau, @HoTen, @TrangThai, NOW(), NOW())
+            """;
+            await connection.ExecuteAsync(sql, new { MaNguoiDung = maNguoiDung, TenDangNhap = dto.TenDangNhap, MatKhau = hashed, HoTen = dto.HoTen, TrangThai = dto.TrangThai ? 1 : 0 }, tx);
+            var userId = await connection.QuerySingleAsync<uint>("SELECT LAST_INSERT_ID()", transaction: tx);
+            foreach (var rid in dto.RoleIds.Distinct())
+            {
+                await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_vai_tro (nguoi_dung_id, vai_tro_id) VALUES (@UserId, @RoleId)", new { UserId = userId, RoleId = rid }, tx);
+            }
+            foreach (var pid in dto.PermissionIds.Distinct())
+            {
+                await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = userId, QuyenId = pid, ActorId = actorId }, tx);
+            }
+            await tx.CommitAsync();
+            return userId;
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task UpdateUserAsync(UserEditDto dto, uint? actorId = null)
+    {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersEdit, "Bạn không có quyền sửa tài khoản.");
+
+        // Không cho bỏ vai trò QUAN_TRI của chính mình hoặc của tài khoản Admin khác.
+        if (dto.Id == Session.CurrentUser?.Id && await IsQuanTriAsync(dto.Id))
+        {
+            var vanConQuanTri = false;
+            foreach (var rid in dto.RoleIds)
+            {
+                if (vanConQuanTri)
+                {
+                    break;
+                }
+
+                var ma = await GetRoleCodeAsync(rid);
+                if (string.Equals(ma, Quyen.QuanTri, StringComparison.OrdinalIgnoreCase))
+                {
+                    vanConQuanTri = true;
+                }
+            }
+
+            if (!vanConQuanTri)
+            {
+                throw new InvalidOperationException("Bạn không thể tự bỏ vai trò QUAN_TRI của chính mình.");
+            }
+        }
+
+        await using var connection = await OpenAsync();
+        await using var tx = await connection.BeginTransactionAsync();
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(dto.MatKhau))
+            {
+                var hashed = BCrypt.Net.BCrypt.HashPassword(dto.MatKhau);
+                await connection.ExecuteAsync("UPDATE nguoi_dung SET ho_ten = @HoTen, mat_khau = @MatKhau, trang_thai = @TrangThai, ngay_cap_nhat = NOW() WHERE id = @Id", new { Id = dto.Id, HoTen = dto.HoTen, MatKhau = hashed, TrangThai = dto.TrangThai ? 1 : 0 }, tx);
+            }
+            else
+            {
+                await connection.ExecuteAsync("UPDATE nguoi_dung SET ho_ten = @HoTen, trang_thai = @TrangThai, ngay_cap_nhat = NOW() WHERE id = @Id", new { Id = dto.Id, HoTen = dto.HoTen, TrangThai = dto.TrangThai ? 1 : 0 }, tx);
+            }
+            await connection.ExecuteAsync("DELETE FROM nguoi_dung_vai_tro WHERE nguoi_dung_id = @UserId", new { UserId = dto.Id }, tx);
+            foreach (var rid in dto.RoleIds.Distinct())
+            {
+                await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_vai_tro (nguoi_dung_id, vai_tro_id) VALUES (@UserId, @RoleId)", new { UserId = dto.Id, RoleId = rid }, tx);
+            }
+            await connection.ExecuteAsync("DELETE FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId", new { UserId = dto.Id }, tx);
+            foreach (var pid in dto.PermissionIds.Distinct())
+            {
+                await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = dto.Id, QuyenId = pid, ActorId = actorId }, tx);
+            }
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    private async Task<string?> GetRoleCodeAsync(uint roleId)
+    {
+        await using var connection = await OpenAsync();
+        return await connection.ExecuteScalarAsync<string?>(
+            "SELECT ma_vai_tro FROM vai_tro WHERE id = @Id", new { Id = roleId });
+    }
+
+    /// <summary>Tài khoản có vai trò QUAN_TRI hay không.</summary>
+    public async Task<bool> IsQuanTriAsync(uint userId)
+    {
+        await using var connection = await OpenAsync();
+        var count = await connection.ExecuteScalarAsync<int>(
+            """
+            SELECT COUNT(*)
+            FROM nguoi_dung_vai_tro ndvt
+            JOIN vai_tro vt ON vt.id = ndvt.vai_tro_id
+            WHERE ndvt.nguoi_dung_id = @UserId AND vt.ma_vai_tro = @MaVaiTro
+            """,
+            new { UserId = userId, MaVaiTro = Quyen.QuanTri });
+        return count > 0;
+    }
+
+    private async Task BaoVeQuanTriAsync(uint userId, string hanhDong)
+    {
+        if (userId == 0 || userId == Session.CurrentUser?.Id)
+        {
+            return;
+        }
+
+        if (await IsQuanTriAsync(userId))
+        {
+            throw new InvalidOperationException($"Không thể {hanhDong} tài khoản có vai trò QUAN_TRI.");
+        }
+    }
+
+    public async Task LockUserAsync(uint userId, uint? actorId = null)
+    {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersLock, "Bạn không có quyền khóa tài khoản.");
+        await BaoVeQuanTriAsync(userId, "khóa");
+        await using var connection = await OpenAsync();
+        await connection.ExecuteAsync("UPDATE nguoi_dung SET trang_thai = 0, ngay_cap_nhat = NOW() WHERE id = @Id", new { Id = userId });
+    }
+
+    public async Task UnlockUserAsync(uint userId, uint? actorId = null)
+    {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersUnlock, "Bạn không có quyền mở khóa tài khoản.");
+        await using var connection = await OpenAsync();
+        await connection.ExecuteAsync("UPDATE nguoi_dung SET trang_thai = 1, ngay_cap_nhat = NOW() WHERE id = @Id", new { Id = userId });
+    }
+
+    public async Task DeleteUserAsync(uint userId, uint? actorId = null)
+    {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersDelete, "Bạn không có quyền xóa tài khoản.");
+        await using var connection = await OpenAsync();
+        // Không xóa admin (id=1 thường) - phòng ngừa
+        if (userId == 1) throw new InvalidOperationException("Không thể xóa tài khoản Admin mặc định.");
+        await BaoVeQuanTriAsync(userId, "xóa");
+        await connection.ExecuteAsync("DELETE FROM nguoi_dung_vai_tro WHERE nguoi_dung_id = @UserId", new { UserId = userId });
+        await connection.ExecuteAsync("DELETE FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId", new { UserId = userId });
+        await connection.ExecuteAsync("DELETE FROM nguoi_dung WHERE id = @Id", new { Id = userId });
+    }
+
+    public async Task ResetPasswordAsync(uint userId, string newPassword, uint? actorId = null)
+    {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersResetPassword, "Bạn không có quyền đặt lại mật khẩu.");
+        if (string.IsNullOrWhiteSpace(newPassword)) throw new ArgumentException("Mật khẩu không được để trống");
+        await using var connection = await OpenAsync();
+        var hashed = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        await connection.ExecuteAsync("UPDATE nguoi_dung SET mat_khau = @MatKhau, ngay_cap_nhat = NOW() WHERE id = @Id", new { Id = userId, MatKhau = hashed });
+    }
+
+    private async Task<string> GenerateMaNguoiDungAsync(MySqlConnector.MySqlConnection conn, MySqlConnector.MySqlTransaction? tx = null)
+    {
+        var max = await conn.QueryFirstOrDefaultAsync<string>("SELECT MAX(ma_nguoi_dung) FROM nguoi_dung", transaction: tx);
+        if (string.IsNullOrWhiteSpace(max) || !max.StartsWith("ND", StringComparison.OrdinalIgnoreCase))
+        {
+            return "ND000002";
+        }
+        if (int.TryParse(max.Substring(2), out int num))
+        {
+            return "ND" + (num + 1).ToString("000000");
+        }
+        return "ND" + DateTime.Now.ToString("yyMMddHHmmss");
+    }
+
+    public async Task LogAuditAsync(AuditLog log)
+    {
+        try
+        {
+            await using var connection = await OpenAsync();
+            var sql = "INSERT INTO nhat_ky_hoat_dong (nguoi_dung_id, ten_dang_nhap, ho_ten, hanh_dong, doi_tuong, doi_tuong_id, noi_dung, dia_chi_ip, thoi_gian) VALUES (@NguoiDungId, @TenDangNhap, @HoTen, @HanhDong, @DoiTuong, @DoiTuongId, @NoiDung, @DiaChiIp, NOW())";
+            await connection.ExecuteAsync(sql, new { log.NguoiDungId, log.TenDangNhap, log.HoTen, log.HanhDong, log.DoiTuong, log.DoiTuongId, log.NoiDung, log.DiaChiIp });
+        }
+        catch { }
+    }
+    #endregion
+
 }
 

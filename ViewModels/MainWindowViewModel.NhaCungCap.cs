@@ -562,6 +562,10 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private async Task XuatFileNhaCungCapAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersExport, "Bạn không có quyền export nhà cung cấp."))
+        {
+            return;
+        }
         if (OwnerWindow is null)
             return;
 

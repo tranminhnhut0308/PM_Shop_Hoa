@@ -21,6 +21,10 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private async Task NhapHoaDonTuFileAsync()
     {
+        if (!await KiemTraQuyenAsync(PermissionKeys.InvoicesImport, "Bạn không có quyền import hóa đơn."))
+        {
+            return;
+        }
         if (OwnerWindow is null || IsImporting)
             return;
 

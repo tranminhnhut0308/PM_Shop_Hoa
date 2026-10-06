@@ -114,9 +114,9 @@ public partial class LoginViewModel : ObservableObject
         try
         {
             // Vẫn phải xác thực lại với database, tuyệt đối không tin file đã lưu.
-            var user = await _db.DangNhapAsync(remembered.TenDangNhap, secret);
+            var loginRes = await _db.DangNhapAsync(remembered.TenDangNhap, secret);
 
-            if (user is null)
+            if (!loginRes.IsValid)
             {
                 // Mật khẩu đã đổi / tài khoản bị khoá -> xoá credential,
                 // tránh thử lại sai mỗi lần mở app.
@@ -135,8 +135,9 @@ public partial class LoginViewModel : ObservableObject
                 return false;
             }
 
-            Session.SetCurrentUser(user);
-
+            var user = loginRes.User!;
+            var perms = await _db.GetUserPermissionKeysAsync(user.Id);
+            Session.SetCurrentUser(user, perms);
             _ = _db.CapNhatLanDangNhapCuoiAsync(user.Id);
 
             ThongBao = "";
@@ -219,25 +220,19 @@ public partial class LoginViewModel : ObservableObject
             // Không có tài khoản gắn cứng, không có đường tắt.
             // =====================================================
 
-            var user = await _db.DangNhapAsync(
-                tenDangNhap,
-                MatKhau);
+            var loginRes = await _db.DangNhapAsync(tenDangNhap, MatKhau);
 
-            if (user is null)
+            if (!loginRes.IsValid)
             {
-                ThongBao = "Tên đăng nhập hoặc mật khẩu không đúng.";
+                ThongBao = loginRes.IsLocked ? (loginRes.ErrorMessage ?? "Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.") : "Tên đăng nhập hoặc mật khẩu không đúng.";
                 TrangThaiKetNoi = "Kết nối database thành công.";
                 MatKhau = "";
                 return;
             }
 
-            // =====================================================
-            // LƯU USER HIỆN TẠI
-            // =====================================================
-
-            Session.SetCurrentUser(user);
-
-            // Cập nhật thời gian đăng nhập
+            var user = loginRes.User!;
+            var perms = await _db.GetUserPermissionKeysAsync(user.Id);
+            Session.SetCurrentUser(user, perms);
             _ = _db.CapNhatLanDangNhapCuoiAsync(user.Id);
 
             // Ghi nhớ hoặc xoá thông tin đăng nhập
