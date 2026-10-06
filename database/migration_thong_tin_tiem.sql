@@ -37,4 +37,4 @@ CREATE TABLE IF NOT EXISTS `thong_tin_tiem` (
 INSERT IGNORE INTO `thong_tin_tiem`
   (`id`, `ten_tiem`, `dia_chi`, `so_dien_thoai`, `email`, `ma_so_thue`, `website`, `duong_dan_logo`, `loi_cam_on`)
 VALUES
-  (1, 'SHOP HOA', '', '', '', '', '', '', 'Cảm ơn quý khách!');
+  (1, 'VỰA HOA NHÀ HUY', '', '', '', '', '', '', 'Cảm ơn quý khách!');

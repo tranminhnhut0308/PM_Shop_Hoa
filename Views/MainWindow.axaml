@@ -996,12 +996,25 @@
         <ImageBrush Source="avares://ShopHoa/Assets/anh_menu.png" Stretch="UniformToFill" />
       </Border.Background>
       <Grid RowDefinitions="Auto,*,Auto">
-        <TextBlock Text="🌸 SHOP HOA"
-          Foreground="White"
-          FontSize="20"
-          FontWeight="Bold"
-          VerticalAlignment="Center"
-          Margin="8,28,8,30" />
+        <!-- Tên cửa hàng lấy theo thông tin tiệm đã lưu. Icon hoa nằm riêng cột trái,
+             tên chiếm phần bề ngang còn lại nên tự xuống dòng tối đa 2 dòng. -->
+        <Grid Margin="8,28,8,30" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+          <TextBlock Text="🌸"
+            Foreground="White"
+            FontSize="20"
+            FontWeight="Bold"
+            VerticalAlignment="Top"
+            Margin="0,0,6,0" />
+          <TextBlock Grid.Column="1"
+            Text="{Binding TenCuaHangHienThi}"
+            Foreground="White"
+            FontSize="20"
+            FontWeight="Bold"
+            VerticalAlignment="Center"
+            TextWrapping="Wrap"
+            TextTrimming="None"
+            MaxLines="2" />
+        </Grid>
 
         <StackPanel Grid.Row="1" Orientation="Vertical">
           <Button Classes="menu" Content="Tổng quan" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewDashboard}"

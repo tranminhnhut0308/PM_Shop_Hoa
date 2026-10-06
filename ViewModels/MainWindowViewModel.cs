@@ -77,6 +77,10 @@ public partial class MainWindowViewModel : ObservableObject
             CoTheChinhSua = () => CanEditStoreInfo
         };
 
+        // Tên cửa hàng ở góc trái trên lấy theo thông tin tiệm đã lưu, nên mỗi
+        // lần màn "Thông tin tiệm" nạp hoặc lưu xong thì tên hiển thị đổi theo.
+        ThongTinTiem.ThongTinDaNap += (_, _) => CapNhatTenCuaHangHienThi(ThongTinTiem.TenTiem);
+
         // Giỏ hàng thêm/bớt dòng thì trạng thái nút "Thanh toán" phải cập nhật
         // theo, nếu không nút sẽ mở khi giỏ hàng vẫn còn trống.
         SaleCart.CollectionChanged += (_, _) => OnPropertyChanged(nameof(CanThanhToan));
@@ -88,6 +92,27 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private async Task<ThongTinTiem> LayThongTinTiemChoHoaDonAsync()
         => await _storeInfo.LayThongTinKemLogoAsync();
+
+    /// <summary>
+    /// Tên cửa hàng hiển thị ở góc trái trên. Đọc từ thông tin tiệm đã lưu nên
+    /// tự đổi theo tên người dùng sửa, không phải gõ cứng trong giao diện.
+    /// </summary>
+    [ObservableProperty]
+    private string tenCuaHangHienThi = TenCuaHangMacDinh;
+
+    /// <summary>
+    /// Tên hiển thị khi database chưa có thông tin tiệm (chưa kịp nạp hoặc
+    /// nạp lỗi) thì vẫn có chữ để đọc, không để trống.
+    /// </summary>
+    public const string TenCuaHangMacDinh = "VỰA HOA NHÀ HUY";
+
+    /// <summary>
+    /// Chuyển tên vừa nạp/lưu sang tên hiển thị. Rỗng thì giữ tên mặc định.
+    /// </summary>
+    private void CapNhatTenCuaHangHienThi(string? tenTiem)
+        => TenCuaHangHienThi = string.IsNullOrWhiteSpace(tenTiem)
+            ? TenCuaHangMacDinh
+            : tenTiem.Trim();
 
     [ObservableProperty] private string selectedMenu = "Tổng quan";
     [ObservableProperty] private int selectedDataTabIndex = 0;
@@ -1033,6 +1058,25 @@ public partial class MainWindowViewModel : ObservableObject
 
         _isInitialized = true;
         await LoadAsync();
+        await TaiTenCuaHangAsync();
+    }
+
+    /// <summary>
+    /// Nạp tên cửa hàng cho góc trái trên ngay khi mở chương trình, không phụ
+    /// thuộc người dùng có quyền xem màn "Thông tin tiệm" hay không. Lỗi thì giữ
+    /// tên mặc định để giao diện vẫn hiển thị bình thường.
+    /// </summary>
+    private async Task TaiTenCuaHangAsync()
+    {
+        try
+        {
+            var info = await _storeInfo.LayThongTinAsync();
+            CapNhatTenCuaHangHienThi(info.TenTiem);
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi tai ten cua hang", ex);
+        }
     }
 
     [RelayCommand]

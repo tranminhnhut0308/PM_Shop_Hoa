@@ -40,6 +40,13 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
     /// </summary>
     public Func<bool>? CoTheChinhSua { get; set; }
 
+    /// <summary>
+    /// Báo ra ngoài mỗi khi thông tin tiệm vừa được nạp từ database hoặc vừa lưu
+    /// thành công. Cửa sổ chính dùng sự kiện này để đổi tên cửa hàng ở góc trái
+    /// trên theo đúng tên vừa lưu, không phải hard-code.
+    /// </summary>
+    public event EventHandler? ThongTinDaNap;
+
     private bool DuocPhepChinhSua => CoTheChinhSua?.Invoke() ?? true;
 
     // ============================================================
@@ -127,6 +134,8 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
                 string.IsNullOrWhiteSpace(info.TenTiem)
                     ? "Chưa có thông tin tiệm, hãy nhập và bấm Lưu."
                     : $"Đã tải thông tin tiệm: {info.TenTiem}");
+
+            ThongTinDaNap?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {
@@ -208,6 +217,8 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
             const string noiDung = "Đã lưu thông tin tiệm";
 
             CapNhatTrangThai?.Invoke(noiDung);
+
+            ThongTinDaNap?.Invoke(this, EventArgs.Empty);
 
             await HienThiHopNhatThongBaoAsync(
                 "Lưu thành công",
