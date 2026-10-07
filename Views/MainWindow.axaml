@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:vm="using:ShopHoa.ViewModels"
   xmlns:models="using:ShopHoa.Models"
@@ -5224,6 +5224,12 @@
       <!-- BÁO CÁO KHÁCH HÀNG                                           -->
       <Grid IsVisible="{Binding IsBaoCaoKhachHangSelected}">
         <views:BaoCaoKhachHangView DataContext="{Binding BaoCaoKhachHang}" />
+      </Grid>
+
+      <!-- ============================================================ -->
+      <!-- BÁO CÁO NHÀ CUNG CẤP                                         -->
+      <Grid IsVisible="{Binding IsBaoCaoNhaCungCapSelected}">
+        <views:BaoCaoNhaCungCapView DataContext="{Binding BaoCaoNhaCungCap}" />
       </Grid>
 
       <!-- ============================================================ -->

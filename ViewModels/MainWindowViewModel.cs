@@ -35,6 +35,7 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _baoCaoBanHangLoaded;
     private bool _baoCaoHangHoaLoaded;
     private bool _baoCaoKhachHangLoaded;
+    private bool _baoCaoNhaCungCapLoaded;
 
     /// <summary>
     /// Màn "Tổng quan" có ViewModel riêng. Giữ một instance sống suốt phiên để
@@ -55,6 +56,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Màn "Báo cáo khách hàng" cũng giữ một instance sống suốt phiên.</summary>
     public BaoCaoKhachHangViewModel BaoCaoKhachHang { get; }
 
+    /// <summary>Màn "Báo cáo nhà cung cấp" cũng giữ một instance sống suốt phiên.</summary>
+    public BaoCaoNhaCungCapViewModel BaoCaoNhaCungCap { get; }
+
     public BaoCaoCuoiNgayViewModel BaoCaoCuoiNgay { get; }
 
     /// <summary>
@@ -73,6 +77,7 @@ public partial class MainWindowViewModel : ObservableObject
         BaoCaoBanHang = new BaoCaoBanHangViewModel(_db);
         BaoCaoHangHoa = new BaoCaoHangHoaViewModel(_db);
         BaoCaoKhachHang = new BaoCaoKhachHangViewModel(_db);
+        BaoCaoNhaCungCap = new BaoCaoNhaCungCapViewModel(_db);
         BaoCaoCuoiNgay = new BaoCaoCuoiNgayViewModel(_db)
         {
             // Cửa sổ chính chỉ có sau khi ViewModel được tạo, nên các callback
@@ -1217,6 +1222,14 @@ public partial class MainWindowViewModel : ObservableObject
                     {
                         _baoCaoKhachHangLoaded = true;
                         await BaoCaoKhachHang.TaiLaiAsync();
+                    }
+
+                    // Báo cáo nhà cung cấp cũng chỉ tải lần đầu; các lần sau giữ
+                    // nguyên bộ lọc người dùng đang xem.
+                    if (SelectedReportKey == "nha-cung-cap" && !_baoCaoNhaCungCapLoaded)
+                    {
+                        _baoCaoNhaCungCapLoaded = true;
+                        await BaoCaoNhaCungCap.TaiLaiAsync();
                     }
 
                     break;
@@ -3086,6 +3099,12 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
         },
         new BaoCaoMenuItem
         {
+            Key = "nha-cung-cap",
+            TieuDe = "Báo cáo nhà cung cấp",
+            BieuTuong = "🏢"
+        },
+        new BaoCaoMenuItem
+        {
             Key = "phieu-nhap-hang",
             TieuDe = "Báo cáo phiếu nhập hàng",
             BieuTuong = "📥"
@@ -3161,6 +3180,9 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
     public bool IsBaoCaoKhachHangSelected =>
         IsBaoCaoSectionSelected && SelectedReportKey == "khach-hang";
 
+    public bool IsBaoCaoNhaCungCapSelected =>
+        IsBaoCaoSectionSelected && SelectedReportKey == "nha-cung-cap";
+
     public bool IsBaoCaoCuoiNgaySelected =>
         SelectedMenu == "Báo cáo" && SelectedReportKey == "cuoi-ngay";
 
@@ -3197,6 +3219,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
         OnPropertyChanged(nameof(IsBaoCaoBanHangSelected));
         OnPropertyChanged(nameof(IsBaoCaoHangHoaSelected));
         OnPropertyChanged(nameof(IsBaoCaoKhachHangSelected));
+        OnPropertyChanged(nameof(IsBaoCaoNhaCungCapSelected));
         OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
     }
 
@@ -3211,7 +3234,9 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
             "cuoi-ngay" => PermissionKeys.ReportsEndOfDay,
             "ban-hang" => PermissionKeys.ReportsSales,
             "hang-hoa" => PermissionKeys.ReportsProducts,
+            "khach-hang" => PermissionKeys.ReportsSales,
             "phieu-nhap-hang" => PermissionKeys.ReportsPurchases,
+            "nha-cung-cap" => PermissionKeys.ReportsPurchases,
             _ => PermissionKeys.ReportsView
         };
 
@@ -3255,6 +3280,14 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
         {
             _baoCaoKhachHangLoaded = true;
             _ = BaoCaoKhachHang.TaiLaiAsync();
+        }
+
+        // Báo cáo nhà cung cấp cũng chỉ tải một lần đầu, các lần sau giữ nguyên
+        // bộ lọc người dùng đang xem.
+        if (item.Key == "nha-cung-cap" && !_baoCaoNhaCungCapLoaded)
+        {
+            _baoCaoNhaCungCapLoaded = true;
+            _ = BaoCaoNhaCungCap.TaiLaiAsync();
         }
 
         // Báo cáo cuối ngày chỉ tải khi mở lần đầu, sau đó giữ nguyên ngày đang
@@ -4353,6 +4386,7 @@ partial void OnSelectedMenuChanged(string value)
     OnPropertyChanged(nameof(IsBaoCaoBanHangSelected));
     OnPropertyChanged(nameof(IsBaoCaoHangHoaSelected));
     OnPropertyChanged(nameof(IsBaoCaoKhachHangSelected));
+    OnPropertyChanged(nameof(IsBaoCaoNhaCungCapSelected));
     OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
     OnPropertyChanged(nameof(IsThongTinTiemSelected));
 
@@ -4540,6 +4574,7 @@ public bool CanViewReportEndOfDay => CoQuyen(PermissionKeys.ReportsEndOfDay);
 public bool CanViewReportSales => CoQuyen(PermissionKeys.ReportsSales);
 public bool CanViewReportProducts => CoQuyen(PermissionKeys.ReportsProducts);
 public bool CanViewReportPurchases => CoQuyen(PermissionKeys.ReportsPurchases);
+public bool CanViewReportSuppliers => CoQuyen(PermissionKeys.ReportsPurchases);
 public bool CanViewRevenue => CoQuyen(PermissionKeys.ReportsRevenue);
 public bool CanViewProfit => CoQuyen(PermissionKeys.ReportsProfit);
 public bool CanViewCost => CoQuyen(PermissionKeys.ReportsCost);
