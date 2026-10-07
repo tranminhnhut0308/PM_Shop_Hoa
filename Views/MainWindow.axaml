@@ -5221,6 +5221,12 @@
       </Grid>
 
       <!-- ============================================================ -->
+      <!-- BÁO CÁO KHÁCH HÀNG                                           -->
+      <Grid IsVisible="{Binding IsBaoCaoKhachHangSelected}">
+        <views:BaoCaoKhachHangView DataContext="{Binding BaoCaoKhachHang}" />
+      </Grid>
+
+      <!-- ============================================================ -->
       <!-- BÁO CÁO PHIẾU NHẬP HÀNG                                       -->
       <!-- (khác với Mua hàng → Nhập hàng: đây là màn đọc dữ liệu)      -->
       <Grid IsVisible="{Binding IsBaoCaoPhieuNhapSelected}"
