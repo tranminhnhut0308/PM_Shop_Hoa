@@ -88,6 +88,16 @@
                         <TextBlock x:Name="TxtCongNo" Grid.Column="1"
                             FontWeight="Bold" Foreground="#D64545" FontSize="13" />
                     </Grid>
+
+                    <Border Height="1" Background="#E8F0ED" />
+
+                    <!-- Phương thức thanh toán -->
+                    <Grid ColumnDefinitions="*,180">
+                        <TextBlock Text="Phương thức thanh toán" Foreground="#61736E"
+                            FontSize="13" VerticalAlignment="Center" />
+                        <ComboBox x:Name="CboPhuongThuc" Grid.Column="1"
+                            HorizontalAlignment="Stretch" />
+                    </Grid>
                 </StackPanel>
             </Border>
 

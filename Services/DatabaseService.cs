@@ -3922,7 +3922,8 @@ LIMIT 500;
     IReadOnlyCollection<SaleCartItem> items,
     KhachHang? customer,
     decimal discount,
-    decimal tienKhachDua)
+    decimal tienKhachDua,
+    string? phuongThucThanhToan = null)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SalesCreate, "Bạn không có quyền tạo hóa đơn bán hàng.");
         if (items.Count == 0)
@@ -4277,7 +4278,8 @@ LIMIT 500;
                 debtAmount,
                 customer,
                 now,
-                coCotPhieuThuLienKet);
+                coCotPhieuThuLienKet,
+                ChuanHoaPhuongThuc(phuongThucThanhToan));
 
             // ============================================================
             // 6. COMMIT
@@ -4480,7 +4482,8 @@ LIMIT 500;
         decimal debtAmount,
         KhachHang? customer,
         DateTime thoiGian,
-        bool coCotLienKet)
+        bool coCotLienKet,
+        string phuongThucThanhToan)
     {
         if (paidAmount <= 0)
             return "";
@@ -4519,7 +4522,7 @@ LIMIT 500;
               )
               VALUES
               (
-                  @MaPhieu, @ChiNhanhId, NULL, @SoTien, 'TIEN_MAT',
+                  @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
                   @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
                   @NguoiTaoId, @TrangThai, @HoaDonId, @MaHoaDon
               );
@@ -4533,7 +4536,7 @@ LIMIT 500;
               )
               VALUES
               (
-                  @MaPhieu, @ChiNhanhId, NULL, @SoTien, 'TIEN_MAT',
+                  @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
                   @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
                   @NguoiTaoId, @TrangThai
               );
@@ -4546,6 +4549,7 @@ LIMIT 500;
                 MaPhieu = maPhieu,
                 ChiNhanhId = branchId,
                 SoTien = paidAmount,
+                PhuongThuc = phuongThucThanhToan,
                 NoiDung = $"Thu tiền bán hàng - hóa đơn {invoiceCode}",
                 NguoiNopNhan = Truncate150(customer?.TenKhachHang),
                 GhiChu = ghiChu,
@@ -4558,6 +4562,25 @@ LIMIT 500;
             transaction);
 
         return maPhieu;
+    }
+
+    /// <summary>
+    /// Chuẩn hóa mã phương thức thanh toán cho cột <c>phieu_chi.phuong_thuc</c>
+    /// (varchar(30)). Mã rỗng/không hợp lệ quay về "TIEN_MAT".
+    /// </summary>
+    private static string ChuanHoaPhuongThuc(string? ma)
+    {
+        const string macDinh = "TIEN_MAT";
+
+        if (string.IsNullOrWhiteSpace(ma))
+            return macDinh;
+
+        var chuanHoa = ma.Trim().ToUpperInvariant();
+
+        if (chuanHoa.Length > 30)
+            chuanHoa = chuanHoa[..30];
+
+        return chuanHoa.All(c => char.IsLetterOrDigit(c) || c == '_') ? chuanHoa : macDinh;
     }
 
     /// <summary>

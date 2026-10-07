@@ -4103,6 +4103,9 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Bạn không có quy�
         return;
     }
 
+    // Phương thức thanh toán người dùng chọn trong hộp thoại, ghi vào phiếu thu.
+    var phuongThucSnapshot = confirmWindow.PhuongThucThanhToan;
+
     // 4. Lưu vào database
     HoaDonBanHangReceipt? receipt = null;
 
@@ -4115,7 +4118,8 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Bạn không có quy�
             cartSnapshot,
             customer,
             discountSnapshot,
-            cashSnapshot);
+            cashSnapshot,
+            phuongThucSnapshot);
     }
     catch (Exception ex)
     {

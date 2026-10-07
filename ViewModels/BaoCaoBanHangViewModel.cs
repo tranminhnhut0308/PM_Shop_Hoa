@@ -1,20 +1,18 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShopHoa.Models;
 using ShopHoa.Services;
-using ClosedXML.Excel;
 
 namespace ShopHoa.ViewModels;
 
-public enum BaoCaoBanHangKieuHienThi { BieuDo, BaoCao }
-public enum BaoCaoBanHangMocQuanTam { ThoiGian, SanPham, KhachHang, PhuongThucThanhToan }
-
 /// <summary>
 /// ViewModel cho màn "Báo cáo bán hàng": tổng hợp doanh thu theo khoảng thời gian,
-/// biểu đồ, bảng theo ngày, top sản phẩm / khách hàng và phương thức thanh toán.
+/// biểu đồ, bảng theo ngày, top sản phẩm / khách hàng, nhóm hàng và phương thức thanh toán.
 /// <para>
 /// Khác với <see cref="BaoCaoCuoiNgayViewModel"/> (chốt số của MỘT ngày), màn này
 /// luôn làm việc trên khoảng <c>TuNgay → DenNgay</c>.
@@ -24,12 +22,13 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
 {
     private readonly BaoCaoBanHangService _service;
 
+    // Toàn bộ dữ liệu gốc (chưa phân trang / chưa lọc) dùng để dựng lại trang.
+    private readonly List<BaoCaoBanHangBangRow> _bangAll = new();
+    private readonly List<BaoCaoBanHangChiTietHoaDon> _chiTietAll = new();
+
     public BaoCaoBanHangViewModel(DatabaseService db)
     {
         _service = new BaoCaoBanHangService(db.TaoKetNoiAsync);
-
-        KieuHienThi = BaoCaoBanHangKieuHienThi.BieuDo;
-        MocQuanTam = BaoCaoBanHangMocQuanTam.ThoiGian;
 
         TuNgay = DateTime.Today.AddDays(-6);
         DenNgay = DateTime.Today;
@@ -47,8 +46,6 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
     // TRẠNG THÁI
     // ============================================================
 
-    [ObservableProperty] private BaoCaoBanHangKieuHienThi kieuHienThi;
-    [ObservableProperty] private BaoCaoBanHangMocQuanTam mocQuanTam;
     [ObservableProperty] private bool dangTai;
 
     [ObservableProperty]
@@ -114,14 +111,54 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(NgayChiTietHienThi))]
     private DateTime? ngayChiTiet;
 
-    public ObservableCollection<BaoCaoBanHangDiemThoiGian> BieuDoItems => new(DuLieu.BieuDo);
-    public ObservableCollection<BaoCaoBanHangBangRow> BangItems => new(DuLieu.BangDuLieu);
-    public ObservableCollection<BaoCaoBanHangTopSanPham> TopSanPhamItems => new(DuLieu.TopSanPham);
-    public ObservableCollection<BaoCaoBanHangTopKhachHang> TopKhachHangItems => new(DuLieu.TopKhachHang);
-    public ObservableCollection<BaoCaoBanHangPhuongThucRow> PhuongThucItems => new(DuLieu.PhuongThucThanhToan);
-    public ObservableCollection<BaoCaoBanHangChiTietHoaDon> ChiTietHoaDonList => new(DuLieu.ChiTietHoaDon);
+    public ObservableCollection<BaoCaoBanHangDiemThoiGian> BieuDoItems { get; } = new();
+    public ObservableCollection<BaoCaoBanHangTopSanPham> TopSanPhamItems { get; } = new();
+    public ObservableCollection<BaoCaoBanHangTopKhachHang> TopKhachHangItems { get; } = new();
+    public ObservableCollection<BaoCaoBanHangNhomHang> NhomHangItems { get; } = new();
+    public ObservableCollection<BaoCaoBanHangPhuongThucRow> PhuongThucItems { get; } = new();
+
+    /// <summary>Bảng doanh thu theo ngày của TRANG đang xem (đã phân trang).</summary>
+    public ObservableCollection<BaoCaoBanHangBangRow> BangItems { get; } = new();
+
+    /// <summary>Danh sách hóa đơn chi tiết của ngày đang xem (đã lọc + phân trang).</summary>
+    public ObservableCollection<BaoCaoBanHangChiTietHoaDon> ChiTietHoaDonList { get; } = new();
 
     public BaoCaoBanHangTongHop TongHop => DuLieu.TongHop;
+
+    // ============================================================
+    // PHÂN TRANG BẢNG THEO NGÀY
+    // ============================================================
+
+    [ObservableProperty] private int bangPage = 1;
+    [ObservableProperty] private int bangPageSize = 15;
+
+    public int BangTotalCount => _bangAll.Count;
+    public int BangTotalPages => BangTotalCount <= 0 ? 0 : (int)Math.Ceiling(BangTotalCount / (double)BangPageSize);
+    public bool CanBangTrangTruoc => BangPage > 1;
+    public bool CanBangTrangSau => BangPage < BangTotalPages;
+    public string BangTrangText => BangTotalPages <= 0 ? "0/0" : $"{BangPage}/{BangTotalPages}";
+
+    // ============================================================
+    // TÌM KIẾM + PHÂN TRANG CHI TIẾT HÓA ĐƠN
+    // ============================================================
+
+    [ObservableProperty] private string chiTietSearch = string.Empty;
+    [ObservableProperty] private int chiTietPage = 1;
+    [ObservableProperty] private int chiTietPageSize = 20;
+
+    private List<BaoCaoBanHangChiTietHoaDon> ChiTietDaLoc =>
+        string.IsNullOrWhiteSpace(ChiTietSearch)
+            ? _chiTietAll
+            : _chiTietAll.Where(x =>
+                    x.MaHoaDon.Contains(ChiTietSearch, StringComparison.OrdinalIgnoreCase)
+                    || x.KhachHang.Contains(ChiTietSearch, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+    public int ChiTietTotalCount => ChiTietDaLoc.Count;
+    public int ChiTietTotalPages => ChiTietTotalCount <= 0 ? 0 : (int)Math.Ceiling(ChiTietTotalCount / (double)ChiTietPageSize);
+    public bool CanChiTietTrangTruoc => ChiTietPage > 1;
+    public bool CanChiTietTrangSau => ChiTietPage < ChiTietTotalPages;
+    public string ChiTietTrangText => ChiTietTotalPages <= 0 ? "0/0" : $"{ChiTietPage}/{ChiTietTotalPages}";
 
     // ============================================================
     // CỜ HIỂN THỊ
@@ -129,22 +166,24 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
 
     public bool CoLoi => !string.IsNullOrWhiteSpace(ThongBaoLoi);
     public bool CoBieuDo => DuLieu.BieuDo.Count > 0;
-    public bool CoBang => DuLieu.BangDuLieu.Count > 0;
+    public bool CoBang => _bangAll.Count > 0;
     public bool CoTopSanPham => DuLieu.TopSanPham.Count > 0;
     public bool CoTopKhachHang => DuLieu.TopKhachHang.Count > 0;
+    public bool CoNhomHang => DuLieu.NhomHang.Count > 0;
     public bool CoPhuongThuc => DuLieu.PhuongThucThanhToan.Count > 0;
-    public bool CoChiTietHoaDon => DuLieu.ChiTietHoaDon.Count > 0;
+    public bool CoChiTietHoaDon => ChiTietDaLoc.Count > 0;
     public bool CoNgayChiTiet => NgayChiTiet is not null;
 
     public string NgayChiTietHienThi => NgayChiTiet?.ToString("dd/MM/yyyy") ?? string.Empty;
 
-    /// <summary>Thông báo lại toàn bộ cờ cờ rỗng / có dữ liệu sau mỗi lần tải.</summary>
+    /// <summary>Thông báo lại toàn bộ cờ rỗng / có dữ liệu sau mỗi lần tải.</summary>
     private void ThongBaoCoGiaTri()
     {
         OnPropertyChanged(nameof(CoBieuDo));
         OnPropertyChanged(nameof(CoBang));
         OnPropertyChanged(nameof(CoTopSanPham));
         OnPropertyChanged(nameof(CoTopKhachHang));
+        OnPropertyChanged(nameof(CoNhomHang));
         OnPropertyChanged(nameof(CoPhuongThuc));
         OnPropertyChanged(nameof(CoChiTietHoaDon));
         OnPropertyChanged(nameof(TongHop));
@@ -171,14 +210,23 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
             if (DenNgay < TuNgay)
                 DenNgay = TuNgay;
 
-            DuLieu = await _service.TaiDuLieuAsync(TuNgay, DenNgay, 1, TuyChinh, default);
+            DuLieu = await _service.TaiDuLieuAsync(TuNgay, DenNgay, default);
 
-            OnPropertyChanged(nameof(BieuDoItems));
-            OnPropertyChanged(nameof(BangItems));
-            OnPropertyChanged(nameof(TopSanPhamItems));
-            OnPropertyChanged(nameof(TopKhachHangItems));
-            OnPropertyChanged(nameof(PhuongThucItems));
-            OnPropertyChanged(nameof(ChiTietHoaDonList));
+            DoDanhSachMoi(BieuDoItems, DuLieu.BieuDo);
+            DoDanhSachMoi(TopSanPhamItems, DuLieu.TopSanPham);
+            DoDanhSachMoi(TopKhachHangItems, DuLieu.TopKhachHang);
+            DoDanhSachMoi(NhomHangItems, DuLieu.NhomHang);
+            DoDanhSachMoi(PhuongThucItems, DuLieu.PhuongThucThanhToan);
+
+            // Bảng theo ngày: nạp toàn bộ rồi phân trang lại từ đầu.
+            _bangAll.Clear();
+            _bangAll.AddRange(DuLieu.BangDuLieu);
+            BangPage = 1;
+            CapNhatBangHienThi();
+
+            // Chi tiết hóa đơn: đóng lại phần đang xem vì dữ liệu ngày cũ không còn đúng.
+            DongChiTietNoiBo();
+
             ThongBaoCoGiaTri();
         }
         catch (Exception ex)
@@ -189,6 +237,96 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
         {
             DangTai = false;
         }
+    }
+
+    private static void DoDanhSachMoi<T>(ObservableCollection<T> dich, IReadOnlyList<T> moi)
+    {
+        dich.Clear();
+        foreach (var item in moi)
+            dich.Add(item);
+    }
+
+    // ============================================================
+    // PHÂN TRANG BẢNG THEO NGÀY
+    // ============================================================
+
+    private void CapNhatBangHienThi()
+    {
+        var trang = Math.Max(1, BangPage);
+        BangItems.Clear();
+
+        foreach (var row in _bangAll.Skip((trang - 1) * BangPageSize).Take(BangPageSize))
+            BangItems.Add(row);
+
+        OnPropertyChanged(nameof(BangTotalCount));
+        OnPropertyChanged(nameof(BangTotalPages));
+        OnPropertyChanged(nameof(CanBangTrangTruoc));
+        OnPropertyChanged(nameof(CanBangTrangSau));
+        OnPropertyChanged(nameof(BangTrangText));
+    }
+
+    partial void OnBangPageChanged(int value) => CapNhatBangHienThi();
+
+    [RelayCommand]
+    private void BangTrangTruoc()
+    {
+        if (BangPage > 1)
+            BangPage--;
+    }
+
+    [RelayCommand]
+    private void BangTrangSau()
+    {
+        if (BangPage < BangTotalPages)
+            BangPage++;
+    }
+
+    // ============================================================
+    // TÌM KIẾM + PHÂN TRANG CHI TIẾT HÓA ĐƠN
+    // ============================================================
+
+    partial void OnChiTietSearchChanged(string value)
+    {
+        // Đổi từ khóa luôn quay về trang đầu. Nếu trang đang là 1 thì việc gán
+        // không phát sinh thông báo, phải tự vẽ lại danh sách.
+        if (ChiTietPage != 1)
+            ChiTietPage = 1;
+        else
+            CapNhatChiTietHienThi();
+
+        OnPropertyChanged(nameof(CoChiTietHoaDon));
+    }
+
+    partial void OnChiTietPageChanged(int value) => CapNhatChiTietHienThi();
+
+    private void CapNhatChiTietHienThi()
+    {
+        var daLoc = ChiTietDaLoc;
+        var trang = Math.Max(1, ChiTietPage);
+        ChiTietHoaDonList.Clear();
+
+        foreach (var row in daLoc.Skip((trang - 1) * ChiTietPageSize).Take(ChiTietPageSize))
+            ChiTietHoaDonList.Add(row);
+
+        OnPropertyChanged(nameof(ChiTietTotalCount));
+        OnPropertyChanged(nameof(ChiTietTotalPages));
+        OnPropertyChanged(nameof(CanChiTietTrangTruoc));
+        OnPropertyChanged(nameof(CanChiTietTrangSau));
+        OnPropertyChanged(nameof(ChiTietTrangText));
+    }
+
+    [RelayCommand]
+    private void ChiTietTrangTruoc()
+    {
+        if (ChiTietPage > 1)
+            ChiTietPage--;
+    }
+
+    [RelayCommand]
+    private void ChiTietTrangSau()
+    {
+        if (ChiTietPage < ChiTietTotalPages)
+            ChiTietPage++;
     }
 
     // ============================================================
@@ -300,9 +438,12 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
         try
         {
             NgayChiTiet = ngay.Date;
-            DuLieu.ChiTietHoaDon = await _service.TaiChiTietHoaDonAsync(ngay, default);
+            _chiTietAll.Clear();
+            _chiTietAll.AddRange(await _service.TaiChiTietHoaDonAsync(ngay, default));
 
-            OnPropertyChanged(nameof(ChiTietHoaDonList));
+            ChiTietSearch = string.Empty;
+            ChiTietPage = 1;
+            CapNhatChiTietHienThi();
             OnPropertyChanged(nameof(CoChiTietHoaDon));
         }
         catch (Exception ex)
@@ -312,12 +453,21 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void DongChiTiet()
+    private void DongChiTiet() => DongChiTietNoiBo();
+
+    private void DongChiTietNoiBo()
     {
         NgayChiTiet = null;
-        DuLieu.ChiTietHoaDon = new System.Collections.Generic.List<BaoCaoBanHangChiTietHoaDon>();
+        _chiTietAll.Clear();
+        ChiTietSearch = string.Empty;
+        ChiTietPage = 1;
+        ChiTietHoaDonList.Clear();
 
-        OnPropertyChanged(nameof(ChiTietHoaDonList));
         OnPropertyChanged(nameof(CoChiTietHoaDon));
+        OnPropertyChanged(nameof(ChiTietTotalCount));
+        OnPropertyChanged(nameof(ChiTietTotalPages));
+        OnPropertyChanged(nameof(CanChiTietTrangTruoc));
+        OnPropertyChanged(nameof(CanChiTietTrangSau));
+        OnPropertyChanged(nameof(ChiTietTrangText));
     }
 }

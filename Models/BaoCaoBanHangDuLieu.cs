@@ -75,12 +75,14 @@ public sealed class BaoCaoBanHangBangRow
     public int SoHoaDon { get; set; }
     public decimal TongTienHang { get; set; }
     public decimal GiamGia { get; set; }
+    public decimal ThuKhac { get; set; }
     public decimal DoanhThu { get; set; }
     public decimal DaThu { get; set; }
     public decimal CongNo { get; set; }
     public string SoHoaDonHienThi => SoHoaDon.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
     public string TongTienHangHienThi => TongTienHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string GiamGiaHienThi => GiamGia.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string ThuKhacHienThi => ThuKhac.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string DaThuHienThi => DaThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
@@ -96,6 +98,7 @@ public sealed class BaoCaoBanHangChiTietHoaDon
     public string KhachHang { get; set; } = string.Empty;
     public decimal TongTienHang { get; set; }
     public decimal GiamGia { get; set; }
+    public decimal ThuKhac { get; set; }
     public decimal DoanhThu { get; set; }
     public decimal DaThu { get; set; }
     public decimal CongNo { get; set; }
@@ -103,6 +106,7 @@ public sealed class BaoCaoBanHangChiTietHoaDon
     public string ThoiGianHienThi => ThoiGianBan.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
     public string TongTienHangHienThi => TongTienHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string GiamGiaHienThi => GiamGia.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string ThuKhacHienThi => ThuKhac.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string DaThuHienThi => DaThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
@@ -138,6 +142,23 @@ public sealed class BaoCaoBanHangTopKhachHang
 
 
 
+public sealed class BaoCaoBanHangNhomHang
+{
+    public int Stt { get; set; }
+    public string NhomHang { get; set; } = string.Empty;
+    public decimal SoLuongBan { get; set; }
+    public decimal DoanhThu { get; set; }
+
+    /// <summary>Tỉ lệ doanh thu của nhóm so với tổng (0..100).</summary>
+    public double TyLePhanTram { get; set; }
+
+    public string SoLuongBanHienThi => SoLuongBan.ToString("N3", CultureInfo.GetCultureInfo("vi-VN"));
+    public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string TyLePhanTramHienThi => TyLePhanTram.ToString("N1", CultureInfo.GetCultureInfo("vi-VN")) + "%";
+}
+
+
+
 public sealed class BaoCaoBanHangTongHop
 {
     public DateTime TuNgay { get; set; }
@@ -145,6 +166,7 @@ public sealed class BaoCaoBanHangTongHop
     public int SoHoaDon { get; set; }
     public decimal TongTienHang { get; set; }
     public decimal GiamGia { get; set; }
+    public decimal ThuKhac { get; set; }
     public decimal DoanhThu { get; set; }
     public decimal DaThu { get; set; }
     public decimal CongNo { get; set; }
@@ -152,6 +174,7 @@ public sealed class BaoCaoBanHangTongHop
     public string SoHoaDonHienThi => SoHoaDon.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
     public string TongTienHangHienThi => TongTienHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string GiamGiaHienThi => GiamGia.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string ThuKhacHienThi => ThuKhac.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string DaThuHienThi => DaThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
@@ -171,6 +194,7 @@ public sealed class BaoCaoBanHangDuLieu
     public List<BaoCaoBanHangChiTietHoaDon> ChiTietHoaDon { get; set; } = new();
     public List<BaoCaoBanHangTopSanPham> TopSanPham { get; set; } = new();
     public List<BaoCaoBanHangTopKhachHang> TopKhachHang { get; set; } = new();
+    public List<BaoCaoBanHangNhomHang> NhomHang { get; set; } = new();
     public List<BaoCaoBanHangPhuongThucRow> PhuongThucThanhToan { get; set; } = new();
 }
 
