@@ -181,6 +181,7 @@
                     <StackPanel Grid.Row="1" Grid.Column="0">
                         <TextBlock Classes="label" Text="Số điện thoại"/>
                         <TextBox Classes="input"
+                                 Name="SoDienThoaiBox"
                                  Text="{Binding Customer.SoDienThoai, Mode=TwoWay}"
                                  Watermark="Nhập số điện thoại"/>
                     </StackPanel>
@@ -344,6 +345,7 @@
 
                 <Button Grid.Column="2"
                         Classes="primary"
+                        Name="NutLuuButton"
                         Content="💾 Lưu khách hàng"
                         Click="OnSaveClicked"/>
 

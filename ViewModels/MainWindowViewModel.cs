@@ -445,6 +445,66 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Thêm khách hàng ngay trong màn Bán hàng: mở form khách hàng đang có,
+    /// lưu bằng DatabaseService hiện tại rồi tự chọn khách vừa tạo cho hóa đơn đang bán.
+    /// </summary>
+    [RelayCommand]
+    private async Task ThemKhachHangBanAsync()
+    {
+        if (OwnerWindow is null)
+            return;
+
+        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersCreate, "Bạn không có quyền thêm khách hàng."))
+            return;
+
+        try
+        {
+            var maKhachHangMoi = await _db.TaoMaKhachHangMoiAsync();
+
+            var editor = new KhachHangEditorWindow(
+                new KhachHang
+                {
+                    Id = 0,
+                    MaKhachHang = maKhachHangMoi,
+                    TenKhachHang = "",
+                    LoaiKhachHang = "CA_NHAN",
+                    TrangThai = true
+                },
+                await LoadNhomKhachHangOptionsAsync(),
+                isEditMode: false,
+                trungSoDienThoaiAsync: KiemTraTrungSoDienThoaiAsync);
+
+            // Người dùng hủy: giữ nguyên khách hàng và hóa đơn hiện tại.
+            if (!await editor.ShowDialog<bool>(OwnerWindow))
+                return;
+
+            var newId = await _db.ThemKhachHangAsync(editor.Customer);
+
+            // Đọc lại bản ghi từ database để có Id và các giá trị do database sinh.
+            var khachHangMoi = await _db.GetKhachHangByIdAsync(newId) ?? editor.Customer;
+            khachHangMoi.Id = newId;
+
+            // Tự chọn khách vừa tạo: phải gán khách trước rồi mới đổi tên
+            // để ô "Khách hàng" không làm mất lựa chọn.
+            SelectedSaleCustomer = khachHangMoi;
+            SaleCustomerName = khachHangMoi.TenKhachHang;
+            SaleCustomerSuggestions.Clear();
+
+            StatusMessage = $"Đã thêm khách hàng: {khachHangMoi.TenKhachHang}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể thêm khách hàng: " + ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Kiểm tra số điện thoại đã tồn tại chưa (dùng cho form thêm khách trong Bán hàng).
+    /// </summary>
+    private Task<bool> KiemTraTrungSoDienThoaiAsync(string? soDienThoai, uint khachHangId)
+        => _db.KiemTraTrungSoDienThoaiAsync(soDienThoai, khachHangId);
+
+    /// <summary>
     /// Tìm kiếm khách hàng (nút "Tìm kiếm"): luôn quay về trang đầu.
     /// </summary>
     [RelayCommand]

@@ -11,6 +11,9 @@ namespace ShopHoa.Views;
 /// </summary>
 public partial class KhachHangEditorWindow : Window
 {
+    // Đánh dấu form đã bị đóng (Hủy hoặc nút X) để không Close lần nữa sau khi await.
+    private bool _daDongForm;
+
     public KhachHang Customer { get; }
 
     public bool IsEditMode { get; }
@@ -24,12 +27,22 @@ public partial class KhachHangEditorWindow : Window
             ? "Sửa khách hàng"
             : "Thêm khách hàng";
 
+    /// <summary>
+    /// Kiểm tra trùng số điện thoại do nơi gọi cung cấp
+    /// (form không truy cập database trực tiếp).
+    /// Tham số: số điện thoại, id khách hàng hiện tại (0 = thêm mới).
+    /// Trả về true nếu số đã tồn tại.
+    /// </summary>
+    public Func<string?, uint, Task<bool>>? TrungSoDienThoaiAsync { get; }
+
     public KhachHangEditorWindow(
         KhachHang? customer,
         IReadOnlyList<NhomKhachHang>? nhomKhachHangOptions,
-        bool isEditMode)
+        bool isEditMode,
+        Func<string?, uint, Task<bool>>? trungSoDienThoaiAsync = null)
     {
         IsEditMode = isEditMode;
+        TrungSoDienThoaiAsync = trungSoDienThoaiAsync;
         DanhSachNhom = nhomKhachHangOptions ?? Array.Empty<NhomKhachHang>();
 
         // Tạo bản sao để khi bấm Hủy
@@ -42,6 +55,8 @@ public partial class KhachHangEditorWindow : Window
 
         // Gán dữ liệu trước khi dựng giao diện để các binding đọc đúng giá trị
         InitializeComponent();
+
+        Closed += (_, _) => _daDongForm = true;
 
         ChonGioiTinh(Customer.GioiTinh);
 
@@ -139,7 +154,7 @@ public partial class KhachHangEditorWindow : Window
             loiMessage.Text = message;
     }
 
-    private void OnSaveClicked(
+    private async void OnSaveClicked(
         object? sender,
         RoutedEventArgs e)
     {
@@ -180,6 +195,42 @@ public partial class KhachHangEditorWindow : Window
             tenBox?.Focus();
 
             return;
+        }
+
+        // ==============================
+        // KIỂM TRA TRÙNG SỐ ĐIỆN THOẠI
+        // ==============================
+
+        if (TrungSoDienThoaiAsync is not null &&
+            !string.IsNullOrWhiteSpace(Customer.SoDienThoai))
+        {
+            var nutLuu = this.FindControl<Button>("NutLuuButton");
+
+            if (nutLuu is not null)
+                nutLuu.IsEnabled = false;
+
+            try
+            {
+                if (await TrungSoDienThoaiAsync(Customer.SoDienThoai, Customer.Id))
+                {
+                    HienLoi($"Số điện thoại {Customer.SoDienThoai} đã tồn tại. Vui lòng dùng số khác.");
+
+                    this.FindControl<TextBox>("SoDienThoaiBox")?.Focus();
+
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                HienLoi("Không thể kiểm tra số điện thoại: " + ex.Message);
+
+                return;
+            }
+            finally
+            {
+                if (nutLuu is not null)
+                    nutLuu.IsEnabled = true;
+            }
         }
 
         // ==============================
@@ -238,6 +289,10 @@ public partial class KhachHangEditorWindow : Window
         // ==============================
         // LƯU
         // ==============================
+
+        // Trong lúc chờ kiểm tra số điện thoại, người dùng có thể đã đóng form.
+        if (_daDongForm)
+            return;
 
         if (!IsEditMode)
             Customer.NgayTao = DateTime.Now;

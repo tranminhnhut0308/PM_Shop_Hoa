@@ -2008,6 +2008,48 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
         ).AsList();
     }
 
+    /// <summary>
+    /// Kiểm tra số điện thoại đã tồn tại trong khách hàng đang hoạt động chưa.
+    /// So sánh sau khi bỏ khoảng trắng, dấu gạch và dấu chấm
+    /// để tránh lưu trùng khi khách gõ khác định dạng.
+    /// </summary>
+    public async Task<bool> KiemTraTrungSoDienThoaiAsync(
+        string? soDienThoai,
+        uint khachHangId = 0)
+    {
+        var sdt = (soDienThoai ?? "")
+            .Trim()
+            .Replace(" ", "")
+            .Replace("-", "")
+            .Replace(".", "");
+
+        if (sdt.Length == 0)
+            return false;
+
+        await using var connection = await OpenAsync();
+
+        const string sql = """
+        SELECT COUNT(*)
+        FROM khach_hang
+        WHERE trang_thai = 1
+          AND id <> @KhachHangId
+          AND REPLACE(
+                REPLACE(REPLACE(TRIM(so_dien_thoai), ' ', ''), '-', ''),
+                '.', '')
+              = @SoDienThoai;
+        """;
+
+        var soLuong = await connection.ExecuteScalarAsync<int>(
+            sql,
+            new
+            {
+                SoDienThoai = sdt,
+                KhachHangId = khachHangId
+            });
+
+        return soLuong > 0;
+    }
+
     public async Task XoaKhachHangAsync(uint customerId)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CustomersDelete, "Bạn không có quyền xóa khách hàng.");

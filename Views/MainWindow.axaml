@@ -1300,6 +1300,16 @@
                         Command="{Binding MoDanhSachKhachBanCommand}" />
               </StackPanel>
 
+              <!-- Thêm khách hàng ngay trong màn Bán hàng -->
+              <Button Content="＋ Thêm khách hàng"
+                      Classes="toolbar-action"
+                      HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Center"
+                      Padding="8,5"
+                      FontSize="11"
+                      Margin="0,0,0,4"
+                      Command="{Binding ThemKhachHangBanCommand}" />
+
               <!-- List gợi ý thu gọn -->
               <Border Background="White" BorderBrush="#D8E5E0" BorderThickness="1" CornerRadius="6" MaxHeight="90" Margin="0,0,0,8">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -1445,10 +1455,7 @@
             <StackPanel Grid.Row="2" Orientation="Vertical" Spacing="6" Margin="0,8,0,0">
               <Button Classes="toolbar-primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                       Content="{Binding TrangThaiXuLyThanhToan}" IsEnabled="{Binding CanThanhToan}" Command="{Binding ThanhToanCommand}" Height="36" />
-              <Grid ColumnDefinitions="*,*">
-                <Button Classes="secondary" Content="🧾 Đơn mới" Command="{Binding TaoDonMoiCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,3,0" />
-                <Button Grid.Column="1" Classes="secondary" Content="Đóng" Command="{Binding DongGiaoDienBanHangCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="3,0,0,0" />
-              </Grid>
+              <Button Classes="secondary" Content="Đóng" Command="{Binding DongGiaoDienBanHangCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Height="36" />
             </StackPanel>
 
           </Grid>
