@@ -16,7 +16,8 @@ public sealed partial class PermissionItem : ObservableObject
     private bool isChecked;
 
     /// <summary>Quyền cốt lõi: bắt buộc phải có để mở được phần giao diện của nhóm.</summary>
-    public bool IsCoreView => MaQuyen.EndsWith(".View", StringComparison.Ordinal);
+    public bool IsCoreView => ShopHoa.Services.PermissionCatalog.ModuleViewKeys.Values
+        .Contains(MaQuyen, StringComparer.Ordinal);
 
     /// <summary>Người đang sửa có quyền thay đổi danh sách quyền hay không.</summary>
     [ObservableProperty]

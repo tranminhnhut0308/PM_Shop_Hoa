@@ -15,16 +15,6 @@ public static class Quyen
     public const string ThuNgan = "THU_NGAN";
     public const string BaoCao = "BAO_CAO";
 
-    private static readonly string[] VaiTroSuaHangHoa =
-    [
-        QuanTri,
-        QuanLy,
-        Kho
-    ];
-
-    public static bool DuocSuaHangHoa(NguoiDung? nguoiDung)
-        => HasAnyRole(nguoiDung, VaiTroSuaHangHoa);
-
     public static bool HasAnyRole(NguoiDung? nguoiDung, params string[] maVaiTro)
     {
         if (nguoiDung is null || maVaiTro.Length == 0)

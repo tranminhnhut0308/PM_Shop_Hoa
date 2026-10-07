@@ -3814,7 +3814,7 @@ LIMIT 500;
     /// <summary>Lấy mã hóa đơn kế tiếp (dùng ngoài giao dịch bán hàng).</summary>
     public async Task<string> TaoMaHoaDonMoiAsync()
     {
-        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SalesCreate, "Bạn không có quyền tạo hóa đơn bán hàng.");
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SalesPayment, "Bạn không có quyền tạo hóa đơn bán hàng.");
         await using var connection = await OpenAsync();
 
         return await TaoMaHoaDonMoiTrongGiaoDichAsync(connection, null);
@@ -3925,7 +3925,7 @@ LIMIT 500;
     decimal tienKhachDua,
     string? phuongThucThanhToan = null)
     {
-        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SalesCreate, "Bạn không có quyền tạo hóa đơn bán hàng.");
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SalesPayment, "Bạn không có quyền tạo hóa đơn bán hàng.");
         if (items.Count == 0)
             throw new InvalidOperationException("Giỏ hàng đang trống.");
 
@@ -8046,6 +8046,116 @@ LIMIT 500;
             var items = await connection.QueryAsync<Permission>(sql);
             return items.ToList();
         } catch { return new List<Permission>(); }
+    }
+
+    private static bool _daDamBaoDanhMucQuyen;
+
+    /// <summary>
+    /// Bảo đảm bảng <c>quyen</c> có đủ mọi mã quyền trong <see cref="PermissionCatalog"/>.
+    /// Nhờ vậy cây phân quyền luôn có Id &gt; 0 và không bị mất quyền khi lưu.
+    /// Chạy idempotent, an toàn khi gọi lại nhiều lần.
+    /// </summary>
+    public async Task EnsurePermissionCatalogAsync()
+    {
+        if (_daDamBaoDanhMucQuyen)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            // Bảo đảm các bảng phân quyền tồn tại (database cũ chưa chạy migration).
+            await connection.ExecuteAsync("""
+            CREATE TABLE IF NOT EXISTS `quyen` (
+              `id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+              `ma_quyen` VARCHAR(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+              `ten_quyen` VARCHAR(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+              `nhom` VARCHAR(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+              `loai` VARCHAR(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+              `mo_ta` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+              `thu_tu` INT(10) UNSIGNED DEFAULT 0,
+              `trang_thai` TINYINT(1) NOT NULL DEFAULT 1,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `uk_quyen_ma_quyen` (`ma_quyen`),
+              KEY `idx_quyen_nhom` (`nhom`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """);
+
+            await connection.ExecuteAsync("""
+            CREATE TABLE IF NOT EXISTS `vai_tro_quyen` (
+              `id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+              `vai_tro_id` INT(10) UNSIGNED NOT NULL,
+              `quyen_id` INT(10) UNSIGNED NOT NULL,
+              `nguoi_cap_nhat_id` INT(10) UNSIGNED DEFAULT NULL,
+              `ngay_cap_nhat` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `uk_vai_tro_quyen` (`vai_tro_id`, `quyen_id`),
+              KEY `fk_vtq_quyen` (`quyen_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """);
+
+            await connection.ExecuteAsync("""
+            CREATE TABLE IF NOT EXISTS `nguoi_dung_quyen` (
+              `id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+              `nguoi_dung_id` INT(10) UNSIGNED NOT NULL,
+              `quyen_id` INT(10) UNSIGNED NOT NULL,
+              `cho_phep` TINYINT(1) NOT NULL DEFAULT 1,
+              `nguoi_cap_nhat_id` INT(10) UNSIGNED DEFAULT NULL,
+              `ngay_cap_nhat` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `uk_nguoi_dung_quyen` (`nguoi_dung_id`, `quyen_id`),
+              KEY `fk_ndq_quyen` (`quyen_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """);
+
+            var sql = """
+            INSERT INTO quyen (ma_quyen, ten_quyen, nhom, loai, thu_tu, trang_thai)
+            VALUES (@MaQuyen, @TenQuyen, @Nhom, @Loai, @ThuTu, 1)
+            ON DUPLICATE KEY UPDATE
+                ten_quyen = VALUES(ten_quyen),
+                nhom = VALUES(nhom),
+                loai = VALUES(loai),
+                thu_tu = VALUES(thu_tu),
+                trang_thai = 1
+            """;
+
+            foreach (var group in PermissionCatalog.Groups)
+            {
+                for (var i = 0; i < group.Keys.Length; i++)
+                {
+                    var key = group.Keys[i];
+                    await connection.ExecuteAsync(sql, new
+                    {
+                        MaQuyen = key,
+                        TenQuyen = PermissionCatalog.GetTenQuyen(key),
+                        Nhom = group.Nhom,
+                        Loai = PermissionCatalog.GetLoai(key),
+                        ThuTu = i + 1
+                    });
+                }
+            }
+
+            // Vai trò QUAN_TRI luôn được cấp toàn bộ danh mục quyền.
+            var adminRoleId = await connection.ExecuteScalarAsync<uint?>(
+                "SELECT id FROM vai_tro WHERE ma_vai_tro = @Ma",
+                new { Ma = Quyen.QuanTri });
+
+            if (adminRoleId.HasValue)
+            {
+                await connection.ExecuteAsync(
+                    "INSERT IGNORE INTO vai_tro_quyen (vai_tro_id, quyen_id) SELECT @RoleId, q.id FROM quyen q",
+                    new { RoleId = adminRoleId.Value });
+            }
+
+            _daDamBaoDanhMucQuyen = true;
+        }
+        catch (Exception ex)
+        {
+            // Không chặn đăng nhập nếu danh mục quyền chưa đồng bộ được.
+            Helpers.SafeLog.WriteError("EnsurePermissionCatalogAsync", ex);
+        }
     }
 
     public async Task<IReadOnlyList<uint>> GetRolePermissionIdsAsync(uint roleId)

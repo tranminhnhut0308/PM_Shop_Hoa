@@ -11,6 +11,7 @@ public partial class UserEditViewModel : ObservableObject
     private readonly DatabaseService _db;
     private readonly bool _isEdit;
     private bool _canEditPermissions = true;
+    private bool _dangTaiDuLieu;
 
     [ObservableProperty] private string title = "Thêm tài khoản";
     [ObservableProperty] private uint userId;
@@ -97,8 +98,17 @@ public partial class UserEditViewModel : ObservableObject
                 }
             }
 
+            _dangTaiDuLieu = true;
             ApplyRoleSelection(currentRoleIds);
             BuildPermissionGroups(perms, checkedKeys);
+            _dangTaiDuLieu = false;
+
+            // Tạo tài khoản mới: tick sẵn nhóm quyền mặc định của vai trò đang chọn.
+            if (!_isEdit)
+            {
+                ApplyRoleDefaults(SelectedRole);
+            }
+
             ApplyPermissionGuard();
         }
         catch (Exception ex)
@@ -233,20 +243,50 @@ public partial class UserEditViewModel : ObservableObject
 
     partial void OnSelectedRoleChanged(Role? value)
     {
-        var isAdmin = value is not null
-                      && string.Equals(value.MaVaiTro, Quyen.QuanTri, StringComparison.OrdinalIgnoreCase);
-        if (isAdmin == IsAdminAccount)
+        // Khi nạp dữ liệu, LoadAsync đã tự dựng cây quyền nên bỏ qua để không ghi đè.
+        if (_dangTaiDuLieu)
         {
             return;
         }
+
+        ApplyRoleDefaults(value);
+        ApplyPermissionGuard();
+        RefreshCommands();
+    }
+
+    /// <summary>
+    /// Tick sẵn các quyền mặc định của vai trò đang chọn (người dùng vẫn sửa lại được).
+    /// QUAN_TRI luôn được tick toàn bộ.
+    /// </summary>
+    private void ApplyRoleDefaults(Role? role)
+    {
+        var isAdmin = role is not null
+                      && string.Equals(role.MaVaiTro, Quyen.QuanTri, StringComparison.OrdinalIgnoreCase);
 
         IsAdminAccount = isAdmin;
         OnPropertyChanged(nameof(IsAdminAccount));
         OnPropertyChanged(nameof(CanEditBasicInfo));
 
-        SetAllPermissions(isAdmin);
-        ApplyPermissionGuard();
-        RefreshCommands();
+        if (isAdmin)
+        {
+            SetAllPermissions(true);
+            return;
+        }
+
+        var defaults = role is not null
+                       && PermissionCatalog.DefaultRolePermissions.TryGetValue(role.MaVaiTro, out var keys)
+            ? new HashSet<string>(keys, StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var g in PermissionGroups)
+        {
+            foreach (var it in g.Permissions)
+            {
+                it.IsChecked = defaults.Contains(it.MaQuyen);
+            }
+        }
+
+        RaiseSelectedSummary();
     }
 
     private void SetAllPermissions(bool value)

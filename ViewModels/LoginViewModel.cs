@@ -136,6 +136,7 @@ public partial class LoginViewModel : ObservableObject
             }
 
             var user = loginRes.User!;
+            await _db.EnsurePermissionCatalogAsync();
             var perms = await _db.GetUserPermissionKeysAsync(user.Id);
             Session.SetCurrentUser(user, perms);
             _ = _db.CapNhatLanDangNhapCuoiAsync(user.Id);
@@ -231,6 +232,7 @@ public partial class LoginViewModel : ObservableObject
             }
 
             var user = loginRes.User!;
+            await _db.EnsurePermissionCatalogAsync();
             var perms = await _db.GetUserPermissionKeysAsync(user.Id);
             Session.SetCurrentUser(user, perms);
             _ = _db.CapNhatLanDangNhapCuoiAsync(user.Id);

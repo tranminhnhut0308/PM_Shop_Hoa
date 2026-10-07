@@ -199,8 +199,10 @@ public partial class MainWindowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(TrangThaiXuLyThanhToan))]
     private bool isThanhToanDangXuLy;
 
-    /// <summary>Có thể bấm "Thanh toán" hay không.</summary>
-    public bool CanThanhToan => !IsThanhToanDangXuLy && SaleCart.Count > 0;
+    /// <summary>Có thể bấm "Thanh toán" hay không (có hàng + có quyền thanh toán).</summary>
+    public bool CanThanhToan => !IsThanhToanDangXuLy
+                                && SaleCart.Count > 0
+                                && Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SalesPayment);
 
     /// <summary>Chữ hiển thị trên nút thanh toán khi đang xử lý.</summary>
     public string TrangThaiXuLyThanhToan =>
@@ -1451,10 +1453,10 @@ public partial class MainWindowViewModel : ObservableObject
     // =========================================================
 
     /// <summary>
-    /// Người dùng hiện tại có quyền sửa hàng hóa / giá bán không.
-    /// Lấy từ vai trò trong database (vai_tro.ma_vai_tro), không gắn cứng tài khoản.
+    /// Người dùng hiện tại có quyền chỉnh giá bán không (dựa trên quyền chi tiết,
+    /// không gắn cứng theo tên vai trò).
     /// </summary>
-    public bool DuocSuaGiaBan => Quyen.DuocSuaHangHoa(Session.CurrentUser);
+    public bool DuocSuaGiaBan => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsUpdatePrice);
 
     /// <summary>
     /// Mở ô nhập giá ngay tại dòng sản phẩm (chỉnh nhanh).
@@ -3121,6 +3123,21 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
         if (item is null)
             return;
 
+        var quyenBaoCao = item.Key switch
+        {
+            "cuoi-ngay" => PermissionKeys.ReportsEndOfDay,
+            "ban-hang" => PermissionKeys.ReportsSales,
+            "hang-hoa" => PermissionKeys.ReportsProducts,
+            "phieu-nhap-hang" => PermissionKeys.ReportsPurchases,
+            _ => PermissionKeys.ReportsView
+        };
+
+        if (!CoQuyen(quyenBaoCao))
+        {
+            StatusMessage = "Bạn không có quyền xem báo cáo này.";
+            return;
+        }
+
         SelectedMenu = "Báo cáo";
         SelectedReportKey = item.Key;
 
@@ -4033,7 +4050,7 @@ partial void OnSaleDiscountModeChanged(string value) => RecalculateSaleTotal();
 [RelayCommand]
 private async Task ThanhToanAsync()
 {
-if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Bạn không có quyền bán hàng."))
+if (!await KiemTraQuyenAsync(PermissionKeys.SalesPayment, "Bạn không có quyền bán hàng."))
     {
         return;
     }
@@ -4255,22 +4272,50 @@ public void RaiseAllCanProperties()
 {
     string[] names =
     [
-        nameof(CanCreateProduct), nameof(CanEditProduct), nameof(CanDeleteProduct),
+        nameof(CanViewDashboard), nameof(CanViewProducts), nameof(CanViewPurchases),
+            nameof(CanViewInvoices), nameof(CanViewSales), nameof(CanViewCustomers),
+            nameof(CanViewSuppliers), nameof(CanViewCashBook), nameof(CanViewReports),
+            nameof(CanViewUsers), nameof(CanViewSettings), nameof(CanViewStoreInfo),
+            nameof(CanManageUsers),
+            // Hàng hóa
+            nameof(CanCreateProduct), nameof(CanEditProduct), nameof(CanDeleteProduct),
             nameof(CanImportProduct), nameof(CanExportProduct), nameof(CanUpdateProductPrice),
-            nameof(CanCreateSale), nameof(CanEditSale), nameof(CanDeleteSale),
-            nameof(CanPaySale), nameof(CanViewSaleHistory),
-            nameof(CanPrintInvoice), nameof(CanImportInvoice), nameof(CanCancelInvoice),
-            nameof(CanCreateCustomer), nameof(CanEditCustomer), nameof(CanDeleteCustomer), nameof(CanImportCustomer),
+            nameof(CanUpdateProductCost), nameof(CanAdjustStock), nameof(CanViewProductDetail),
+            // Bán hàng
+            nameof(CanSearchProduct), nameof(CanAddProductToSale), nameof(CanEditSaleQuantity),
+            nameof(CanRemoveProductFromSale), nameof(CanApplySaleDiscount), nameof(CanPaySale),
+            nameof(CanPrintSaleInvoice), nameof(CanCancelSaleInvoice), nameof(CanViewSaleHistory),
+            // Hóa đơn
+            nameof(CanViewInvoiceDetail), nameof(CanCreateInvoice), nameof(CanEditInvoice),
+            nameof(CanCancelInvoice), nameof(CanDeleteInvoice), nameof(CanPrintInvoice),
+            nameof(CanImportInvoice), nameof(CanExportInvoice),
+            // Khách hàng
+            nameof(CanCreateCustomer), nameof(CanEditCustomer), nameof(CanDeleteCustomer),
+            nameof(CanImportCustomer), nameof(CanExportCustomer), nameof(CanViewCustomerDetail),
+            nameof(CanViewCustomerDebt), nameof(CanCollectCustomerDebt),
+            // Nhà cung cấp
             nameof(CanCreateSupplier), nameof(CanEditSupplier), nameof(CanDeleteSupplier),
-            nameof(CanImportSupplier), nameof(CanExportSupplier),
+            nameof(CanImportSupplier), nameof(CanExportSupplier), nameof(CanViewSupplierDetail),
+            nameof(CanViewSupplierDebt), nameof(CanPaySupplierDebt),
+            // Phiếu nhập
             nameof(CanCreatePurchase), nameof(CanEditPurchase), nameof(CanDeletePurchase),
             nameof(CanImportPurchase), nameof(CanExportPurchase), nameof(CanPrintPurchase),
+            nameof(CanViewPurchaseDetail),
+            // Sổ quỹ
             nameof(CanCreateReceipt), nameof(CanCreatePayment), nameof(CanEditCashBook),
-            nameof(CanDeleteCashBook), nameof(CanCancelCashBook),
-            nameof(CanImportCashBook), nameof(CanExportCashBook),
-            nameof(CanViewStoreInfo), nameof(CanEditStoreInfo),
+            nameof(CanDeleteCashBook), nameof(CanCancelCashBook), nameof(CanImportCashBook),
+            nameof(CanExportCashBook), nameof(CanViewCashBookBalance), nameof(CanInitCashBook),
+            nameof(CanSetOpeningBalance), nameof(CanViewCashBookDetail),
+            // Báo cáo
+            nameof(CanViewReportEndOfDay), nameof(CanViewReportSales), nameof(CanViewReportProducts),
+            nameof(CanViewReportPurchases), nameof(CanViewRevenue), nameof(CanViewProfit),
+            nameof(CanViewCost), nameof(CanPrintReport), nameof(CanExportReport),
+            // Tài khoản
             nameof(CanCreateUser), nameof(CanEditUser), nameof(CanDeleteUser),
-            nameof(CanAssignPermission), nameof(CanEditSettings)
+            nameof(CanAssignPermission), nameof(CanLockUser), nameof(CanUnlockUser),
+            nameof(CanResetPassword),
+            // Cài đặt / Thông tin tiệm
+            nameof(CanEditSettings), nameof(CanEditStoreInfo)
     ];
 
     foreach (var name in names)
@@ -4292,16 +4337,16 @@ public bool IsDataSectionSelected =>
 /// <summary>Màn "Thông tin tiệm" có vùng nội dung riêng, không nằm trong TabControl dữ liệu.</summary>
 public bool IsThongTinTiemSelected => SelectedMenu == "Thông tin tiệm";
 
-/// <summary>Được phép xem màn thông tin tiệm (dùng chung nhóm quyền Cài đặt).</summary>
-public bool CanViewStoreInfo => CanViewSettings;
+/// <summary>Được phép xem màn thông tin tiệm.</summary>
+public bool CanViewStoreInfo => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.StoreInfoView)
+    || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SettingsView)
+    || Quyen.IsAdmin(Session.CurrentUser);
 
-/// <summary>Được phép sửa thông tin tiệm (cùng nhóm quyền Cài đặt).</summary>
-public bool CanEditStoreInfo => CanEditSettings;
 public bool CanViewDashboard => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.DashboardView) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewProducts => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsView) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewPurchases => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.PurchasesView) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewInvoices => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.InvoicesView) || Quyen.IsAdmin(Session.CurrentUser);
-public bool CanViewSales => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SalesView) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SalesCreate) || Quyen.IsAdmin(Session.CurrentUser);
+public bool CanViewSales => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SalesView) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SalesPayment) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewCustomers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.CustomersView) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewSuppliers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SuppliersView) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewCashBook => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.CashBookView) || Quyen.IsAdmin(Session.CurrentUser);
@@ -4331,22 +4376,40 @@ public bool CanDeleteProduct => CoQuyen(PermissionKeys.ProductsDelete);
 public bool CanImportProduct => CoQuyen(PermissionKeys.ProductsImport);
 public bool CanExportProduct => CoQuyen(PermissionKeys.ProductsExport);
 public bool CanUpdateProductPrice => CoQuyen(PermissionKeys.ProductsUpdatePrice);
+public bool CanUpdateProductCost => CoQuyen(PermissionKeys.ProductsUpdateCost);
+public bool CanAdjustStock => CoQuyen(PermissionKeys.ProductsAdjustStock);
+public bool CanViewProductDetail => CoQuyen(PermissionKeys.ProductsDetail);
 
-// Bán hàng / Hóa đơn
-public bool CanCreateSale => CoQuyen(PermissionKeys.SalesCreate);
-public bool CanEditSale => CoQuyen(PermissionKeys.SalesEdit);
-public bool CanDeleteSale => CoQuyen(PermissionKeys.SalesDelete);
+// Bán hàng
+public bool CanSearchProduct => CoQuyen(PermissionKeys.SalesSearchProduct);
+public bool CanAddProductToSale => CoQuyen(PermissionKeys.SalesAddProduct);
+public bool CanEditSaleQuantity => CoQuyen(PermissionKeys.SalesEditQuantity);
+public bool CanRemoveProductFromSale => CoQuyen(PermissionKeys.SalesRemoveProduct);
+public bool CanApplySaleDiscount => CoQuyen(PermissionKeys.SalesDiscount);
 public bool CanPaySale => CoQuyen(PermissionKeys.SalesPayment);
+public bool CanPrintSaleInvoice => CoQuyen(PermissionKeys.SalesPrint);
+public bool CanCancelSaleInvoice => CoQuyen(PermissionKeys.SalesCancel);
 public bool CanViewSaleHistory => CoQuyen(PermissionKeys.SalesHistory);
+
+// Hóa đơn
+public bool CanViewInvoiceDetail => CoQuyen(PermissionKeys.InvoicesDetail);
+public bool CanCreateInvoice => CoQuyen(PermissionKeys.InvoicesCreate);
+public bool CanEditInvoice => CoQuyen(PermissionKeys.InvoicesEdit);
+public bool CanCancelInvoice => CoQuyen(PermissionKeys.InvoicesCancel);
+public bool CanDeleteInvoice => CoQuyen(PermissionKeys.InvoicesDelete);
 public bool CanPrintInvoice => CoQuyen(PermissionKeys.InvoicesPrint);
 public bool CanImportInvoice => CoQuyen(PermissionKeys.InvoicesImport);
-public bool CanCancelInvoice => CoQuyen(PermissionKeys.InvoicesCancel);
+public bool CanExportInvoice => CoQuyen(PermissionKeys.InvoicesExport);
 
 // Khách hàng
 public bool CanCreateCustomer => CoQuyen(PermissionKeys.CustomersCreate);
 public bool CanEditCustomer => CoQuyen(PermissionKeys.CustomersEdit);
 public bool CanDeleteCustomer => CoQuyen(PermissionKeys.CustomersDelete);
 public bool CanImportCustomer => CoQuyen(PermissionKeys.CustomersImport);
+public bool CanExportCustomer => CoQuyen(PermissionKeys.CustomersExport);
+public bool CanViewCustomerDetail => CoQuyen(PermissionKeys.CustomersDetail);
+public bool CanViewCustomerDebt => CoQuyen(PermissionKeys.CustomersDebtView);
+public bool CanCollectCustomerDebt => CoQuyen(PermissionKeys.CustomersDebtPay);
 
 // Nhà cung cấp
 public bool CanCreateSupplier => CoQuyen(PermissionKeys.SuppliersCreate);
@@ -4354,6 +4417,9 @@ public bool CanEditSupplier => CoQuyen(PermissionKeys.SuppliersEdit);
 public bool CanDeleteSupplier => CoQuyen(PermissionKeys.SuppliersDelete);
 public bool CanImportSupplier => CoQuyen(PermissionKeys.SuppliersImport);
 public bool CanExportSupplier => CoQuyen(PermissionKeys.SuppliersExport);
+public bool CanViewSupplierDetail => CoQuyen(PermissionKeys.SuppliersDetail);
+public bool CanViewSupplierDebt => CoQuyen(PermissionKeys.SuppliersDebtView);
+public bool CanPaySupplierDebt => CoQuyen(PermissionKeys.SuppliersDebtPay);
 
 // Phiếu nhập
 public bool CanCreatePurchase => CoQuyen(PermissionKeys.PurchasesCreate);
@@ -4362,6 +4428,7 @@ public bool CanDeletePurchase => CoQuyen(PermissionKeys.PurchasesDelete);
 public bool CanImportPurchase => CoQuyen(PermissionKeys.PurchasesImport);
 public bool CanExportPurchase => CoQuyen(PermissionKeys.PurchasesExport);
 public bool CanPrintPurchase => CoQuyen(PermissionKeys.PurchasesPrint);
+public bool CanViewPurchaseDetail => CoQuyen(PermissionKeys.PurchasesDetail);
 
 // Sổ quỹ
 public bool CanCreateReceipt => CoQuyen(PermissionKeys.CashBookCreateReceipt);
@@ -4371,15 +4438,34 @@ public bool CanDeleteCashBook => CoQuyen(PermissionKeys.CashBookDelete);
 public bool CanCancelCashBook => CoQuyen(PermissionKeys.CashBookCancel);
 public bool CanImportCashBook => CoQuyen(PermissionKeys.CashBookImport);
 public bool CanExportCashBook => CoQuyen(PermissionKeys.CashBookExport);
+public bool CanViewCashBookBalance => CoQuyen(PermissionKeys.CashBookBalance);
+public bool CanInitCashBook => CoQuyen(PermissionKeys.CashBookInit);
+public bool CanSetOpeningBalance => CoQuyen(PermissionKeys.CashBookOpeningBalance);
+public bool CanViewCashBookDetail => CoQuyen(PermissionKeys.CashBookDetail);
+
+// Báo cáo
+public bool CanViewReportEndOfDay => CoQuyen(PermissionKeys.ReportsEndOfDay);
+public bool CanViewReportSales => CoQuyen(PermissionKeys.ReportsSales);
+public bool CanViewReportProducts => CoQuyen(PermissionKeys.ReportsProducts);
+public bool CanViewReportPurchases => CoQuyen(PermissionKeys.ReportsPurchases);
+public bool CanViewRevenue => CoQuyen(PermissionKeys.ReportsRevenue);
+public bool CanViewProfit => CoQuyen(PermissionKeys.ReportsProfit);
+public bool CanViewCost => CoQuyen(PermissionKeys.ReportsCost);
+public bool CanPrintReport => CoQuyen(PermissionKeys.ReportsPrint);
+public bool CanExportReport => CoQuyen(PermissionKeys.ReportsExport);
 
 // Tài khoản
 public bool CanCreateUser => CoQuyen(PermissionKeys.UsersCreate);
 public bool CanEditUser => CoQuyen(PermissionKeys.UsersEdit);
 public bool CanDeleteUser => CoQuyen(PermissionKeys.UsersDelete);
 public bool CanAssignPermission => CoQuyen(PermissionKeys.UsersAssignPermission);
+public bool CanLockUser => CoQuyen(PermissionKeys.UsersLock);
+public bool CanUnlockUser => CoQuyen(PermissionKeys.UsersUnlock);
+public bool CanResetPassword => CoQuyen(PermissionKeys.UsersResetPassword);
 
-// Cài đặt
+// Cài đặt / Thông tin tiệm
 public bool CanEditSettings => CoQuyen(PermissionKeys.SettingsEdit);
+public bool CanEditStoreInfo => CoQuyen(PermissionKeys.StoreInfoEdit);
 
 /// <summary>Kiểm tra quyền ngay tại thời điểm gọi lệnh (bắt được cả trường hợp gọi trực tiếp).</summary>
 private async Task<bool> KiemTraQuyenAsync(string key, string message)
