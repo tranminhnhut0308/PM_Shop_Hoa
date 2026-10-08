@@ -473,6 +473,8 @@ public partial class UserEditViewModel : ObservableObject
                 {
                     await _db.SaveUserPermissionsAsync(UserId, permissionIds, actorId);
                 }
+                
+                await ShowMessage("Cập nhật tài khoản thành công.");
             }
             else
             {
@@ -486,10 +488,19 @@ public partial class UserEditViewModel : ObservableObject
                     PermissionIds = permissionIds
                 };
                 await _db.CreateUserAsync(dto, actorId);
+                await ShowMessage("Tạo tài khoản thành công.");
             }
 
             var target = window ?? GetCurrentWindow();
-            target?.Close(true);
+            if (target != null)
+            {
+                target.Close(true);
+            }
+            else
+            {
+                // Fallback nếu không tìm thấy window
+                Console.WriteLine("Cannot find window to close.");
+            }
         }
         catch (UnauthorizedAccessException ex)
         {

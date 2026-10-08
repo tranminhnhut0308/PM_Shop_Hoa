@@ -78,6 +78,19 @@ public partial class MainWindowViewModel : ObservableObject
         BaoCaoHangHoa = new BaoCaoHangHoaViewModel(_db);
         BaoCaoKhachHang = new BaoCaoKhachHangViewModel(_db);
         BaoCaoNhaCungCap = new BaoCaoNhaCungCapViewModel(_db);
+
+        if (!CanViewDashboard)
+        {
+            if (CanViewProducts) SelectedMenu = "Hàng hóa";
+            else if (CanViewPurchases) SelectedMenu = "Nhập hàng";
+            else if (CanViewInvoices) SelectedMenu = "Hóa đơn";
+            else if (CanViewCustomers) SelectedMenu = "Khách hàng";
+            else if (CanViewSuppliers) SelectedMenu = "Nhà cung cấp";
+            else if (CanViewCashBook) SelectedMenu = "Sổ quỹ";
+            else if (CanViewReports) SelectedMenu = "Báo cáo";
+            else SelectedMenu = "";
+        }
+
         BaoCaoCuoiNgay = new BaoCaoCuoiNgayViewModel(_db)
         {
             // Cửa sổ chính chỉ có sau khi ViewModel được tạo, nên các callback

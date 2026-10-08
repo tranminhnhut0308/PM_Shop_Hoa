@@ -8298,6 +8298,7 @@ LIMIT 500;
             {
                 await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = userId, QuyenId = pid, ActorId = actorId }, tx);
             }
+            try { await connection.ExecuteAsync("UPDATE nguoi_dung SET phan_quyen_rieng = 1 WHERE id = @UserId", new { UserId = userId }, tx); } catch { }
             await tx.CommitAsync();
         }
         catch
@@ -8359,6 +8360,7 @@ LIMIT 500;
             {
                 await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = userId, QuyenId = pid, ActorId = actorId }, tx);
             }
+            try { await connection.ExecuteAsync("UPDATE nguoi_dung SET phan_quyen_rieng = 1 WHERE id = @UserId", new { UserId = userId }, tx); } catch { }
             await tx.CommitAsync();
             return userId;
         }
@@ -8420,6 +8422,7 @@ LIMIT 500;
             {
                 await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = dto.Id, QuyenId = pid, ActorId = actorId }, tx);
             }
+            try { await connection.ExecuteAsync("UPDATE nguoi_dung SET phan_quyen_rieng = 1 WHERE id = @UserId", new { UserId = dto.Id }, tx); } catch { }
             await tx.CommitAsync();
         }
         catch

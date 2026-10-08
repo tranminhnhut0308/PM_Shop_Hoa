@@ -62,20 +62,19 @@ public partial class UsersViewModel : ObservableObject
     {
         if (!DuocXemTaiKhoan)
         {
-            Users.Clear();
+            Users = new ObservableCollection<UserListItem>();
             return;
         }
 
         try
         {
             var data = await _db.GetUsersAsync(SearchText);
-            Users.Clear();
-            foreach (var u in data)
-            {
-                Users.Add(u);
-            }
+            Users = new ObservableCollection<UserListItem>(data);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _ = ShowMessage("Lỗi tải danh sách tài khoản: " + ex.Message);
+        }
     }
 
     [RelayCommand]
@@ -111,17 +110,19 @@ public partial class UsersViewModel : ObservableObject
         catch { owner = null; }
         if (owner == null || owner.IsVisible == false)
         {
+            win.Closed += (_, _) => _ = LoadAsync();
             win.Show();
         }
         else
         {
             try
             {
-                var res = await win.ShowDialog<bool>(owner);
-                if (res) await LoadAsync();
+                await win.ShowDialog(owner);
+                await LoadAsync();
             }
             catch
             {
+                win.Closed += (_, _) => _ = LoadAsync();
                 win.Show();
             }
         }
@@ -151,17 +152,19 @@ public partial class UsersViewModel : ObservableObject
         catch { owner = null; }
         if (owner == null || owner.IsVisible == false)
         {
+            win.Closed += (_, _) => _ = LoadAsync();
             win.Show();
         }
         else
         {
             try
             {
-                var res = await win.ShowDialog<bool>(owner);
-                if (res) await LoadAsync();
+                await win.ShowDialog(owner);
+                await LoadAsync();
             }
             catch
             {
+                win.Closed += (_, _) => _ = LoadAsync();
                 win.Show();
             }
         }
