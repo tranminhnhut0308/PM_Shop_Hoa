@@ -14,6 +14,7 @@ public partial class UserEditViewModel : ObservableObject
     private bool _dangTaiDuLieu;
 
     [ObservableProperty] private string title = "Thêm tài khoản";
+    [ObservableProperty] private string passwordWatermark = "Nhập mật khẩu *";
     [ObservableProperty] private uint userId;
     [ObservableProperty] private string tenDangNhap = string.Empty;
     [ObservableProperty] private string hoTen = string.Empty;
@@ -60,7 +61,14 @@ public partial class UserEditViewModel : ObservableObject
         if (_isEdit)
         {
             Title = "Sửa tài khoản";
+            PasswordWatermark = "Để trống nếu không đổi";
             canChangeUsername = false;
+        }
+        else
+        {
+            Title = "Thêm tài khoản";
+            PasswordWatermark = "Nhập mật khẩu *";
+            canChangeUsername = true;
         }
 
         _ = LoadAsync();
@@ -70,6 +78,8 @@ public partial class UserEditViewModel : ObservableObject
     {
         try
         {
+            await _db.EnsurePermissionCatalogAsync();
+
             var rolesList = await _db.GetRolesAsync();
             Roles.Clear();
             foreach (var r in rolesList)
@@ -475,15 +485,11 @@ public partial class UserEditViewModel : ObservableObject
                     RoleIds = roleIds,
                     PermissionIds = permissionIds
                 };
-                var newId = await _db.CreateUserAsync(dto, actorId);
-
-                if (CanEditPermissions)
-                {
-                    await _db.SaveUserPermissionsAsync(newId, permissionIds, actorId);
-                }
+                await _db.CreateUserAsync(dto, actorId);
             }
 
-            window?.Close(true);
+            var target = window ?? GetCurrentWindow();
+            target?.Close(true);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -497,7 +503,22 @@ public partial class UserEditViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public void Cancel(Avalonia.Controls.Window? window) => window?.Close(false);
+    public void Cancel(Avalonia.Controls.Window? window)
+    {
+        var target = window ?? GetCurrentWindow();
+        target?.Close(false);
+    }
+
+    private static Avalonia.Controls.Window? GetCurrentWindow()
+    {
+        if (App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt)
+        {
+            return lt.Windows.OfType<Views.UserEditWindow>().FirstOrDefault(w => w.IsVisible && w.IsActive)
+                ?? lt.Windows.OfType<Views.UserEditWindow>().FirstOrDefault(w => w.IsVisible)
+                ?? lt.Windows.FirstOrDefault(w => w.IsActive);
+        }
+        return null;
+    }
 
     private async Task ShowMessage(string msg)
     {
@@ -508,14 +529,28 @@ public partial class UserEditViewModel : ObservableObject
         btn.Click += (_, _) => win.Close();
         sp.Children.Add(btn);
         win.Content = sp;
-        var owner = App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt ? lt.MainWindow : null;
-        if (owner != null)
+
+        Avalonia.Controls.Window? owner = null;
+        if (App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt)
         {
-            await win.ShowDialog(owner);
+            owner = lt.Windows.OfType<Views.UserEditWindow>().FirstOrDefault(w => w.IsVisible && w.IsActive)
+                ?? lt.Windows.OfType<Views.UserEditWindow>().FirstOrDefault(w => w.IsVisible)
+                ?? lt.Windows.LastOrDefault(w => w.IsVisible && w != win);
         }
-        else
+
+        if (owner != null && owner != win)
         {
-            win.Show();
+            try
+            {
+                await win.ShowDialog(owner);
+                return;
+            }
+            catch
+            {
+                // Fallback nếu không ShowDialog được
+            }
         }
+
+        win.Show();
     }
 }

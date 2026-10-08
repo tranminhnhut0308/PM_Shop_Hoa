@@ -69,7 +69,7 @@ public sealed class StoreInfoService
             // ứng dụng hoặc lần sau đều không sinh thêm dòng.
             await connection.ExecuteAsync(
                 "INSERT IGNORE INTO thong_tin_tiem (id, ten_tiem, loi_cam_on) "
-                + "VALUES (1, 'SHOP HOA', 'Cảm ơn quý khách!');");
+                + "VALUES (1, 'VỰA HOA NHÀ HUY', 'Cảm ơn quý khách!');");
 
             return true;
         }

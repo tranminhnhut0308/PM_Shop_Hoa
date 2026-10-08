@@ -36,6 +36,7 @@ public partial class UserPermissionsViewModel : ObservableObject
     {
         try
         {
+            await _db.EnsurePermissionCatalogAsync();
             var perms = await _db.GetPermissionsAsync();
 
             var userPerms = await _db.GetUserPermissionsDetailAsync(_userId);
@@ -202,7 +203,8 @@ public partial class UserPermissionsViewModel : ObservableObject
         {
             await _db.SaveUserPermissionsAsync(_userId, ids, Session.CurrentUser?.Id);
             await ShowMessage("Đã lưu phân quyền.");
-            window?.Close();
+            var target = window ?? GetCurrentWindow();
+            target?.Close();
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -216,7 +218,22 @@ public partial class UserPermissionsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public void Huy(Avalonia.Controls.Window? window) => window?.Close();
+    public void Huy(Avalonia.Controls.Window? window)
+    {
+        var target = window ?? GetCurrentWindow();
+        target?.Close();
+    }
+
+    private static Avalonia.Controls.Window? GetCurrentWindow()
+    {
+        if (App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt)
+        {
+            return lt.Windows.OfType<Views.UserPermissionsWindow>().FirstOrDefault(w => w.IsVisible && w.IsActive)
+                ?? lt.Windows.OfType<Views.UserPermissionsWindow>().FirstOrDefault(w => w.IsVisible)
+                ?? lt.Windows.FirstOrDefault(w => w.IsActive);
+        }
+        return null;
+    }
 
     [RelayCommand(CanExecute = nameof(CanSave))]
     public void ChonTatCa() => SetAllPermissions(true);
@@ -233,14 +250,28 @@ public partial class UserPermissionsViewModel : ObservableObject
         btn.Click += (_, _) => win.Close();
         sp.Children.Add(btn);
         win.Content = sp;
-        var owner = App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt ? lt.MainWindow : null;
-        if (owner != null)
+
+        Avalonia.Controls.Window? owner = null;
+        if (App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt)
         {
-            await win.ShowDialog(owner);
+            owner = lt.Windows.OfType<Views.UserPermissionsWindow>().FirstOrDefault(w => w.IsVisible && w.IsActive)
+                ?? lt.Windows.OfType<Views.UserPermissionsWindow>().FirstOrDefault(w => w.IsVisible)
+                ?? lt.Windows.LastOrDefault(w => w.IsVisible && w != win);
         }
-        else
+
+        if (owner != null && owner != win)
         {
-            win.Show();
+            try
+            {
+                await win.ShowDialog(owner);
+                return;
+            }
+            catch
+            {
+                // Fallback nếu không ShowDialog được
+            }
         }
+
+        win.Show();
     }
 }

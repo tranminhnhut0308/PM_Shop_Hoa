@@ -8337,12 +8337,20 @@ LIMIT 500;
         {
             var maNguoiDung = await GenerateMaNguoiDungAsync(connection, tx);
             var hashed = BCrypt.Net.BCrypt.HashPassword(dto.MatKhau);
+            var chiNhanhId = Session.CurrentUser?.ChiNhanhId ?? 1u;
             var sql = """
-            INSERT INTO nguoi_dung (ma_nguoi_dung, ten_dang_nhap, mat_khau, ho_ten, trang_thai, ngay_tao, ngay_cap_nhat)
-            VALUES (@MaNguoiDung, @TenDangNhap, @MatKhau, @HoTen, @TrangThai, NOW(), NOW())
+            INSERT INTO nguoi_dung (ma_nguoi_dung, ten_dang_nhap, mat_khau, ho_ten, chi_nhanh_id, trang_thai, ngay_tao, ngay_cap_nhat)
+            VALUES (@MaNguoiDung, @TenDangNhap, @MatKhau, @HoTen, @ChiNhanhId, @TrangThai, NOW(), NOW())
             """;
-            await connection.ExecuteAsync(sql, new { MaNguoiDung = maNguoiDung, TenDangNhap = dto.TenDangNhap, MatKhau = hashed, HoTen = dto.HoTen, TrangThai = dto.TrangThai ? 1 : 0 }, tx);
-            var userId = await connection.QuerySingleAsync<uint>("SELECT LAST_INSERT_ID()", transaction: tx);
+            await connection.ExecuteAsync(sql, new { 
+                MaNguoiDung = maNguoiDung, 
+                TenDangNhap = dto.TenDangNhap, 
+                MatKhau = hashed, 
+                HoTen = dto.HoTen, 
+                ChiNhanhId = chiNhanhId,
+                TrangThai = dto.TrangThai ? 1 : 0 
+            }, tx);
+            var userId = await connection.ExecuteScalarAsync<uint>("SELECT LAST_INSERT_ID();", null, tx);
             foreach (var rid in dto.RoleIds.Distinct())
             {
                 await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_vai_tro (nguoi_dung_id, vai_tro_id) VALUES (@UserId, @RoleId)", new { UserId = userId, RoleId = rid }, tx);
@@ -8494,16 +8502,31 @@ LIMIT 500;
 
     private async Task<string> GenerateMaNguoiDungAsync(MySqlConnector.MySqlConnection conn, MySqlConnector.MySqlTransaction? tx = null)
     {
-        var max = await conn.QueryFirstOrDefaultAsync<string>("SELECT MAX(ma_nguoi_dung) FROM nguoi_dung", transaction: tx);
-        if (string.IsNullOrWhiteSpace(max) || !max.StartsWith("ND", StringComparison.OrdinalIgnoreCase))
+        const string sql = """
+        SELECT COALESCE(
+            MAX(CAST(SUBSTRING(ma_nguoi_dung, 3) AS UNSIGNED)),
+            0
+        ) + 1
+        FROM nguoi_dung
+        WHERE ma_nguoi_dung REGEXP '^ND[0-9]{1,8}$';
+        """;
+
+        var nextNum = await conn.ExecuteScalarAsync<long>(sql, transaction: tx);
+        if (nextNum <= 1)
         {
-            return "ND000002";
+            nextNum = 2;
         }
-        if (int.TryParse(max.Substring(2), out int num))
+
+        var code = $"ND{nextNum:D6}";
+        while (await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(1) FROM nguoi_dung WHERE ma_nguoi_dung = @Code",
+            new { Code = code },
+            tx) > 0)
         {
-            return "ND" + (num + 1).ToString("000000");
+            nextNum++;
+            code = $"ND{nextNum:D6}";
         }
-        return "ND" + DateTime.Now.ToString("yyMMddHHmmss");
+        return code;
     }
 
     public async Task LogAuditAsync(AuditLog log)

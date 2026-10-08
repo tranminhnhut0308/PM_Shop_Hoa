@@ -18,11 +18,15 @@ public partial class UsersViewModel : ObservableObject
         _ = LoadAsync();
     }
 
-    /// <summary>Chỉ mở được cửa sổ quản lý tài khoản khi có quyền xem danh sách tài khoản.</summary>
+    /// <summary>Chỉ mở được cửa sổ quản lý tài khoản khi có quyền xem danh sách tài khoản hoặc tạo tài khoản.</summary>
     public static bool DuocXemTaiKhoan => Session.CurrentUser != null
-                                          && Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersView);
+                                          && (Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersView)
+                                              || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersCreate)
+                                              || Quyen.IsAdmin(Session.CurrentUser));
 
-    public bool CanCreateUser => DuocXemTaiKhoan && Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersCreate);
+    public bool CanCreateUser => Session.CurrentUser != null
+                                 && (Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersCreate)
+                                     || Quyen.IsAdmin(Session.CurrentUser));
     public bool CanEditUser => DuocXemTaiKhoan && Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersEdit);
     public bool CanAssignPermission => DuocXemTaiKhoan && Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersAssignPermission);
     public bool CanLockUser => DuocXemTaiKhoan && Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersLock);
