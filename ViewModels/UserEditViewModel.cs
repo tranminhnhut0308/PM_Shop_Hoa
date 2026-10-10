@@ -505,34 +505,32 @@ public partial class UserEditViewModel : ObservableObject
                     PermissionIds = permissionIds
                 };
                 await _db.CreateUserAsync(dto, actorId);
-                await ShowMessage("Tạo tài khoản mới thành công!");
             }
 
             OnSaved?.Invoke();
 
             var target = window ?? GetCurrentWindow();
-            if (target != null)
-            {
-                target.Close(true);
-            }
-            else
-            {
-                // Fallback nếu không tìm thấy window
-                Console.WriteLine("Cannot find window to close.");
-            }
+            target?.Close(true);
+
+            await Views.NotificationWindow.ShowSuccessAsync(
+                _isEdit ? "Cập nhật tài khoản thành công!" : "Tạo tài khoản mới thành công!");
         }
         catch (MySqlConnector.MySqlException ex) when (ex.Number == 1062)
         {
-            await ShowMessage("Tên đăng nhập đã tồn tại trong hệ thống. Vui lòng chọn tên đăng nhập khác.");
+            await Views.NotificationWindow.ShowWarningAsync(
+                "Tên đăng nhập đã tồn tại trong hệ thống. Vui lòng chọn tên đăng nhập khác.",
+                owner: GetCurrentWindow());
         }
         catch (UnauthorizedAccessException ex)
         {
-            await ShowMessage(ex.Message);
+            await Views.NotificationWindow.ShowWarningAsync(ex.Message, owner: GetCurrentWindow());
         }
         catch (Exception ex)
         {
             Helpers.SafeLog.WriteError("UserEditViewModel.SaveAsync", ex);
-            await ShowMessage("Không thể " + (_isEdit ? "cập nhật" : "tạo") + " tài khoản: " + ex.Message);
+            await Views.NotificationWindow.ShowErrorAsync(
+                "Không thể " + (_isEdit ? "cập nhật" : "tạo") + " tài khoản: " + ex.Message,
+                owner: GetCurrentWindow());
         }
     }
 
@@ -554,37 +552,8 @@ public partial class UserEditViewModel : ObservableObject
         return null;
     }
 
-    private async Task ShowMessage(string msg)
+    private Task ShowMessage(string msg)
     {
-        var win = new Avalonia.Controls.Window { Title = "Thông báo", Width = 400, Height = 150 };
-        var sp = new Avalonia.Controls.StackPanel { Margin = new Avalonia.Thickness(20), Spacing = 10 };
-        sp.Children.Add(new Avalonia.Controls.TextBlock { Text = msg, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
-        var btn = new Avalonia.Controls.Button { Content = "OK", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right };
-        btn.Click += (_, _) => win.Close();
-        sp.Children.Add(btn);
-        win.Content = sp;
-
-        Avalonia.Controls.Window? owner = null;
-        if (App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt)
-        {
-            owner = lt.Windows.OfType<Views.UserEditWindow>().FirstOrDefault(w => w.IsVisible && w.IsActive)
-                ?? lt.Windows.OfType<Views.UserEditWindow>().FirstOrDefault(w => w.IsVisible)
-                ?? lt.Windows.LastOrDefault(w => w.IsVisible && w != win);
-        }
-
-        if (owner != null && owner != win)
-        {
-            try
-            {
-                await win.ShowDialog(owner);
-                return;
-            }
-            catch
-            {
-                // Fallback nếu không ShowDialog được
-            }
-        }
-
-        win.Show();
+        return Views.NotificationWindow.ShowWarningAsync(msg, owner: GetCurrentWindow());
     }
 }

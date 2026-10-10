@@ -285,16 +285,8 @@ public partial class UsersViewModel : ObservableObject
         }
     }
 
-    private async Task ShowMessage(string msg)
+    private Task ShowMessage(string msg)
     {
-        var win = new Avalonia.Controls.Window { Title = "Thông báo", Width = 400, Height = 150 };
-        var sp = new Avalonia.Controls.StackPanel { Margin = new Avalonia.Thickness(20), Spacing = 10 };
-        sp.Children.Add(new Avalonia.Controls.TextBlock { Text = msg, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
-        var btn = new Avalonia.Controls.Button { Content = "OK", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right };
-        btn.Click += (_, _) => win.Close();
-        sp.Children.Add(btn);
-        win.Content = sp;
-        var owner = App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt ? lt.MainWindow : null;
-        if (owner != null) await win.ShowDialog(owner); else win.Show();
+        return Views.NotificationWindow.ShowWarningAsync(msg);
     }
 }

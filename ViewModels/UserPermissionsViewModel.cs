@@ -241,37 +241,8 @@ public partial class UserPermissionsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanSave))]
     public void BoChonTatCa() => SetAllPermissions(false);
 
-    private async Task ShowMessage(string msg)
+    private Task ShowMessage(string msg)
     {
-        var win = new Avalonia.Controls.Window { Title = "Thông báo", Width = 400, Height = 150 };
-        var sp = new Avalonia.Controls.StackPanel { Margin = new Avalonia.Thickness(20), Spacing = 10 };
-        sp.Children.Add(new Avalonia.Controls.TextBlock { Text = msg, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
-        var btn = new Avalonia.Controls.Button { Content = "OK", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right };
-        btn.Click += (_, _) => win.Close();
-        sp.Children.Add(btn);
-        win.Content = sp;
-
-        Avalonia.Controls.Window? owner = null;
-        if (App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt)
-        {
-            owner = lt.Windows.OfType<Views.UserPermissionsWindow>().FirstOrDefault(w => w.IsVisible && w.IsActive)
-                ?? lt.Windows.OfType<Views.UserPermissionsWindow>().FirstOrDefault(w => w.IsVisible)
-                ?? lt.Windows.LastOrDefault(w => w.IsVisible && w != win);
-        }
-
-        if (owner != null && owner != win)
-        {
-            try
-            {
-                await win.ShowDialog(owner);
-                return;
-            }
-            catch
-            {
-                // Fallback nếu không ShowDialog được
-            }
-        }
-
-        win.Show();
+        return Views.NotificationWindow.ShowAsync(msg);
     }
 }
