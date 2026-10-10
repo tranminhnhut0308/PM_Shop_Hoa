@@ -199,8 +199,24 @@
       <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
     <Style Selector="DatePicker.flDate">
-      <Setter Property="FontSize" Value="12" />
+      <!-- Cho phép co giãn tự do theo chiều ngang và ôm sát khung cha -->
       <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MaxWidth" Value="240" /> <!-- Điều chỉnh độ rộng tối đa cho vừa khung sidebar -->
+      <Setter Property="Height" Value="32" /> <!-- Thu gọn chiều cao -->
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <!-- Ép các nút bấm / ô chọn bên trong DatePicker co giãn đúng kích thước -->
+    <Style Selector="DatePicker.flDate /template/ Button#FlyoutButton">
+      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="MinHeight" Value="30" />
+    </Style>
+
+    <!-- Giảm font chữ của văn bản hiển thị ngày/tháng/năm bên trong -->
+    <Style Selector="DatePicker.flDate TextBlock">
+      <Setter Property="FontSize" Value="11" />
     </Style>
   </UserControl.Styles>
 

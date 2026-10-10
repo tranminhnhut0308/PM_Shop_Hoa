@@ -90,6 +90,9 @@ public partial class MainWindowViewModel : ObservableObject
         // Giỏ hàng thêm/bớt dòng thì trạng thái nút "Thanh toán" phải cập nhật
         // theo, nếu không nút sẽ mở khi giỏ hàng vẫn còn trống.
         SaleCart.CollectionChanged += (_, _) => OnPropertyChanged(nameof(CanThanhToan));
+
+        // Gọi load danh sách nhóm sản phẩm tự động khi ViewModel khởi tạo
+        _ = LoadNhomSanPhamAsync();
     }
 
     /// <summary>
@@ -1420,6 +1423,93 @@ public partial class MainWindowViewModel : ObservableObject
         _productSearchCts.Dispose();
         _productSearchCts = null;
     }
+// 1. Khai báo các thuộc tính
+    [ObservableProperty]
+    private long? _selectedNhomId;
+
+    [ObservableProperty]
+    private IReadOnlyList<ProductOption>? _nhomSanPhamOptions;
+
+    [ObservableProperty]
+    private ProductOption? _selectedNhomSanPham;
+
+    partial void OnSelectedNhomSanPhamChanged(ProductOption? value)
+    {
+        // Mỗi khi người dùng chọn một mục trong ComboBox, tự động gọi hàm làm mới danh sách
+        _ = RefreshProductsAsync();
+        _ = TimKiemHoaBanAsync();
+    }
+
+    [ObservableProperty]
+    private string _currentSortOption = "Tên sản phẩm";
+
+    // 2. Hàm Load nhóm (dùng uint cho Id để khớp với ProductOption của bạn)
+    [RelayCommand]
+    private async Task LoadNhomSanPhamAsync()
+    {
+        try
+        {
+            var list = await _db.GetNhomSanPhamAsync();
+
+            // Vì Id là uint nên dùng 0 hoặc các giá trị dương an toàn
+            var fullList = new List<ProductOption>
+            {
+                new ProductOption { Id = 0, Name = "Tất cả sản phẩm" },
+                new ProductOption { Id = 999999, Name = "-- Chưa phân nhóm --" }
+            };
+
+            if (list != null)
+            {
+                fullList.AddRange(list);
+            }
+
+            NhomSanPhamOptions = fullList;
+
+            // Dùng tên thuộc tính viết hoa (SelectedNhomSanPham) thay vì _selectedNhomSanPham
+            SelectedNhomSanPham = fullList.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể tải danh sách nhóm sản phẩm: " + ex.Message;
+        }
+    }
+
+    // 3. Lệnh Lọc theo nhóm
+    [RelayCommand]
+    private async Task LocTheoNhomAsync(ProductOption? nhom)
+    {
+        SelectedNhomSanPham = nhom;
+        SelectedNhomId = nhom?.Id; 
+
+        await RefreshProductsAsync(); 
+
+        StatusMessage = nhom == null || nhom.Id == 0
+            ? $"Hiển thị tất cả {SanPhams.Count} sản phẩm" 
+            : $"Lọc theo nhóm '{nhom.Name}': {SanPhams.Count} sản phẩm";
+    }
+
+    // 4. Sắp xếp đa tiêu chuẩn
+    [RelayCommand]
+    private void SapXepTheoTieuChi(string criteria)
+    {
+        CurrentSortOption = criteria;
+        List<SanPham> sorted = criteria switch
+        {
+            "Mã hàng" => SanPhams.OrderBy(p => p.MaSanPham).ToList(),
+            "Giá tăng dần" => SanPhams.OrderBy(p => p.GiaBan).ToList(),
+            "Giá giảm dần" => SanPhams.OrderByDescending(p => p.GiaBan).ToList(),
+            _ => SanPhams.OrderBy(p => p.TenSanPham).ToList(),
+        };
+
+        SanPhams.Clear();
+        foreach (var product in sorted)
+        {
+            SanPhams.Add(product);
+        }
+
+        StatusMessage = $"Đã sắp xếp theo: {criteria}";
+    }
+
 
     [RelayCommand]
     private async Task LocSanPhamAsync(string? filter)
@@ -1615,6 +1705,8 @@ public partial class MainWindowViewModel : ObservableObject
         if (doiGioHang)
             RecalculateSaleTotal();
     }
+
+    
 
     [RelayCommand]
     private async Task XoaSanPhamAsync(SanPham? product)
@@ -2132,67 +2224,85 @@ public partial class MainWindowViewModel : ObservableObject
     /// nên sản phẩm nằm ở trang khác / ngoài phần đang hiển thị vẫn tìm ra được.
     /// </summary>
     private async Task RefreshProductsAsync()
+{
+    // Version guard: người dùng gõ tiếp trong lúc chờ database thì bỏ kết quả cũ,
+    // tránh danh sách bị nhảy ngược về từ khóa cũ.
+    var version = ++_productLoadVersion;
+
+    try
     {
-        // Version guard: người dùng gõ tiếp trong lúc chờ database thì bỏ kết quả cũ,
-        // tránh danh sách bị nhảy ngược về từ khóa cũ.
-        var version = ++_productLoadVersion;
+        var (products, tongSoKhop) = await _db.GetSanPhamPagedAsync(
+            ProductSearch,
+            1,
+            DatabaseService.SoDongSanPhamToiDa);
 
-        try
+        if (version != _productLoadVersion)
+            return;
+
+        // --- BỔ SUNG LOGIC LỌC THEO NHÓM SẢN PHẨM ---
+        if (SelectedNhomSanPham != null && SelectedNhomSanPham.Id > 0)
         {
-            var (products, tongSoKhop) = await _db.GetSanPhamPagedAsync(
-                ProductSearch,
-                1,
-                DatabaseService.SoDongSanPhamToiDa);
-
-            if (version != _productLoadVersion)
-                return;
-
-            if (!string.IsNullOrWhiteSpace(ProductFilter))
+            if (SelectedNhomSanPham.Id == 999999)
             {
-                products = products
-                    .Where(product => MatchesFilter(product, ProductFilter))
-                    .ToList();
+                // Lọc các sản phẩm chưa phân nhóm (Id nhóm bằng 0 hoặc null)
+                products = products.Where(p => p.NhomSanPhamId == null || p.NhomSanPhamId == 0).ToList();
             }
-
-            SanPhams.Clear();
-            foreach (var product in products)
+            else
             {
-                if (!string.IsNullOrWhiteSpace(product.HinhAnh) && File.Exists(product.HinhAnh))
-                    product.HinhAnhBitmap = new Bitmap(product.HinhAnh);
-
-                SanPhams.Add(product);
+                // Lọc theo nhóm cụ thể
+                products = products.Where(p => p.NhomSanPhamId == SelectedNhomSanPham.Id).ToList();
             }
-
-            ProductTotalCount = tongSoKhop;
-
-            OnPropertyChanged(nameof(IsSanPhamListEmpty));
-
-            var dangTimKiem = !string.IsNullOrWhiteSpace(ProductSearch);
-
-            StatusMessage = SanPhams.Count == 0
-                ? SanPhamEmptyText
-                : (dangTimKiem
-                    ? SanPhams.Count < tongSoKhop
-                        ? $"Tìm thấy {tongSoKhop:N0} sản phẩm theo \"{ProductSearch.Trim()}\" (đang hiện {SanPhams.Count:N0})"
-                        : $"Tìm thấy {tongSoKhop:N0} sản phẩm theo \"{ProductSearch.Trim()}\""
-                    : $"Đã tải {SanPhams.Count:N0} sản phẩm");
         }
-        catch (Exception ex)
+        // Nếu Id == 0 (Tất cả sản phẩm) thì bỏ qua, giữ nguyên danh sách.
+        // -------------------------------------------
+
+        if (!string.IsNullOrWhiteSpace(ProductFilter))
         {
-            if (version != _productLoadVersion)
-                return;
-
-            SanPhams.Clear();
-            ProductTotalCount = 0;
-
-            OnPropertyChanged(nameof(IsSanPhamListEmpty));
-
-            SafeLog.WriteError("Tải danh sách hàng hóa", ex);
-
-            StatusMessage =
-                "Không thể tải danh sách hàng hóa: " + SafeLog.Redact(ex.Message);
+            products = products
+                .Where(product => MatchesFilter(product, ProductFilter))
+                .ToList();
         }
+
+        SanPhams.Clear();
+        foreach (var product in products)
+        {
+            if (!string.IsNullOrWhiteSpace(product.HinhAnh) && File.Exists(product.HinhAnh))
+                product.HinhAnhBitmap = new Bitmap(product.HinhAnh);
+
+            SanPhams.Add(product);
+        }
+
+        ProductTotalCount = products.Count; // Cập nhật lại số lượng theo kết quả thực tế sau khi lọc
+
+        OnPropertyChanged(nameof(IsSanPhamListEmpty));
+
+        var dangTimKiem = !string.IsNullOrWhiteSpace(ProductSearch);
+        var tenNhomDangChon = SelectedNhomSanPham?.Id > 0 && SelectedNhomSanPham.Id != 999999 ? SelectedNhomSanPham.Name : null;
+
+        StatusMessage = SanPhams.Count == 0
+            ? SanPhamEmptyText
+            : (dangTimKiem
+                ? $"Tìm thấy {SanPhams.Count:N0} sản phẩm theo \"{ProductSearch.Trim()}\""
+                : (tenNhomDangChon != null 
+                    ? $"Lọc theo nhóm \"{tenNhomDangChon}\": {SanPhams.Count:N0} sản phẩm" 
+                    : $"Đã tải {SanPhams.Count:N0} sản phẩm"));
     }
+    catch (Exception ex)
+    {
+        if (version != _productLoadVersion)
+            return;
+
+        SanPhams.Clear();
+        ProductTotalCount = 0;
+
+        OnPropertyChanged(nameof(IsSanPhamListEmpty));
+
+        SafeLog.WriteError("Tải danh sách hàng hóa", ex);
+
+        StatusMessage =
+            "Không thể tải danh sách hàng hóa: " + SafeLog.Redact(ex.Message);
+    }
+}
 
     private static bool MatchesFilter(SanPham product, string filter)
     {
@@ -2725,15 +2835,33 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task TimKiemHoaBanAsync(string? keyword)
-    {
-        var search = keyword ?? SaleSearchText ?? "";
-        var products = await _db.GetSanPhamAsync(search);
+private async Task TimKiemHoaBanAsync(string? keyword = null)
+{
+    var search = keyword ?? SaleSearchText ?? "";
+    var products = await _db.GetSanPhamAsync(search);
 
-        ProductSearchResults.Clear();
-        foreach (var product in products)
-            ProductSearchResults.Add(product);
+    // --- BỔ SUNG LOGIC LỌC THEO NHÓM SẢN PHẨM ---
+    if (SelectedNhomSanPham != null && SelectedNhomSanPham.Id > 0)
+    {
+        if (SelectedNhomSanPham.Id == 999999)
+        {
+            // Lọc các sản phẩm chưa phân nhóm (Id nhóm bằng 0 hoặc null)
+            products = products.Where(p => p.NhomSanPhamId == null || p.NhomSanPhamId == 0).ToList();
+        }
+        else
+        {
+            // Lọc theo nhóm cụ thể
+            products = products.Where(p => p.NhomSanPhamId == SelectedNhomSanPham.Id).ToList();
+        }
     }
+    // -------------------------------------------
+
+    ProductSearchResults.Clear();
+    foreach (var product in products)
+    {
+        ProductSearchResults.Add(product);
+    }
+}
 
     /// <summary>
     /// Đặt lại TOÀN BỘ trạng thái của đơn hàng đang bán.
@@ -2781,7 +2909,7 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task MoGiaoDienBanHangAsync()
     {
-if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền mở màn hình bán hàng."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền mở màn hình bán hàng."))
         {
             return;
         }
@@ -2856,7 +2984,27 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
         if (product is null)
             return;
 
-        // Sản phẩm chưa có giá bán
+        // Reset thông báo cũ để UI luôn nhận biết có sự thay đổi mới
+        StatusMessage = string.Empty;
+
+        // 1. Kiểm tra sản phẩm đã hết hàng
+        if (product.HetHang)
+        {
+            StatusMessage = $"⚠️ Sản phẩm '{product.TenSanPham}' đã hết hàng!";
+            return;
+        }
+
+        // 2. Kiểm tra số lượng tồn kho với giỏ hàng
+        var existing = SaleCart.FirstOrDefault(item => item.SanPham.Id == product.Id);
+        var currentQuantityInCart = existing?.SoLuong ?? 0;
+
+        if (currentQuantityInCart + 1 > product.TonKho)
+        {
+            StatusMessage = $"⚠️ Sản phẩm '{product.TenSanPham}' chỉ còn tồn kho {product.TonKho:N0}!";
+            return;
+        }
+
+        // 3. Sản phẩm chưa có giá bán
         if (product.GiaBan <= 0)
         {
             if (OwnerWindow is null)
@@ -2868,21 +3016,15 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
             try
             {
                 var window = new NhapGiaBanWindow();
-
                 var giaBan = await window.ShowDialog<decimal?>(OwnerWindow);
 
-                // Người dùng bấm Hủy hoặc nhập giá không hợp lệ
                 if (!giaBan.HasValue || giaBan.Value <= 0)
                 {
                     StatusMessage = "Chưa nhập giá bán. Sản phẩm chưa được thêm vào giỏ.";
                     return;
                 }
 
-                // Lưu giá bán vào database
-                var updated =
-                    await _db.CapNhatGiaBanSanPhamAsync(
-                        product.Id,
-                        giaBan.Value);
+                var updated = await _db.CapNhatGiaBanSanPhamAsync(product.Id, giaBan.Value);
 
                 if (!updated)
                 {
@@ -2890,7 +3032,6 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
                     return;
                 }
 
-                // Cập nhật giá của sản phẩm đang hiển thị và các màn hình khác
                 DongBoGiaBan(product.Id, giaBan.Value);
             }
             catch (Exception ex)
@@ -2900,10 +3041,7 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
             }
         }
 
-        // Có giá rồi thì thêm vào giỏ
-        var existing = SaleCart.FirstOrDefault(
-            item => item.SanPham.Id == product.Id);
-
+        // 4. Có giá rồi thì thêm vào giỏ
         if (existing is not null)
         {
             existing.SoLuong += 1;
@@ -2921,6 +3059,9 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
         }
 
         RecalculateSaleTotal();
+
+        // Thông báo thành công khi thêm vào giỏ thành công
+        StatusMessage = $"Đã thêm '{product.TenSanPham}' vào giỏ hàng.";
     }
     [RelayCommand]
     private void CapNhatTongTienBanHang()
@@ -2931,9 +3072,16 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
     [RelayCommand]
     private void TangSoLuong(SaleCartItem? item)
     {
-        if (item is null)
-            return;
+        if (item is null || item.SanPham is null) return;
 
+        // Kiểm tra nếu tăng thêm 1 mà vượt quá tồn kho
+        if (item.SoLuong + 1 > item.SanPham.TonKho)
+        {
+            StatusMessage = $"⚠️ Sản phẩm '{item.SanPham.TenSanPham}' chỉ còn tồn kho {item.SanPham.TonKho:N0}!";
+            return;
+        }
+
+        StatusMessage = string.Empty;
         item.SoLuong += 1;
         RecalculateSaleTotal();
     }
@@ -3950,308 +4098,308 @@ if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền
     }
 
     partial void OnTienKhachDuaChanged(decimal value)
-{
-    RecalculatePayment();
-}
-
-/// <summary>
-/// Tổng tiền thay đổi thì tiền thối / công nợ / trạng thái phải tính lại.
-/// Bản cũ chỉ gắn hook cho TienKhachDua nên khi tổng tiền đổi (thêm hàng,
-/// đổi số lượng, giảm giá) các ô này giữ số cũ — và sau khi thanh toán
-/// xong chúng cũng không tự về 0.
-/// </summary>
-partial void OnSaleTotalChanged(decimal value)
-{
-    RecalculatePayment();
-}
-
-private void RecalculatePayment()
-{
-    var canTra = Math.Max(0, SaleTotal);
-    var khachDua = Math.Max(0, TienKhachDua);
-
-    if (canTra <= 0)
     {
-        TienThoi = 0;
-        TienCongNo = 0;
-        TrangThaiThanhToan = "";
-        return;
+        RecalculatePayment();
     }
 
-    if (khachDua > canTra)
+    /// <summary>
+    /// Tổng tiền thay đổi thì tiền thối / công nợ / trạng thái phải tính lại.
+    /// Bản cũ chỉ gắn hook cho TienKhachDua nên khi tổng tiền đổi (thêm hàng,
+    /// đổi số lượng, giảm giá) các ô này giữ số cũ — và sau khi thanh toán
+    /// xong chúng cũng không tự về 0.
+    /// </summary>
+    partial void OnSaleTotalChanged(decimal value)
     {
-        TienThoi = khachDua - canTra;
-        TienCongNo = 0;
-        TrangThaiThanhToan = "Đã thanh toán đủ - Tiền thối";
+        RecalculatePayment();
     }
-    else if (khachDua < canTra)
-    {
-        TienThoi = 0;
-        TienCongNo = canTra - khachDua;
 
-        if (khachDua == 0)
-            TrangThaiThanhToan = "Chưa thanh toán - Công nợ";
+    private void RecalculatePayment()
+    {
+        var canTra = Math.Max(0, SaleTotal);
+        var khachDua = Math.Max(0, TienKhachDua);
+
+        if (canTra <= 0)
+        {
+            TienThoi = 0;
+            TienCongNo = 0;
+            TrangThaiThanhToan = "";
+            return;
+        }
+
+        if (khachDua > canTra)
+        {
+            TienThoi = khachDua - canTra;
+            TienCongNo = 0;
+            TrangThaiThanhToan = "Đã thanh toán đủ - Tiền thối";
+        }
+        else if (khachDua < canTra)
+        {
+            TienThoi = 0;
+            TienCongNo = canTra - khachDua;
+
+            if (khachDua == 0)
+                TrangThaiThanhToan = "Chưa thanh toán - Công nợ";
+            else
+                TrangThaiThanhToan = "Thanh toán thiếu - Công nợ";
+        }
         else
-            TrangThaiThanhToan = "Thanh toán thiếu - Công nợ";
-    }
-    else
-    {
-        TienThoi = 0;
-        TienCongNo = 0;
-        TrangThaiThanhToan = "Đã thanh toán đủ";
-    }
-}
-partial void OnSaleDiscountInputChanged(decimal value)
-{
-    if (SaleDiscountMode == "Số tiền")
-    {
-        var maxDiscount = Math.Max(0, SaleSubtotal);
-
-        if (value > maxDiscount)
         {
-            SaleDiscountInput = maxDiscount;
-            return;
+            TienThoi = 0;
+            TienCongNo = 0;
+            TrangThaiThanhToan = "Đã thanh toán đủ";
         }
     }
-
-    RecalculateSaleTotal();
-}
-
-partial void OnSaleDiscountModeChanged(string value) => RecalculateSaleTotal();
-
-/// <summary>
-/// Thanh toán đơn hàng đang bán.
-/// <para>
-/// Thứ tự bắt buộc: khoá chống bấm hai lần → kiểm tra dữ liệu → xác nhận
-/// người dùng → LƯU VÀO DATABASE (hóa đơn + chi tiết + tồn kho + công nợ
-/// trong một transaction) → chỉ khi lưu thành công mới mở hóa đơn và báo
-/// "thanh toán thành công" → cuối cùng xoá sạch đơn cũ để bán đơn tiếp theo.
-/// Nếu database lỗi thì rollback toàn bộ, giữ nguyên đơn hàng và báo lỗi
-/// thật, tuyệt đối không báo thành công giả.
-/// </para>
-/// </summary>
-[RelayCommand]
-private async Task ThanhToanAsync()
-{
-if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Bạn không có quyền bán hàng."))
+    partial void OnSaleDiscountInputChanged(decimal value)
     {
-        return;
-    }
-
-    // 1. Chống bấm nút nhiều lần / gọi lệnh chồng nhau
-    if (IsThanhToanDangXuLy)
-        return;
-
-    // 2. Kiểm tra dữ liệu
-    if (SaleCart.Count == 0)
-    {
-        StatusMessage = "Vui lòng chọn ít nhất một sản phẩm trước khi thanh toán.";
-        return;
-    }
-
-    var sanPhamChuaCoGia = SaleCart.FirstOrDefault(x => x.SanPham.GiaBan <= 0);
-
-    if (sanPhamChuaCoGia is not null)
-    {
-        StatusMessage =
-            $"Sản phẩm \"{sanPhamChuaCoGia.SanPham.TenSanPham}\" chưa có giá bán, không thể thanh toán.";
-        return;
-    }
-
-    var soLuongSai = SaleCart.FirstOrDefault(x => x.SoLuong <= 0);
-
-    if (soLuongSai is not null)
-    {
-        StatusMessage =
-            $"Số lượng của \"{soLuongSai.SanPham.TenSanPham}\" phải lớn hơn 0.";
-        return;
-    }
-
-    if (SaleTotal < 0)
-    {
-        StatusMessage = "Tổng tiền không hợp lệ. Vui lòng kiểm tra lại giỏ hàng.";
-        return;
-    }
-
-    if (OwnerWindow is null)
-    {
-        StatusMessage = "Không xác định được cửa sổ bán hàng.";
-        return;
-    }
-
-    var owner = OwnerWindow;
-
-    // Chụp lại dữ liệu đơn hàng TRƯỚC khi mở hộp thoại, tránh việc người
-    // dùng sửa giỏ hàng lúc đang xác nhận làm lệch số liệu.
-    var cartSnapshot = SaleCart.ToList();
-    var customer = SelectedSaleCustomer;
-    var customerName = customer?.TenKhachHang ?? "Khách lẻ";
-    var discountSnapshot = SaleDiscountAmount;
-    var cashSnapshot = TienKhachDua;
-
-    // 3. Xác nhận thanh toán
-    var confirmWindow = new ThanhToanConfirmWindow(
-        customerName,
-        SaleTotal,
-        TienKhachDua,
-        TienThoi,
-        TienCongNo);
-
-    if (!await confirmWindow.ShowDialog<bool>(owner))
-    {
-        StatusMessage = "Đã hủy thanh toán.";
-        return;
-    }
-
-    // 4. Lưu vào database
-    HoaDonBanHangReceipt? receipt = null;
-
-    IsThanhToanDangXuLy = true;
-    StatusMessage = "Đang lưu hóa đơn...";
-
-    try
-    {
-        receipt = await _db.TaoHoaDonBanHangAsync(
-            cartSnapshot,
-            customer,
-            discountSnapshot,
-            cashSnapshot);
-    }
-    catch (Exception ex)
-    {
-        // Giao dịch đã được rollback trong DatabaseService: giữ nguyên đơn
-        // hàng để người dùng sửa rồi thử lại, tuyệt đối không báo thành công.
-        StatusMessage =
-            $"KHÔNG thanh toán được - dữ liệu chưa được lưu vào database: {ex.Message}";
-
-        SafeLog.WriteError("Loi thanh toan ban hang", ex);
-
-        return;
-    }
-    finally
-    {
-        IsThanhToanDangXuLy = false;
-    }
-
-    // 5. Lưu thành công mới dọn đơn cũ, không làm mất dữ liệu đơn vừa bán
-    var maHoaDon = receipt.MaHoaDon;
-
-    ResetDonHangVeMacDinh();
-
-    _invoicesLoaded = false;
-    ChonMenu("Hóa đơn");
-
-    // Dashboard phải thấy ngay hóa đơn vừa tạo (doanh thu, số hóa đơn,
-    // hoạt động gần đây, top hàng bán chạy, top khách hàng).
-    _ = LamMoiTongQuanNeuDangMoAsync();
-
-    // Sổ quỹ tự đọc lại database mỗi lần mở menu nên phiếu thu mới sẽ
-    // hiện ra ngay khi người dùng chuyển sang tab "Sổ quỹ".
-    var thongTinPhieuThu = string.IsNullOrWhiteSpace(receipt.MaPhieuThu)
-        ? ""
-        : $" Đã ghi phiếu thu {receipt.MaPhieuThu} vào sổ quỹ.";
-
-    var thongBaoThanhToan = receipt.CanhBao.Count > 0
-        ? $"Đã tạo hóa đơn {maHoaDon}. {string.Join(" ", receipt.CanhBao)}"
-        : $"Đã tạo hóa đơn {maHoaDon} thành công.";
-
-    StatusMessage = thongBaoThanhToan + thongTinPhieuThu;
-
-    // 6. Hiển thị hóa đơn vừa bán (đọc lại từ database nên khớp dữ liệu đã lưu)
-    try
-    {
-        // Gắn thông tin tiệm lúc mở hóa đơn (không phải lúc thanh toán) để người
-        // dùng vừa sửa ở màn "Thông tin tiệm" cũng thấy ngay ở hóa đơn này.
-        receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
-
-        var invoiceWindow = new InvoiceWindow(receipt);
-        await invoiceWindow.ShowDialog(owner);
-    }
-    catch (Exception ex)
-    {
-        StatusMessage =
-            $"Đã tạo hóa đơn {maHoaDon} nhưng không mở được cửa sổ hóa đơn: {ex.Message}";
-
-        SafeLog.WriteError("Loi mo cua so hoa don", ex);
-    }
-}
-
-/// <summary>Mở lại một hóa đơn đã có để xem / in (đọc dữ liệu từ database).</summary>
-[RelayCommand]
-private async Task XemHoaDonAsync(HoaDon? hoaDon)
-{
-    if (hoaDon is null || OwnerWindow is null)
-        return;
-
-    var maHoaDon = hoaDon.MaHoaDon;
-
-    if (string.IsNullOrWhiteSpace(maHoaDon))
-        return;
-
-    try
-    {
-        var receipt = await _db.GetHoaDonBanHangTheoMaAsync(maHoaDon);
-
-        if (receipt is null)
+        if (SaleDiscountMode == "Số tiền")
         {
-            StatusMessage = $"Không tìm thấy hóa đơn {maHoaDon} trong database.";
+            var maxDiscount = Math.Max(0, SaleSubtotal);
+
+            if (value > maxDiscount)
+            {
+                SaleDiscountInput = maxDiscount;
+                return;
+            }
+        }
+
+        RecalculateSaleTotal();
+    }
+
+    partial void OnSaleDiscountModeChanged(string value) => RecalculateSaleTotal();
+
+    /// <summary>
+    /// Thanh toán đơn hàng đang bán.
+    /// <para>
+    /// Thứ tự bắt buộc: khoá chống bấm hai lần → kiểm tra dữ liệu → xác nhận
+    /// người dùng → LƯU VÀO DATABASE (hóa đơn + chi tiết + tồn kho + công nợ
+    /// trong một transaction) → chỉ khi lưu thành công mới mở hóa đơn và báo
+    /// "thanh toán thành công" → cuối cùng xoá sạch đơn cũ để bán đơn tiếp theo.
+    /// Nếu database lỗi thì rollback toàn bộ, giữ nguyên đơn hàng và báo lỗi
+    /// thật, tuyệt đối không báo thành công giả.
+    /// </para>
+    /// </summary>
+    [RelayCommand]
+    private async Task ThanhToanAsync()
+    {
+        if (!await KiemTraQuyenAsync(PermissionKeys.SalesCreate, "Bạn không có quyền bán hàng."))
+        {
             return;
         }
 
-        receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
+        // 1. Chống bấm nút nhiều lần / gọi lệnh chồng nhau
+        if (IsThanhToanDangXuLy)
+            return;
 
-        var invoiceWindow = new InvoiceWindow(receipt);
-        await invoiceWindow.ShowDialog(OwnerWindow);
+        // 2. Kiểm tra dữ liệu
+        if (SaleCart.Count == 0)
+        {
+            StatusMessage = "Vui lòng chọn ít nhất một sản phẩm trước khi thanh toán.";
+            return;
+        }
+
+        var sanPhamChuaCoGia = SaleCart.FirstOrDefault(x => x.SanPham.GiaBan <= 0);
+
+        if (sanPhamChuaCoGia is not null)
+        {
+            StatusMessage =
+                $"Sản phẩm \"{sanPhamChuaCoGia.SanPham.TenSanPham}\" chưa có giá bán, không thể thanh toán.";
+            return;
+        }
+
+        var soLuongSai = SaleCart.FirstOrDefault(x => x.SoLuong <= 0);
+
+        if (soLuongSai is not null)
+        {
+            StatusMessage =
+                $"Số lượng của \"{soLuongSai.SanPham.TenSanPham}\" phải lớn hơn 0.";
+            return;
+        }
+
+        if (SaleTotal < 0)
+        {
+            StatusMessage = "Tổng tiền không hợp lệ. Vui lòng kiểm tra lại giỏ hàng.";
+            return;
+        }
+
+        if (OwnerWindow is null)
+        {
+            StatusMessage = "Không xác định được cửa sổ bán hàng.";
+            return;
+        }
+
+        var owner = OwnerWindow;
+
+        // Chụp lại dữ liệu đơn hàng TRƯỚC khi mở hộp thoại, tránh việc người
+        // dùng sửa giỏ hàng lúc đang xác nhận làm lệch số liệu.
+        var cartSnapshot = SaleCart.ToList();
+        var customer = SelectedSaleCustomer;
+        var customerName = customer?.TenKhachHang ?? "Khách lẻ";
+        var discountSnapshot = SaleDiscountAmount;
+        var cashSnapshot = TienKhachDua;
+
+        // 3. Xác nhận thanh toán
+        var confirmWindow = new ThanhToanConfirmWindow(
+            customerName,
+            SaleTotal,
+            TienKhachDua,
+            TienThoi,
+            TienCongNo);
+
+        if (!await confirmWindow.ShowDialog<bool>(owner))
+        {
+            StatusMessage = "Đã hủy thanh toán.";
+            return;
+        }
+
+        // 4. Lưu vào database
+        HoaDonBanHangReceipt? receipt = null;
+
+        IsThanhToanDangXuLy = true;
+        StatusMessage = "Đang lưu hóa đơn...";
+
+        try
+        {
+            receipt = await _db.TaoHoaDonBanHangAsync(
+                cartSnapshot,
+                customer,
+                discountSnapshot,
+                cashSnapshot);
+        }
+        catch (Exception ex)
+        {
+            // Giao dịch đã được rollback trong DatabaseService: giữ nguyên đơn
+            // hàng để người dùng sửa rồi thử lại, tuyệt đối không báo thành công.
+            StatusMessage =
+                $"KHÔNG thanh toán được - dữ liệu chưa được lưu vào database: {ex.Message}";
+
+            SafeLog.WriteError("Loi thanh toan ban hang", ex);
+
+            return;
+        }
+        finally
+        {
+            IsThanhToanDangXuLy = false;
+        }
+
+        // 5. Lưu thành công mới dọn đơn cũ, không làm mất dữ liệu đơn vừa bán
+        var maHoaDon = receipt.MaHoaDon;
+
+        ResetDonHangVeMacDinh();
+
+        _invoicesLoaded = false;
+        ChonMenu("Hóa đơn");
+
+        // Dashboard phải thấy ngay hóa đơn vừa tạo (doanh thu, số hóa đơn,
+        // hoạt động gần đây, top hàng bán chạy, top khách hàng).
+        _ = LamMoiTongQuanNeuDangMoAsync();
+
+        // Sổ quỹ tự đọc lại database mỗi lần mở menu nên phiếu thu mới sẽ
+        // hiện ra ngay khi người dùng chuyển sang tab "Sổ quỹ".
+        var thongTinPhieuThu = string.IsNullOrWhiteSpace(receipt.MaPhieuThu)
+            ? ""
+            : $" Đã ghi phiếu thu {receipt.MaPhieuThu} vào sổ quỹ.";
+
+        var thongBaoThanhToan = receipt.CanhBao.Count > 0
+            ? $"Đã tạo hóa đơn {maHoaDon}. {string.Join(" ", receipt.CanhBao)}"
+            : $"Đã tạo hóa đơn {maHoaDon} thành công.";
+
+        StatusMessage = thongBaoThanhToan + thongTinPhieuThu;
+
+        // 6. Hiển thị hóa đơn vừa bán (đọc lại từ database nên khớp dữ liệu đã lưu)
+        try
+        {
+            // Gắn thông tin tiệm lúc mở hóa đơn (không phải lúc thanh toán) để người
+            // dùng vừa sửa ở màn "Thông tin tiệm" cũng thấy ngay ở hóa đơn này.
+            receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
+
+            var invoiceWindow = new InvoiceWindow(receipt);
+            await invoiceWindow.ShowDialog(owner);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage =
+                $"Đã tạo hóa đơn {maHoaDon} nhưng không mở được cửa sổ hóa đơn: {ex.Message}";
+
+            SafeLog.WriteError("Loi mo cua so hoa don", ex);
+        }
     }
-    catch (Exception ex)
-    {
-        StatusMessage = $"Không mở được hóa đơn {maHoaDon}: {ex.Message}";
 
-        SafeLog.WriteError("Loi xem hoa don", ex);
+    /// <summary>Mở lại một hóa đơn đã có để xem / in (đọc dữ liệu từ database).</summary>
+    [RelayCommand]
+    private async Task XemHoaDonAsync(HoaDon? hoaDon)
+    {
+        if (hoaDon is null || OwnerWindow is null)
+            return;
+
+        var maHoaDon = hoaDon.MaHoaDon;
+
+        if (string.IsNullOrWhiteSpace(maHoaDon))
+            return;
+
+        try
+        {
+            var receipt = await _db.GetHoaDonBanHangTheoMaAsync(maHoaDon);
+
+            if (receipt is null)
+            {
+                StatusMessage = $"Không tìm thấy hóa đơn {maHoaDon} trong database.";
+                return;
+            }
+
+            receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
+
+            var invoiceWindow = new InvoiceWindow(receipt);
+            await invoiceWindow.ShowDialog(OwnerWindow);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Không mở được hóa đơn {maHoaDon}: {ex.Message}";
+
+            SafeLog.WriteError("Loi xem hoa don", ex);
+        }
     }
-}
 
-[RelayCommand]
-private void ChonMenu(string menu)
-{
-    IsSalesPanelVisible = false;
-    SelectedMenu = menu;
-}
-
-partial void OnSelectedMenuChanged(string value)
-{
-    SelectedDataTabIndex = value switch
+    [RelayCommand]
+    private void ChonMenu(string menu)
     {
-        "Khách hàng" => 1,
-        "Hóa đơn" => 2,
-        "Nhà cung cấp" => 3,
-        "Nhập hàng" => 4,
-        "Sổ quỹ" => 5,
-        _ => 0
-    };
+        IsSalesPanelVisible = false;
+        SelectedMenu = menu;
+    }
 
-    // Rời khỏi màn lập phiếu nhập thì đóng lại lịch đang mở
-    if (value != "Nhập hàng")
-        IsPhieuNhapCalendarOpen = false;
+    partial void OnSelectedMenuChanged(string value)
+    {
+        SelectedDataTabIndex = value switch
+        {
+            "Khách hàng" => 1,
+            "Hóa đơn" => 2,
+            "Nhà cung cấp" => 3,
+            "Nhập hàng" => 4,
+            "Sổ quỹ" => 5,
+            _ => 0
+        };
 
-    OnPropertyChanged(nameof(IsTongQuanSelected));
-    OnPropertyChanged(nameof(IsDataSectionSelected));
-    OnPropertyChanged(nameof(IsBaoCaoSectionSelected));
-    OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
-    OnPropertyChanged(nameof(IsBaoCaoBanHangSelected));
-    OnPropertyChanged(nameof(IsBaoCaoHangHoaSelected));
-    OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
-    OnPropertyChanged(nameof(IsThongTinTiemSelected));
+        // Rời khỏi màn lập phiếu nhập thì đóng lại lịch đang mở
+        if (value != "Nhập hàng")
+            IsPhieuNhapCalendarOpen = false;
 
-    _ = LoadSelectedSectionAsync(value);
-}
+        OnPropertyChanged(nameof(IsTongQuanSelected));
+        OnPropertyChanged(nameof(IsDataSectionSelected));
+        OnPropertyChanged(nameof(IsBaoCaoSectionSelected));
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
+        OnPropertyChanged(nameof(IsBaoCaoBanHangSelected));
+        OnPropertyChanged(nameof(IsBaoCaoHangHoaSelected));
+        OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
+        OnPropertyChanged(nameof(IsThongTinTiemSelected));
 
-/// <summary>Thông báo lại toàn bộ cờ quyền chi tiết sau khi phiên đăng nhập thay đổi.</summary>
-public void RaiseAllCanProperties()
-{
-    string[] names =
-    [
-        nameof(CanCreateProduct), nameof(CanEditProduct), nameof(CanDeleteProduct),
+        _ = LoadSelectedSectionAsync(value);
+    }
+
+    /// <summary>Thông báo lại toàn bộ cờ quyền chi tiết sau khi phiên đăng nhập thay đổi.</summary>
+    public void RaiseAllCanProperties()
+    {
+        string[] names =
+        [
+            nameof(CanCreateProduct), nameof(CanEditProduct), nameof(CanDeleteProduct),
             nameof(CanImportProduct), nameof(CanExportProduct), nameof(CanUpdateProductPrice),
             nameof(CanCreateSale), nameof(CanEditSale), nameof(CanDeleteSale),
             nameof(CanPaySale), nameof(CanViewSaleHistory),
@@ -4267,126 +4415,126 @@ public void RaiseAllCanProperties()
             nameof(CanViewStoreInfo), nameof(CanEditStoreInfo),
             nameof(CanCreateUser), nameof(CanEditUser), nameof(CanDeleteUser),
             nameof(CanAssignPermission), nameof(CanEditSettings)
-    ];
+        ];
 
-    foreach (var name in names)
-    {
-        OnPropertyChanged(name);
-    }
-}
-
-public bool IsTongQuanSelected => SelectedMenu == "Tổng quan";
-
-// Báo cáo có vùng nội dung riêng nên không dùng chung TabControl dữ liệu
-// Màn nào có vùng nội dung riêng thì không được bật TabControl dữ liệu,
-// nếu không TabControl sẽ hiện chồng lên màn đó.
-public bool IsDataSectionSelected =>
-    !IsTongQuanSelected
-    && !IsBaoCaoSectionSelected
-    && !IsThongTinTiemSelected;
-
-/// <summary>Màn "Thông tin tiệm" có vùng nội dung riêng, không nằm trong TabControl dữ liệu.</summary>
-public bool IsThongTinTiemSelected => SelectedMenu == "Thông tin tiệm";
-
-/// <summary>Được phép xem màn thông tin tiệm (dùng chung nhóm quyền Cài đặt).</summary>
-public bool CanViewStoreInfo => CanViewSettings;
-
-/// <summary>Được phép sửa thông tin tiệm (cùng nhóm quyền Cài đặt).</summary>
-public bool CanEditStoreInfo => CanEditSettings;
-public bool CanViewDashboard => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.DashboardView) || Quyen.IsAdmin(Session.CurrentUser);
-public bool CanViewProducts => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsView) || Quyen.IsAdmin(Session.CurrentUser);
-public bool CanViewPurchases => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.PurchasesView) || Quyen.IsAdmin(Session.CurrentUser);
-public bool CanViewInvoices => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.InvoicesView) || Quyen.IsAdmin(Session.CurrentUser);
-public bool CanViewSales => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SalesView) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SalesCreate) || Quyen.IsAdmin(Session.CurrentUser);
-public bool CanViewCustomers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.CustomersView) || Quyen.IsAdmin(Session.CurrentUser);
-public bool CanViewSuppliers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SuppliersView) || Quyen.IsAdmin(Session.CurrentUser);
-public bool CanViewCashBook => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.CashBookView) || Quyen.IsAdmin(Session.CurrentUser);
-public bool CanViewReports => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ReportsView) || Quyen.IsAdmin(Session.CurrentUser);
-public bool CanViewUsers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersView) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersCreate) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersAssignPermission) || Quyen.IsAdmin(Session.CurrentUser);
-public bool CanViewSettings => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SettingsView) || Quyen.IsAdmin(Session.CurrentUser);
-
-public bool CanManageUsers
-{
-    get
-    {
-        var u = Session.CurrentUser;
-        if (u == null) return false;
-        if (Quyen.IsAdmin(u)) return true;
-        return Session.HasPermission(PermissionKeys.UsersView) || Session.HasPermission(PermissionKeys.UsersAssignPermission) || Session.HasPermission(PermissionKeys.UsersCreate);
-    }
-}
-
-// ===== Quyền theo từng chức năng chi tiết (dùng cho IsVisible/IsEnabled của nút) =====
-
-private static bool CoQuyen(string key) => Quyen.HasPermission(Session.CurrentUser, key);
-
-// Hàng hóa
-public bool CanCreateProduct => CoQuyen(PermissionKeys.ProductsCreate);
-public bool CanEditProduct => CoQuyen(PermissionKeys.ProductsEdit);
-public bool CanDeleteProduct => CoQuyen(PermissionKeys.ProductsDelete);
-public bool CanImportProduct => CoQuyen(PermissionKeys.ProductsImport);
-public bool CanExportProduct => CoQuyen(PermissionKeys.ProductsExport);
-public bool CanUpdateProductPrice => CoQuyen(PermissionKeys.ProductsUpdatePrice);
-
-// Bán hàng / Hóa đơn
-public bool CanCreateSale => CoQuyen(PermissionKeys.SalesCreate);
-public bool CanEditSale => CoQuyen(PermissionKeys.SalesEdit);
-public bool CanDeleteSale => CoQuyen(PermissionKeys.SalesDelete);
-public bool CanPaySale => CoQuyen(PermissionKeys.SalesPayment);
-public bool CanViewSaleHistory => CoQuyen(PermissionKeys.SalesHistory);
-public bool CanPrintInvoice => CoQuyen(PermissionKeys.InvoicesPrint);
-public bool CanImportInvoice => CoQuyen(PermissionKeys.InvoicesImport);
-public bool CanCancelInvoice => CoQuyen(PermissionKeys.InvoicesCancel);
-
-// Khách hàng
-public bool CanCreateCustomer => CoQuyen(PermissionKeys.CustomersCreate);
-public bool CanEditCustomer => CoQuyen(PermissionKeys.CustomersEdit);
-public bool CanDeleteCustomer => CoQuyen(PermissionKeys.CustomersDelete);
-public bool CanImportCustomer => CoQuyen(PermissionKeys.CustomersImport);
-
-// Nhà cung cấp
-public bool CanCreateSupplier => CoQuyen(PermissionKeys.SuppliersCreate);
-public bool CanEditSupplier => CoQuyen(PermissionKeys.SuppliersEdit);
-public bool CanDeleteSupplier => CoQuyen(PermissionKeys.SuppliersDelete);
-public bool CanImportSupplier => CoQuyen(PermissionKeys.SuppliersImport);
-public bool CanExportSupplier => CoQuyen(PermissionKeys.SuppliersExport);
-
-// Phiếu nhập
-public bool CanCreatePurchase => CoQuyen(PermissionKeys.PurchasesCreate);
-public bool CanEditPurchase => CoQuyen(PermissionKeys.PurchasesEdit);
-public bool CanDeletePurchase => CoQuyen(PermissionKeys.PurchasesDelete);
-public bool CanImportPurchase => CoQuyen(PermissionKeys.PurchasesImport);
-public bool CanExportPurchase => CoQuyen(PermissionKeys.PurchasesExport);
-public bool CanPrintPurchase => CoQuyen(PermissionKeys.PurchasesPrint);
-
-// Sổ quỹ
-public bool CanCreateReceipt => CoQuyen(PermissionKeys.CashBookCreateReceipt);
-public bool CanCreatePayment => CoQuyen(PermissionKeys.CashBookCreatePayment);
-public bool CanEditCashBook => CoQuyen(PermissionKeys.CashBookEdit);
-public bool CanDeleteCashBook => CoQuyen(PermissionKeys.CashBookDelete);
-public bool CanCancelCashBook => CoQuyen(PermissionKeys.CashBookCancel);
-public bool CanImportCashBook => CoQuyen(PermissionKeys.CashBookImport);
-public bool CanExportCashBook => CoQuyen(PermissionKeys.CashBookExport);
-
-// Tài khoản
-public bool CanCreateUser => CoQuyen(PermissionKeys.UsersCreate);
-public bool CanEditUser => CoQuyen(PermissionKeys.UsersEdit);
-public bool CanDeleteUser => CoQuyen(PermissionKeys.UsersDelete);
-public bool CanAssignPermission => CoQuyen(PermissionKeys.UsersAssignPermission);
-
-// Cài đặt
-public bool CanEditSettings => CoQuyen(PermissionKeys.SettingsEdit);
-
-/// <summary>Kiểm tra quyền ngay tại thời điểm gọi lệnh (bắt được cả trường hợp gọi trực tiếp).</summary>
-private async Task<bool> KiemTraQuyenAsync(string key, string message)
-{
-    if (CoQuyen(key))
-    {
-        return true;
+        foreach (var name in names)
+        {
+            OnPropertyChanged(name);
+        }
     }
 
-    await ShowMessageAsync("Thông báo", message);
-    return false;
-}
+    public bool IsTongQuanSelected => SelectedMenu == "Tổng quan";
+
+    // Báo cáo có vùng nội dung riêng nên không dùng chung TabControl dữ liệu
+    // Màn nào có vùng nội dung riêng thì không được bật TabControl dữ liệu,
+    // nếu không TabControl sẽ hiện chồng lên màn đó.
+    public bool IsDataSectionSelected =>
+        !IsTongQuanSelected
+        && !IsBaoCaoSectionSelected
+        && !IsThongTinTiemSelected;
+
+    /// <summary>Màn "Thông tin tiệm" có vùng nội dung riêng, không nằm trong TabControl dữ liệu.</summary>
+    public bool IsThongTinTiemSelected => SelectedMenu == "Thông tin tiệm";
+
+    /// <summary>Được phép xem màn thông tin tiệm (dùng chung nhóm quyền Cài đặt).</summary>
+    public bool CanViewStoreInfo => CanViewSettings;
+
+    /// <summary>Được phép sửa thông tin tiệm (cùng nhóm quyền Cài đặt).</summary>
+    public bool CanEditStoreInfo => CanEditSettings;
+    public bool CanViewDashboard => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.DashboardView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewProducts => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewPurchases => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.PurchasesView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewInvoices => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.InvoicesView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewSales => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SalesView) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SalesCreate) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewCustomers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.CustomersView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewSuppliers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SuppliersView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewCashBook => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.CashBookView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewReports => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ReportsView) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewUsers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersView) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersCreate) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersAssignPermission) || Quyen.IsAdmin(Session.CurrentUser);
+    public bool CanViewSettings => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SettingsView) || Quyen.IsAdmin(Session.CurrentUser);
+
+    public bool CanManageUsers
+    {
+        get
+        {
+            var u = Session.CurrentUser;
+            if (u == null) return false;
+            if (Quyen.IsAdmin(u)) return true;
+            return Session.HasPermission(PermissionKeys.UsersView) || Session.HasPermission(PermissionKeys.UsersAssignPermission) || Session.HasPermission(PermissionKeys.UsersCreate);
+        }
+    }
+
+    // ===== Quyền theo từng chức năng chi tiết (dùng cho IsVisible/IsEnabled của nút) =====
+
+    private static bool CoQuyen(string key) => Quyen.HasPermission(Session.CurrentUser, key);
+
+    // Hàng hóa
+    public bool CanCreateProduct => CoQuyen(PermissionKeys.ProductsCreate);
+    public bool CanEditProduct => CoQuyen(PermissionKeys.ProductsEdit);
+    public bool CanDeleteProduct => CoQuyen(PermissionKeys.ProductsDelete);
+    public bool CanImportProduct => CoQuyen(PermissionKeys.ProductsImport);
+    public bool CanExportProduct => CoQuyen(PermissionKeys.ProductsExport);
+    public bool CanUpdateProductPrice => CoQuyen(PermissionKeys.ProductsUpdatePrice);
+
+    // Bán hàng / Hóa đơn
+    public bool CanCreateSale => CoQuyen(PermissionKeys.SalesCreate);
+    public bool CanEditSale => CoQuyen(PermissionKeys.SalesEdit);
+    public bool CanDeleteSale => CoQuyen(PermissionKeys.SalesDelete);
+    public bool CanPaySale => CoQuyen(PermissionKeys.SalesPayment);
+    public bool CanViewSaleHistory => CoQuyen(PermissionKeys.SalesHistory);
+    public bool CanPrintInvoice => CoQuyen(PermissionKeys.InvoicesPrint);
+    public bool CanImportInvoice => CoQuyen(PermissionKeys.InvoicesImport);
+    public bool CanCancelInvoice => CoQuyen(PermissionKeys.InvoicesCancel);
+
+    // Khách hàng
+    public bool CanCreateCustomer => CoQuyen(PermissionKeys.CustomersCreate);
+    public bool CanEditCustomer => CoQuyen(PermissionKeys.CustomersEdit);
+    public bool CanDeleteCustomer => CoQuyen(PermissionKeys.CustomersDelete);
+    public bool CanImportCustomer => CoQuyen(PermissionKeys.CustomersImport);
+
+    // Nhà cung cấp
+    public bool CanCreateSupplier => CoQuyen(PermissionKeys.SuppliersCreate);
+    public bool CanEditSupplier => CoQuyen(PermissionKeys.SuppliersEdit);
+    public bool CanDeleteSupplier => CoQuyen(PermissionKeys.SuppliersDelete);
+    public bool CanImportSupplier => CoQuyen(PermissionKeys.SuppliersImport);
+    public bool CanExportSupplier => CoQuyen(PermissionKeys.SuppliersExport);
+
+    // Phiếu nhập
+    public bool CanCreatePurchase => CoQuyen(PermissionKeys.PurchasesCreate);
+    public bool CanEditPurchase => CoQuyen(PermissionKeys.PurchasesEdit);
+    public bool CanDeletePurchase => CoQuyen(PermissionKeys.PurchasesDelete);
+    public bool CanImportPurchase => CoQuyen(PermissionKeys.PurchasesImport);
+    public bool CanExportPurchase => CoQuyen(PermissionKeys.PurchasesExport);
+    public bool CanPrintPurchase => CoQuyen(PermissionKeys.PurchasesPrint);
+
+    // Sổ quỹ
+    public bool CanCreateReceipt => CoQuyen(PermissionKeys.CashBookCreateReceipt);
+    public bool CanCreatePayment => CoQuyen(PermissionKeys.CashBookCreatePayment);
+    public bool CanEditCashBook => CoQuyen(PermissionKeys.CashBookEdit);
+    public bool CanDeleteCashBook => CoQuyen(PermissionKeys.CashBookDelete);
+    public bool CanCancelCashBook => CoQuyen(PermissionKeys.CashBookCancel);
+    public bool CanImportCashBook => CoQuyen(PermissionKeys.CashBookImport);
+    public bool CanExportCashBook => CoQuyen(PermissionKeys.CashBookExport);
+
+    // Tài khoản
+    public bool CanCreateUser => CoQuyen(PermissionKeys.UsersCreate);
+    public bool CanEditUser => CoQuyen(PermissionKeys.UsersEdit);
+    public bool CanDeleteUser => CoQuyen(PermissionKeys.UsersDelete);
+    public bool CanAssignPermission => CoQuyen(PermissionKeys.UsersAssignPermission);
+
+    // Cài đặt
+    public bool CanEditSettings => CoQuyen(PermissionKeys.SettingsEdit);
+
+    /// <summary>Kiểm tra quyền ngay tại thời điểm gọi lệnh (bắt được cả trường hợp gọi trực tiếp).</summary>
+    private async Task<bool> KiemTraQuyenAsync(string key, string message)
+    {
+        if (CoQuyen(key))
+        {
+            return true;
+        }
+
+        await ShowMessageAsync("Thông báo", message);
+        return false;
+    }
 
 }
