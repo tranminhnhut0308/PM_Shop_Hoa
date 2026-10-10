@@ -33,6 +33,24 @@ public partial class MainWindow : Window
         this.Opened += async (_, _) =>
         {
             await viewModel.InitializeAsync();
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(3000);
+                    var updateRes = await UpdateService.Instance.CheckForUpdatesAsync();
+                    if (updateRes.IsUpdateAvailable)
+                    {
+                        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+                        {
+                            var updateWindow = new UpdateWindow();
+                            await updateWindow.ShowDialog(this);
+                        });
+                    }
+                }
+                catch { }
+            });
         };
     }
     private async void OpenSettingsButton_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -256,21 +274,53 @@ public partial class MainWindow : Window
         viewModel.CapNhatTrangThaiChonTatCaBaoCaoPhieuNhap();
     }
 
-    private void OnBaoCaoPhieuNhapPageSizeChanged(
+    private void OnBaoCaoPhieuNhapRowDoubleTapped(
     object? sender,
-    SelectionChangedEventArgs e)
+        TappedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel viewModel)
             return;
 
-        if (sender is not ComboBox comboBox)
+        if (sender is not ListBox listBox)
             return;
 
-        if (!int.TryParse(comboBox.SelectedItem?.ToString(), out var pageSize) || pageSize <= 0)
+        if (listBox.SelectedItem is not PhieuNhapHang item)
             return;
 
-        viewModel.BaoCaoPhieuNhapPageSize = pageSize;
-        viewModel.TimKiemBaoCaoPhieuNhapTuDong();
+        if (viewModel.XemChiTietPhieuNhapCommand.CanExecute(item))
+            viewModel.XemChiTietPhieuNhapCommand.Execute(item);
+    }
+
+    private void OnBaoCaoPhieuNhapRowPointerPressed(
+        object? sender,
+        PointerPressedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        // Chỉ xử lý chuột trái (hoặc cảm ứng)
+        var point = e.GetCurrentPoint(this);
+        if (point.Properties.IsRightButtonPressed)
+            return;
+
+        // Bỏ qua nếu bấm vào CheckBox hoặc Button (nút sao yêu thích, mã phiếu đã có command riêng)
+        var element = e.Source as StyledElement;
+        while (element is not null && element != sender)
+        {
+            if (element is CheckBox or ToggleButton or Button)
+                return;
+
+            element = element.Parent as StyledElement;
+        }
+
+        var item = (sender as Control)?.DataContext as PhieuNhapHang
+                   ?? (e.Source as StyledElement)?.DataContext as PhieuNhapHang;
+
+        if (item is null)
+            return;
+
+        if (viewModel.XemChiTietPhieuNhapCommand.CanExecute(item))
+            viewModel.XemChiTietPhieuNhapCommand.Execute(item);
     }
 
     private void OnCustomerSearchTextChanged(object? sender, TextChangedEventArgs e)
@@ -284,27 +334,6 @@ public partial class MainWindow : Window
         // Tìm kiếm realtime: ViewModel tự debounce 350ms
         // để không gọi database liên tục khi người dùng gõ.
         viewModel.TimKiemKhachHangTuDong();
-    }
-
-    private void OnCustomerPageSizeChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if (DataContext is not MainWindowViewModel viewModel)
-            return;
-
-        if (sender is not ComboBox comboBox)
-            return;
-
-        if (!int.TryParse(comboBox.SelectedItem?.ToString(), out var pageSize) || pageSize <= 0)
-            return;
-
-        // Bỏ qua khi giá trị không đổi (kể cả lúc giao diện vừa khởi tạo)
-        if (viewModel.CustomerPageSize == pageSize)
-            return;
-
-        // ViewModel tự quay về trang 1 khi đổi số bản ghi mỗi trang
-        viewModel.CustomerPageSize = pageSize;
-
-        _ = viewModel.TaiLaiDanhSachKhachHangAsync();
     }
 
     /// <summary>
@@ -1014,5 +1043,11 @@ public partial class MainWindow : Window
 
         var usersWindow = new UsersWindow();
         await usersWindow.ShowDialog(this);
+    }
+    private async void OpenUpdateWindow_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        (AccountButton.Flyout as Flyout)?.Hide();
+        var updateWindow = new UpdateWindow();
+        await updateWindow.ShowDialog(this);
     }
 }

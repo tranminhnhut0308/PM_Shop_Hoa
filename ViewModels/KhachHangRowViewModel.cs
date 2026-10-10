@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShopHoa.Helpers;
@@ -16,6 +17,9 @@ public sealed partial class KhachHangRowViewModel : ObservableObject
 {
     /// <summary>Giá trị hiển thị khi một trường dữ liệu chưa có.</summary>
     public const string ChuaCo = "Chưa có";
+
+    private static readonly IBrush ChuCoNo = new SolidColorBrush(Color.Parse("#D64545"));
+    private static readonly IBrush ChuKhongCoNo = new SolidColorBrush(Color.Parse("#163F38"));
 
     public KhachHang Customer { get; private set; }
 
@@ -70,6 +74,12 @@ public sealed partial class KhachHangRowViewModel : ObservableObject
 
     /// <summary>Nợ hiện tại, lấy từ sổ cái công nợ (hoặc tổng nợ trên hóa đơn).</summary>
     public decimal NoHienTai => Customer.NoHienTai;
+
+    /// <summary>Khách hàng đang còn nợ hay không (nợ hiện tại lớn hơn 0).</summary>
+    public bool CoNo => Customer.NoHienTai > 0;
+
+    /// <summary>Màu chữ ô nợ: 0 đ hiển thị bình thường, còn nợ thì tô đỏ cảnh báo.</summary>
+    public IBrush NoHienTaiForeground => CoNo ? ChuCoNo : ChuKhongCoNo;
 
     /// <summary>Tổng tiền bán của khách hàng.</summary>
     public decimal TongBan => Customer.TongBan;
@@ -128,6 +138,8 @@ public sealed partial class KhachHangRowViewModel : ObservableObject
         OnPropertyChanged(nameof(NgayTaoText));
         OnPropertyChanged(nameof(ChuCaiDau));
         OnPropertyChanged(nameof(NoHienTai));
+        OnPropertyChanged(nameof(CoNo));
+        OnPropertyChanged(nameof(NoHienTaiForeground));
         OnPropertyChanged(nameof(TongBan));
         OnPropertyChanged(nameof(TongBanTruTraHang));
         OnPropertyChanged(nameof(NoHienTaiText));

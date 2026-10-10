@@ -13,4 +13,8 @@ public sealed class DatabaseConfig
     public string Password { get; set; } = "";
 
     public string SslMode { get; set; } = "None";
+
+    public string ApiUrl { get; set; } = "http://localhost:5000";
+
+    public bool UseApi { get; set; } = false;
 }

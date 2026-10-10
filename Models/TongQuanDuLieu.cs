@@ -132,49 +132,73 @@ public sealed class TongQuanHangTop
     public string SoLuongHienThi => $"{SoLuong:N0}";
 }
 
-/// <summary>Một dòng trong thẻ "Hoạt động gần đây".</summary>
-public sealed class TongQuanHoatDong
+/// <summary>Một dòng nhật ký hoạt động của tài khoản con (dành cho Admin trên Dashboard).</summary>
+public sealed class TongQuanHoatDongTaiKhoanCon
 {
+    public ulong Id { get; set; }
+    public uint? NguoiDungId { get; set; }
+    public string TenDangNhap { get; set; } = "";
+    public string HoTen { get; set; } = "";
+    public string VaiTro { get; set; } = "";
+    public string HanhDong { get; set; } = "";
+    public string? DoiTuong { get; set; }
+    public string? MaChungTu { get; set; }
+    public string? NoiDung { get; set; }
+    public decimal? GiaTri { get; set; }
     public DateTime ThoiGian { get; set; }
 
-    /// <summary>Mã chứng từ (HD..., PN..., PT...).</summary>
-    public string MaChungTu { get; set; } = "";
+    public string ThoiGianHienThi => ThoiGian.ToString("dd/MM/yyyy HH:mm");
+    public string GioHienThi => ThoiGian.ToString("HH:mm");
+    public string NgayHienThi => ThoiGian.ToString("dd/MM");
+    public string GiaTriHienThi => (GiaTri.HasValue && GiaTri.Value != 0)
+        ? $"{Math.Abs(GiaTri.Value):N0} đ"
+        : "";
 
-    public string TieuDe { get; set; } = "";
+    public string NguoiThucHienHienThi => !string.IsNullOrWhiteSpace(HoTen)
+        ? $"{HoTen} ({TenDangNhap})"
+        : (!string.IsNullOrWhiteSpace(TenDangNhap) ? TenDangNhap : "Tài khoản");
 
-    public string MoTa { get; set; } = "";
+    public string VaiTroHienThi => !string.IsNullOrWhiteSpace(VaiTro) ? VaiTro : "Nhân viên";
 
-    /// <summary>"BAN_HANG" | "NHAP_HANG" | "SO_QUY"</summary>
-    public string Loai { get; set; } = "";
-
-    /// <summary>Số tiền liên quan, có thể âm nếu là chi.</summary>
-    public decimal GiaTri { get; set; }
-
-    public string GiaTriHienThi => GiaTri == 0 ? "" : $"{Math.Abs(GiaTri):N0} đ";
-
-    public bool LaChi => GiaTri < 0;
-
-    public string ThoiGianHienThi => ThoiGian.ToString("dd/MM HH:mm");
-
-    public string ThoiGianDayDu => ThoiGian.ToString("dd/MM/yyyy HH:mm");
-
-    public string MauGiaTri => LaChi ? "#D64545" : "#087F6E";
-
-    public string MauNenLoai => Loai switch
+    public string MauBadgeVaiTro => VaiTro switch
     {
-        "BAN_HANG" => "#EAF9F5",
-        "NHAP_HANG" => "#FFF4E5",
-        _ => "#EEF2FF"
+        "QUAN_LY" or "Quản lý" => "#6D28D9",
+        "THU_NGAN" or "Thu ngân" => "#0284C7",
+        "KHO" or "Kho" => "#D97706",
+        _ => "#4B5563"
     };
 
-    public string MauIcon => Loai switch
+    public string MauNenBadgeVaiTro => VaiTro switch
     {
-        "BAN_HANG" => "#087F6E",
-        "NHAP_HANG" => "#C27803",
-        _ => "#4B5D57"
+        "QUAN_LY" or "Quản lý" => "#F3E8FF",
+        "THU_NGAN" or "Thu ngân" => "#E0F2FE",
+        "KHO" or "Kho" => "#FEF3C7",
+        _ => "#F3F4F6"
     };
 
-    public string ChucNangMoRong => $"{TieuDe} {MaChungTu}";
+    public string MauBadgeHanhDong => HanhDong switch
+    {
+        "BAN_HANG" or "Bán hàng" => "#047857",
+        "NHAP_HANG" or "Nhập hàng" => "#C2410C",
+        "THU_TIEN" or "Thu tiền" => "#0284C7",
+        "CHI_TIEN" or "Chi tiền" => "#B91C1C",
+        "SO_QUY" or "Sổ quỹ" => "#1D4ED8",
+        "HUY_DON" or "HỦY" or "Hủy hóa đơn" or "Hủy sổ quỹ" => "#B91C1C",
+        "DANG_NHAP" or "Đăng nhập" => "#4338CA",
+        _ => "#0F766E"
+    };
+
+    public string MauNenBadgeHanhDong => HanhDong switch
+    {
+        "BAN_HANG" or "Bán hàng" => "#ECFDF5",
+        "NHAP_HANG" or "Nhập hàng" => "#FFF7ED",
+        "THU_TIEN" or "Thu tiền" => "#E0F2FE",
+        "CHI_TIEN" or "Chi tiền" => "#FEF2F2",
+        "SO_QUY" or "Sổ quỹ" => "#EFF6FF",
+        "HUY_DON" or "HỦY" or "Hủy hóa đơn" or "Hủy sổ quỹ" => "#FEF2F2",
+        "DANG_NHAP" or "Đăng nhập" => "#EEF2FF",
+        _ => "#F0FDFA"
+    };
 }
 
 /// <summary>Thống kê kho lấy trực tiếp từ database, không suy diễn ở client.</summary>
@@ -216,8 +240,8 @@ public sealed class TongQuanDuLieu
 
     public List<TongQuanDiemDoanhThu> BieuDoDoanhThu { get; set; } = [];
 
-    // --- Hoạt động gần đây ---
-    public List<TongQuanHoatDong> HoatDongGanDay { get; set; } = [];
+    // --- Hoạt động tài khoản con (dành riêng cho Admin) ---
+    public List<TongQuanHoatDongTaiKhoanCon> HoatDongTaiKhoanCon { get; set; } = [];
 
     // --- Top 10 ---
     public List<TongQuanHangTop> TopHangBanChay { get; set; } = [];

@@ -30,6 +30,12 @@ public partial class DatabaseSettingsViewModel : ObservableObject
     private string sslMode = "None";
 
     [ObservableProperty]
+    private string apiUrl = "http://localhost:5000";
+
+    [ObservableProperty]
+    private bool useApi;
+
+    [ObservableProperty]
     private string thongBao = "";
 
     [ObservableProperty]
@@ -52,6 +58,8 @@ public partial class DatabaseSettingsViewModel : ObservableObject
         User = config.User;
         Password = config.Password;
         SslMode = config.SslMode;
+        ApiUrl = config.ApiUrl;
+        UseApi = config.UseApi;
     }
 
     private DatabaseConfig GetConfig()
@@ -70,7 +78,9 @@ public partial class DatabaseSettingsViewModel : ObservableObject
             Password = Password,
             SslMode = string.IsNullOrWhiteSpace(SslMode)
                 ? "None"
-                : SslMode
+                : SslMode,
+            ApiUrl = string.IsNullOrWhiteSpace(ApiUrl) ? "http://localhost:5000" : ApiUrl.Trim(),
+            UseApi = UseApi
         };
     }
 

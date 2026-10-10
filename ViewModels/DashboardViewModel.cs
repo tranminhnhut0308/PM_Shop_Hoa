@@ -125,10 +125,86 @@ public sealed partial class DashboardViewModel : ObservableObject
     public ObservableCollection<TongQuanDiemDoanhThu> BieuDoDoanhThu { get; } = new();
 
     // ============================================================
-    // HOẠT ĐỘNG GẦN ĐÂY
+    // HOẠT ĐỘNG TÀI KHOẢN CON (CHỈ ADMIN MỚI XEM ĐƯỢC)
     // ============================================================
 
-    public ObservableCollection<TongQuanHoatDong> HoatDongGanDay { get; } = new();
+    public bool IsAdmin => Session.CurrentUser != null && Quyen.IsAdmin(Session.CurrentUser);
+
+    private List<TongQuanHoatDongTaiKhoanCon> _tatCaHoatDongTaiKhoanCon = [];
+
+    public ObservableCollection<TongQuanHoatDongTaiKhoanCon> HoatDongTaiKhoanCon { get; } = new();
+
+    public int SoLuongHoatDongTaiKhoanCon => HoatDongTaiKhoanCon.Count;
+
+    public bool CoHoatDongTaiKhoanCon => HoatDongTaiKhoanCon.Count > 0;
+
+    [ObservableProperty]
+    private string timKiemHoatDongSub = "";
+
+    partial void OnTimKiemHoatDongSubChanged(string value)
+    {
+        ApDungBoLocHoatDongSub();
+    }
+
+    [ObservableProperty]
+    private string locTaiKhoanSub = "Tất cả nhân viên";
+
+    partial void OnLocTaiKhoanSubChanged(string value)
+    {
+        ApDungBoLocHoatDongSub();
+    }
+
+    [ObservableProperty]
+    private string locHanhDongSub = "Tất cả nghiệp vụ";
+
+    partial void OnLocHanhDongSubChanged(string value)
+    {
+        ApDungBoLocHoatDongSub();
+    }
+
+    public ObservableCollection<string> DanhSachTaiKhoanCon { get; } = new();
+    public ObservableCollection<string> DanhSachHanhDongCon { get; } = new();
+
+    private void ApDungBoLocHoatDongSub()
+    {
+        var ketQua = _tatCaHoatDongTaiKhoanCon.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(TimKiemHoatDongSub))
+        {
+            var kw = TimKiemHoatDongSub.Trim().ToLowerInvariant();
+            ketQua = ketQua.Where(h =>
+                (h.TenDangNhap?.ToLowerInvariant().Contains(kw) ?? false) ||
+                (h.HoTen?.ToLowerInvariant().Contains(kw) ?? false) ||
+                (h.VaiTro?.ToLowerInvariant().Contains(kw) ?? false) ||
+                (h.HanhDong?.ToLowerInvariant().Contains(kw) ?? false) ||
+                (h.MaChungTu?.ToLowerInvariant().Contains(kw) ?? false) ||
+                (h.NoiDung?.ToLowerInvariant().Contains(kw) ?? false));
+        }
+
+        if (!string.IsNullOrWhiteSpace(LocTaiKhoanSub) && LocTaiKhoanSub != "Tất cả nhân viên" && LocTaiKhoanSub != "Tất cả")
+        {
+            ketQua = ketQua.Where(h =>
+                string.Equals(h.TenDangNhap, LocTaiKhoanSub, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(h.NguoiThucHienHienThi, LocTaiKhoanSub, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(LocHanhDongSub) && LocHanhDongSub != "Tất cả nghiệp vụ" && LocHanhDongSub != "Tất cả")
+        {
+            ketQua = ketQua.Where(h => string.Equals(h.HanhDong, LocHanhDongSub, StringComparison.OrdinalIgnoreCase));
+        }
+
+        DoDanhSachMoi(HoatDongTaiKhoanCon, ketQua);
+        OnPropertyChanged(nameof(SoLuongHoatDongTaiKhoanCon));
+        OnPropertyChanged(nameof(CoHoatDongTaiKhoanCon));
+    }
+
+    [RelayCommand]
+    private void XoaBoLocHoatDongSub()
+    {
+        TimKiemHoatDongSub = "";
+        LocTaiKhoanSub = "Tất cả nhân viên";
+        LocHanhDongSub = "Tất cả nghiệp vụ";
+    }
 
     // ============================================================
     // TOP 10
@@ -201,6 +277,7 @@ public sealed partial class DashboardViewModel : ObservableObject
                 TuNgayTuChon,
                 DenNgayTuChon,
                 DateTime.Now,
+                IsAdmin,
                 token);
 
             // Bỏ qua nếu đã có lượt tải mới hơn (version guard).
@@ -248,10 +325,36 @@ public sealed partial class DashboardViewModel : ObservableObject
         TongSoHoaDonKyChonHienThi = duLieu.TongSoHoaDonKyChonHienThi;
 
         DoDanhSachMoi(BieuDoDoanhThu, duLieu.BieuDoDoanhThu);
-        DoDanhSachMoi(HoatDongGanDay, duLieu.HoatDongGanDay);
         DoDanhSachMoi(TopHangBanChay, duLieu.TopHangBanChay);
         DoDanhSachMoi(TopKhachHang, duLieu.TopKhachHang);
 
+        _tatCaHoatDongTaiKhoanCon = duLieu.HoatDongTaiKhoanCon;
+
+        var dsTaiKhoan = new List<string> { "Tất cả nhân viên" };
+        dsTaiKhoan.AddRange(_tatCaHoatDongTaiKhoanCon
+            .Select(h => h.TenDangNhap)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t));
+        DoDanhSachMoi(DanhSachTaiKhoanCon, dsTaiKhoan);
+
+        var dsHanhDong = new List<string> { "Tất cả nghiệp vụ" };
+        dsHanhDong.AddRange(_tatCaHoatDongTaiKhoanCon
+            .Select(h => h.HanhDong)
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(h => h));
+        DoDanhSachMoi(DanhSachHanhDongCon, dsHanhDong);
+
+        if (string.IsNullOrWhiteSpace(LocTaiKhoanSub) || !dsTaiKhoan.Contains(LocTaiKhoanSub))
+            LocTaiKhoanSub = "Tất cả nhân viên";
+
+        if (string.IsNullOrWhiteSpace(LocHanhDongSub) || !dsHanhDong.Contains(LocHanhDongSub))
+            LocHanhDongSub = "Tất cả nghiệp vụ";
+
+        ApDungBoLocHoatDongSub();
+
+        OnPropertyChanged(nameof(IsAdmin));
         OnPropertyChanged(nameof(CoHangBanChay));
         OnPropertyChanged(nameof(CoKhachHang));
 

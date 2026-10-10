@@ -18,3 +18,6 @@ Thumbs.db
 
 # Build logs
 *.log
+dist/
+bin/
+obj/

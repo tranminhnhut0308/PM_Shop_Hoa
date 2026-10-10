@@ -765,7 +765,7 @@ public sealed partial class MainWindowViewModel
 
             await TaiLaiSoQuyAsync();
 
-            // Dashboard có khoản thu/chi trong "Hoạt động gần đây".
+            // Nạp lại Tổng quan nếu đang mở để số liệu thu/chi cập nhật kịp.
             _ = LamMoiTongQuanNeuDangMoAsync();
         }
         catch (Exception ex)

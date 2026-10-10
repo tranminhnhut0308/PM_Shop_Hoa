@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -141,6 +141,16 @@ public partial class LoginViewModel : ObservableObject
             Session.SetCurrentUser(user, perms);
             _ = _db.CapNhatLanDangNhapCuoiAsync(user.Id);
 
+            if (!Quyen.IsAdmin(user))
+            {
+                _ = _db.LogSubAccountActivityAsync(
+                    "Đăng nhập",
+                    "HE_THONG",
+                    user.Id,
+                    user.TenDangNhap,
+                    $"Tài khoản {user.TenDangNhap} ({user.HoTen}) đăng nhập hệ thống");
+            }
+
             ThongBao = "";
             TrangThaiKetNoi = "Đăng nhập thành công.";
 
@@ -236,6 +246,16 @@ public partial class LoginViewModel : ObservableObject
             var perms = await _db.GetUserPermissionKeysAsync(user.Id);
             Session.SetCurrentUser(user, perms);
             _ = _db.CapNhatLanDangNhapCuoiAsync(user.Id);
+
+            if (!Quyen.IsAdmin(user))
+            {
+                _ = _db.LogSubAccountActivityAsync(
+                    "Đăng nhập",
+                    "HE_THONG",
+                    user.Id,
+                    user.TenDangNhap,
+                    $"Tài khoản {user.TenDangNhap} ({user.HoTen}) đăng nhập hệ thống");
+            }
 
             // Ghi nhớ hoặc xoá thông tin đăng nhập
             CapNhatGhiNhoDangNhap(tenDangNhap, MatKhau);

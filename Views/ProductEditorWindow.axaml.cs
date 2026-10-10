@@ -75,7 +75,7 @@ public partial class ProductEditorWindow : Window
 
         // Giá bán hiển thị kiểu Việt Nam (50.000), các ô số khác giữ nguyên dạng gốc
         GiaBanTextBox.Text = MoneyInput.Format(_product.GiaBan);
-        GiaVonTextBox.Text = _product.GiaVon.ToString(CultureInfo.InvariantCulture);
+        GiaVonTextBox.Text =  MoneyInput.Format(_product.GiaVon);
         TonKhoTextBox.Text = _product.TonKhoExcel.ToString(CultureInfo.InvariantCulture);
         KhachDatTextBox.Text = _product.KhachDat.ToString(CultureInfo.InvariantCulture);
         ViTriKhoTextBox.Text = _product.ViTriKho ?? "";

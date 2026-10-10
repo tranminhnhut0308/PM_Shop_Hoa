@@ -107,4 +107,7 @@ public sealed partial class SanPham : ObservableObject
         LoiGiaBanNhanh = null;
         DangLuGiaBan = false;
     }
+
+    // Thêm thuộc tính kiểm tra hết hàng
+    public bool HetHang => TonKho <= 0;
 }

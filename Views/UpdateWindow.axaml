@@ -1,0 +1,93 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ShopHoa.ViewModels"
+        x:Class="ShopHoa.Views.UpdateWindow"
+        x:DataType="vm:UpdateViewModel"
+        Title="Cập nhật phần mềm ShopHoa"
+        Width="540"
+        Height="460"
+        MinWidth="480"
+        MinHeight="420"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#F4F7F6">
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="28,24">
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,20">
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <TextBlock Text="🔄" FontSize="26" VerticalAlignment="Center"/>
+                <TextBlock Text="Cập nhật phần mềm" FontSize="22" FontWeight="Bold" Foreground="#173F38" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Text="Kiểm tra và nâng cấp phiên bản mới nhất từ máy chủ từ xa."
+                       FontSize="13" Foreground="#667085"/>
+        </StackPanel>
+
+        <!-- Body / Content -->
+        <Border Grid.Row="1" Background="White" CornerRadius="12" Padding="20" BorderBrush="#D8E5E0" BorderThickness="1">
+            <StackPanel Spacing="16" VerticalAlignment="Center">
+                <!-- Version Cards -->
+                <Grid ColumnDefinitions="*,16,*">
+                    <Border Grid.Column="0" Background="#F0F9F6" CornerRadius="8" Padding="14,12" BorderBrush="#B2DDCE" BorderThickness="1">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Phiên bản hiện tại" FontSize="12" Foreground="#4F625D" FontWeight="Medium"/>
+                            <TextBlock Text="{Binding CurrentVersion}" FontSize="18" FontWeight="Bold" Foreground="#078C7A"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="2" Background="#F8F9FA" CornerRadius="8" Padding="14,12" BorderBrush="#E4E7EC" BorderThickness="1">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Phiên bản mới nhất" FontSize="12" Foreground="#667085" FontWeight="Medium"/>
+                            <TextBlock Text="{Binding NewVersion, FallbackValue='Chưa kiểm tra'}"
+                                       FontSize="18" FontWeight="Bold"
+                                       Foreground="{Binding HasNewVersion, Converter={x:Null}}"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Update URL Setting -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Địa chỉ máy chủ cập nhật:" FontSize="12" Foreground="#4F625D"/>
+                    <TextBox Text="{Binding UpdateUrl}" FontSize="13" CornerRadius="6" Padding="10,6"
+                             IsEnabled="{Binding !IsDownloading}"/>
+                </StackPanel>
+
+                <!-- Status Message -->
+                <Border Background="#F9FAFB" CornerRadius="8" Padding="12" BorderBrush="#EAECF0" BorderThickness="1">
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="13" TextWrapping="Wrap"
+                               Foreground="#344054" HorizontalAlignment="Center" TextAlignment="Center"/>
+                </Border>
+
+                <!-- Progress Bar -->
+                <StackPanel Spacing="6" IsVisible="{Binding IsDownloading}">
+                    <ProgressBar Minimum="0" Maximum="100" Value="{Binding DownloadProgress}"
+                                 Height="10" CornerRadius="5" Foreground="#078C7A"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Actions Footer -->
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,20,0,0">
+            <Button Grid.Column="0" Content="Đóng" Command="{Binding CloseCommand}"
+                    Background="White" Foreground="#344054" BorderBrush="#D0D5DD" BorderThickness="1"
+                    CornerRadius="8" Padding="18,10" FontWeight="SemiBold" FontSize="13" Cursor="Hand"/>
+
+            <Button Grid.Column="2" Content="Kiểm tra cập nhật" Command="{Binding CheckUpdateCommand}"
+                    IsVisible="{Binding !IsUpdateReady}"
+                    IsEnabled="{Binding !IsChecking}"
+                    Background="#078C7A" Foreground="White" CornerRadius="8" Padding="18,10"
+                    FontWeight="SemiBold" FontSize="13" Cursor="Hand" Margin="0,0,10,0"/>
+
+            <Button Grid.Column="3" Content="Tải và Cập nhật" Command="{Binding DownloadAndInstallCommand}"
+                    IsVisible="{Binding HasNewVersion}"
+                    IsEnabled="{Binding !IsDownloading}"
+                    Background="#0878E8" Foreground="White" CornerRadius="8" Padding="20,10"
+                    FontWeight="Bold" FontSize="13" Cursor="Hand"/>
+
+            <Button Grid.Column="3" Content="Khởi động lại ngay" Command="{Binding RestartToApplyCommand}"
+                    IsVisible="{Binding IsUpdateReady}"
+                    Background="#12B76A" Foreground="White" CornerRadius="8" Padding="20,10"
+                    FontWeight="Bold" FontSize="13" Cursor="Hand"/>
+        </Grid>
+    </Grid>
+</Window>
