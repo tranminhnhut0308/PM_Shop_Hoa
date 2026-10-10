@@ -14,6 +14,7 @@ public partial class UserEditViewModel : ObservableObject
     private bool _dangTaiDuLieu;
 
     [ObservableProperty] private string title = "Thêm tài khoản";
+    [ObservableProperty] private string saveButtonText = "Tạo tài khoản mới";
     [ObservableProperty] private string passwordWatermark = "Nhập mật khẩu *";
     [ObservableProperty] private uint userId;
     [ObservableProperty] private string tenDangNhap = string.Empty;
@@ -27,6 +28,8 @@ public partial class UserEditViewModel : ObservableObject
     [ObservableProperty] private Role? selectedRole;
     [ObservableProperty] private bool isAdminAccount;
     [ObservableProperty] private string permissionHint = string.Empty;
+
+    public Action? OnSaved { get; set; }
 
     public bool CanEditPermissions
     {
@@ -61,12 +64,14 @@ public partial class UserEditViewModel : ObservableObject
         if (_isEdit)
         {
             Title = "Sửa tài khoản";
+            SaveButtonText = "Lưu tài khoản";
             PasswordWatermark = "Để trống nếu không đổi";
             canChangeUsername = false;
         }
         else
         {
             Title = "Thêm tài khoản";
+            SaveButtonText = "Tạo tài khoản mới";
             PasswordWatermark = "Nhập mật khẩu *";
             canChangeUsername = true;
         }
@@ -393,9 +398,15 @@ public partial class UserEditViewModel : ObservableObject
     [RelayCommand]
     public async Task SaveAsync(Avalonia.Controls.Window? window)
     {
-        if (string.IsNullOrWhiteSpace(TenDangNhap) || string.IsNullOrWhiteSpace(HoTen))
+        if (string.IsNullOrWhiteSpace(TenDangNhap))
         {
-            await ShowMessage("Vui lòng nhập đầy đủ thông tin.");
+            await ShowMessage("Vui lòng nhập tên đăng nhập.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(HoTen))
+        {
+            await ShowMessage("Vui lòng nhập họ và tên.");
             return;
         }
 
@@ -405,20 +416,26 @@ public partial class UserEditViewModel : ObservableObject
         {
             if (!Session.HasPermission(PermissionKeys.UsersCreate))
             {
-                await ShowMessage("Bạn không có quyền Tạo tài khoản.");
+                await ShowMessage("Bạn không có quyền tạo tài khoản.");
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(MatKhau) || MatKhau != NhapLaiMatKhau)
+            if (string.IsNullOrWhiteSpace(MatKhau))
             {
-                await ShowMessage("Mật khẩu không khớp hoặc trống.");
+                await ShowMessage("Vui lòng nhập mật khẩu.");
+                return;
+            }
+
+            if (MatKhau != NhapLaiMatKhau)
+            {
+                await ShowMessage("Mật khẩu xác nhận không khớp. Vui lòng nhập lại.");
                 return;
             }
 
             var users = await _db.GetUsersAsync();
             if (users.Any(u => u.TenDangNhap.Equals(username, StringComparison.OrdinalIgnoreCase)))
             {
-                await ShowMessage("Tên đăng nhập đã tồn tại.");
+                await ShowMessage("Tên đăng nhập đã tồn tại trong hệ thống. Vui lòng chọn tên đăng nhập khác.");
                 return;
             }
         }
@@ -426,7 +443,7 @@ public partial class UserEditViewModel : ObservableObject
         {
             if (!Session.HasPermission(PermissionKeys.UsersEdit))
             {
-                await ShowMessage("Bạn không có quyền Sửa tài khoản.");
+                await ShowMessage("Bạn không có quyền sửa tài khoản.");
                 return;
             }
 
@@ -440,7 +457,7 @@ public partial class UserEditViewModel : ObservableObject
 
             if (!string.IsNullOrWhiteSpace(MatKhau) && MatKhau != NhapLaiMatKhau)
             {
-                await ShowMessage("Mật khẩu không khớp.");
+                await ShowMessage("Mật khẩu xác nhận không khớp. Vui lòng nhập lại.");
                 return;
             }
         }
@@ -474,7 +491,7 @@ public partial class UserEditViewModel : ObservableObject
                     await _db.SaveUserPermissionsAsync(UserId, permissionIds, actorId);
                 }
                 
-                await ShowMessage("Cập nhật tài khoản thành công.");
+                await ShowMessage("Cập nhật tài khoản thành công!");
             }
             else
             {
@@ -488,8 +505,10 @@ public partial class UserEditViewModel : ObservableObject
                     PermissionIds = permissionIds
                 };
                 await _db.CreateUserAsync(dto, actorId);
-                await ShowMessage("Tạo tài khoản thành công.");
+                await ShowMessage("Tạo tài khoản mới thành công!");
             }
+
+            OnSaved?.Invoke();
 
             var target = window ?? GetCurrentWindow();
             if (target != null)
@@ -502,6 +521,10 @@ public partial class UserEditViewModel : ObservableObject
                 Console.WriteLine("Cannot find window to close.");
             }
         }
+        catch (MySqlConnector.MySqlException ex) when (ex.Number == 1062)
+        {
+            await ShowMessage("Tên đăng nhập đã tồn tại trong hệ thống. Vui lòng chọn tên đăng nhập khác.");
+        }
         catch (UnauthorizedAccessException ex)
         {
             await ShowMessage(ex.Message);
@@ -509,7 +532,7 @@ public partial class UserEditViewModel : ObservableObject
         catch (Exception ex)
         {
             Helpers.SafeLog.WriteError("UserEditViewModel.SaveAsync", ex);
-            await ShowMessage(ex.Message);
+            await ShowMessage("Không thể " + (_isEdit ? "cập nhật" : "tạo") + " tài khoản: " + ex.Message);
         }
     }
 

@@ -98,6 +98,7 @@ public partial class UsersViewModel : ObservableObject
         }
 
         var vm = new UserEditViewModel(_db, isEdit: false, userId: 0);
+        vm.OnSaved = () => _ = LoadAsync();
         var win = new Views.UserEditWindow(vm);
         Avalonia.Controls.Window? owner = null;
         try
@@ -128,8 +129,6 @@ public partial class UsersViewModel : ObservableObject
         }
     }
 
-    
-
     [RelayCommand]
     public async Task MoSuaTaiKhoanAsync(UserListItem? item)
     {
@@ -140,6 +139,7 @@ public partial class UsersViewModel : ObservableObject
         }
 
         var vm = new UserEditViewModel(_db, isEdit: true, userId: item.Id);
+        vm.OnSaved = () => _ = LoadAsync();
         var win = new Views.UserEditWindow(vm);
         Avalonia.Controls.Window? owner = null;
         try

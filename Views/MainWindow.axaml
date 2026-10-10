@@ -991,13 +991,35 @@
         <ImageBrush Source="avares://ShopHoa/Assets/anh_menu.png" Stretch="UniformToFill" />
       </Border.Background>
       <Grid RowDefinitions="Auto,*,Auto">
-        <TextBlock Text="🌸 VỰA HOA NHÀ HUY"
-          Foreground="White"
-          FontSize="18"
-          FontWeight="Bold"
-          VerticalAlignment="Center"
-          HorizontalAlignment="Center"
-          Margin="8,28,8,30" />
+        <StackPanel Margin="0,24,0,24" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <!-- Biểu tượng hoa cách điệu -->
+          <Path Data="M12,2 C12,2 9,7 9,11 C9,15 12,20 12,20 C12,20 15,15 15,11 C15,7 12,2 12,2 Z M12,20 C12,20 6,18 4,13 C2,8 5,6 5,6 C5,6 8,9 10,14 C11,16 12,20 12,20 Z M12,20 C12,20 18,18 20,13 C22,8 19,6 19,6 C19,6 16,9 14,14 C13,16 12,20 12,20 Z"
+                Fill="#D9B66F" 
+                Stretch="Uniform" 
+                Width="42" 
+                Height="42" 
+                HorizontalAlignment="Center"
+                Margin="0,0,0,8"/>
+          
+          <!-- Chữ VỰA HOA -->
+          <TextBlock Text="VỰA HOA"
+                     Foreground="#FFFDF5"
+                     FontSize="14"
+                     FontWeight="SemiBold"
+                     LetterSpacing="1"
+                     HorizontalAlignment="Center" />
+                     
+          <!-- Đường kẻ vàng champagne -->
+          <Rectangle Width="50" Height="1.5" Fill="#D9B66F" Margin="0,6,0,6" HorizontalAlignment="Center" />
+          
+          <!-- Chữ NHÀ HUY -->
+          <TextBlock Text="NHÀ HUY"
+                     Foreground="#D9B66F"
+                     FontSize="19"
+                     FontWeight="Bold"
+                     LetterSpacing="1.5"
+                     HorizontalAlignment="Center" />
+        </StackPanel>
 
         <StackPanel Grid.Row="1" Orientation="Vertical">
           <Button Classes="menu" Content="Tổng quan" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewDashboard}"

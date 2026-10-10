@@ -8020,20 +8020,24 @@ LIMIT 500;
     /// </summary>
     private async Task<bool> CoQuyenGanRiengAsync(uint userId)
     {
-        var sql = """
-        SELECT CASE
-          WHEN EXISTS (
-            SELECT 1 FROM information_schema.columns
+        await using var connection = await OpenAsync();
+        var hasColumn = await connection.ExecuteScalarAsync<bool>("""
+            SELECT COUNT(1) > 0 FROM information_schema.columns
             WHERE table_schema = DATABASE()
               AND table_name = 'nguoi_dung'
               AND column_name = 'phan_quyen_rieng'
-          )
-          THEN (SELECT COUNT(*) FROM nguoi_dung WHERE id = @UserId AND phan_quyen_rieng = 1)
-          ELSE (SELECT COUNT(*) FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId)
-        END
-        """;
-        await using var connection = await OpenAsync();
-        return await connection.ExecuteScalarAsync<int>(sql, new { UserId = userId }) > 0;
+        """);
+
+        if (hasColumn)
+        {
+            return await connection.ExecuteScalarAsync<bool>(
+                "SELECT COUNT(1) > 0 FROM nguoi_dung WHERE id = @UserId AND phan_quyen_rieng = 1",
+                new { UserId = userId });
+        }
+
+        return await connection.ExecuteScalarAsync<bool>(
+            "SELECT COUNT(1) > 0 FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId",
+            new { UserId = userId });
     }
 
     public async Task<List<string>> GetUserPermissionKeysAsync(uint userId)
@@ -8179,16 +8183,50 @@ LIMIT 500;
                 }
             }
 
-            // Vai trò QUAN_TRI luôn được cấp toàn bộ danh mục quyền.
-            var adminRoleId = await connection.ExecuteScalarAsync<uint?>(
-                "SELECT id FROM vai_tro WHERE ma_vai_tro = @Ma",
-                new { Ma = Quyen.QuanTri });
-
-            if (adminRoleId.HasValue)
+            // Bảo đảm cột phan_quyen_rieng tồn tại trong bảng nguoi_dung
+            var coColPhanQuyenRieng = await connection.ExecuteScalarAsync<bool>("""
+                SELECT COUNT(1) > 0 FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = 'nguoi_dung'
+                  AND column_name = 'phan_quyen_rieng'
+            """);
+            if (!coColPhanQuyenRieng)
             {
-                await connection.ExecuteAsync(
-                    "INSERT IGNORE INTO vai_tro_quyen (vai_tro_id, quyen_id) SELECT @RoleId, q.id FROM quyen q",
-                    new { RoleId = adminRoleId.Value });
+                try
+                {
+                    await connection.ExecuteAsync("ALTER TABLE nguoi_dung ADD COLUMN `phan_quyen_rieng` TINYINT(1) NOT NULL DEFAULT 0");
+                }
+                catch { }
+            }
+
+            // Đồng bộ quyền mặc định theo vai trò vào vai_tro_quyen cho tất cả vai trò
+            foreach (var kvp in PermissionCatalog.DefaultRolePermissions)
+            {
+                var roleId = await connection.ExecuteScalarAsync<uint?>(
+                    "SELECT id FROM vai_tro WHERE ma_vai_tro = @Ma",
+                    new { Ma = kvp.Key });
+
+                if (roleId.HasValue)
+                {
+                    if (string.Equals(kvp.Key, Quyen.QuanTri, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // QUAN_TRI luôn có tất cả quyền
+                        await connection.ExecuteAsync(
+                            "INSERT IGNORE INTO vai_tro_quyen (vai_tro_id, quyen_id) SELECT @RoleId, q.id FROM quyen q",
+                            new { RoleId = roleId.Value });
+                    }
+                    else
+                    {
+                        var sqlVtq = """
+                            INSERT IGNORE INTO vai_tro_quyen (vai_tro_id, quyen_id)
+                            SELECT @RoleId, q.id FROM quyen q WHERE q.ma_quyen = @MaQuyen
+                        """;
+                        foreach (var k in kvp.Value)
+                        {
+                            await connection.ExecuteAsync(sqlVtq, new { RoleId = roleId.Value, MaQuyen = k });
+                        }
+                    }
+                }
             }
 
             _daDamBaoDanhMucQuyen = true;
@@ -8294,9 +8332,10 @@ LIMIT 500;
         try
         {
             await connection.ExecuteAsync("DELETE FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId", new { UserId = userId }, tx);
+            var safeActorId = actorId.HasValue && actorId.Value > 0 ? actorId.Value : (uint?)null;
             foreach (var pid in permissionIds.Distinct())
             {
-                await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = userId, QuyenId = pid, ActorId = actorId }, tx);
+                await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = userId, QuyenId = pid, ActorId = safeActorId }, tx);
             }
             try { await connection.ExecuteAsync("UPDATE nguoi_dung SET phan_quyen_rieng = 1 WHERE id = @UserId", new { UserId = userId }, tx); } catch { }
             await tx.CommitAsync();
@@ -8316,9 +8355,10 @@ LIMIT 500;
         try
         {
             await connection.ExecuteAsync("DELETE FROM vai_tro_quyen WHERE vai_tro_id = @RoleId", new { RoleId = roleId }, tx);
+            var safeActorId = actorId.HasValue && actorId.Value > 0 ? actorId.Value : (uint?)null;
             foreach (var pid in permissionIds.Distinct())
             {
-                await connection.ExecuteAsync("INSERT IGNORE INTO vai_tro_quyen (vai_tro_id, quyen_id, nguoi_cap_nhat_id) VALUES (@RoleId, @QuyenId, @ActorId)", new { RoleId = roleId, QuyenId = pid, ActorId = actorId }, tx);
+                await connection.ExecuteAsync("INSERT IGNORE INTO vai_tro_quyen (vai_tro_id, quyen_id, nguoi_cap_nhat_id) VALUES (@RoleId, @QuyenId, @ActorId)", new { RoleId = roleId, QuyenId = pid, ActorId = safeActorId }, tx);
             }
             await tx.CommitAsync();
         }
@@ -8356,9 +8396,10 @@ LIMIT 500;
             {
                 await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_vai_tro (nguoi_dung_id, vai_tro_id) VALUES (@UserId, @RoleId)", new { UserId = userId, RoleId = rid }, tx);
             }
+            var safeActorId = actorId.HasValue && actorId.Value > 0 ? actorId.Value : (uint?)null;
             foreach (var pid in dto.PermissionIds.Distinct())
             {
-                await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = userId, QuyenId = pid, ActorId = actorId }, tx);
+                await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = userId, QuyenId = pid, ActorId = safeActorId }, tx);
             }
             try { await connection.ExecuteAsync("UPDATE nguoi_dung SET phan_quyen_rieng = 1 WHERE id = @UserId", new { UserId = userId }, tx); } catch { }
             await tx.CommitAsync();
@@ -8418,9 +8459,10 @@ LIMIT 500;
                 await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_vai_tro (nguoi_dung_id, vai_tro_id) VALUES (@UserId, @RoleId)", new { UserId = dto.Id, RoleId = rid }, tx);
             }
             await connection.ExecuteAsync("DELETE FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId", new { UserId = dto.Id }, tx);
+            var safeActorId = actorId.HasValue && actorId.Value > 0 ? actorId.Value : (uint?)null;
             foreach (var pid in dto.PermissionIds.Distinct())
             {
-                await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = dto.Id, QuyenId = pid, ActorId = actorId }, tx);
+                await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = dto.Id, QuyenId = pid, ActorId = safeActorId }, tx);
             }
             try { await connection.ExecuteAsync("UPDATE nguoi_dung SET phan_quyen_rieng = 1 WHERE id = @UserId", new { UserId = dto.Id }, tx); } catch { }
             await tx.CommitAsync();

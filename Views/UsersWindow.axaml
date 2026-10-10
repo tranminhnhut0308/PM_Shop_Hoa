@@ -21,12 +21,12 @@
     </Grid>
     <DataGrid Grid.Row="2" ItemsSource="{Binding Users}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="Tài khoản" Binding="{Binding TenDangNhap}" Width="120" />
-        <DataGridTextColumn Header="Họ và tên" Binding="{Binding HoTen}" Width="*" />
-        <DataGridTextColumn Header="Vai trò" Binding="{Binding VaiTro}" Width="140" />
-        <DataGridTextColumn Header="Trạng thái" Binding="{Binding TrangThaiText}" Width="110" />
-        <DataGridTextColumn Header="Quyền truy cập" Binding="{Binding MaVaiTro}" Width="160" />
-        <DataGridTextColumn Header="Đăng nhập gần nhất" Binding="{Binding LanDangNhapCuoi, StringFormat={}{0:dd/MM/yyyy HH:mm}}" Width="150" />
+        <DataGridTextColumn Header="Tài khoản" Binding="{Binding TenDangNhap, Mode=OneWay}" Width="120" />
+        <DataGridTextColumn Header="Họ và tên" Binding="{Binding HoTen, Mode=OneWay}" Width="*" />
+        <DataGridTextColumn Header="Vai trò" Binding="{Binding VaiTro, Mode=OneWay}" Width="140" />
+        <DataGridTextColumn Header="Trạng thái" Binding="{Binding TrangThaiText, Mode=OneWay}" Width="110" />
+        <DataGridTextColumn Header="Quyền truy cập" Binding="{Binding MaVaiTro, Mode=OneWay}" Width="160" />
+        <DataGridTextColumn Header="Đăng nhập gần nhất" Binding="{Binding LanDangNhapCuoi, Mode=OneWay, StringFormat={}{0:dd/MM/yyyy HH:mm}}" Width="150" />
         <DataGridTemplateColumn Header="Thao tác" Width="220">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="m:UserListItem">
