@@ -8199,6 +8199,13 @@ LIMIT 500;
                 catch { }
             }
 
+            // Dọn dẹp tài khoản kiểm thử nếu có
+            try
+            {
+                await connection.ExecuteAsync("DELETE ndvt, ndq, nd FROM nguoi_dung nd LEFT JOIN nguoi_dung_vai_tro ndvt ON ndvt.nguoi_dung_id = nd.id LEFT JOIN nguoi_dung_quyen ndq ON ndq.nguoi_dung_id = nd.id WHERE nd.ten_dang_nhap = 'repro_test_x'");
+            }
+            catch { }
+
             // Đồng bộ quyền mặc định theo vai trò vào vai_tro_quyen cho tất cả vai trò
             foreach (var kvp in PermissionCatalog.DefaultRolePermissions)
             {
