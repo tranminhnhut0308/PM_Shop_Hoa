@@ -1,13 +1,17 @@
 # .NET build
 bin/
 obj/
+publish/
 
-# Visual Studio Code
+# Visual Studio / VS Code
+.vs/
 .vscode/
 
 # User files
 *.user
 *.suo
+*.userosscache
+*.sln.docstates
 
 # OS
 .DS_Store
@@ -16,8 +20,8 @@ Thumbs.db
 # Codacy
 .codacy/
 
-# Build logs
+# Build logs & Temp
 *.log
+*.tmp
 dist/
-bin/
-obj/
+cloudflared.exe
