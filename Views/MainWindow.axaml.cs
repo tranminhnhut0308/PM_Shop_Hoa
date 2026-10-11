@@ -44,6 +44,9 @@ public partial class MainWindow : Window
                     {
                         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                         {
+                            viewModel.CoBanCapNhatMoi = true;
+                            viewModel.PhienBanMoiText = updateRes.NewVersion ?? "";
+
                             var updateWindow = new UpdateWindow();
                             await updateWindow.ShowDialog(this);
                         });

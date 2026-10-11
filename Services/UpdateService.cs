@@ -80,6 +80,25 @@ public sealed class UpdateService
         {
             _lastUpdateInfo = await _updateManager.CheckForUpdatesAsync();
 
+            // Nếu GithubSource không tìm thấy bản mới trên GitHub Releases,
+            // tự động fallback sang thư mục Releases/win-x64 trên nhánh main của Git
+            if (_lastUpdateInfo is null && UpdateUrl.Contains("github.com/tranminhnhut0308/PM_Shop_Hoa"))
+            {
+                try
+                {
+                    var rawUrl = "https://raw.githubusercontent.com/tranminhnhut0308/PM_Shop_Hoa/main/Releases/win-x64";
+                    var rawSource = new SimpleWebSource(rawUrl);
+                    var rawManager = new UpdateManager(rawSource);
+                    var rawInfo = await rawManager.CheckForUpdatesAsync();
+                    if (rawInfo != null)
+                    {
+                        _updateManager = rawManager;
+                        _lastUpdateInfo = rawInfo;
+                    }
+                }
+                catch { }
+            }
+
             if (_lastUpdateInfo is null)
             {
                 return new UpdateCheckResult
@@ -101,6 +120,32 @@ public sealed class UpdateService
         }
         catch (Exception ex)
         {
+            // Nếu kiểm tra GitHub Releases gặp lỗi, thử kiểm tra qua raw Git
+            if (UpdateUrl.Contains("github.com/tranminhnhut0308/PM_Shop_Hoa"))
+            {
+                try
+                {
+                    var rawUrl = "https://raw.githubusercontent.com/tranminhnhut0308/PM_Shop_Hoa/main/Releases/win-x64";
+                    var rawSource = new SimpleWebSource(rawUrl);
+                    var rawManager = new UpdateManager(rawSource);
+                    var rawInfo = await rawManager.CheckForUpdatesAsync();
+                    if (rawInfo != null)
+                    {
+                        _updateManager = rawManager;
+                        _lastUpdateInfo = rawInfo;
+                        var newVer = rawInfo.TargetFullRelease.Version.ToString();
+                        return new UpdateCheckResult
+                        {
+                            IsUpdateAvailable = true,
+                            CurrentVersion = CurrentVersionText,
+                            NewVersion = newVer,
+                            Message = $"Đã có phiên bản mới {newVer} sẵn sàng để cập nhật!"
+                        };
+                    }
+                }
+                catch { }
+            }
+
             return new UpdateCheckResult
             {
                 IsUpdateAvailable = false,

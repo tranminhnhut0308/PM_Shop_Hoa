@@ -139,8 +139,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// chạy vô hạn như cũ.
     /// </summary>
     [ObservableProperty] private bool importHasProgress;
-
     [ObservableProperty] private double importProgress;
+    [ObservableProperty] private bool coBanCapNhatMoi;
+    [ObservableProperty] private string phienBanMoiText = "";
     [ObservableProperty] private string productSearch = "";
     [ObservableProperty] private string customerSearch = "";
     [ObservableProperty] private string invoiceSearch = "";
