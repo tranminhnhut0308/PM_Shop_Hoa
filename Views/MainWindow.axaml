@@ -79,75 +79,149 @@
       <Setter Property="Foreground" Value="#263B35" />
     </Style>
 
+    <!-- MENU CHÍNH BÊN TRÁI -->
     <Style Selector="Button.menu">
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="#EAF4FF" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Padding" Value="14,8" />
-      <Setter Property="Margin" Value="0,4" />
-      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="#D6EDE4" />
+      <Setter Property="BorderThickness" Value="3.5,0,0,0" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Padding" Value="14,9" />
+      <Setter Property="Margin" Value="0,2" />
+      <Setter Property="FontSize" Value="13.5" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
       <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Cursor" Value="Hand" />
     </Style>
 
-    <Style Selector="Button.menu:pointerover">
+    <Style Selector="Button.menu /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="#EAF4FF" />
+      <Setter Property="BorderThickness" Value="3.5,0,0,0" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="TextElement.Foreground" Value="#D6EDE4" />
     </Style>
 
-    <Style Selector="Button.menu:pressed">
-      <Setter Property="Background" Value="#FFFFFF30" />
-      <Setter Property="Foreground" Value="#FFFFFF" />
+    <!-- Hover Menu chính -->
+    <Style Selector="Button.menu:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#1FFFFFFF" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
     </Style>
 
+    <!-- Active Menu chính (Đang được chọn) -->
+    <Style Selector="Button.menu.active /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#2BFFFFFF" />
+      <Setter Property="BorderThickness" Value="3.5,0,0,0" />
+      <Setter Property="BorderBrush" Value="#D9B66F" />
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+      <Setter Property="TextElement.FontWeight" Value="Bold" />
+    </Style>
+
+    <Style Selector="Button.menu:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#38FFFFFF" />
+      <Setter Property="BorderBrush" Value="#D9B66F" />
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+    </Style>
+
+    <!-- SUB-MENU (BÁO CÁO CON) -->
+    <Style Selector="Button.subMenu">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#B2DDD0" />
+      <Setter Property="BorderThickness" Value="2.5,0,0,0" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="Margin" Value="0,1" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="Normal" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.subMenu /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="2.5,0,0,0" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="TextElement.Foreground" Value="#B2DDD0" />
+    </Style>
+
+    <!-- Hover SubMenu -->
+    <Style Selector="Button.subMenu:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#18FFFFFF" />
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+    </Style>
+
+    <!-- Active SubMenu -->
+    <Style Selector="Button.subMenu.active /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#25FFFFFF" />
+      <Setter Property="BorderThickness" Value="2.5,0,0,0" />
+      <Setter Property="BorderBrush" Value="#D9B66F" />
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+      <Setter Property="TextElement.FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- NÚT BÁN HÀNG NỔI BẬT -->
     <Style Selector="Button.salesButton">
       <Setter Property="Background" Value="#0A8C78" />
       <Setter Property="Foreground" Value="#FFFFFF" />
-      <Setter Property="BorderBrush" Value="#7AE3D3" />
-      <Setter Property="BorderThickness" Value="1.4" />
-      <Setter Property="Padding" Value="18,14" />
-      <Setter Property="Margin" Value="12,18,12,0" />
+      <Setter Property="BorderBrush" Value="#62E8D3" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="16,12" />
+      <Setter Property="Margin" Value="0,10,0,0" />
       <Setter Property="FontWeight" Value="Bold" />
-      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontSize" Value="13.5" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="CornerRadius" Value="12" />
-      <Setter Property="Template">
-        <ControlTemplate>
-          <Border Background="#0A8C78"
-            BorderBrush="#7AE3D3"
-            BorderThickness="1.4"
-            CornerRadius="12"
-            Padding="18,14">
-            <ContentPresenter Content="{TemplateBinding Content}"
-              ContentTemplate="{TemplateBinding ContentTemplate}"
-              HorizontalContentAlignment="Center"
-              VerticalContentAlignment="Center"
-              TextElement.Foreground="White" />
-          </Border>
-        </ControlTemplate>
-      </Setter>
-    </Style>
-
-    <Style Selector="Button.salesButton:pointerover">
-      <Setter Property="Background" Value="#0A8C78" />
-      <Setter Property="Foreground" Value="#FFFFFF" />
-      <Setter Property="BorderBrush" Value="#7AE3D3" />
-    </Style>
-
-    <Style Selector="Button.salesButton:focus">
-      <Setter Property="Background" Value="#0A8C78" />
-      <Setter Property="Foreground" Value="#FFFFFF" />
-    </Style>
-
-    <Style Selector="Button.salesButton:pointerover /template/ Border#PART_ButtonRoot">
-      <Setter Property="Background" Value="#0A8C78" />
-      <Setter Property="BorderBrush" Value="#7AE3D3" />
+      <Setter Property="Cursor" Value="Hand" />
     </Style>
 
     <Style Selector="Button.salesButton /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#0A8C78" />
+      <Setter Property="BorderBrush" Value="#62E8D3" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
       <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+    </Style>
+
+    <Style Selector="Button.salesButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#0E9F89" />
+      <Setter Property="BorderBrush" Value="#95F5E5" />
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+    </Style>
+
+    <Style Selector="Button.salesButton:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#076E5E" />
+    </Style>
+
+    <!-- THẺ TÀI KHOẢN ADMIN KÍNH MỜ -->
+    <Style Selector="Button.accountCard">
+      <Setter Property="Background" Value="#1C000000" />
+      <Setter Property="BorderBrush" Value="#25FFFFFF" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="10,8" />
+      <Setter Property="Margin" Value="0,10,0,0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.accountCard /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#1C000000" />
+      <Setter Property="BorderBrush" Value="#25FFFFFF" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+    </Style>
+
+    <Style Selector="Button.accountCard:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#2D000000" />
+      <Setter Property="BorderBrush" Value="#45FFFFFF" />
     </Style>
 
 
@@ -987,92 +1061,147 @@
 
   </Window.Styles>
 
-  <Grid ColumnDefinitions="220,*" Background="#F4F7F6">
-    <Border Grid.Column="0" Padding="16,0">
+  <Grid ColumnDefinitions="225,*" Background="#F4F7F6">
+    <Border Grid.Column="0" Padding="14,0">
       <Border.Background>
         <ImageBrush Source="avares://ShopHoa/Assets/anh_menu.png" Stretch="UniformToFill" />
       </Border.Background>
       <Grid RowDefinitions="Auto,*,Auto">
-        <StackPanel Margin="0,24,0,24" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <!-- LOGO VỰA HOA NHÀ HUY -->
+        <StackPanel Margin="0,20,0,18" HorizontalAlignment="Center" VerticalAlignment="Center">
           <!-- Biểu tượng hoa cách điệu -->
           <Path Data="M12,2 C12,2 9,7 9,11 C9,15 12,20 12,20 C12,20 15,15 15,11 C15,7 12,2 12,2 Z M12,20 C12,20 6,18 4,13 C2,8 5,6 5,6 C5,6 8,9 10,14 C11,16 12,20 12,20 Z M12,20 C12,20 18,18 20,13 C22,8 19,6 19,6 C19,6 16,9 14,14 C13,16 12,20 12,20 Z"
                 Fill="#D9B66F" 
                 Stretch="Uniform" 
-                Width="42" 
-                Height="42" 
+                Width="38" 
+                Height="38" 
                 HorizontalAlignment="Center"
-                Margin="0,0,0,8"/>
+                Margin="0,0,0,6"/>
           
           <!-- Chữ VỰA HOA -->
           <TextBlock Text="VỰA HOA"
                      Foreground="#FFFDF5"
-                     FontSize="14"
+                     FontSize="13"
                      FontWeight="SemiBold"
-                     LetterSpacing="1"
+                     LetterSpacing="1.2"
                      HorizontalAlignment="Center" />
-                     
+                      
           <!-- Đường kẻ vàng champagne -->
-          <Rectangle Width="50" Height="1.5" Fill="#D9B66F" Margin="0,6,0,6" HorizontalAlignment="Center" />
+          <Rectangle Width="44" Height="1.5" Fill="#D9B66F" Margin="0,5,0,5" HorizontalAlignment="Center" />
           
           <!-- Chữ NHÀ HUY -->
           <TextBlock Text="NHÀ HUY"
                      Foreground="#D9B66F"
-                     FontSize="19"
+                     FontSize="18"
                      FontWeight="Bold"
-                     LetterSpacing="1.5"
+                     LetterSpacing="1.8"
                      HorizontalAlignment="Center" />
         </StackPanel>
 
-        <StackPanel Grid.Row="1" Orientation="Vertical">
-          <Button Classes="menu" Content="Tổng quan" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewDashboard}"
-            CommandParameter="Tổng quan" />
-          <Button Classes="menu" Content="Hàng hóa" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewProducts}"
-            CommandParameter="Hàng hóa" />
-          <!-- Đã ẩn Nhập hàng vì chuyển vào nút Tạo mới trong Hàng hóa -->
-          <!-- 
-          <Button Classes="menu" Content="Nhập hàng" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewPurchases}"
-            CommandParameter="Nhập hàng" /> 
-          -->
-          <Button Classes="menu" Content="Hóa đơn"
-            Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewInvoices}"
-            CommandParameter="Hóa đơn" />
-          <Button Classes="menu" Content="Khách hàng" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewCustomers}"
-            CommandParameter="Khách hàng" />
-          <Button Classes="menu"
-            Content="Nhà cung cấp"
-            Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewSuppliers}"
-            CommandParameter="Nhà cung cấp" />
-          <Button Classes="menu" Content="Sổ quỹ" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewCashBook}"
-            CommandParameter="Sổ quỹ" />
+        <!-- DANH SÁCH MENU ĐIỀU HƯỚNG CÓ CUỘN TỰ ĐỘNG -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Orientation="Vertical" Margin="0,0,2,0">
+            <!-- Nhãn phân nhóm chức năng -->
+            <TextBlock Text="CHỨC NĂNG" FontSize="10" FontWeight="Bold" Foreground="#85C7B7"
+                       Margin="10,0,0,6" LetterSpacing="0.8" />
 
-          <!-- "Thông tin tiệm" không nằm ở menu chính này mà nằm trong
-               menu tài khoản góc trái dưới, cạnh Cài đặt danh mục. -->
+            <!-- TỔNG QUAN -->
+            <Button Classes="menu" Classes.active="{Binding IsTongQuanSelected}"
+              Command="{Binding ChonMenuCommand}" CommandParameter="Tổng quan"
+              IsVisible="{Binding CanViewDashboard}">
+              <Grid ColumnDefinitions="24,*">
+                <TextBlock Text="📊" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Tổng quan" VerticalAlignment="Center" Margin="6,0,0,0" />
+              </Grid>
+            </Button>
 
-          <!-- NHÓM MENU BÁO CÁO (mở rộng được cho các báo cáo sau) -->
-          <Button Classes="menu" Content="Báo cáo" Command="{Binding ChonMenuCommand}" IsVisible="{Binding CanViewReports}"
-            CommandParameter="Báo cáo" />
+            <!-- HÀNG HÓA -->
+            <Button Classes="menu" Classes.active="{Binding IsHangHoaSelected}"
+              Command="{Binding ChonMenuCommand}" CommandParameter="Hàng hóa"
+              IsVisible="{Binding CanViewProducts}">
+              <Grid ColumnDefinitions="24,*">
+                <TextBlock Text="🌸" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Hàng hóa" VerticalAlignment="Center" Margin="6,0,0,0" />
+              </Grid>
+            </Button>
 
-          <ItemsControl ItemsSource="{Binding BaoCaoMenuItems}" IsVisible="{Binding CanViewReports}"
-            Margin="14,0,0,4">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="models:BaoCaoMenuItem">
-                <Button Classes="menu"
-                  HorizontalAlignment="Stretch"
-                  HorizontalContentAlignment="Left"
-                  FontSize="12"
-                  Padding="10,7"
-                  Command="{Binding ElementName=RootWindow, Path=DataContext.ChonBaoCaoCommand}"
-                  CommandParameter="{Binding}">
-                  <StackPanel Orientation="Horizontal" Spacing="7">
-                    <TextBlock Text="{Binding BieuTuong}" FontSize="12" />
-                    <TextBlock Text="{Binding TieuDe}" TextTrimming="CharacterEllipsis" />
-                  </StackPanel>
-                </Button>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </StackPanel>
-        <StackPanel Grid.Row="2">
+            <!-- HÓA ĐƠN -->
+            <Button Classes="menu" Classes.active="{Binding IsHoaDonSelected}"
+              Command="{Binding ChonMenuCommand}" CommandParameter="Hóa đơn"
+              IsVisible="{Binding CanViewInvoices}">
+              <Grid ColumnDefinitions="24,*">
+                <TextBlock Text="🧾" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Hóa đơn" VerticalAlignment="Center" Margin="6,0,0,0" />
+              </Grid>
+            </Button>
+
+            <!-- KHÁCH HÀNG -->
+            <Button Classes="menu" Classes.active="{Binding IsKhachHangSelected}"
+              Command="{Binding ChonMenuCommand}" CommandParameter="Khách hàng"
+              IsVisible="{Binding CanViewCustomers}">
+              <Grid ColumnDefinitions="24,*">
+                <TextBlock Text="👥" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Khách hàng" VerticalAlignment="Center" Margin="6,0,0,0" />
+              </Grid>
+            </Button>
+
+            <!-- NHÀ CUNG CẤP -->
+            <Button Classes="menu" Classes.active="{Binding IsNhaCungCapSelected}"
+              Command="{Binding ChonMenuCommand}" CommandParameter="Nhà cung cấp"
+              IsVisible="{Binding CanViewSuppliers}">
+              <Grid ColumnDefinitions="24,*">
+                <TextBlock Text="🚚" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Nhà cung cấp" VerticalAlignment="Center" Margin="6,0,0,0" />
+              </Grid>
+            </Button>
+
+            <!-- SỔ QUỸ -->
+            <Button Classes="menu" Classes.active="{Binding IsSoQuySelected}"
+              Command="{Binding ChonMenuCommand}" CommandParameter="Sổ quỹ"
+              IsVisible="{Binding CanViewCashBook}">
+              <Grid ColumnDefinitions="24,*">
+                <TextBlock Text="💰" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Sổ quỹ" VerticalAlignment="Center" Margin="6,0,0,0" />
+              </Grid>
+            </Button>
+
+            <!-- BÁO CÁO (ACCORDION CÓ GẬP MỞ) -->
+            <Button Classes="menu" Classes.active="{Binding IsBaoCaoSectionSelected}"
+              Command="{Binding ChonMenuCommand}" CommandParameter="Báo cáo"
+              IsVisible="{Binding CanViewReports}">
+              <Grid ColumnDefinitions="24,*,Auto">
+                <TextBlock Text="📈" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Báo cáo" VerticalAlignment="Center" Margin="6,0,0,0" />
+                <TextBlock Grid.Column="2" Text="{Binding BaoCaoArrowText}" FontSize="12" Foreground="#85C7B7" VerticalAlignment="Center" Margin="0,0,4,0" />
+              </Grid>
+            </Button>
+
+            <!-- CÁC BÁO CÁO CON DẠNG NHÁNH CÂY -->
+            <Border IsVisible="{Binding IsBaoCaoExpanded}"
+                    Margin="16,2,0,4"
+                    Padding="6,2,0,2"
+                    BorderBrush="#2FFFFFFF"
+                    BorderThickness="1.5,0,0,0">
+              <ItemsControl ItemsSource="{Binding BaoCaoMenuItems}" IsVisible="{Binding CanViewReports}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="models:BaoCaoMenuItem">
+                    <Button Classes="subMenu" Classes.active="{Binding IsSelected}"
+                      Command="{Binding ElementName=RootWindow, Path=DataContext.ChonBaoCaoCommand}"
+                      CommandParameter="{Binding}">
+                      <StackPanel Orientation="Horizontal" Spacing="7">
+                        <TextBlock Text="{Binding BieuTuong}" FontSize="12" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding TieuDe}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- KHU VỰC CUỐI THANH MENU -->
+        <StackPanel Grid.Row="2" Margin="0,6,0,12">
           <!-- NÚT BÁN HÀNG -->
           <Button Classes="salesButton" Content="🛒  Bán hàng" VerticalAlignment="Center"
             Command="{Binding MoGiaoDienBanHangCommand}" IsVisible="{Binding CanViewSales}" />
@@ -1099,29 +1228,22 @@
             </StackPanel>
           </Button>
 
-          <!-- THẺ TÀI KHOẢN ADMIN TÍCH HỢP POPUP MENU (FLYOUT) -->
+          <!-- THẺ TÀI KHOẢN ADMIN TÍCH HỢP POPUP MENU (FLYOUT) - KÍNH MỜ -->
           <Button x:Name="AccountButton"
-            Background="#087F6E"
-            BorderThickness="0"
-            CornerRadius="10"
-            Opacity="0.95"
-            HorizontalAlignment="Stretch"
-            HorizontalContentAlignment="Stretch"
-            Padding="10"
-            Margin="0,14,0,14">
+            Classes="accountCard">
 
             <!-- Giao diện hiển thị Avatar + Tên người đang đăng nhập -->
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Width="34" Height="34" Background="#D8F0E9" CornerRadius="17">
-                <TextBlock Text="{Binding ChuiChuCaiHienThi}" Foreground="#087F6E" FontWeight="Bold"
+              <Border Width="34" Height="34" Background="#147B6B" BorderBrush="#D9B66F" BorderThickness="1.2" CornerRadius="17">
+                <TextBlock Text="{Binding ChuiChuCaiHienThi}" Foreground="#FFFDF5" FontWeight="Bold"
                   HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Border>
               <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="{Binding HoTenHienThi}" Foreground="White" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding VaiTroHienThi}" Foreground="#D8F0E9" FontSize="11" />
+                <TextBlock Text="{Binding HoTenHienThi}" Foreground="White" FontWeight="SemiBold" FontSize="12.5" />
+                <TextBlock Text="{Binding VaiTroHienThi}" Foreground="#A3DFCE" FontSize="11" />
               </StackPanel>
               <!-- Ký hiệu mũi tên gợi ý có menu -->
-              <TextBlock Grid.Column="2" Text="▲" FontSize="9" Foreground="#D8F0E9"
+              <TextBlock Grid.Column="2" Text="▲" FontSize="9" Foreground="#A3DFCE"
                 VerticalAlignment="Center" Margin="0,0,4,0" />
             </Grid>
 

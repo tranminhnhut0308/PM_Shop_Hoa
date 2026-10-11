@@ -3401,6 +3401,7 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
 
     partial void OnSelectedReportKeyChanged(string value)
     {
+        CapNhatTrangThaiChonBaoCao();
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
         OnPropertyChanged(nameof(IsBaoCaoBanHangSelected));
         OnPropertyChanged(nameof(IsBaoCaoHangHoaSelected));
@@ -3436,9 +3437,11 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         // mở, phải đóng màn bán hàng trước như ChonMenu, không thì nó vẫn phủ
         // lên và che khuất báo cáo vừa chọn.
         IsSalesPanelVisible = false;
+        IsBaoCaoExpanded = true;
 
         SelectedMenu = "Báo cáo";
         SelectedReportKey = item.Key;
+        CapNhatTrangThaiChonBaoCao();
 
         // Mỗi báo cáo có danh sách riêng
         BaoCaoPhieuNhapPage = 1;
@@ -4589,11 +4592,42 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         }
     }
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BaoCaoArrowText))]
+    private bool isBaoCaoExpanded;
+
+    public string BaoCaoArrowText => IsBaoCaoExpanded ? "▾" : "▸";
+
     [RelayCommand]
     private void ChonMenu(string menu)
     {
         IsSalesPanelVisible = false;
+        if (menu == "Báo cáo")
+        {
+            if (SelectedMenu == "Báo cáo")
+            {
+                IsBaoCaoExpanded = !IsBaoCaoExpanded;
+            }
+            else
+            {
+                IsBaoCaoExpanded = true;
+            }
+        }
         SelectedMenu = menu;
+    }
+
+    [RelayCommand]
+    private void ToggleBaoCaoMenu()
+    {
+        IsBaoCaoExpanded = !IsBaoCaoExpanded;
+    }
+
+    private void CapNhatTrangThaiChonBaoCao()
+    {
+        foreach (var item in BaoCaoMenuItems)
+        {
+            item.IsSelected = (SelectedMenu == "Báo cáo" && item.Key == SelectedReportKey);
+        }
     }
 
     partial void OnSelectedMenuChanged(string value)
@@ -4613,6 +4647,11 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             IsPhieuNhapCalendarOpen = false;
 
         OnPropertyChanged(nameof(IsTongQuanSelected));
+        OnPropertyChanged(nameof(IsHangHoaSelected));
+        OnPropertyChanged(nameof(IsHoaDonSelected));
+        OnPropertyChanged(nameof(IsKhachHangSelected));
+        OnPropertyChanged(nameof(IsNhaCungCapSelected));
+        OnPropertyChanged(nameof(IsSoQuySelected));
         OnPropertyChanged(nameof(IsDataSectionSelected));
         OnPropertyChanged(nameof(IsBaoCaoSectionSelected));
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapSelected));
@@ -4622,6 +4661,8 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         OnPropertyChanged(nameof(IsBaoCaoNhaCungCapSelected));
         OnPropertyChanged(nameof(IsBaoCaoCuoiNgaySelected));
         OnPropertyChanged(nameof(IsThongTinTiemSelected));
+
+        CapNhatTrangThaiChonBaoCao();
 
         _ = LoadSelectedSectionAsync(value);
     }
@@ -4684,6 +4725,11 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
 }
 
 public bool IsTongQuanSelected => SelectedMenu == "Tổng quan";
+public bool IsHangHoaSelected => SelectedMenu == "Hàng hóa";
+public bool IsHoaDonSelected => SelectedMenu == "Hóa đơn";
+public bool IsKhachHangSelected => SelectedMenu == "Khách hàng";
+public bool IsNhaCungCapSelected => SelectedMenu == "Nhà cung cấp";
+public bool IsSoQuySelected => SelectedMenu == "Sổ quỹ";
 
 // Báo cáo có vùng nội dung riêng nên không dùng chung TabControl dữ liệu
 // Màn nào có vùng nội dung riêng thì không được bật TabControl dữ liệu,
