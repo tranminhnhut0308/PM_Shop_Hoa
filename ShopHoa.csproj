@@ -29,6 +29,11 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
   <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
     <Compile Remove="ShopHoa.Api\**" />
     <EmbeddedResource Remove="ShopHoa.Api\**" />
     <None Remove="ShopHoa.Api\**" />

@@ -13,7 +13,7 @@ public partial class UpdateViewModel : ObservableObject
     private string currentVersion = "1.0.0";
 
     [ObservableProperty]
-    private string newVersion = "";
+    private string newVersion = "---";
 
     [ObservableProperty]
     private string statusMessage = "Bấm 'Kiểm tra cập nhật' để tìm phiên bản mới.";
@@ -80,6 +80,7 @@ public partial class UpdateViewModel : ObservableObject
             }
             else
             {
+                NewVersion = CurrentVersion;
                 StatusMessage = "✓ " + (result.Message ?? "Bạn đang sử dụng phiên bản mới nhất.");
             }
         }

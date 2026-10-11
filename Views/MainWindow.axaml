@@ -4879,16 +4879,6 @@
                     Padding="14,0"
                     FontSize="13"
                     IsVisible="{Binding CanImportCashBook}" />
-
-                  <Button Classes="toolbar-action"
-                    Content="File mẫu"
-                    ToolTip.Tip="Tải file Excel mẫu đúng định dạng nhập sổ quỹ"
-                    Command="{Binding TaiFileMauSoQuyCommand}"
-                    IsEnabled="{Binding !IsSoQuyDangNhap}"
-                    Height="38"
-                    Padding="12,0"
-                    FontSize="13"
-                    IsVisible="{Binding CanImportCashBook}" />
                 </StackPanel>
               </Grid>
 

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:models="using:ShopHoa.Models"
+  xmlns:converters="using:ShopHoa.Converters"
   xmlns:vm="using:ShopHoa.ViewModels"
   x:Class="ShopHoa.Views.BaoCaoNhaCungCapView"
   x:Name="RootView"
@@ -714,7 +715,7 @@
                         <!-- CÔNG NỢ -->
                         <TextBlock Grid.Column="8" Text="{Binding CongNoHienThi}"
                           FontSize="12.5" FontWeight="SemiBold"
-                          Foreground="{Binding HasCongNo, Converter={x:Static ObjectConverters.IsNotNull}}"
+                          Foreground="{Binding CongNo, Converter={x:Static converters:ConNoForegroundConverter.Instance}}"
                           HorizontalAlignment="Right" VerticalAlignment="Center" />
                       </Grid>
                     </Border>

@@ -3020,8 +3020,12 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
     [RelayCommand]
     private async Task MoGiaoDienBanHangAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.SalesView, "Bạn không có quyền mở màn hình bán hàng."))
+        // Nút "Bán hàng" hiển thị theo CanViewSales (SalesView || SalesPayment
+        // || admin) nên handler phải đồng bộ: người chỉ có quyền thanh toán vẫn
+        // mở được màn để làm thao tác thanh toán.
+        if (!CanViewSales)
         {
+            await ShowMessageAsync("Thông báo", "Bạn không có quyền mở màn hình bán hàng.");
             return;
         }
 
@@ -3427,6 +3431,11 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             StatusMessage = "Bạn không có quyền xem báo cáo này.";
             return;
         }
+
+        // Vì được gọi từ menu sidebar khi màn bán hàng (ZIndex=10, nền đục) đang
+        // mở, phải đóng màn bán hàng trước như ChonMenu, không thì nó vẫn phủ
+        // lên và che khuất báo cáo vừa chọn.
+        IsSalesPanelVisible = false;
 
         SelectedMenu = "Báo cáo";
         SelectedReportKey = item.Key;
@@ -3842,8 +3851,12 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
     [RelayCommand]
     private async Task MoGiaoDienNhapHangAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesView, "Bạn không có quyền mở màn hình nhập hàng."))
+        // Vào đây từ 2 nguồn: nút "＋ Nhập hàng" trên màn Hàng hóa (hiện theo
+        // CanCreatePurchase) và nút "＋ Nhập hàng" trong Báo cáo phiếu nhập (hiện
+        // theo CanViewPurchases). Cho phép khi có quyền xem HOẶC tạo phiếu nhập.
+        if (!CanViewPurchases && !CanCreatePurchase)
         {
+            await ShowMessageAsync("Thông báo", "Bạn không có quyền mở màn hình nhập hàng.");
             return;
         }
         // Nếu đang đứng ở màn Nhập hàng thì SelectedMenu không đổi,

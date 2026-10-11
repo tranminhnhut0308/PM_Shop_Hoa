@@ -81,12 +81,13 @@ public sealed class UpdateService
             _lastUpdateInfo = await _updateManager.CheckForUpdatesAsync();
 
             // Nếu GithubSource không tìm thấy bản mới trên GitHub Releases,
-            // tự động fallback sang thư mục Releases/win-x64 trên nhánh main của Git
+            // tự động fallback sang thư mục Releases/{channel} trên nhánh main của Git
             if (_lastUpdateInfo is null && UpdateUrl.Contains("github.com/tranminhnhut0308/PM_Shop_Hoa"))
             {
                 try
                 {
-                    var rawUrl = "https://raw.githubusercontent.com/tranminhnhut0308/PM_Shop_Hoa/main/Releases/win-x64";
+                    var channel = OperatingSystem.IsWindows() ? "win-x64" : "linux-x64";
+                    var rawUrl = $"https://raw.githubusercontent.com/tranminhnhut0308/PM_Shop_Hoa/main/Releases/{channel}";
                     var rawSource = new SimpleWebSource(rawUrl);
                     var rawManager = new UpdateManager(rawSource);
                     var rawInfo = await rawManager.CheckForUpdatesAsync();
@@ -125,7 +126,8 @@ public sealed class UpdateService
             {
                 try
                 {
-                    var rawUrl = "https://raw.githubusercontent.com/tranminhnhut0308/PM_Shop_Hoa/main/Releases/win-x64";
+                    var channel = OperatingSystem.IsWindows() ? "win-x64" : "linux-x64";
+                    var rawUrl = $"https://raw.githubusercontent.com/tranminhnhut0308/PM_Shop_Hoa/main/Releases/{channel}";
                     var rawSource = new SimpleWebSource(rawUrl);
                     var rawManager = new UpdateManager(rawSource);
                     var rawInfo = await rawManager.CheckForUpdatesAsync();

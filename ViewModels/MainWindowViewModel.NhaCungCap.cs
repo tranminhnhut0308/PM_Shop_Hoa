@@ -42,6 +42,8 @@ public sealed partial class MainWindowViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupplierHasFilter))]
     [NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
+    [NotifyPropertyChangedFor(nameof(SupplierRongText))]
+    [NotifyPropertyChangedFor(nameof(SupplierRongHint))]
     private string? supplierCongNoFilter = CongNoTatCa;
 
     [ObservableProperty] private bool isSupplierFilterPanelOpen;

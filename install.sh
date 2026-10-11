@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Script cài đặt tự động 1 lệnh duy nhất cho ShopHoa trên Linux
-# Sử dụng: curl -sSL https://update.shophoa.vn/install.sh | bash
+# Sử dụng: curl -fsSL https://raw.githubusercontent.com/tranminhnhut0308/PM_Shop_Hoa/main/install.sh | bash
 # ==============================================================================
 
 set -e
@@ -18,8 +18,9 @@ echo -e "${GREEN}   BẮT ĐẦU CÀI ĐẶT PHẦN MỀM QUẢN LÝ SHOP HOA LI
 echo -e "${CYAN}======================================================${NC}"
 
 # 1. Cấu hình đường dẫn tải và thư mục cài đặt
-UPDATE_SERVER="${SHOPHOA_SERVER:-https://update.shophoa.vn}"
-PACKAGE_URL="${UPDATE_SERVER}/releases/linux-x64/ShopHoa-linux.tar.gz"
+REPO="tranminhnhut0308/PM_Shop_Hoa"
+RELEASE_URL="https://github.com/${REPO}/releases/latest/download/ShopHoa-linux.tar.gz"
+RAW_FALLBACK_URL="https://raw.githubusercontent.com/${REPO}/main/Releases/linux-x64/ShopHoa-linux.tar.gz"
 INSTALL_DIR="$HOME/.local/share/shophoa"
 DESKTOP_DIR="$HOME/.local/share/applications"
 
@@ -42,17 +43,31 @@ if command -v apt-get >/dev/null 2>&1; then
 fi
 
 # 3. Tải và giải nén phần mềm trực tiếp vào thư mục cài đặt
-echo -e "\n${YELLOW}[2/4] Đang tải phần mềm từ máy chủ ($PACKAGE_URL)...${NC}"
+echo -e "\n${YELLOW}[2/4] Đang tải phần mềm từ GitHub...${NC}"
 mkdir -p "$INSTALL_DIR"
 
 TEMP_TAR=$(mktemp /tmp/shophoa-XXXXXX.tar.gz)
-if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$PACKAGE_URL" -o "$TEMP_TAR"
-elif command -v wget >/dev/null 2>&1; then
-    wget -q "$PACKAGE_URL" -O "$TEMP_TAR"
-else
-    echo -e "${RED}Lỗi: Máy tính cần có curl hoặc wget để tải phần mềm.${NC}"
-    exit 1
+
+download_file() {
+    local url="$1"
+    local dest="$2"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$url" -o "$dest"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q "$url" -O "$dest"
+    else
+        return 1
+    fi
+}
+
+# Thử tải từ GitHub Releases (bản mới nhất), fallback về raw repository
+if ! download_file "$RELEASE_URL" "$TEMP_TAR"; then
+    echo -e "${YELLOW}Đang thử tải từ kho lưu trữ (nhánh main)...${NC}"
+    if ! download_file "$RAW_FALLBACK_URL" "$TEMP_TAR"; then
+        echo -e "${RED}Lỗi: Không thể tải file cài đặt từ GitHub. Vui lòng kiểm tra lại repository!${NC}"
+        rm -f "$TEMP_TAR"
+        exit 1
+    fi
 fi
 
 echo -e "\n${YELLOW}[3/4] Đang giải nén và thiết lập quyền thực thi...${NC}"
@@ -83,6 +98,21 @@ StartupWMClass=ShopHoa
 EOF
 
 chmod +x "$DESKTOP_DIR/shophoa.desktop"
+
+# Thêm icon ra màn hình Desktop nếu thư mục Desktop tồn tại
+USER_DESKTOP=""
+if command -v xdg-user-dir >/dev/null 2>&1; then
+    USER_DESKTOP="$(xdg-user-dir DESKTOP 2>/dev/null)"
+fi
+if [ -z "$USER_DESKTOP" ] && [ -d "$HOME/Desktop" ]; then
+    USER_DESKTOP="$HOME/Desktop"
+fi
+
+if [ -n "$USER_DESKTOP" ] && [ -d "$USER_DESKTOP" ]; then
+    cp "$DESKTOP_DIR/shophoa.desktop" "$USER_DESKTOP/shophoa.desktop"
+    chmod +x "$USER_DESKTOP/shophoa.desktop"
+    gio set "$USER_DESKTOP/shophoa.desktop" metadata::trusted true 2>/dev/null || true
+fi
 
 # Tạo shortcut lệnh ngoài Terminal (chạy trực tiếp bằng gõ 'shophoa')
 if [ -d "$HOME/.local/bin" ]; then

@@ -78,6 +78,7 @@ public sealed partial class DashboardViewModel : ObservableObject
     // ============================================================
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CoDuLieu))]
     private bool dangTai;
 
     [ObservableProperty]

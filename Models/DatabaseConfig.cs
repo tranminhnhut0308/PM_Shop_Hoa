@@ -10,7 +10,7 @@ public sealed class DatabaseConfig
 
     public string User { get; set; } = "admin_Nhut";
 
-    public string Password { get; set; } = "";
+    public string Password { get; set; } = "NhutHuyMinh@2025";
 
     public string SslMode { get; set; } = "None";
 

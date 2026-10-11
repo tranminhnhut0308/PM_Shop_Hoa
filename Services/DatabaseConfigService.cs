@@ -26,7 +26,7 @@ public sealed class DatabaseConfigService
         {
             if (!File.Exists(_filePath))
             {
-                return new DatabaseConfig();
+                return LoadFromAppSettings();
             }
 
             var json = File.ReadAllText(_filePath);
@@ -35,12 +35,43 @@ public sealed class DatabaseConfigService
                 json,
                 JsonOptions);
 
-            return config ?? new DatabaseConfig();
+            return config ?? LoadFromAppSettings();
         }
         catch
         {
-            return new DatabaseConfig();
+            return LoadFromAppSettings();
         }
+    }
+
+    private DatabaseConfig LoadFromAppSettings()
+    {
+        try
+        {
+            var appSettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+            if (!File.Exists(appSettingsPath))
+            {
+                appSettingsPath = "appsettings.json";
+            }
+
+            if (File.Exists(appSettingsPath))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(appSettingsPath));
+                if (doc.RootElement.TryGetProperty("Database", out var dbProp))
+                {
+                    var config = new DatabaseConfig();
+                    if (dbProp.TryGetProperty("Server", out var s) && s.GetString() is { } server) config.Server = server;
+                    if (dbProp.TryGetProperty("Port", out var p) && p.TryGetInt32(out var port)) config.Port = port;
+                    if (dbProp.TryGetProperty("Database", out var d) && d.GetString() is { } db) config.Database = db;
+                    if (dbProp.TryGetProperty("User", out var u) && u.GetString() is { } user) config.User = user;
+                    if (dbProp.TryGetProperty("Password", out var pwd) && pwd.GetString() is { } pass) config.Password = pass;
+                    if (dbProp.TryGetProperty("SslMode", out var ssl) && ssl.GetString() is { } sm) config.SslMode = sm;
+                    return config;
+                }
+            }
+        }
+        catch { }
+
+        return new DatabaseConfig();
     }
 
     public void Save(DatabaseConfig config)

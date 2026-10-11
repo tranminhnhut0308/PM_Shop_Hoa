@@ -58,6 +58,9 @@ public partial class MainWindow : Window
     }
     private async void OpenSettingsButton_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
+        // Đóng menu tài khoản, không thì flyout đè lên hộp thoại vừa mở.
+        (AccountButton.Flyout as Flyout)?.Hide();
+
         if (DataContext is MainWindowViewModel
             && !Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SettingsView))
         {
@@ -88,7 +91,8 @@ public partial class MainWindow : Window
         if (DataContext is not MainWindowViewModel viewModel)
             return;
 
-        if (!Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SettingsView))
+        // Kiểm tra đúng quyền gắn với nút hiển thị (StoreInfoView / SettingsView / admin).
+        if (!viewModel.CanViewStoreInfo)
         {
             _ = ShowMessageAsync("Thông báo", "Bạn không có quyền xem thông tin tiệm.");
             return;
@@ -96,6 +100,9 @@ public partial class MainWindow : Window
 
         // Giống hệt cách các mục menu khác đổi màn: SelectedMenu được set thì
         // OnSelectedMenuChanged bật cờ IsThongTinTiemSelected và tải lại dữ liệu.
+        // Phải tắt màn bán hàng trước, không thì panel bán hàng (ZIndex=10, nền
+        // đục) vẫn phủ lên và che khuất màn này.
+        viewModel.IsSalesPanelVisible = false;
         viewModel.SelectedMenu = "Thông tin tiệm";
     }
 
@@ -103,6 +110,9 @@ public partial class MainWindow : Window
         object? sender,
         RoutedEventArgs e)
     {
+        // Đóng menu tài khoản trước, không thì flyout vẫn hiện khi đăng xuất bị hủy.
+        (AccountButton.Flyout as Flyout)?.Hide();
+
         if (DataContext is not MainWindowViewModel viewModel)
             return;
 
@@ -1036,6 +1046,9 @@ public partial class MainWindow : Window
     }
     private async void OpenUsersButton_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
+        // Đóng menu tài khoản, không thì flyout đè lên hộp thoại vừa mở.
+        (AccountButton.Flyout as Flyout)?.Hide();
+
         if (DataContext is not MainWindowViewModel viewModel)
             return;
 
