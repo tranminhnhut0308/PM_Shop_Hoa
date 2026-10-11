@@ -11,7 +11,7 @@ namespace ShopHoa.Views;
 /// </summary>
 public partial class SettingsPasswordWindow : Window
 {
-    private const string DefaultSettingsPassword = "123456";
+    private const string DefaultSettingsPassword = "123";
 
     public SettingsPasswordWindow() : this(null)
     {
