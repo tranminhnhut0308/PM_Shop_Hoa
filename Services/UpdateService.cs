@@ -16,7 +16,7 @@ public sealed class UpdateService
     private UpdateInfo? _lastUpdateInfo;
 
     public string CurrentVersionText { get; private set; } = "1.0.0";
-    public string UpdateUrl { get; set; } = "https://update.shophoa.vn/releases";
+    public string UpdateUrl { get; set; } = "https://github.com/tranminhnhut0308/PM_Shop_Hoa";
     public bool IsInstalled => _updateManager?.IsInstalled ?? false;
 
     public UpdateService()
@@ -38,7 +38,16 @@ public sealed class UpdateService
     {
         try
         {
-            var source = new SimpleWebSource(UpdateUrl);
+            IUpdateSource source;
+            if (UpdateUrl.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
+            {
+                source = new GithubSource(UpdateUrl, accessToken: null, prerelease: false);
+            }
+            else
+            {
+                source = new SimpleWebSource(UpdateUrl);
+            }
+
             _updateManager = new UpdateManager(source);
             if (_updateManager.IsInstalled && _updateManager.CurrentVersion != null)
             {
