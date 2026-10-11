@@ -5,7 +5,11 @@ namespace ShopHoa.Views;
 
 public partial class DatabaseSettingsWindow : Window
 {
-    public DatabaseSettingsWindow(Window? owner = null)
+    public DatabaseSettingsWindow() : this(null)
+    {
+    }
+
+    public DatabaseSettingsWindow(Window? owner)
     {
         InitializeComponent();
 

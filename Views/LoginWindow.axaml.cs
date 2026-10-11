@@ -33,18 +33,22 @@ public partial class LoginWindow : Window
         object? sender,
         RoutedEventArgs e)
     {
-        // Mở cửa sổ xác thực tài khoản thật trong database
+        // Yêu cầu nhập mật khẩu xác thực mặc định (123456)
         var passwordWindow = new SettingsPasswordWindow(this);
-
         var result = await passwordWindow.ShowDialog<bool>(this);
 
-        // Sai tài khoản/mật khẩu hoặc hủy
+        // Nếu nhập sai hoặc bấm Hủy -> dừng lại
         if (!result)
             return;
 
-        // Xác thực đúng → mở cài đặt Database
+        // Đúng mật khẩu 123456 -> Mở cài đặt Database để điền thông số
         var settingsWindow = new DatabaseSettingsWindow(this);
-
         await settingsWindow.ShowDialog(this);
+
+        // Sau khi đóng cửa sổ cài đặt, tự động kiểm tra lại kết nối
+        if (DataContext is LoginViewModel vm)
+        {
+            await vm.KiemTraKetNoiAsync();
+        }
     }
 }

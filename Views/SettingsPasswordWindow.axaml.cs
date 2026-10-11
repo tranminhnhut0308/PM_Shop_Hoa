@@ -1,27 +1,23 @@
-using System;
-using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using ShopHoa.Helpers;
-using ShopHoa.Services;
 
 namespace ShopHoa.Views;
 
 /// <summary>
 /// Cổng xác thực trước khi mở cấu hình database.
-///
-/// Không có mật khẩu nào gắn cứng trong source: người dùng phải
-/// nhập một tài khoản thật, xác thực y hệt màn đăng nhập
-/// (BCrypt + database), tài khoản phải còn hoạt động.
+/// Dùng mật khẩu kỹ thuật mặc định (123456) độc lập với database,
+/// giúp luôn mở được cấu hình để sửa kết nối kể cả khi chưa có mạng/database.
 /// </summary>
 public partial class SettingsPasswordWindow : Window
 {
-    private readonly DatabaseService _db = new();
+    private const string DefaultSettingsPassword = "123456";
 
-    private bool _dangXuLy;
+    public SettingsPasswordWindow() : this(null)
+    {
+    }
 
-    public SettingsPasswordWindow(Window? owner = null)
+    public SettingsPasswordWindow(Window? owner)
     {
         InitializeComponent();
 
@@ -30,104 +26,60 @@ public partial class SettingsPasswordWindow : Window
             Owner = owner;
         }
 
-        UsernameTextBox.Focus();
+        PasswordTextBox.Focus();
     }
 
     // ============================================================
     // XÁC NHẬN
     // ============================================================
 
-    private async void OnConfirmClick(
+    private void OnConfirmClick(
         object? sender,
         RoutedEventArgs e)
     {
-        await CheckCredentialsAsync();
+        CheckPassword();
     }
 
     // ============================================================
     // ENTER ĐỂ XÁC NHẬN
     // ============================================================
 
-    private async void OnCredentialKeyDown(
+    private void OnCredentialKeyDown(
         object? sender,
         KeyEventArgs e)
     {
         if (e.Key == Key.Enter)
         {
             e.Handled = true;
-
-            await CheckCredentialsAsync();
+            CheckPassword();
         }
     }
 
     // ============================================================
-    // KIỂM TRA TÀI KHOẢN
+    // KIỂM TRA MẬT KHẨU
     // ============================================================
 
-    private async Task CheckCredentialsAsync()
+    private void CheckPassword()
     {
-        if (_dangXuLy)
-            return;
-
-        var username = UsernameTextBox.Text?.Trim() ?? "";
-
         var password = PasswordTextBox.Text ?? "";
-
-        if (string.IsNullOrWhiteSpace(username))
-        {
-            ErrorText.Text = "⚠ Vui lòng nhập tên đăng nhập.";
-
-            UsernameTextBox.Focus();
-
-            return;
-        }
 
         if (string.IsNullOrEmpty(password))
         {
             ErrorText.Text = "⚠ Vui lòng nhập mật khẩu.";
-
             PasswordTextBox.Focus();
-
             return;
         }
 
-        _dangXuLy = true;
-
-        ConfirmButton.IsEnabled = false;
-
-        ErrorText.Text = "Đang xác thực...";
-
-        try
+        if (password == DefaultSettingsPassword)
         {
-            var user = await _db.DangNhapAsync(username, password);
-
-            if (user is null)
-            {
-                ErrorText.Text = "❌ Tên đăng nhập hoặc mật khẩu không đúng.";
-
-                PasswordTextBox.SelectAll();
-
-                PasswordTextBox.Focus();
-
-                return;
-            }
-
-            // ĐÚNG TÀI KHOẢN
+            // Đúng mật khẩu mặc định -> mở cấu hình
             Close(true);
         }
-        catch (Exception ex)
+        else
         {
-            SafeLog.WriteError("DATABASE SETTINGS AUTH ERROR", ex);
-
-            ErrorText.Text =
-                "❌ Không thể kết nối database: " +
-                SafeLog.Redact(ex.Message);
-        }
-        finally
-        {
-            _dangXuLy = false;
-
-            ConfirmButton.IsEnabled = true;
+            ErrorText.Text = "❌ Mật khẩu không đúng. Vui lòng thử lại.";
+            PasswordTextBox.SelectAll();
+            PasswordTextBox.Focus();
         }
     }
 

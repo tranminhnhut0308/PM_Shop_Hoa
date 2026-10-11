@@ -50,7 +50,7 @@ public partial class LoginViewModel : ObservableObject
     // KIỂM TRA DATABASE
     // =========================================================
 
-    private async Task KiemTraKetNoiAsync()
+    public async Task KiemTraKetNoiAsync()
     {
         try
         {
