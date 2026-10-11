@@ -92,18 +92,22 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Cấu hình Kestrel: nhận PORT từ Cloud (Render/Railway) hoặc mặc định 5000 khi chạy local
+var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
 var app = builder.Build();
 
 // 5. Cấu hình Middleware
-if (app.Environment.IsDevelopment() || true) // Luôn bật Swagger để kiểm thử nội bộ
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "ShopHoa API v1");
-        c.RoutePrefix = string.Empty; // Mở Swagger ngay tại trang chủ http://localhost:5000
-    });
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "ShopHoa API v1");
+    c.RoutePrefix = "swagger"; // Swagger mở tại: http://localhost:5000/swagger
+});
 
 app.UseCors();
 app.UseAuthentication();
