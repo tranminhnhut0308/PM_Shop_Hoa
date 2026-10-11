@@ -5,7 +5,7 @@
         x:DataType="vm:LoginViewModel"
 
         Title="VỰA HOA NHÀ HUY - Đăng nhập"
-        Icon="/Assets/logo.png"
+        Icon="/Assets/logo.ico"
 
         Width="1050"
         Height="680"

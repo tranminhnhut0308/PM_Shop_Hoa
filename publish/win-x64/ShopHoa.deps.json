@@ -7,7 +7,7 @@
   "targets": {
     ".NETCoreApp,Version=v8.0": {},
     ".NETCoreApp,Version=v8.0/win-x64": {
-      "ShopHoa/1.0.1": {
+      "ShopHoa/1.0.2": {
         "dependencies": {
           "Avalonia": "11.3.12",
           "Avalonia.Controls.DataGrid": "11.3.12",
@@ -20,7 +20,7 @@
           "Dapper": "2.1.66",
           "MySqlConnector": "2.4.0",
           "System.Security.Cryptography.ProtectedData": "8.0.0",
-          "Velopack": "0.0.1053",
+          "Velopack": "1.2.161",
           "runtimepack.Microsoft.NETCore.App.Runtime.win-x64": "8.0.29"
         },
         "runtime": {
@@ -1071,14 +1071,6 @@
           }
         }
       },
-      "NuGet.Versioning/6.12.1": {
-        "runtime": {
-          "lib/netstandard2.0/NuGet.Versioning.dll": {
-            "assemblyVersion": "6.12.1.1",
-            "fileVersion": "6.12.1.1"
-          }
-        }
-      },
       "RBush/4.0.0": {
         "runtime": {
           "lib/net8.0/RBush.dll": {
@@ -1156,22 +1148,18 @@
           }
         }
       },
-      "Velopack/0.0.1053": {
-        "dependencies": {
-          "Microsoft.Extensions.Logging.Abstractions": "8.0.2",
-          "NuGet.Versioning": "6.12.1"
-        },
+      "Velopack/1.2.161": {
         "runtime": {
           "lib/net8.0/Velopack.dll": {
-            "assemblyVersion": "0.0.0.0",
-            "fileVersion": "0.0.1053.3308"
+            "assemblyVersion": "1.2.0.0",
+            "fileVersion": "1.2.161.37590"
           }
         }
       }
     }
   },
   "libraries": {
-    "ShopHoa/1.0.1": {
+    "ShopHoa/1.0.2": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
@@ -1391,13 +1379,6 @@
       "path": "mysqlconnector/2.4.0",
       "hashPath": "mysqlconnector.2.4.0.nupkg.sha512"
     },
-    "NuGet.Versioning/6.12.1": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-fJ6rFYANDnohFsdpaY79FvrJxI6murmoOxXz6nZlf819F48+IBKMnAIg3oIBRtZq5y498ObMtKnro5IitvizUg==",
-      "path": "nuget.versioning/6.12.1",
-      "hashPath": "nuget.versioning.6.12.1.nupkg.sha512"
-    },
     "RBush/4.0.0": {
       "type": "package",
       "serviceable": true,
@@ -1475,12 +1456,12 @@
       "path": "tmds.dbus.protocol/0.21.2",
       "hashPath": "tmds.dbus.protocol.0.21.2.nupkg.sha512"
     },
-    "Velopack/0.0.1053": {
+    "Velopack/1.2.161": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-hbSFBfwAAEg5GGKkocDPiyYA+FxyrkXo2pJJCcrgOv1xnSupINpYXk2l9M/M7LEjKiH42pq+NmcG/+CwQvTbvA==",
-      "path": "velopack/0.0.1053",
-      "hashPath": "velopack.0.0.1053.nupkg.sha512"
+      "sha512": "sha512-OpHNacIumnkhaaX3ZlQ/TCR4YPOJvud2/PAOoWb6o+mIrLwIVA275I5wAgt4q/1O2VrJeDwR1qFQyqzG4lUArg==",
+      "path": "velopack/1.2.161",
+      "hashPath": "velopack.1.2.161.nupkg.sha512"
     }
   },
   "runtimes": {

@@ -9,7 +9,7 @@
   x:Name="RootWindow"
   x:DataType="vm:MainWindowViewModel"
   Title="VỰA HOA NHÀ HUY"
-  Icon="/Assets/logo.png"
+  Icon="/Assets/logo.ico"
   Width="1500"
   Height="900"
   WindowState="Maximized"

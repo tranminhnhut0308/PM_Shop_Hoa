@@ -10,11 +10,12 @@ Write-Host "=== BAT DAU DONG GOI SHOPHOA ===" -ForegroundColor Cyan
 Write-Host "Muc tieu: $Target" -ForegroundColor Yellow
 Write-Host "Phien ban: $Version" -ForegroundColor Yellow
 
-# 0. Chuan bi logo icon tu Assets/logo.png
-if (-not (Test-Path "Assets/logo.ico") -and (Test-Path "Assets/logo.png")) {
-    Write-Host "`n[0/3] Dang tao file Assets/logo.ico tu Assets/logo.png..." -ForegroundColor Yellow
+# 0. Chuan bi logo icon tu Assets/LOGO_APP.png
+$logoSource = if (Test-Path "Assets/LOGO_APP.png") { "Assets/LOGO_APP.png" } else { "Assets/logo.png" }
+if (Test-Path $logoSource) {
+    Write-Host "`n[0/3] Dang tao file Assets/logo.ico tu $logoSource..." -ForegroundColor Yellow
     Add-Type -AssemblyName System.Drawing
-    $srcImg = [System.Drawing.Image]::FromFile((Resolve-Path "Assets/logo.png"))
+    $srcImg = [System.Drawing.Image]::FromFile((Resolve-Path $logoSource))
     $bmp = New-Object System.Drawing.Bitmap(256, 256)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
@@ -49,7 +50,7 @@ if (-not (Test-Path "Assets/logo.ico") -and (Test-Path "Assets/logo.png")) {
     $bw.Flush()
     $bw.Close()
     $icoFs.Close()
-    Write-Host "Da tao thanh cong Assets/logo.ico!" -ForegroundColor Green
+    Write-Host "Da tao thanh cong Assets/logo.ico tu $logoSource!" -ForegroundColor Green
 }
 
 # 1. Kiem tra cong cu vpk (Velopack CLI)
@@ -64,9 +65,23 @@ if (-not $vpkInstalled) {
 
 # 2. Xuat ban ung dung (Self-contained)
 Write-Host "`n[2/3] Dang xuat ban du an ShopHoa (Release, $Target, self-contained)..." -ForegroundColor Green
+
+# Tat tien trinh ShopHoa neu dang chay ngam de tranh khoa file DLL
+Get-Process -Name "ShopHoa", "ShopHoa-win-Setup", "vpk" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 500
+
 $publishDir = "publish/$Target"
 if (Test-Path $publishDir) {
-    Remove-Item $publishDir -Recurse -Force
+    # Xoa thuoc tinh ReadOnly neu co de tranh loi Access is denied khi xoa file
+    Get-ChildItem -Path $publishDir -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        if ($_.IsReadOnly) { $_.IsReadOnly = $false }
+    }
+    try {
+        Remove-Item $publishDir -Recurse -Force -ErrorAction Stop
+    } catch {
+        Start-Sleep -Seconds 1
+        Remove-Item $publishDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 dotnet publish ShopHoa.csproj -c Release /p:PublishProfile="Properties/PublishProfiles/$Target.pubxml" /p:Version=$Version
@@ -81,6 +96,22 @@ Write-Host "`n[3/3] Dang dong goi bo cai dat bang Velopack (vpk pack)..." -Foreg
 $releaseDir = "Releases/$Target"
 if (-not (Test-Path $releaseDir)) {
     New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
+} else {
+    # Bo thuoc tinh ReadOnly tren tat ca file trong Releases
+    Get-ChildItem -Path $releaseDir -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        if ($_.IsReadOnly) { $_.IsReadOnly = $false }
+    }
+
+    # Xoa file RELEASES cu: Velopack khi hoan tat se goi DeleteFile('RELEASES'). Tren Windows,
+    # neu file da ton tai, DeleteFile co the bi loi UnauthorizedAccessException do Antivirus/handle lock.
+    # Xoa truoc giup vpk bo qua viec xoa va truc tiep tao moi RELEASES tu cac file .nupkg va releases.win.json san co.
+    $releasesLegacy = Join-Path $releaseDir "RELEASES"
+    if (Test-Path $releasesLegacy) {
+        Remove-Item $releasesLegacy -Force -ErrorAction SilentlyContinue
+    }
+
+    # Xoa cac goi dở dang cua phien ban nay neu bi loi o lan dong goi truoc de tranh prompt hoi de de
+    Get-ChildItem -Path $releaseDir -Filter "*$Version*" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
 $mainExe = if ($Target -eq "win-x64") { "ShopHoa.exe" } else { "ShopHoa" }
@@ -90,7 +121,7 @@ if (Test-Path "Assets/logo.ico") {
     $iconArgs = @("-i", "Assets/logo.ico")
 }
 
-vpk pack -u ShopHoa -v $Version -p $publishDir -e $mainExe -o $releaseDir --packTitle "ShopHoa" @iconArgs
+vpk pack -u ShopHoa -v $Version -p $publishDir -e $mainExe -o $releaseDir --packTitle "ShopHoa" --runtime $Target @iconArgs
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Dong goi Velopack that bai!"
@@ -101,4 +132,9 @@ Write-Host "`n=== DONG GOI HOAN TAT THANH CONG ===" -ForegroundColor Green
 Write-Host "Thu muc chua file cai dat: $(Resolve-Path $releaseDir)" -ForegroundColor Cyan
 if ($Target -eq "win-x64") {
     Write-Host "File cai dat may khach: ShopHoa-win-Setup.exe" -ForegroundColor Yellow
+} elseif ($Target -eq "linux-x64") {
+    Write-Host "Dang tao goi ShopHoa-linux.tar.gz phuc vu cai dat 1 dong..." -ForegroundColor Yellow
+    tar -czf "$releaseDir/ShopHoa-linux.tar.gz" -C $publishDir .
+    Copy-Item "install.sh" "$releaseDir/install.sh" -Force -ErrorAction SilentlyContinue
+    Write-Host "File cai dat Linux: $releaseDir/ShopHoa-linux.tar.gz va install.sh" -ForegroundColor Yellow
 }
