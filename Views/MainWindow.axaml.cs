@@ -450,6 +450,18 @@ public partial class MainWindow : Window
             viewModel.IsSupplierFilterPanelOpen = false;
     }
 
+    private void OnCustomerFilterFlyoutOpened(object? sender, EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+            viewModel.IsCustomerFilterPanelOpen = true;
+    }
+
+    private void OnCustomerFilterFlyoutClosed(object? sender, EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+            viewModel.IsCustomerFilterPanelOpen = false;
+    }
+
     /// <summary>
     /// Bấm "Áp dụng" thì đóng menu bộ lọc. Áp dụng xong danh sách và thống kê
     /// đã cập nhật, giữ menu mở chỉ che mất bảng dữ liệu.
@@ -461,15 +473,24 @@ public partial class MainWindow : Window
     private void OnSupplierFilterClearClicked(object? sender, RoutedEventArgs e)
         => DongMenuBoLoc();
 
+    private void OnCustomerFilterApplyClicked(object? sender, RoutedEventArgs e)
+        => DongMenuBoLoc();
+
+    private void OnCustomerFilterClearClicked(object? sender, RoutedEventArgs e)
+        => DongMenuBoLoc();
+
     /// <summary>
-    /// Đóng menu bộ lọc. Nội dung menu nằm trong Popup nên không sinh field,
-    /// phải lấy qua chính nút đã gắn Flyout.
+    /// Đóng menu bộ lọc (của khách hàng hoặc nhà cung cấp). Nội dung menu nằm
+    /// trong Popup nên không sinh field, phải lấy qua chính nút đã gắn Flyout.
     /// </summary>
     private void DongMenuBoLoc()
     {
         // FlyoutBase.IsOpen không có setter công khai, dùng Hide() của FlyoutBase.
-        if (SupplierFilterButton.Flyout is FlyoutBase flyout)
-            flyout.Hide();
+        if (CustomerFilterButton.Flyout is FlyoutBase flyoutCustomer)
+            flyoutCustomer.Hide();
+
+        if (SupplierFilterButton.Flyout is FlyoutBase flyoutSupplier)
+            flyoutSupplier.Hide();
     }
 
     private void OnSupplierPageSizeChanged(object? sender, SelectionChangedEventArgs e)

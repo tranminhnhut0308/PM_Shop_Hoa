@@ -698,6 +698,98 @@ foreach (var character in khongDau)
         )).AsList();
     }
 
+    public async Task<ProductOption> ThemNhomSanPhamAsync(string tenNhom)
+    {
+        var ten = tenNhom.Trim();
+        if (string.IsNullOrWhiteSpace(ten))
+            throw new ArgumentException("Tên nhóm hàng không được để trống.", nameof(tenNhom));
+
+        await using var connection = await OpenAsync();
+
+        var existing = await connection.QueryFirstOrDefaultAsync<ProductOption>(
+            "SELECT id AS Id, ten_nhom AS Name FROM nhom_san_pham WHERE LOWER(TRIM(ten_nhom)) = LOWER(@Ten) LIMIT 1;",
+            new { Ten = ten });
+
+        if (existing != null)
+        {
+            await connection.ExecuteAsync(
+                "UPDATE nhom_san_pham SET trang_thai = 1 WHERE id = @Id;",
+                new { Id = existing.Id });
+            return new ProductOption { Id = existing.Id, Name = existing.Name };
+        }
+
+        bool hasMaNhom = false;
+        try
+        {
+            hasMaNhom = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nhom_san_pham' AND COLUMN_NAME = 'ma_nhom';") > 0;
+        }
+        catch { }
+
+        uint newId;
+        if (hasMaNhom)
+        {
+            var maNhom = "N" + DateTime.Now.ToString("yyMMddHHmmss");
+            newId = await connection.ExecuteScalarAsync<uint>(
+                "INSERT INTO nhom_san_pham (ma_nhom, ten_nhom, trang_thai) VALUES (@Ma, @Ten, 1); SELECT LAST_INSERT_ID();",
+                new { Ma = maNhom, Ten = ten });
+        }
+        else
+        {
+            newId = await connection.ExecuteScalarAsync<uint>(
+                "INSERT INTO nhom_san_pham (ten_nhom, trang_thai) VALUES (@Ten, 1); SELECT LAST_INSERT_ID();",
+                new { Ten = ten });
+        }
+
+        return new ProductOption { Id = newId, Name = ten };
+    }
+
+    public async Task<ProductOption> ThemDonViTinhAsync(string tenDonVi, string? maDonVi = null)
+    {
+        var ten = tenDonVi.Trim();
+        if (string.IsNullOrWhiteSpace(ten))
+            throw new ArgumentException("Tên đơn vị tính không được để trống.", nameof(tenDonVi));
+
+        await using var connection = await OpenAsync();
+
+        var existing = await connection.QueryFirstOrDefaultAsync<ProductOption>(
+            "SELECT id AS Id, ten_don_vi AS Name FROM don_vi_tinh WHERE LOWER(TRIM(ten_don_vi)) = LOWER(@Ten) LIMIT 1;",
+            new { Ten = ten });
+
+        if (existing != null)
+        {
+            await connection.ExecuteAsync(
+                "UPDATE don_vi_tinh SET trang_thai = 1 WHERE id = @Id;",
+                new { Id = existing.Id });
+            return new ProductOption { Id = existing.Id, Name = existing.Name };
+        }
+
+        bool hasMaDvt = false;
+        try
+        {
+            hasMaDvt = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'don_vi_tinh' AND COLUMN_NAME = 'ma_don_vi';") > 0;
+        }
+        catch { }
+
+        uint newId;
+        if (hasMaDvt)
+        {
+            var ma = !string.IsNullOrWhiteSpace(maDonVi) ? maDonVi.Trim() : ("DVT" + DateTime.Now.ToString("yyMMddHHmmss"));
+            newId = await connection.ExecuteScalarAsync<uint>(
+                "INSERT INTO don_vi_tinh (ma_don_vi, ten_don_vi, trang_thai) VALUES (@Ma, @Ten, 1); SELECT LAST_INSERT_ID();",
+                new { Ma = ma, Ten = ten });
+        }
+        else
+        {
+            newId = await connection.ExecuteScalarAsync<uint>(
+                "INSERT INTO don_vi_tinh (ten_don_vi, trang_thai) VALUES (@Ten, 1); SELECT LAST_INSERT_ID();",
+                new { Ten = ten });
+        }
+
+        return new ProductOption { Id = newId, Name = ten };
+    }
+
     public async Task CapNhatHinhAnhSanPhamAsync(uint productId, string imagePath)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsEdit, "Bạn không có quyền cập nhật hàng hóa.");
@@ -2432,7 +2524,9 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
         string? search,
         int page,
         int pageSize,
-        bool dayDuThongTin = false)
+        bool dayDuThongTin = false,
+        uint nhomKhachHangId = 0,
+        string? congNoFilter = null)
     {
         var safePage = page < 1 ? 1 : page;
         var safePageSize = pageSize < 1 ? 20 : pageSize;
@@ -2442,10 +2536,24 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
         var coBangTraHang = await HasBangTraHangAsync();
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
 
-        const string countSql = """
+        // Bộ lọc nhóm khách hàng và tình trạng công nợ, dùng cùng biểu thức
+        // NoHienTai với cột tiền trong bảng nên số liệu lọc luôn khớp.
+        var noHienTai = TaoBieuThucTienKhachHang(coBangTraHang, "kh.id", coCotKiotViet).NoHienTai;
+        var dieuKienNhom = nhomKhachHangId == 0
+            ? ""
+            : "AND kh.nhom_khach_hang_id = @NhomKhachHangId ";
+        var dieuKienCongNo = (congNoFilter ?? "").Trim() switch
+        {
+            "conno" => $"AND COALESCE({noHienTai}, 0) > 0 ",
+            "khongconno" => $"AND COALESCE({noHienTai}, 0) <= 0 ",
+            _ => ""
+        };
+
+        var countSql = $"""
         SELECT COUNT(*)
         FROM khach_hang kh
         WHERE kh.trang_thai = 1
+          {dieuKienNhom}{dieuKienCongNo}
           AND (
                 @Search = ''
                 OR kh.ma_khach_hang LIKE CONCAT('%', @Search, '%')
@@ -2508,6 +2616,7 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
         LEFT JOIN nhom_khach_hang nkh
             ON nkh.id = kh.nhom_khach_hang_id
         WHERE kh.trang_thai = 1
+          {dieuKienNhom}{dieuKienCongNo}
           AND (
                 @Search = ''
                 OR kh.ma_khach_hang LIKE CONCAT('%', @Search, '%')
@@ -2524,7 +2633,8 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
         {
             Search = keyword,
             PageSize = safePageSize,
-            Offset = offset
+            Offset = offset,
+            NhomKhachHangId = nhomKhachHangId
         };
 
         var tongSoBanGhi = await connection.ExecuteScalarAsync<int>(countSql, parameters);

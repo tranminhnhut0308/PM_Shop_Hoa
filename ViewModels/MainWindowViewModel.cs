@@ -28,6 +28,7 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _customersLoaded;
     private bool _invoicesLoaded;
     private bool _overviewLoaded;
+    private bool _customerNhomOptionsLoaded;
     private CancellationTokenSource? _baoCaoPhieuNhapSearchCts;
     private int _baoCaoPhieuNhapLoadVersion;
     private bool _baoCaoPhieuNhapLoaded;
@@ -285,6 +286,103 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Tổng tiền bán của toàn bộ khách hàng.</summary>
     [ObservableProperty] private decimal customerTotalSales;
+
+    // =========================================================
+    // BỘ LỌC DANH SÁCH KHÁCH HÀNG (NHÓM + TÌNH TRẠNG CÔNG NỢ)
+    // =========================================================
+
+    /// <summary>Các nhóm khách hàng cho ô lọc; dòng đầu tiên là "Tất cả nhóm khách hàng" (Id = 0).</summary>
+    public ObservableCollection<NhomKhachHang> CustomerNhomOptions { get; } = new();
+
+    /// <summary>Id nhóm khách hàng đang lọc. 0 = tất cả các nhóm.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CustomerHasFilter))]
+    [NotifyPropertyChangedFor(nameof(CustomerFilterButtonText))]
+    private NhomKhachHang? selectedCustomerNhom;
+
+    /// <summary>Giá trị bộ lọc công nợ, dùng chung hằng số CongNoTatCa/CongNoConNo/CongNoKhongConNo.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CustomerHasFilter))]
+    [NotifyPropertyChangedFor(nameof(CustomerFilterButtonText))]
+    private string? customerCongNoFilter = CongNoTatCa;
+
+    [ObservableProperty] private bool isCustomerFilterPanelOpen;
+
+    /// <summary>Bộ lọc đang có điều kiện khác mặc định (để hiện nút "Xóa").</summary>
+    public bool CustomerHasFilter =>
+        SelectedCustomerNhom is { Id: > 0 }
+        || (!string.IsNullOrWhiteSpace(CustomerCongNoFilter) && CustomerCongNoFilter != CongNoTatCa);
+
+    /// <summary>
+    /// Nhãn nút bộ lọc, ghi rõ điều kiện đang áp dụng:
+    /// "Bộ lọc", "Bộ lọc (VIP)", "Bộ lọc (Còn nợ)", "Bộ lọc (VIP, Còn nợ)", ...
+    /// </summary>
+    public string CustomerFilterButtonText
+    {
+        get
+        {
+            var dieuKien = new List<string>();
+
+            if (SelectedCustomerNhom is { Id: > 0 })
+                dieuKien.Add(SelectedCustomerNhom.TenNhom);
+
+            switch (CustomerCongNoFilter)
+            {
+                case CongNoConNo:
+                    dieuKien.Add("Còn nợ");
+                    break;
+                case CongNoKhongConNo:
+                    dieuKien.Add("Không còn nợ");
+                    break;
+            }
+
+            return dieuKien.Count == 0
+                ? "Bộ lọc"
+                : $"Bộ lọc ({string.Join(", ", dieuKien)})";
+        }
+    }
+
+    /// <summary>Mũi tên trên nút mở/đóng menu bộ lọc.</summary>
+    public string CustomerFilterArrowText => IsCustomerFilterPanelOpen ? "▲" : "▼";
+
+    partial void OnIsCustomerFilterPanelOpenChanged(bool value)
+        => OnPropertyChanged(nameof(CustomerFilterArrowText));
+
+    /// <summary>Nạp nhóm khách hàng cho ô lọc (gọi một lần khi mở màn khách hàng).</summary>
+    public async Task LoadCustomerNhomOptionsAsync()
+    {
+        var nhoms = await LoadNhomKhachHangOptionsAsync();
+
+        // Nhóm đang lọc có thể bị vô hiệu: đưa về "tất cả nhóm" thay vì giữ giá trị mù.
+        if (SelectedCustomerNhom is { Id: > 0 } && nhoms.All(n => n.Id != SelectedCustomerNhom.Id))
+            SelectedCustomerNhom = null;
+
+        CustomerNhomOptions.Clear();
+        CustomerNhomOptions.Add(new NhomKhachHang { Id = 0, TenNhom = "Tất cả nhóm khách hàng" });
+
+        foreach (var nhom in nhoms)
+            CustomerNhomOptions.Add(nhom);
+    }
+
+    /// <summary>Bấm "Áp dụng" trong menu lọc: quay về trang 1 rồi tải lại danh sách.</summary>
+    [RelayCommand]
+    private async Task ApplyCustomerFilterAsync()
+    {
+        CustomerPage = 1;
+
+        await LoadCustomersAsync();
+    }
+
+    /// <summary>Bấm "Xóa" trong menu lọc: reset về mặc định rồi tải lại danh sách.</summary>
+    [RelayCommand]
+    private async Task ClearCustomerFilterAsync()
+    {
+        CustomerCongNoFilter = CongNoTatCa;
+        SelectedCustomerNhom = null;
+        CustomerPage = 1;
+
+        await LoadCustomersAsync();
+    }
 
     /// <summary>Checkbox "chọn tất cả" của bảng danh sách.</summary>
     [ObservableProperty] private bool isAllCustomerRowsSelected;
@@ -1355,10 +1453,23 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             var page = CustomerPage;
+
+            if (!_customerNhomOptionsLoaded)
+            {
+                await LoadCustomerNhomOptionsAsync();
+                _customerNhomOptionsLoaded = true;
+
+                if (version != _customerLoadVersion)
+                    return;
+            }
+
             var (items, tongSoBanGhi) = await _db.GetKhachHangPagedAsync(
                 CustomerSearch,
                 page,
-                CustomerPageSize);
+                CustomerPageSize,
+                false,
+                SelectedCustomerNhom?.Id ?? 0,
+                CustomerCongNoFilter);
 
             if (version != _customerLoadVersion)
                 return;
@@ -1586,6 +1697,44 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = "Không thể tải danh sách nhóm sản phẩm: " + ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ThemNhomHangNhanhAsync()
+    {
+        if (OwnerWindow is null)
+            return;
+
+        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsCreate, "Bạn không có quyền thêm nhóm hàng."))
+            return;
+
+        try
+        {
+            var tenNhom = await QuickOptionEditorWindow.ShowAsync(
+                OwnerWindow,
+                "Thêm nhóm hàng mới",
+                "Tên nhóm hàng *",
+                "Ví dụ: Hoa cúc, Hoa hồng, Phụ kiện...");
+
+            if (string.IsNullOrWhiteSpace(tenNhom))
+                return;
+
+            var newOption = await _db.ThemNhomSanPhamAsync(tenNhom);
+            await LoadNhomSanPhamAsync();
+
+            SelectedNhomSanPham = NhomSanPhamOptions?.FirstOrDefault(x => x.Id == newOption.Id);
+
+            await NotificationWindow.ShowSuccessAsync(
+                $"Đã thêm nhóm hàng \"{newOption.Name}\" thành công.",
+                owner: OwnerWindow);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể thêm nhóm hàng: " + ex.Message;
+            await NotificationWindow.ShowErrorAsync(
+                "Không thể thêm nhóm hàng: " + ex.Message,
+                owner: OwnerWindow);
         }
     }
 
@@ -1925,6 +2074,8 @@ public partial class MainWindowViewModel : ObservableObject
 
             StatusMessage = $"Đã cập nhật hàng hóa {maHienThi}";
 
+            _ = LoadNhomSanPhamAsync();
+
             await NotificationWindow.ShowSuccessAsync(
                 $"Đã cập nhật hàng hóa {maHienThi}.",
                 owner: OwnerWindow);
@@ -2002,6 +2153,7 @@ public partial class MainWindowViewModel : ObservableObject
             editor.Product.Id = await _db.ThemSanPhamAsync(editor.Product);
             SanPhams.Add(editor.Product);
             StatusMessage = $"Đã thêm sản phẩm {editor.Product.MaSanPham}";
+            _ = LoadNhomSanPhamAsync();
         }
         catch (Exception ex)
         {

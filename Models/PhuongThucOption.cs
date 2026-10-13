@@ -9,4 +9,6 @@ public sealed class PhuongThucOption
     public string Ma { get; init; } = "";
 
     public string Ten { get; init; } = "";
+
+    public override string ToString() => Ten;
 }

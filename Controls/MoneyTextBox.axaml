@@ -8,5 +8,8 @@
     Text="{Binding Text, ElementName=Root, Mode=TwoWay}"
     TextAlignment="Right"
     Watermark="0"
-    Padding="8,6" />
+    Height="38"
+    CornerRadius="8"
+    Padding="12,8"
+    VerticalContentAlignment="Center" />
 </UserControl>

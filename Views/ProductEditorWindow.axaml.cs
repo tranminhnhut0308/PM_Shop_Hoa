@@ -6,11 +6,15 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using ShopHoa.Helpers;
 using ShopHoa.Models;
+using ShopHoa.Services;
 
 namespace ShopHoa.Views;
 
 public partial class ProductEditorWindow : Window
 {
+    private readonly DatabaseService _db = new();
+    private readonly List<ProductOption> _groupsList;
+    private readonly List<ProductOption> _unitsList;
     private readonly SanPham _product;
     private readonly bool _isNew;
     private readonly bool _duocSuaGiaBan;
@@ -38,8 +42,11 @@ public partial class ProductEditorWindow : Window
             DuocBanTrucTiep = true
         };
 
-        NhomSanPhamComboBox.ItemsSource = groups ?? [];
-        DonViTinhComboBox.ItemsSource = units ?? [];
+        _groupsList = (groups ?? []).ToList();
+        _unitsList = (units ?? []).ToList();
+
+        NhomSanPhamComboBox.ItemsSource = _groupsList;
+        DonViTinhComboBox.ItemsSource = _unitsList;
 
         // Không có quyền sửa hàng hóa thì không cho gõ giá bán,
         // nhưng vẫn xem và sửa các thông tin khác của sản phẩm.
@@ -80,10 +87,7 @@ public partial class ProductEditorWindow : Window
         KhachDatTextBox.Text = _product.KhachDat.ToString(CultureInfo.InvariantCulture);
         ViTriKhoTextBox.Text = _product.ViTriKho ?? "";
         LoaiHangTextBox.Text = _product.LoaiHang ?? "";
-        NhomHangBaCapTextBox.Text = _product.NhomHangBaCap ?? "";
         DuKienHetHangTextBox.Text = _product.DuKienHetHang ?? "";
-        DuocBanTrucTiepCheckBox.IsChecked = _product.DuocBanTrucTiep;
-        DangKinhDoanhCheckBox.IsChecked = _product.DangKinhDoanh;
     }
 
     /// <summary>Bắt đầu gõ thì bỏ dấu phân cách để sửa số bình thường.</summary>
@@ -198,10 +202,7 @@ public partial class ProductEditorWindow : Window
         _product.KhachDat = khachDat;
         _product.ViTriKho = NullIfEmpty(ViTriKhoTextBox.Text);
         _product.LoaiHang = NullIfEmpty(LoaiHangTextBox.Text);
-        _product.NhomHangBaCap = NullIfEmpty(NhomHangBaCapTextBox.Text);
         _product.DuKienHetHang = NullIfEmpty(DuKienHetHangTextBox.Text);
-        _product.DuocBanTrucTiep = DuocBanTrucTiepCheckBox.IsChecked == true;
-        _product.DangKinhDoanh = DangKinhDoanhCheckBox.IsChecked == true;
 
         Close(true);
     }
@@ -229,5 +230,67 @@ public partial class ProductEditorWindow : Window
     private void CancelButton_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         Close(false);
+    }
+
+    private async void ThemNhomHangButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var tenNhom = await QuickOptionEditorWindow.ShowAsync(
+                this,
+                "Thêm nhóm hàng mới",
+                "Tên nhóm hàng *",
+                "Ví dụ: Hoa cúc, Hoa hồng, Phụ kiện...");
+
+            if (string.IsNullOrWhiteSpace(tenNhom))
+                return;
+
+            var newOption = await _db.ThemNhomSanPhamAsync(tenNhom);
+            var existing = _groupsList.FirstOrDefault(x => x.Id == newOption.Id);
+            if (existing == null)
+            {
+                _groupsList.Add(newOption);
+                _groupsList.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase));
+            }
+
+            NhomSanPhamComboBox.ItemsSource = null;
+            NhomSanPhamComboBox.ItemsSource = _groupsList;
+            NhomSanPhamComboBox.SelectedItem = _groupsList.FirstOrDefault(x => x.Id == newOption.Id);
+        }
+        catch (Exception ex)
+        {
+            await NotificationWindow.ShowErrorAsync("Không thể thêm nhóm hàng: " + ex.Message, owner: this);
+        }
+    }
+
+    private async void ThemDonViTinhButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var tenDvt = await QuickOptionEditorWindow.ShowAsync(
+                this,
+                "Thêm đơn vị tính mới",
+                "Tên đơn vị tính *",
+                "Ví dụ: Bó, Cành, Chậu, Giỏ, Lẵng, Bình...");
+
+            if (string.IsNullOrWhiteSpace(tenDvt))
+                return;
+
+            var newOption = await _db.ThemDonViTinhAsync(tenDvt);
+            var existing = _unitsList.FirstOrDefault(x => x.Id == newOption.Id);
+            if (existing == null)
+            {
+                _unitsList.Add(newOption);
+                _unitsList.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase));
+            }
+
+            DonViTinhComboBox.ItemsSource = null;
+            DonViTinhComboBox.ItemsSource = _unitsList;
+            DonViTinhComboBox.SelectedItem = _unitsList.FirstOrDefault(x => x.Id == newOption.Id);
+        }
+        catch (Exception ex)
+        {
+            await NotificationWindow.ShowErrorAsync("Không thể thêm đơn vị tính: " + ex.Message, owner: this);
+        }
     }
 }
