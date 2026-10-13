@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
 using ShopHoa.Services;
 using ShopHoa.Views;
@@ -12,6 +13,101 @@ namespace ShopHoa.ViewModels;
 public sealed partial class MainWindowViewModel
 {
     private readonly HoaDonImportService _hoaDonImport = new();
+
+    // =========================================================
+    // LỌC NHANH HÓA ĐƠN: TẤT CẢ / ĐÃ THANH TOÁN / CÒN NỢ
+    // =========================================================
+
+    /// <summary>Bộ lọc trạng thái đang chọn: ALL, PAID hoặc DEBT.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsInvoiceFilterAll))]
+    [NotifyPropertyChangedFor(nameof(IsInvoiceFilterPaid))]
+    [NotifyPropertyChangedFor(nameof(IsInvoiceFilterDebt))]
+    private string invoiceFilter = "ALL";
+
+    public bool IsInvoiceFilterAll => InvoiceFilter == "ALL";
+    public bool IsInvoiceFilterPaid => InvoiceFilter == "PAID";
+    public bool IsInvoiceFilterDebt => InvoiceFilter == "DEBT";
+
+    /// <summary>Giá trị lọc truyền xuống database (rỗng = không lọc).</summary>
+    private string? LocHoaDonHienTai => InvoiceFilter switch
+    {
+        "PAID" => "PAID",
+        "DEBT" => "DEBT",
+        _ => null
+    };
+
+    /// <summary>Đổi bộ lọc nhanh rồi tải lại danh sách hóa đơn.</summary>
+    [RelayCommand]
+    private async Task LocHoaDonAsync(string? filter)
+    {
+        InvoiceFilter = string.IsNullOrWhiteSpace(filter)
+            ? "ALL"
+            : filter.Trim().ToUpperInvariant();
+
+        await LoadInvoicesAsync();
+    }
+
+    /// <summary>
+    /// Thu công nợ cho một hóa đơn còn nợ: hỏi số tiền + phương thức rồi ghi
+    /// nhận vào database (cập nhật hóa đơn, lưu thanh toán, phiếu thu sổ quỹ).
+    /// </summary>
+    [RelayCommand]
+    private async Task ThuNoHoaDonAsync(HoaDon? hoaDon)
+    {
+        if (hoaDon is null || OwnerWindow is null)
+            return;
+
+        if (hoaDon.ConNo <= 0)
+        {
+            await ShowMessageAsync(
+                "Thông báo",
+                $"Hóa đơn {hoaDon.MaHoaDon} đã thanh toán đủ, không còn công nợ.");
+            return;
+        }
+
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.CustomersDebtPay,
+                "Bạn không có quyền thu công nợ khách hàng."))
+        {
+            return;
+        }
+
+        var dialog = new ThuNoHoaDonWindow(hoaDon);
+        var ketQua = await dialog.ShowDialog<ThuNoHoaDonKetQua?>(OwnerWindow);
+
+        if (ketQua is null)
+        {
+            StatusMessage = "Đã hủy thu công nợ.";
+            return;
+        }
+
+        try
+        {
+            var receipt = await _db.ThuNoHoaDonAsync(
+                hoaDon.MaHoaDon,
+                ketQua.SoTien,
+                ketQua.PhuongThuc,
+                ketQua.GhiChu);
+
+            _invoicesLoaded = false;
+            await LoadInvoicesAsync();
+            _ = LamMoiTongQuanNeuDangMoAsync();
+
+            var thongBaoPhieu = string.IsNullOrWhiteSpace(receipt.MaPhieuThu)
+                ? ""
+                : $" Đã ghi phiếu thu {receipt.MaPhieuThu} vào sổ quỹ.";
+
+            StatusMessage =
+                $"Đã thu {ketQua.SoTien:N0} đ cho hóa đơn {hoaDon.MaHoaDon}. "
+                + $"Còn nợ {receipt.ConNo:N0} đ.{thongBaoPhieu}";
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageAsync("Không thu được công nợ", ex.Message);
+            SafeLog.WriteError("Loi thu no hoa don", ex);
+        }
+    }
 
     /// <summary>
     /// Nhập hóa đơn từ file Excel/CSV có sẵn của người dùng: đọc dòng tiêu đề để

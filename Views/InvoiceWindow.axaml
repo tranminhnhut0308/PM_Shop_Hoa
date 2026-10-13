@@ -195,6 +195,20 @@
         </StackPanel>
       </Border>
 
+      <Border IsVisible="{Binding CoGhiChu}"
+        Background="#FFF9ED"
+        BorderBrush="#F0E0BB"
+        BorderThickness="1"
+        CornerRadius="6"
+        Padding="10,7"
+        Margin="0,10,0,0">
+        <StackPanel Spacing="2">
+          <TextBlock Text="Ghi chú" FontWeight="SemiBold" FontSize="12" Foreground="#8A5A00" />
+          <TextBlock Text="{Binding GhiChu}" TextWrapping="Wrap" FontSize="12"
+            Foreground="#263B35" />
+        </StackPanel>
+      </Border>
+
       <Border IsVisible="{Binding CoCanhBao}"
         Background="#FFF4E5"
         CornerRadius="6"
@@ -213,8 +227,17 @@
       <TextBlock Text="{Binding ThongTinTiem.LoiCamOnHienThi}" HorizontalAlignment="Center"
         TextAlignment="Center" TextWrapping="Wrap" FontStyle="Italic"
         Foreground="#61736E" Margin="0,18,0,8" />
-      <Button Content="Đóng" HorizontalAlignment="Center" Classes="toolbar-primary"
-        Click="CloseButton_OnClick" Padding="28,10" />
+
+      <TextBlock x:Name="PrintStatus" IsVisible="False" TextWrapping="Wrap"
+        HorizontalAlignment="Center" TextAlignment="Center"
+        Foreground="#D92D20" FontSize="12" Margin="0,0,0,6" />
+
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+        <Button Content="🖨 In hóa đơn" Classes="toolbar-primary"
+          Click="PrintButton_OnClick" Padding="24,10" />
+        <Button Content="Đóng" Classes="toolbar-primary"
+          Click="CloseButton_OnClick" Padding="24,10" />
+      </StackPanel>
     </StackPanel>
   </ScrollViewer>
 </Window>

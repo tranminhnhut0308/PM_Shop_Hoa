@@ -194,6 +194,10 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string saleSearchText = "";
     [ObservableProperty] private bool isSalesPanelVisible;
     [ObservableProperty] private string saleCustomerName = "Khách lẻ";
+
+    /// <summary>Ghi chú riêng của hóa đơn (yêu cầu riêng của khách...).</summary>
+    [ObservableProperty] private string saleGhiChu = "";
+
     [ObservableProperty] private decimal saleTotal;
     [ObservableProperty] private decimal saleSubtotal;
     [ObservableProperty] private decimal saleDiscountInput;
@@ -1457,7 +1461,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         try
         {
-            var invoices = await _db.GetHoaDonAsync();
+            var invoices = await _db.GetHoaDonAsync(InvoiceSearch, LocHoaDonHienTai);
 
             HoaDons.Clear();
 
@@ -2621,7 +2625,7 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             HoaDons.Clear();
-            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch))
+            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, LocHoaDonHienTai))
                 HoaDons.Add(item);
             StatusMessage = $"Tìm thấy {HoaDons.Count} hóa đơn";
         }
@@ -2636,7 +2640,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             HoaDons.Clear();
 
-            foreach (var item in await _db.GetHoaDonAsync())
+            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, LocHoaDonHienTai))
                 HoaDons.Add(item);
 
             StatusMessage = $"Đã tải {HoaDons.Count} hóa đơn";
@@ -2997,6 +3001,7 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         SelectedSaleCustomer = null;
         SaleCustomerName = "Khách lẻ";
         SaleSearchText = "";
+        SaleGhiChu = "";
 
         SaleTotal = 0;
         SaleSubtotal = 0;
@@ -4496,7 +4501,8 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
                 cartSnapshot,
                 customer,
                 discountSnapshot,
-                cashSnapshot);
+                cashSnapshot,
+                ghiChu: SaleGhiChu);
         }
         catch (Exception ex)
         {

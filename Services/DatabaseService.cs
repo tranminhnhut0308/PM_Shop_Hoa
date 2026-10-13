@@ -3774,7 +3774,8 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
     }
 
     public async Task<IReadOnlyList<HoaDon>> GetHoaDonAsync(
-        string? search = null)
+        string? search = null,
+        string? trangThaiLoc = null)
     {
         await using var connection = await OpenAsync();
 
@@ -3793,7 +3794,8 @@ SELECT
     hd.khach_can_tra AS KhachCanTra,
     hd.khach_da_thanh_toan AS KhachDaThanhToan,
     hd.con_no AS ConNo,
-    hd.trang_thai_thanh_toan AS TrangThaiThanhToan
+    hd.trang_thai_thanh_toan AS TrangThaiThanhToan,
+    hd.ghi_chu AS GhiChu
 
 FROM hoa_don_ban_hang hd
 
@@ -3806,6 +3808,11 @@ WHERE (
     OR kh.ma_khach_hang LIKE CONCAT('%', @Search, '%')
     OR kh.ten_khach_hang LIKE CONCAT('%', @Search, '%')
 )
+AND (
+    @Loc = ''
+    OR (@Loc = 'PAID' AND hd.con_no <= 0)
+    OR (@Loc = 'DEBT' AND hd.con_no > 0)
+)
 
 ORDER BY hd.thoi_gian_ban DESC
 LIMIT 500;
@@ -3815,7 +3822,8 @@ LIMIT 500;
                 sql,
                 new
                 {
-                    Search = search ?? ""
+                    Search = search ?? "",
+                    Loc = (trangThaiLoc ?? "").Trim().ToUpperInvariant()
                 })
         ).AsList();
     }
@@ -3897,7 +3905,8 @@ LIMIT 500;
             hd.thu_khac                 AS ThuKhac,
             hd.khach_can_tra            AS KhachCanTra,
             hd.khach_da_thanh_toan      AS KhachDaThanhToan,
-            hd.con_no                   AS ConNo
+            hd.con_no                   AS ConNo,
+            hd.ghi_chu                  AS GhiChu
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
         LEFT JOIN nguoi_dung  nd ON nd.id = hd.nguoi_ban_id
@@ -3952,6 +3961,8 @@ LIMIT 500;
 
             TrangThaiThanhToan = TrangThaiThanhToanHienThi(conNo > 0, thuKhac > 0),
 
+            GhiChu = header.GhiChu as string,
+
             Items = items
         };
     }
@@ -3974,7 +3985,8 @@ LIMIT 500;
     KhachHang? customer,
     decimal discount,
     decimal tienKhachDua,
-    string? phuongThucThanhToan = null)
+    string? phuongThucThanhToan = null,
+    string? ghiChu = null)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SalesPayment, "Bạn không có quyền tạo hóa đơn bán hàng.");
         if (items.Count == 0)
@@ -4073,6 +4085,7 @@ LIMIT 500;
                 con_no,
                 trang_thai_thanh_toan,
                 trang_thai_hoa_don,
+                ghi_chu,
                 ngay_tao,
                 ngay_cap_nhat
             )
@@ -4091,6 +4104,7 @@ LIMIT 500;
                 @ConNo,
                 @TrangThaiThanhToan,
                 'HOAN_THANH',
+                @GhiChu,
                 @ThoiGianBan,
                 @ThoiGianBan
             );
@@ -4134,7 +4148,9 @@ LIMIT 500;
                             // Công nợ
                             ConNo = debtAmount,
 
-                            TrangThaiThanhToan = paymentStatus
+                            TrangThaiThanhToan = paymentStatus,
+
+                            GhiChu = BlankToNull(ghiChu)
                         },
                         transaction);
 
@@ -4386,6 +4402,311 @@ LIMIT 500;
 
             throw;
         }
+    }
+
+    /// <summary>
+    /// Ghi nhận khách trả thêm tiền cho một hóa đơn còn nợ: cập nhật số đã trả /
+    /// còn nợ / trạng thái của hóa đơn, lưu một dòng vào bảng <c>thanh_toan</c>,
+    /// cập nhật lịch sử công nợ khách hàng và tạo phiếu thu trong sổ quỹ — tất cả
+    /// trong MỘT giao dịch. Trả về hóa đơn đã đọc lại từ database.
+    /// </summary>
+    public async Task<HoaDonBanHangReceipt> ThuNoHoaDonAsync(
+        string maHoaDon,
+        decimal soTien,
+        string? phuongThucThanhToan = null,
+        string? ghiChu = null)
+    {
+        Quyen.RequirePermission(
+            Session.CurrentUser,
+            PermissionKeys.CustomersDebtPay,
+            "Bạn không có quyền thu công nợ khách hàng.");
+
+        if (string.IsNullOrWhiteSpace(maHoaDon))
+            throw new InvalidOperationException("Thiếu mã hóa đơn cần thu nợ.");
+
+        if (soTien <= 0)
+            throw new InvalidOperationException("Số tiền thu phải lớn hơn 0.");
+
+        var maCanTim = maHoaDon.Trim();
+        var now = DateTime.Now;
+        var userId = Session.CurrentUser?.Id;
+
+        var coCotLienKet = await EnsurePhieuQuyHoaDonColumnsAsync();
+
+        await using var connection = await OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        var daCommit = false;
+
+        try
+        {
+            const string selectSql = """
+            SELECT
+                id                  AS Id,
+                chi_nhanh_id        AS ChiNhanhId,
+                khach_hang_id       AS KhachHangId,
+                khach_can_tra       AS KhachCanTra,
+                khach_da_thanh_toan AS KhachDaThanhToan,
+                con_no              AS ConNo
+            FROM hoa_don_ban_hang
+            WHERE ma_hoa_don = @MaHoaDon
+            LIMIT 1
+            FOR UPDATE;
+            """;
+
+            var hd = await connection.QueryFirstOrDefaultAsync(
+                selectSql,
+                new { MaHoaDon = maCanTim },
+                transaction);
+
+            if (hd is null)
+                throw new InvalidOperationException($"Không tìm thấy hóa đơn {maCanTim} trong database.");
+
+            uint hoaDonId = Convert.ToUInt32(hd.Id);
+            uint branchCuaHoaDon = Convert.ToUInt32(hd.ChiNhanhId);
+            uint? khachHangId = hd.KhachHangId is null
+                ? null
+                : Convert.ToUInt32(hd.KhachHangId);
+
+            var khachCanTra = ToDecimal(hd.KhachCanTra);
+            var daTraCu = ToDecimal(hd.KhachDaThanhToan);
+            var conNoCu = ToDecimal(hd.ConNo);
+
+            if (conNoCu <= 0)
+                throw new InvalidOperationException(
+                    $"Hóa đơn {maCanTim} đã thanh toán đủ, không còn công nợ.");
+
+            // Không cho thu vượt quá số còn nợ.
+            var thu = Math.Min(soTien, conNoCu);
+            var daTraMoi = daTraCu + thu;
+            var conNoMoi = Math.Max(0, khachCanTra - daTraMoi);
+            var trangThai = conNoMoi > 0 ? "CONG_NO" : "DA_THANH_TOAN";
+
+            const string updateSql = """
+            UPDATE hoa_don_ban_hang
+            SET khach_da_thanh_toan = @DaTra,
+                con_no = @ConNo,
+                trang_thai_thanh_toan = @TrangThai,
+                ngay_cap_nhat = @ThoiGian
+            WHERE id = @Id;
+            """;
+
+            await connection.ExecuteAsync(
+                updateSql,
+                new
+                {
+                    DaTra = daTraMoi,
+                    ConNo = conNoMoi,
+                    TrangThai = trangThai,
+                    ThoiGian = now,
+                    Id = hoaDonId
+                },
+                transaction);
+
+            // Lưu dòng thanh toán.
+            var maThanhToan = await SinhMaThanhToanTrongGiaoDichAsync(connection, transaction);
+
+            const string insertTtSql = """
+            INSERT INTO thanh_toan
+            (ma_thanh_toan, hoa_don_id, khach_hang_id, so_tien, phuong_thuc,
+             thoi_gian, nguoi_thuc_hien_id, ghi_chu)
+            VALUES
+            (@MaThanhToan, @HoaDonId, @KhachHangId, @SoTien, @PhuongThuc,
+             @ThoiGian, @NguoiThucHienId, @GhiChu);
+            """;
+
+            await connection.ExecuteAsync(
+                insertTtSql,
+                new
+                {
+                    MaThanhToan = maThanhToan,
+                    HoaDonId = hoaDonId,
+                    KhachHangId = khachHangId,
+                    SoTien = thu,
+                    PhuongThuc = ChuanHoaPhuongThuc(phuongThucThanhToan),
+                    ThoiGian = now,
+                    NguoiThucHienId = userId,
+                    GhiChu = BlankToNull(ghiChu)
+                },
+                transaction);
+
+            // Cập nhật lịch sử công nợ khách hàng (ghi có = giảm nợ).
+            if (khachHangId is > 0)
+            {
+                const string currentDebtSql = """
+                SELECT COALESCE(SUM(ghi_no - ghi_co), 0)
+                FROM lich_su_cong_no_khach_hang
+                WHERE khach_hang_id = @KhachHangId
+                FOR UPDATE;
+                """;
+
+                var soDuCu = await connection.ExecuteScalarAsync<decimal>(
+                    currentDebtSql,
+                    new { KhachHangId = khachHangId },
+                    transaction);
+
+                const string debtSql = """
+                INSERT INTO lich_su_cong_no_khach_hang
+                (khach_hang_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu,
+                 ghi_no, ghi_co, so_du, thoi_gian, nguoi_thuc_hien_id, ghi_chu)
+                VALUES
+                (@KhachHangId, @ChiNhanhId, 'THU_TIEN', 'HOA_DON', @MaChungTu,
+                 0, @GhiCo, @SoDu, @ThoiGian, @NguoiThucHienId, @GhiChu);
+                """;
+
+                await connection.ExecuteAsync(
+                    debtSql,
+                    new
+                    {
+                        KhachHangId = khachHangId,
+                        ChiNhanhId = branchCuaHoaDon,
+                        MaChungTu = maCanTim,
+                        GhiCo = thu,
+                        SoDu = soDuCu - thu,
+                        ThoiGian = now,
+                        NguoiThucHienId = userId,
+                        GhiChu = $"Thu nợ hóa đơn {maCanTim}"
+                    },
+                    transaction);
+            }
+
+            // Ghi phiếu thu sổ quỹ (mã PT). KHÔNG gán hoa_don_ban_hang_id vì chỉ mục
+            // duy nhất chỉ cho phép 1 phiếu/hóa đơn — phiếu thu đầu tiên đã giữ chỗ đó.
+            var maPhieu = await SinhMaPhieuThuTrongGiaoDichAsync(connection, transaction);
+
+            var noiDung = $"Thu nợ hóa đơn {maCanTim}";
+            var ghiChuPhieu = string.IsNullOrWhiteSpace(ghiChu)
+                ? noiDung
+                : $"{noiDung}. {ghiChu.Trim()}";
+
+            var insertPhieuSql = coCotLienKet
+                ? """
+                  INSERT INTO phieu_chi
+                  (ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                   noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
+                   nguoi_thuc_hien_id, trang_thai, hoa_don_ban_hang_id, ma_hoa_don)
+                  VALUES
+                  (@MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                   @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
+                   @NguoiTaoId, @TrangThai, NULL, @MaHoaDon);
+                  """
+                : """
+                  INSERT INTO phieu_chi
+                  (ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                   noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
+                   nguoi_thuc_hien_id, trang_thai)
+                  VALUES
+                  (@MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                   @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
+                   @NguoiTaoId, @TrangThai);
+                  """;
+
+            var tenKhach = khachHangId is null or 0
+                ? null
+                : await connection.ExecuteScalarAsync<string>(
+                    "SELECT NULLIF(TRIM(ten_khach_hang), '') FROM khach_hang WHERE id = @Id LIMIT 1;",
+                    new { Id = khachHangId },
+                    transaction);
+
+            await connection.ExecuteAsync(
+                insertPhieuSql,
+                new
+                {
+                    MaPhieu = maPhieu,
+                    ChiNhanhId = branchCuaHoaDon,
+                    SoTien = thu,
+                    PhuongThuc = ChuanHoaPhuongThuc(phuongThucThanhToan),
+                    NoiDung = noiDung,
+                    NguoiNopNhan = Truncate150(tenKhach),
+                    GhiChu = ghiChuPhieu,
+                    ThoiGian = now,
+                    NguoiTaoId = userId,
+                    TrangThai = TrangThaiPhieuHoanThanh,
+                    MaHoaDon = maCanTim
+                },
+                transaction);
+
+            await transaction.CommitAsync();
+            daCommit = true;
+
+            _ = LogSubAccountActivityAsync(
+                "Thu nợ",
+                "HOA_DON",
+                hoaDonId,
+                maCanTim,
+                $"Thu nợ hóa đơn {maCanTim}: {thu:N0} đ (còn nợ {conNoMoi:N0} đ)",
+                thu);
+
+            var receipt = await GetHoaDonBanHangTheoMaAsync(maCanTim);
+
+            if (receipt is null)
+                throw new InvalidOperationException(
+                    $"Đã thu nợ nhưng không đọc lại được hóa đơn {maCanTim}.");
+
+            receipt.MaPhieuThu = maPhieu;
+
+            return receipt;
+        }
+        catch (Exception ex)
+        {
+            if (!daCommit)
+            {
+                try
+                {
+                    await transaction.RollbackAsync();
+                }
+                catch (Exception rollbackEx)
+                {
+                    SafeLog.WriteError(
+                        "Khong rollback duoc giao dich thu no",
+                        rollbackEx);
+                }
+            }
+
+            SafeLog.WriteError("Loi thu no hoa don", ex);
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Cấp mã thanh toán kế tiếp (TT0001, TT0002...) bằng chính connection và
+    /// transaction đang chạy, tránh trùng mã (cột <c>ma_thanh_toan</c> có UNIQUE).
+    /// </summary>
+    private async Task<string> SinhMaThanhToanTrongGiaoDichAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction)
+    {
+        const string prefix = "TT";
+
+        var maxSuffix = await connection.ExecuteScalarAsync<long?>(
+            """
+            SELECT COALESCE(MAX(CAST(SUBSTRING(TRIM(ma_thanh_toan), 3) AS SIGNED)), 0)
+            FROM thanh_toan
+            WHERE ma_thanh_toan LIKE CONCAT(@Prefix, '%')
+              AND TRIM(ma_thanh_toan) REGEXP CONCAT('^', @Prefix, '[0-9]+$');
+            """,
+            new { Prefix = prefix },
+            transaction) ?? 0L;
+
+        var nextNumber = maxSuffix > 0 ? maxSuffix + 1 : 1L;
+
+        for (var i = 0; i < 100; i++)
+        {
+            var candidate = prefix + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
+
+            var daTonTai = await connection.ExecuteScalarAsync<int?>(
+                "SELECT 1 FROM thanh_toan WHERE ma_thanh_toan = @Ma LIMIT 1;",
+                new { Ma = candidate },
+                transaction);
+
+            if (daTonTai is null)
+                return candidate;
+
+            nextNumber++;
+        }
+
+        return prefix + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
     }
 
     /// <summary>

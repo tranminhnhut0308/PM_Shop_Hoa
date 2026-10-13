@@ -20,6 +20,11 @@ public sealed class HoaDonBanHangReceipt
     public decimal ConNo { get; set; }
     public string TrangThaiThanhToan { get; set; } = "";
 
+    /// <summary>Ghi chú riêng của hóa đơn (yêu cầu riêng của khách...).</summary>
+    public string? GhiChu { get; set; }
+
+    public bool CoGhiChu => !string.IsNullOrWhiteSpace(GhiChu);
+
     /// <summary>
     /// Mã phiếu Thu trong sổ quỹ đã sinh kèm hóa đơn này (ví dụ "PT0004").
     /// Rỗng khi khách chưa trả đồng nào nên không có dòng tiền vào quỹ.

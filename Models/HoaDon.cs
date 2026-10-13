@@ -28,6 +28,9 @@ public sealed class HoaDon
 
     public string TrangThaiThanhToan { get; set; } = "";
 
+    /// <summary>Ghi chú riêng của hóa đơn (yêu cầu riêng của khách...).</summary>
+    public string? GhiChu { get; set; }
+
     // ============================================================
     // THÔNG TIN CHỈ DÙNG CHO GIAO DIỆN
     // ============================================================
@@ -46,4 +49,7 @@ public sealed class HoaDon
 
     /// <summary>Hóa đơn này còn dư nợ (dùng để tô màu cảnh báo).</summary>
     public bool ConNoDuong => ConNo > 0;
+
+    /// <summary>Có ghi chú để hiển thị kèm hay không.</summary>
+    public bool CoGhiChu => !string.IsNullOrWhiteSpace(GhiChu);
 }
