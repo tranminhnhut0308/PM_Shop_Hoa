@@ -2763,6 +2763,21 @@
                                     Text="{Binding Detail.LanGhiCongNoText, StringFormat='Lần ghi công nợ gần nhất: {0}'}" />
                                 </StackPanel>
 
+                                <!-- THANH TOÁN CÔNG NỢ: trừ dần vào các hóa đơn còn nợ -->
+                                <Button Content="💵 Thanh toán công nợ"
+                                  Padding="16,8"
+                                  CornerRadius="8"
+                                  Background="#087F6E"
+                                  Foreground="White"
+                                  FontWeight="SemiBold"
+                                  BorderThickness="0"
+                                  Cursor="Hand"
+                                  HorizontalAlignment="Right"
+                                  IsVisible="{Binding Detail.CongNoDuong}"
+                                  ToolTip.Tip="Nhập số tiền khách trả, hệ thống tự trừ vào các hóa đơn còn nợ"
+                                  Command="{Binding ElementName=RootWindow, Path=DataContext.ThuNoKhachHangCommand}"
+                                  CommandParameter="{Binding}" />
+
                               </StackPanel>
 
                             </StackPanel>

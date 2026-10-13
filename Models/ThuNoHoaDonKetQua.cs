@@ -1,8 +1,8 @@
 namespace ShopHoa.Models;
 
 /// <summary>
-/// Kết quả người dùng nhập ở hộp thoại thu công nợ của một hóa đơn.
-/// Trả về null khi người dùng hủy.
+/// Kết quả người dùng nhập ở hộp thoại thu công nợ (của một hóa đơn hoặc của
+/// một khách hàng). Trả về null khi người dùng hủy.
 /// </summary>
 public sealed class ThuNoHoaDonKetQua
 {

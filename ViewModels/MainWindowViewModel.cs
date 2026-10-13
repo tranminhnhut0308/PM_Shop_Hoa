@@ -1897,7 +1897,37 @@ public partial class MainWindowViewModel : ObservableObject
             DongBoGiaBan(product.Id, product.GiaBan);
 
             product.DongGiaBanNhanh();
-            StatusMessage = $"Đã cập nhật sản phẩm {product.MaSanPham}";
+
+            // Chỉ cập nhật đúng dòng vừa sửa (kèm tên ĐVT / nhóm hàng lấy qua
+            // JOIN) thay vì nạp lại cả danh sách: giữ nguyên vị trí cuộn và lựa
+            // chọn nên bảng hàng hóa không bị "nhảy" làm người dùng nhầm lẫn.
+            var index = SanPhams.IndexOf(product);
+            var refreshed = await _db.GetSanPhamByIdAsync(product.Id);
+
+            if (index >= 0)
+            {
+                if (refreshed is null)
+                {
+                    // Không còn đọc được sản phẩm (bị xóa ở nơi khác) mới nạp lại cả danh sách.
+                    await RefreshProductsAsync();
+                }
+                else
+                {
+                    if (!string.IsNullOrWhiteSpace(refreshed.HinhAnh) && File.Exists(refreshed.HinhAnh))
+                        refreshed.HinhAnhBitmap = new Bitmap(refreshed.HinhAnh);
+
+                    SanPhams[index] = refreshed;
+                    OnPropertyChanged(nameof(IsSanPhamListEmpty));
+                }
+            }
+
+            var maHienThi = refreshed?.MaSanPham ?? product.MaSanPham;
+
+            StatusMessage = $"Đã cập nhật hàng hóa {maHienThi}";
+
+            await NotificationWindow.ShowSuccessAsync(
+                $"Đã cập nhật hàng hóa {maHienThi}.",
+                owner: OwnerWindow);
         }
         catch (Exception ex)
         {
