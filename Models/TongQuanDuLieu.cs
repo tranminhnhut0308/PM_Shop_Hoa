@@ -104,9 +104,16 @@ public sealed class TongQuanDiemDoanhThu
     public double ChieuCaoCot => DoanhThu <= 0 ? 0 : Math.Max(4, TyLeChieuCao / 100d * ChieuCaoToiDa);
 
     /// <summary>Bề rộng cột (px); nhiều điểm thì cuộn ngang trong vùng biểu đồ.</summary>
-    public double BeRongCot => Math.Max(10, Math.Min(BeRongToiDa, TyLeBeRong / 100d * BeRongToiDa));
+    public double BeRongCot => Math.Max(55, Math.Min(BeRongToiDa, TyLeBeRong / 100d * BeRongToiDa));
 
     public bool CoDuLieu => SoHoaDon > 0 || DoanhThu > 0;
+
+    /// <summary>Tooltip đầy đủ khi rê chuột lên cột.</summary>
+    public string ToolTipDayDu =>
+        $"{NhanDayDu}\n" +
+        $"Doanh thu: {DoanhThuHienThi}\n" +
+        $"Số hóa đơn: {SoHoaDonHienThi}";
+
 }
 
 /// <summary>Một dòng trong thẻ "Top 10" (hàng bán chạy hoặc khách hàng).</summary>

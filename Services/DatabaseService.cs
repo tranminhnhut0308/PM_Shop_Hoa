@@ -475,7 +475,7 @@ public sealed class DatabaseService
 
         var builder = new StringBuilder(khongDau.Length);
 
-foreach (var character in khongDau)
+        foreach (var character in khongDau)
         {
             if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
                 continue;
@@ -2062,7 +2062,7 @@ foreach (var character in khongDau)
 
         foreach (var character in normalized)
         {
-if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
+            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
                 continue;
 
             // Chỉ giữ lại chữ và số; bỏ hết dấu câu, ngoặc, khoảng trắng.
@@ -3995,7 +3995,7 @@ LIMIT 500;
                 })
         ).AsList();
     }
-/// <summary>
+    /// <summary>
     /// Sinh mã hóa đơn kế tiếp trong ngày, dạng HDyyMMdd-NNN (VD: HD261005-002).
     /// <para>
     /// PHẢI cắt chuỗi tại <c>CHAR_LENGTH(@Prefix) + 2</c>. Mã hóa đơn gồm 8 ký tự
@@ -6653,6 +6653,18 @@ LIMIT 500;
     // QUẢN LÝ NHÓM SẢN PHẨM & ĐƠN VỊ TÍNH
     // ==========================================
 
+    public async Task<uint> ThemNhomSanPhamAsync(string tenNhom)
+    {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền thêm nhóm hàng hóa.");
+        await using var connection = await OpenAsync();
+        const string sql = """
+            INSERT INTO nhom_san_pham (ten_nhom, trang_thai)
+            VALUES (@TenNhom, 1);
+            SELECT LAST_INSERT_ID();
+            """;
+        return await connection.ExecuteScalarAsync<uint>(sql, new { TenNhom = tenNhom });
+    }
+
     public async Task XoaNhomSanPhamAsync(uint id)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền xóa nhóm hàng hóa.");
@@ -9050,12 +9062,14 @@ LIMIT 500;
 
     public async Task<IReadOnlyList<Permission>> GetPermissionsAsync()
     {
-        try {
+        try
+        {
             await using var connection = await OpenAsync();
             var sql = "SELECT id AS Id, ma_quyen AS MaQuyen, ten_quyen AS TenQuyen, nhom AS Nhom, loai AS Loai, mo_ta AS MoTa, thu_tu AS ThuTu, trang_thai AS TrangThai FROM quyen WHERE trang_thai = 1 ORDER BY nhom, thu_tu, id ASC";
             var items = await connection.QueryAsync<Permission>(sql);
             return items.ToList();
-        } catch { return new List<Permission>(); }
+        }
+        catch { return new List<Permission>(); }
     }
 
     private static bool _daDamBaoDanhMucQuyen;
@@ -9389,13 +9403,14 @@ LIMIT 500;
             INSERT INTO nguoi_dung (ma_nguoi_dung, ten_dang_nhap, mat_khau, ho_ten, chi_nhanh_id, trang_thai, ngay_tao, ngay_cap_nhat)
             VALUES (@MaNguoiDung, @TenDangNhap, @MatKhau, @HoTen, @ChiNhanhId, @TrangThai, NOW(), NOW())
             """;
-            await connection.ExecuteAsync(sql, new { 
-                MaNguoiDung = maNguoiDung, 
-                TenDangNhap = dto.TenDangNhap, 
-                MatKhau = hashed, 
-                HoTen = dto.HoTen, 
+            await connection.ExecuteAsync(sql, new
+            {
+                MaNguoiDung = maNguoiDung,
+                TenDangNhap = dto.TenDangNhap,
+                MatKhau = hashed,
+                HoTen = dto.HoTen,
                 ChiNhanhId = chiNhanhId,
-                TrangThai = dto.TrangThai ? 1 : 0 
+                TrangThai = dto.TrangThai ? 1 : 0
             }, tx);
             var userId = await connection.ExecuteScalarAsync<uint>("SELECT LAST_INSERT_ID();", null, tx);
             foreach (var rid in dto.RoleIds.Distinct())

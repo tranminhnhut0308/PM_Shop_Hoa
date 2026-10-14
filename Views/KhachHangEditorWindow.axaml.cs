@@ -170,7 +170,16 @@ public partial class KhachHangEditorWindow : Window
 
         Customer.MaKhachHang = Customer.MaKhachHang?.Trim() ?? "";
         Customer.TenKhachHang = Customer.TenKhachHang?.Trim() ?? "";
-        Customer.SoDienThoai = Customer.SoDienThoai?.Trim();
+
+        var so1 = this.FindControl<TextBox>("SoDienThoai1Box")?.Text?.Trim().Replace(" ", "");
+        var so2 = this.FindControl<TextBox>("SoDienThoai2Box")?.Text?.Trim().Replace(" ", "");
+        var so3 = this.FindControl<TextBox>("SoDienThoai3Box")?.Text?.Trim().Replace(" ", "");
+
+        var danhSach = new List<string>();
+        if (!string.IsNullOrWhiteSpace(so1)) danhSach.Add(so1);
+        if (!string.IsNullOrWhiteSpace(so2)) danhSach.Add(so2);
+        if (!string.IsNullOrWhiteSpace(so3)) danhSach.Add(so3);
+        Customer.SoDienThoai = danhSach.Count > 0 ? string.Join(" - ", danhSach) : null;
         Customer.Email = Customer.Email?.Trim();
         Customer.DiaChi = Customer.DiaChi?.Trim();
         Customer.PhuongXa = Customer.PhuongXa?.Trim();
@@ -311,4 +320,38 @@ public partial class KhachHangEditorWindow : Window
     {
         Close(false);
     }
+
+    private int _soLuongSoDienThoai = 1;
+
+    private void OnThemSoDienThoai(object? sender, RoutedEventArgs e)
+    {
+        if (_soLuongSoDienThoai >= 3) return;
+
+        _soLuongSoDienThoai++;
+
+        if (_soLuongSoDienThoai == 2)
+        {
+            this.FindControl<TextBox>("SoDienThoai2Box")!.IsVisible = true;
+        }
+        else if (_soLuongSoDienThoai == 3)
+        {
+            this.FindControl<TextBox>("SoDienThoai3Box")!.IsVisible = true;
+            this.FindControl<Button>("BtnThemSo")!.IsEnabled = false; // hết chỗ thêm
+        }
+    }
+
+    private void OnEmailLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (sender is TextBox textBox && !string.IsNullOrWhiteSpace(textBox.Text))
+        {
+            var text = textBox.Text.Trim();
+            // Nếu người dùng nhập tên mà chưa có đuôi @, tự động cộng thêm @gmail.com
+            if (!text.Contains("@"))
+            {
+                textBox.Text = text + "@gmail.com";
+            }
+        }
+    }
+
+
 }

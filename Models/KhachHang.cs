@@ -79,4 +79,11 @@ public sealed class KhachHang
 
     /// <summary>Tổng bán trừ trả hàng theo file KiotViet (null nếu file không có).</summary>
     public decimal? TongBanTruTraHangExcel { get; set; }
+
+    /// <summary>
+    /// true = Địa chỉ cũ (cần nhập thêm Quận/Huyện).
+    /// false = Địa chỉ mới (chỉ Phường/Xã + Tỉnh/Thành).
+    /// Chỉ dùng trên form, không lưu database.
+    /// </summary>
+    public bool LaDiaChiCu { get; set; }
 }
