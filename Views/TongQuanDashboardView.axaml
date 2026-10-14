@@ -335,65 +335,86 @@
       </Grid>
 
       <!-- BIỂU ĐỒ DOANH THU THEO KỲ -->
-      <Border Classes="tqCard" Padding="16">
-        <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-            <StackPanel>
-              <TextBlock Text="DOANH THU THEO KỲ" Classes="tqSectionTitle" />
-              <TextBlock Text="{Binding ThoiGianHienThi}" Classes="tqSectionSub"
-                Margin="0,2,0,0" />
-            </StackPanel>
-            <StackPanel Grid.Column="1" HorizontalAlignment="Right">
-              <TextBlock Text="{Binding TongDoanhThuKyChonHienThi}"
-                FontSize="20" FontWeight="Bold" Foreground="#087F6E"
-                HorizontalAlignment="Right" />
-              <TextBlock Text="{Binding TongSoHoaDonKyChonHienThi}"
-                Classes="tqMuted" HorizontalAlignment="Right" />
-            </StackPanel>
-          </Grid>
+<Border Classes="tqCard" Padding="16">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
 
-          <Border Grid.Row="1" Height="1" Background="#EEF4F2" />
+    <!-- Header -->
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+      <StackPanel>
+        <TextBlock Text="DOANH THU THEO KỲ" Classes="tqSectionTitle" />
+        <TextBlock Text="{Binding ThoiGianHienThi}" Classes="tqSectionSub"
+                   Margin="0,2,0,0" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+        <TextBlock Text="{Binding TongDoanhThuKyChonHienThi}"
+                   FontSize="20" FontWeight="Bold" Foreground="#087F6E"
+                   HorizontalAlignment="Right" />
+        <TextBlock Text="{Binding TongSoHoaDonKyChonHienThi}"
+                   Classes="tqMuted" HorizontalAlignment="Right" />
+      </StackPanel>
+    </Grid>
 
-          <!-- Vùng vẽ cột: lấp đầy chiều cao còn lại của card, cột bám đáy,
-               trục nằm ngay trên nhãn, nhiều điểm thì cuộn ngang -->
-          <Grid Grid.Row="2">
-            <Border VerticalAlignment="Bottom" Height="1" Margin="0,12,0,0"
+    <Border Grid.Row="1" Height="1" Background="#EEF4F2" />
+
+    <!-- Vùng biểu đồ -->
+    <Grid Grid.Row="2" MinHeight="210">
+      <!-- Đường trục đáy -->
+      <Border VerticalAlignment="Bottom" Height="1" Margin="0,0,0,18"
               Background="#E2ECE8" IsVisible="{Binding CoDuLieu}" />
 
-            <ScrollViewer VerticalScrollBarVisibility="Disabled"
-              HorizontalScrollBarVisibility="Auto">
-              <ItemsControl ItemsSource="{Binding BieuDoDoanhThu}"
-                VerticalAlignment="Bottom">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="models:TongQuanDiemDoanhThu">
-                    <StackPanel Width="{Binding BeRongCot}" Margin="2,0"
-                      ToolTip.Tip="{Binding NhanDayDu}">
-                      <Grid Height="180">
-                        <Border Classes="tqChartBar" Height="{Binding ChieuCaoCot}"
-                          CornerRadius="4,4,0,0" Background="#087F6E"
-                          VerticalAlignment="Bottom" HorizontalAlignment="Stretch"
-                          Margin="0,0,0,2" />
-                      </Grid>
-                      <TextBlock Text="{Binding Nhan}" FontSize="9"
-                        Foreground="#61736E" HorizontalAlignment="Center"
-                        TextTrimming="CharacterEllipsis" />
-                    </StackPanel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </ScrollViewer>
-          </Grid>
+      <ScrollViewer VerticalScrollBarVisibility="Disabled"
+                    HorizontalScrollBarVisibility="Auto"
+                    Padding="0,0,0,2"
+                    IsVisible="{Binding CoDuLieu}">
+        <ItemsControl ItemsSource="{Binding BieuDoDoanhThu}"
+                      VerticalAlignment="Bottom">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="6" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
 
-          <TextBlock Grid.Row="3" Text="Chưa có phát sinh nào trong khoảng đang chọn"
-            Classes="tqMuted" HorizontalAlignment="Center"
-            IsVisible="{Binding !CoDuLieu}" />
-        </Grid>
-      </Border>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="models:TongQuanDiemDoanhThu">
+              <StackPanel Width="{Binding BeRongCot, FallbackValue=55}"
+                          Margin="1,0"
+                          ToolTip.Tip="{Binding ToolTipDayDu}">   <!-- Dùng tooltip mới -->
+
+                <!-- Cột -->
+                <Grid Height="180">
+                  <Border Height="{Binding ChieuCaoCot, FallbackValue=8}"
+                          CornerRadius="4,4,0,0"
+                          Background="#0D9488"
+                          VerticalAlignment="Bottom"
+                          HorizontalAlignment="Stretch"
+                          Margin="2,0,2,0"
+                          Opacity="0.92" />
+                </Grid>
+
+                <!-- Nhãn dưới cột -->
+                <TextBlock Text="{Binding Nhan}"
+                           FontSize="10.5"
+                           Foreground="#61736E"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           MaxLines="1"
+                           Margin="0,4,0,0" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Grid>
+
+    <!-- Empty -->
+    <TextBlock Grid.Row="3"
+               Text="Chưa có phát sinh nào trong khoảng đang chọn"
+               Classes="tqMuted"
+               HorizontalAlignment="Center"
+               IsVisible="{Binding !CoDuLieu}" />
+  </Grid>
+</Border>
 
       <!-- TOP 10 + THỐNG KÊ KHO -->
       <Grid ColumnDefinitions="*,*" ColumnSpacing="12">

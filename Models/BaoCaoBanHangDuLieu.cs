@@ -48,7 +48,7 @@ public sealed class BaoCaoBanHangDiemThoiGian
     public double ChieuCaoCot => DoanhThu <= 0 ? 0 : Math.Max(3, TyLeChieuCao / 100d * ChieuCaoToiDa);
 
     /// <summary>Bề rộng cột (px); nhiều điểm thì cuộn ngang trong vùng biểu đồ.</summary>
-    public double BeRongCot => Math.Max(16, Math.Min(BeRongToiDa, TyLeBeRong / 100d * BeRongToiDa));
+    public double BeRongCot => Math.Max(55, Math.Min(BeRongToiDa, TyLeBeRong / 100d * BeRongToiDa));
 
     public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string DaThuHienThi => DaThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";

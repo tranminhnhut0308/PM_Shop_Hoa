@@ -47,8 +47,12 @@ public partial class CategorySettingsWindow : Window
         var name = NewGroupNameTextBox.Text?.Trim();
         if (string.IsNullOrEmpty(name)) return;
 
-        var newId = await _dbService.ThemNhomSanPhamAsync(name);
-        Groups.Add(new ProductOption { Id = newId, Name = name });
+        // Nhận về ProductOption thay vì ép kiểu hay gán vào uint
+        ProductOption newGroup = await _dbService.ThemNhomSanPhamAsync(name);
+
+        // Thêm trực tiếp đối tượng vào danh sách hiển thị của giao diện
+        Groups.Add(newGroup);
+
         NewGroupNameTextBox.Text = string.Empty;
     }
 
@@ -66,8 +70,11 @@ public partial class CategorySettingsWindow : Window
         var name = NewUnitNameTextBox.Text?.Trim();
         if (string.IsNullOrEmpty(name)) return;
 
-        var newId = await _dbService.ThemDonViTinhAsync(name);
-        Units.Add(new ProductOption { Id = newId, Name = name });
+        // Nhận trực tiếp đối tượng ProductOption trả về từ database service
+        var newOption = await _dbService.ThemDonViTinhAsync(name);
+
+        // Thêm trực tiếp đối tượng đó vào danh sách hiển thị
+        Units.Add(newOption);
         NewUnitNameTextBox.Text = string.Empty;
     }
 

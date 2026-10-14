@@ -6645,17 +6645,7 @@ LIMIT 500;
     // QUẢN LÝ NHÓM SẢN PHẨM & ĐƠN VỊ TÍNH
     // ==========================================
 
-    public async Task<uint> ThemNhomSanPhamAsync(string tenNhom)
-    {
-        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền thêm nhóm hàng hóa.");
-        await using var connection = await OpenAsync();
-        const string sql = """
-            INSERT INTO nhom_san_pham (ten_nhom, trang_thai)
-            VALUES (@TenNhom, 1);
-            SELECT LAST_INSERT_ID();
-            """;
-        return await connection.ExecuteScalarAsync<uint>(sql, new { TenNhom = tenNhom });
-    }
+    
 
     public async Task XoaNhomSanPhamAsync(uint id)
     {
@@ -6663,18 +6653,6 @@ LIMIT 500;
         await using var connection = await OpenAsync();
         const string sql = "UPDATE nhom_san_pham SET trang_thai = 0 WHERE id = @Id;";
         await connection.ExecuteAsync(sql, new { Id = id });
-    }
-
-    public async Task<uint> ThemDonViTinhAsync(string tenDonVi)
-    {
-        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền thêm đơn vị tính.");
-        await using var connection = await OpenAsync();
-        const string sql = """
-            INSERT INTO don_vi_tinh (ten_don_vi, trang_thai)
-            VALUES (@TenDonVi, 1);
-            SELECT LAST_INSERT_ID();
-            """;
-        return await connection.ExecuteScalarAsync<uint>(sql, new { TenDonVi = tenDonVi });
     }
 
     public async Task XoaDonViTinhAsync(uint id)
