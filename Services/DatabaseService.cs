@@ -2473,6 +2473,7 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
     {
         // Sổ cái công nợ là nguồn công nợ chính, giống hệt cột "Còn nợ" và
         // cột "Công nợ hiện tại" của vùng chi tiết.
+        // Nếu chưa có dòng sổ cái nào, tự động fallback sang tổng còn nợ của phiếu nhập.
         var tienNoiBo = $"""
             COALESCE(
                 (
@@ -2480,18 +2481,24 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
                     FROM lich_su_cong_no_nha_cung_cap ls
                     WHERE ls.nha_cung_cap_id = {idExpression}
                 ),
+                (
+                    SELECT SUM(p_cn.con_no)
+                    FROM phieu_nhap_hang p_cn
+                    WHERE p_cn.nha_cung_cap_id = {idExpression}
+                      AND p_cn.trang_thai NOT IN ('LUU_TAM', 'HUY')
+                ),
                 0
             )
             """;
 
-        // Tổng mua lấy từ các phiếu nhập hàng đã hoàn thành.
+        // Tổng mua lấy từ các phiếu nhập hàng hợp lệ (DA_NHAP_HANG hoặc HOAN_THANH).
         var tienMuaNoiBo = $"""
             COALESCE(
                 (
                     SELECT SUM(p.tong_tien_nhap)
                     FROM phieu_nhap_hang p
                     WHERE p.nha_cung_cap_id = {idExpression}
-                      AND p.trang_thai = 'HOAN_THANH'
+                      AND p.trang_thai NOT IN ('LUU_TAM', 'HUY')
                 ),
                 0
             )
@@ -2506,9 +2513,9 @@ if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingM
             return (tienNoiBo, tienMuaNoiBo, tienMuaTruTraNoiBo);
 
         return (
-            $"CASE WHEN ncc.co_du_lieu_kiotviet = 1 THEN (COALESCE(ncc.no_can_tra_hien_tai, 0) + {tienNoiBo}) ELSE {tienNoiBo} END",
-            $"CASE WHEN ncc.co_du_lieu_kiotviet = 1 THEN (COALESCE(ncc.tong_mua, 0) + {tienMuaNoiBo}) ELSE {tienMuaNoiBo} END",
-            $"CASE WHEN ncc.co_du_lieu_kiotviet = 1 THEN (COALESCE(ncc.tong_mua_tru_tra_hang, 0) + {tienMuaTruTraNoiBo}) ELSE {tienMuaTruTraNoiBo} END");
+            $"CASE WHEN ncc.co_du_lieu_kiotviet = 1 OR ncc.no_can_tra_hien_tai IS NOT NULL THEN (COALESCE(ncc.no_can_tra_hien_tai, 0) + {tienNoiBo}) ELSE {tienNoiBo} END",
+            $"CASE WHEN ncc.co_du_lieu_kiotviet = 1 OR ncc.tong_mua IS NOT NULL THEN (COALESCE(ncc.tong_mua, 0) + {tienMuaNoiBo}) ELSE {tienMuaNoiBo} END",
+            $"CASE WHEN ncc.co_du_lieu_kiotviet = 1 OR ncc.tong_mua_tru_tra_hang IS NOT NULL THEN (COALESCE(ncc.tong_mua_tru_tra_hang, 0) + {tienMuaTruTraNoiBo}) ELSE {tienMuaTruTraNoiBo} END");
     }
 
     /// <summary>Lấy danh sách khách hàng theo trang cho màn hình "Danh sách khách hàng".
@@ -5933,7 +5940,8 @@ LIMIT 500;
             COALESCE(SUM(p.da_thanh_toan), 0) AS TongDaThanhToan,
             COALESCE(SUM(p.con_no), 0) AS TongConNoPhieuNhap
         FROM phieu_nhap_hang p
-        WHERE p.nha_cung_cap_id = @Id;
+        WHERE p.nha_cung_cap_id = @Id
+          AND p.trang_thai NOT IN ('LUU_TAM', 'HUY');
         """;
 
         const string congNoSql = """
@@ -6645,36 +6653,12 @@ LIMIT 500;
     // QUẢN LÝ NHÓM SẢN PHẨM & ĐƠN VỊ TÍNH
     // ==========================================
 
-    public async Task<uint> ThemNhomSanPhamAsync(string tenNhom)
-    {
-        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền thêm nhóm hàng hóa.");
-        await using var connection = await OpenAsync();
-        const string sql = """
-            INSERT INTO nhom_san_pham (ten_nhom, trang_thai)
-            VALUES (@TenNhom, 1);
-            SELECT LAST_INSERT_ID();
-            """;
-        return await connection.ExecuteScalarAsync<uint>(sql, new { TenNhom = tenNhom });
-    }
-
     public async Task XoaNhomSanPhamAsync(uint id)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền xóa nhóm hàng hóa.");
         await using var connection = await OpenAsync();
         const string sql = "UPDATE nhom_san_pham SET trang_thai = 0 WHERE id = @Id;";
         await connection.ExecuteAsync(sql, new { Id = id });
-    }
-
-    public async Task<uint> ThemDonViTinhAsync(string tenDonVi)
-    {
-        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền thêm đơn vị tính.");
-        await using var connection = await OpenAsync();
-        const string sql = """
-            INSERT INTO don_vi_tinh (ten_don_vi, trang_thai)
-            VALUES (@TenDonVi, 1);
-            SELECT LAST_INSERT_ID();
-            """;
-        return await connection.ExecuteScalarAsync<uint>(sql, new { TenDonVi = tenDonVi });
     }
 
     public async Task XoaDonViTinhAsync(uint id)
@@ -7277,6 +7261,15 @@ LIMIT 500;
         uint? nguoiThucHienId,
         string ghiChu)
     {
+        var baselineDebt = await connection.ExecuteScalarAsync<decimal>(
+            """
+            SELECT COALESCE(no_can_tra_hien_tai, 0)
+            FROM nha_cung_cap
+            WHERE id = @NhaCungCapId;
+            """,
+            new { NhaCungCapId = nccId },
+            transaction);
+
         var soDuHienTai = await connection.ExecuteScalarAsync<decimal>(
             """
             SELECT COALESCE(SUM(ghi_no - ghi_co), 0)
@@ -7310,7 +7303,7 @@ LIMIT 500;
                 MaChungTu = maChungTu,
                 GhiNo = ghiNo,
                 GhiCo = ghiCo,
-                SoDu = soDuHienTai + ghiNo - ghiCo,
+                SoDu = baselineDebt + soDuHienTai + ghiNo - ghiCo,
                 ThoiGian = thoiGian,
                 NguoiThucHienId = nguoiThucHienId,
                 GhiChu = ghiChu

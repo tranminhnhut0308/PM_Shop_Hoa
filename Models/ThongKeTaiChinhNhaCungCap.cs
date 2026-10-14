@@ -49,24 +49,38 @@ public sealed class ThongKeTaiChinhNhaCungCap
         || TongCongNoHienTai > 0;
 
     /// <summary>
-    /// Công nợ hiện tại: khi có dữ liệu từ file danh sách thì lấy đúng số trong
-    /// file (giống cột "Còn nợ" của bảng), chưa có thì ưu tiên sổ cái công nợ,
-    /// cuối cùng mới lấy tổng nợ còn lại trên các phiếu nhập hàng.
+    /// Công nợ hiện tại: bao gồm số nợ ban đầu từ file danh sách (nếu có)
+    /// cộng dồn với công nợ phát sinh từ các giao dịch trong phần mềm
+    /// (ưu tiên sổ cái công nợ, không có thì lấy tổng nợ còn lại trên phiếu nhập).
     /// </summary>
     public decimal TongCongNoHienTai =>
-        CoDuLieuKiotViet && NoCanTraHienTaiExcel.HasValue
-            ? NoCanTraHienTaiExcel.Value
-            : SoLanGhiCongNo > 0 ? TongCongNoLichSu : TongConNoPhieuNhap;
+        (CoDuLieuKiotViet && NoCanTraHienTaiExcel.HasValue ? NoCanTraHienTaiExcel.Value : 0m)
+        + (SoLanGhiCongNo > 0 ? TongCongNoLichSu : TongConNoPhieuNhap);
 
-    /// <summary>Tổng tiền đã mua: ưu tiên số trong file danh sách.</summary>
+    /// <summary>
+    /// Tổng tiền đã mua: bao gồm tổng mua từ file danh sách (nếu có)
+    /// cộng dồn với tổng tiền các phiếu nhập trong phần mềm.
+    /// </summary>
     public decimal TongMua =>
-        CoDuLieuKiotViet && TongMuaExcel.HasValue
-            ? TongMuaExcel.Value
-            : TongTienNhap;
+        (CoDuLieuKiotViet && TongMuaExcel.HasValue ? TongMuaExcel.Value : 0m)
+        + TongTienNhap;
 
-    /// <summary>Tổng tiền đã mua trừ trả hàng: ưu tiên số trong file danh sách.</summary>
+    /// <summary>
+    /// Tổng tiền đã mua trừ trả hàng: bao gồm tổng mua trừ trả hàng từ file (nếu có)
+    /// cộng dồn với tổng tiền các phiếu nhập trong phần mềm.
+    /// </summary>
     public decimal TongMuaTruTraHang =>
-        CoDuLieuKiotViet && TongMuaTruTraHangExcel.HasValue
+        (CoDuLieuKiotViet && TongMuaTruTraHangExcel.HasValue
             ? TongMuaTruTraHangExcel.Value
-            : TongMua;
+            : (CoDuLieuKiotViet && TongMuaExcel.HasValue ? TongMuaExcel.Value : 0m))
+        + TongTienNhap;
+
+    /// <summary>
+    /// Tổng tiền đã thanh toán: bao gồm phần đã thanh toán trước khi import (nếu có)
+    /// cộng với số tiền đã thanh toán trên các phiếu nhập trong phần mềm.
+    /// </summary>
+    public decimal TongDaThanhToanHienThi =>
+        (CoDuLieuKiotViet && TongMuaExcel.HasValue && NoCanTraHienTaiExcel.HasValue
+            ? Math.Max(0m, TongMuaExcel.Value - NoCanTraHienTaiExcel.Value)
+            : 0m) + TongDaThanhToan;
 }

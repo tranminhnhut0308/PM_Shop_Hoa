@@ -186,7 +186,7 @@ public sealed partial class NhaCungCapDetailViewModel : ObservableObject
         ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongMua);
 
     public string TongDaThanhToanText =>
-        ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongDaThanhToan);
+        ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongDaThanhToanHienThi);
 
     public string TongCongNoText =>
         ThongKe is null ? ChuaCo : FormatTien(ThongKe.TongCongNoHienTai);
@@ -204,6 +204,9 @@ public sealed partial class NhaCungCapDetailViewModel : ObservableObject
         {
             if (ThongKe is null)
                 return ChuaCoDuLieuCongNo;
+
+            if (ThongKe.CoDuLieuKiotViet && (ThongKe.SoPhieuNhap > 0 || ThongKe.SoLanGhiCongNo > 0))
+                return "Kết hợp nợ ban đầu và phát sinh nhập hàng";
 
             if (ThongKe.CoDuLieuKiotViet)
                 return "Theo file danh sách nhà cung cấp";

@@ -47,8 +47,8 @@ public partial class CategorySettingsWindow : Window
         var name = NewGroupNameTextBox.Text?.Trim();
         if (string.IsNullOrEmpty(name)) return;
 
-        var newId = await _dbService.ThemNhomSanPhamAsync(name);
-        Groups.Add(new ProductOption { Id = newId, Name = name });
+        var option = await _dbService.ThemNhomSanPhamAsync(name);
+        Groups.Add(option);
         NewGroupNameTextBox.Text = string.Empty;
     }
 
@@ -66,8 +66,8 @@ public partial class CategorySettingsWindow : Window
         var name = NewUnitNameTextBox.Text?.Trim();
         if (string.IsNullOrEmpty(name)) return;
 
-        var newId = await _dbService.ThemDonViTinhAsync(name);
-        Units.Add(new ProductOption { Id = newId, Name = name });
+        var option = await _dbService.ThemDonViTinhAsync(name);
+        Units.Add(option);
         NewUnitNameTextBox.Text = string.Empty;
     }
 

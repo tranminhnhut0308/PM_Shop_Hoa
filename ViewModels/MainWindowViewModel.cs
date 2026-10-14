@@ -4473,8 +4473,9 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         // ---- Đã lưu thành công ----
 
         // Phiếu vừa lưu phải xuất hiện trong "Báo cáo → Báo cáo phiếu nhập hàng"
-        // nên đánh dấu cần tải lại thay vì giữ cache cũ.
+        // và "Báo cáo → Báo cáo nhà cung cấp" nên đánh dấu cần tải lại thay vì giữ cache cũ.
         _baoCaoPhieuNhapLoaded = false;
+        _baoCaoNhaCungCapLoaded = false;
 
         // Dashboard thống kê phiếu nhập trong hoạt động gần đây và thống kê kho.
         _ = LamMoiTongQuanNeuDangMoAsync();
@@ -4489,6 +4490,16 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         catch (Exception ex)
         {
             SafeLog.WriteError("Loi tai lai danh sach san pham sau khi nhap hang", ex);
+        }
+
+        // Tải lại dữ liệu nhà cung cấp (công nợ, tổng mua, thanh toán)
+        try
+        {
+            await LoadSupplierPageAsync();
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi tai lai danh sach nha cung cap sau khi nhap hang", ex);
         }
 
         // Báo thành công và CHỜ người dùng đóng hộp thoại.

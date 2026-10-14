@@ -199,7 +199,7 @@ public sealed class BaoCaoNhaCungCapService
         {
             return @"CASE
                 WHEN ncc.co_du_lieu_kiotviet = 1 AND ncc.no_can_tra_hien_tai IS NOT NULL
-                THEN COALESCE(ncc.no_can_tra_hien_tai, 0)
+                THEN (COALESCE(ncc.no_can_tra_hien_tai, 0) + " + congNoNoiBo + @")
                 ELSE " + congNoNoiBo + @"
             END";
         }
