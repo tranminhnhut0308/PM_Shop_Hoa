@@ -15,25 +15,32 @@ public partial class InvoiceWindow : Window
     /// thu để cửa sổ cập nhật số nợ và trạng thái nút. Null khi không thu (hủy
     /// hoặc lỗi). Không truyền gì thì cửa sổ không hiện nút thu công nợ.
     /// </summary>
-    private readonly Func<HoaDonBanHangReceipt, Task<HoaDonBanHangReceipt?>>? _thuCongNo;
+    private readonly Func<HoaDonBanHangReceipt, Window, Task<HoaDonBanHangReceipt?>>? _thuCongNo;
 
     public InvoiceWindow() : this(new HoaDonBanHangReceipt())
     {
     }
 
     public InvoiceWindow(HoaDonBanHangReceipt receipt)
-        : this(receipt, null)
+        : this(receipt, (Func<HoaDonBanHangReceipt, Window, Task<HoaDonBanHangReceipt?>>?)null)
     {
     }
 
     public InvoiceWindow(
         HoaDonBanHangReceipt receipt,
-        Func<HoaDonBanHangReceipt, Task<HoaDonBanHangReceipt?>>? thuCongNo)
+        Func<HoaDonBanHangReceipt, Window, Task<HoaDonBanHangReceipt?>>? thuCongNo)
     {
         InitializeComponent();
         _thuCongNo = thuCongNo;
         DataContext = receipt;
         CapNhatNutThanhToan(receipt);
+    }
+
+    public InvoiceWindow(
+        HoaDonBanHangReceipt receipt,
+        Func<HoaDonBanHangReceipt, Task<HoaDonBanHangReceipt?>>? thuCongNo)
+        : this(receipt, thuCongNo == null ? null : (r, _) => thuCongNo(r))
+    {
     }
 
     private void CapNhatNutThanhToan(HoaDonBanHangReceipt receipt)
@@ -50,10 +57,11 @@ public partial class InvoiceWindow : Window
 
         try
         {
-            var capNhat = await _thuCongNo(receipt);
+            var capNhat = await _thuCongNo(receipt, this);
 
             if (capNhat is not null)
             {
+                DataContext = null;
                 DataContext = capNhat;
                 CapNhatNutThanhToan(capNhat);
             }

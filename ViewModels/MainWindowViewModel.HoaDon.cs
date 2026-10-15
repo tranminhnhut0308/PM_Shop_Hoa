@@ -49,67 +49,6 @@ public sealed partial class MainWindowViewModel
     }
 
     /// <summary>
-    /// Thu công nợ cho một hóa đơn còn nợ: hỏi số tiền + phương thức rồi ghi
-    /// nhận vào database (cập nhật hóa đơn, lưu thanh toán, phiếu thu sổ quỹ).
-    /// </summary>
-    [RelayCommand]
-    private async Task ThuNoHoaDonAsync(HoaDon? hoaDon)
-    {
-        if (hoaDon is null || OwnerWindow is null)
-            return;
-
-        if (hoaDon.ConNo <= 0)
-        {
-            await ShowMessageAsync(
-                "Thông báo",
-                $"Hóa đơn {hoaDon.MaHoaDon} đã thanh toán đủ, không còn công nợ.");
-            return;
-        }
-
-        if (!await KiemTraQuyenAsync(
-                PermissionKeys.CustomersDebtPay,
-                "Bạn không có quyền thu công nợ khách hàng."))
-        {
-            return;
-        }
-
-        var dialog = new ThuNoHoaDonWindow(hoaDon);
-        var ketQua = await dialog.ShowDialog<ThuNoHoaDonKetQua?>(OwnerWindow);
-
-        if (ketQua is null)
-        {
-            StatusMessage = "Đã hủy thu công nợ.";
-            return;
-        }
-
-        try
-        {
-            var receipt = await _db.ThuNoHoaDonAsync(
-                hoaDon.MaHoaDon,
-                ketQua.SoTien,
-                ketQua.PhuongThuc,
-                ketQua.GhiChu);
-
-            _invoicesLoaded = false;
-            await LoadInvoicesAsync();
-            _ = LamMoiTongQuanNeuDangMoAsync();
-
-            var thongBaoPhieu = string.IsNullOrWhiteSpace(receipt.MaPhieuThu)
-                ? ""
-                : $" Đã ghi phiếu thu {receipt.MaPhieuThu} vào sổ quỹ.";
-
-            StatusMessage =
-                $"Đã thu {ketQua.SoTien:N0} đ cho hóa đơn {hoaDon.MaHoaDon}. "
-                + $"Còn nợ {receipt.ConNo:N0} đ.{thongBaoPhieu}";
-        }
-        catch (Exception ex)
-        {
-            await ShowMessageAsync("Không thu được công nợ", ex.Message);
-            SafeLog.WriteError("Loi thu no hoa don", ex);
-        }
-    }
-
-    /// <summary>
     /// Thu công nợ theo khách hàng (nút "Thanh toán công nợ" ở tab Công nợ):
     /// hỏi số tiền + phương thức rồi tự động trừ dần vào các hóa đơn còn nợ (cũ
     /// nhất trước). Mỗi hóa đơn được cập nhật và mỗi lần thu đều tạo phiếu thu
