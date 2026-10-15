@@ -5880,7 +5880,7 @@
         RowSpacing="14">
 
         <!-- 1. TIÊU ĐỀ + NÚT + NHẬP HÀNG -->
-        <Grid ColumnDefinitions="*,Auto,Auto,Auto"
+        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto"
           ColumnSpacing="10">
 
           <StackPanel>
@@ -5906,12 +5906,19 @@
 
           <Button Grid.Column="2"
             Classes="toolbar-action"
+            Content="📤  Xuất Excel"
+            Command="{Binding XuatExcelBaoCaoPhieuNhapCommand}"
+            VerticalAlignment="Center"
+            Margin="0" />
+
+          <Button Grid.Column="3"
+            Classes="toolbar-action"
             Content="⚙  Tuỳ chọn"
             Command="{Binding TimKiemBaoCaoPhieuNhapCommand}"
             VerticalAlignment="Center"
             Margin="0" />
 
-          <Button Grid.Column="3"
+          <Button Grid.Column="4"
             Classes="toolbar-action"
             Content="↻  Làm mới"
             Command="{Binding LoadBaoCaoPhieuNhapCommand}"

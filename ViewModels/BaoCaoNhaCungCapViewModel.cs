@@ -89,6 +89,59 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
     [RelayCommand]
     private void ChonBaoCao() => KieuHienThi = BaoCaoNhaCungCapKieuHienThi.BaoCao;
 
+    /// <summary>
+    /// Xuất Excel toàn bộ nhà cung cấp khớp bộ lọc hiện tại (không phụ thuộc trang
+    /// đang xem): truy vấn lại với cỡ trang bằng tổng số bản ghi.
+    /// </summary>
+    [RelayCommand]
+    private async Task XuatExcelAsync()
+    {
+        try
+        {
+            var cuaSo = Avalonia.Application.Current?.ApplicationLifetime
+                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt
+                ? lt.MainWindow
+                : null;
+
+            if (cuaSo is null)
+                return;
+
+            var soDong = Math.Max(1, TongSoBanGhi);
+
+            var duLieu = await _service.TaiDuLieuAsync(
+                TuNgay,
+                DenNgay,
+                TimKiem,
+                SapXepKho,
+                SapXepTang,
+                1,
+                soDong,
+                default);
+
+            using var wb = BaoCaoNhaCungCapExcel.TaoWorkbook(duLieu);
+
+            var file = await cuaSo.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+            {
+                Title = "Xuất Excel báo cáo nhà cung cấp",
+                FileTypeChoices = new[]
+                {
+                    new Avalonia.Platform.Storage.FilePickerFileType("Excel") { Patterns = new[] { "*.xlsx" } }
+                },
+                SuggestedFileName = duLieu.TongHop.TenFileXuat()
+            });
+
+            if (file is not null)
+            {
+                await using var stream = await file.OpenWriteAsync();
+                wb.SaveAs(stream);
+            }
+        }
+        catch (Exception ex)
+        {
+            ThongBaoLoi = "Không xuất được file Excel: " + ex.Message;
+        }
+    }
+
     // ============================================================
     // MỐI QUAN TÂM
     // ============================================================

@@ -624,6 +624,60 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
     [RelayCommand]
     private void ChonBaoCao() => KieuHienThi = BaoCaoKhachHangKieuHienThi.BaoCao;
 
+    /// <summary>
+    /// Xuất Excel toàn bộ khách hàng khớp bộ lọc hiện tại (không phụ thuộc trang
+    /// đang xem): truy vấn lại với cỡ trang bằng tổng số khách hàng.
+    /// </summary>
+    [RelayCommand]
+    private async Task XuatExcelAsync()
+    {
+        try
+        {
+            var cuaSo = Avalonia.Application.Current?.ApplicationLifetime
+                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt
+                ? lt.MainWindow
+                : null;
+
+            if (cuaSo is null)
+                return;
+
+            var soDong = Math.Max(1, TongHop.TongKhachHang);
+
+            var duLieu = await _service.TaiDuLieuAsync(
+                TuNgay,
+                DenNgay,
+                LocTimKiem(),
+                SapXepKho,
+                SapXepTang,
+                KhoaCuaMocQuanTam(MocQuanTam),
+                1,
+                soDong,
+                default);
+
+            using var wb = BaoCaoKhachHangExcel.TaoWorkbook(duLieu);
+
+            var file = await cuaSo.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+            {
+                Title = "Xuất Excel báo cáo khách hàng",
+                FileTypeChoices = new[]
+                {
+                    new Avalonia.Platform.Storage.FilePickerFileType("Excel") { Patterns = new[] { "*.xlsx" } }
+                },
+                SuggestedFileName = duLieu.TongHop.TenFileXuat()
+            });
+
+            if (file is not null)
+            {
+                await using var stream = await file.OpenWriteAsync();
+                wb.SaveAs(stream);
+            }
+        }
+        catch (Exception ex)
+        {
+            ThongBaoLoi = "Không xuất được file Excel: " + ex.Message;
+        }
+    }
+
     [RelayCommand]
     private async Task SapXepAsync(string? cot)
     {

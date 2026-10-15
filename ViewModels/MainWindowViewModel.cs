@@ -3825,6 +3825,54 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
     }
 
     /// <summary>
+    /// Xuất Excel toàn bộ phiếu nhập khớp từ khóa tìm kiếm hiện tại (không phụ
+    /// thuộc trang đang xem): truy vấn lại với cỡ trang bằng tổng số bản ghi.
+    /// </summary>
+    [RelayCommand]
+    private async Task XuatExcelBaoCaoPhieuNhapAsync()
+    {
+        try
+        {
+            var cuaSo = Avalonia.Application.Current?.ApplicationLifetime
+                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt
+                ? lt.MainWindow
+                : null;
+
+            if (cuaSo is null)
+                return;
+
+            var soDong = BaoCaoPhieuNhapTotalCount < 1 ? 1 : BaoCaoPhieuNhapTotalCount;
+
+            var (items, _) = await _db.GetPhieuNhapHangPagedAsync(
+                BaoCaoPhieuNhapSearch,
+                1,
+                soDong);
+
+            using var wb = BaoCaoPhieuNhapExcel.TaoWorkbook(items, DateTime.Now);
+
+            var file = await cuaSo.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+            {
+                Title = "Xuất Excel báo cáo phiếu nhập hàng",
+                FileTypeChoices = new[]
+                {
+                    new Avalonia.Platform.Storage.FilePickerFileType("Excel") { Patterns = new[] { "*.xlsx" } }
+                },
+                SuggestedFileName = $"BaoCaoPhieuNhap_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
+            });
+
+            if (file is not null)
+            {
+                await using var stream = await file.OpenWriteAsync();
+                wb.SaveAs(stream);
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không xuất được file Excel: " + ex.Message;
+        }
+    }
+
+    /// <summary>
     /// Tìm kiếm khi người dùng gõ: chống debounce để không gọi database liên tục.
     /// </summary>
     public void TimKiemBaoCaoPhieuNhapTuDong()
