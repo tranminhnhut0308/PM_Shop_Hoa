@@ -345,11 +345,18 @@
         <Border Height="1" Background="#E5E7EB" />
 
         <!-- NÚT LÀM MỚI BỘ LỌC -->
-        <Button Classes="nccBtn"
-          Content="↻  Làm mới dữ liệu"
-          HorizontalAlignment="Stretch"
-          HorizontalContentAlignment="Center"
-          Command="{Binding TaiLaiCommand}" />
+        <StackPanel Spacing="8">
+          <Button Classes="nccBtn"
+            Content="↻  Làm mới dữ liệu"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Center"
+            Command="{Binding TaiLaiCommand}" />
+          <Button Classes="nccPrimary"
+            Content="📤  Xuất Excel"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Center"
+            Command="{Binding XuatExcelCommand}" />
+        </StackPanel>
       </StackPanel>
     </Border>
 

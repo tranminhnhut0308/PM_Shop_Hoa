@@ -63,6 +63,10 @@ public partial class CategorySettingsWindow : Window
             "Ví dụ: Hoa tươi, Hoa sáp, Hoa lụa, Phụ kiện...",
             initialValue: string.IsNullOrWhiteSpace(currentText) ? null : currentText);
 
+<<<<<<< HEAD
+        // Nhận về ProductOption thay vì ép kiểu hay gán vào uint
+        ProductOption newGroup = await _dbService.ThemNhomSanPhamAsync(name);
+=======
         if (string.IsNullOrWhiteSpace(tenNhom))
             return;
 
@@ -81,6 +85,7 @@ public partial class CategorySettingsWindow : Window
             }
         }
     }
+>>>>>>> 0c04bc6c56fe4db491ab7e1d06b1ebef7c1a1088
 
     private async Task ThemNhomMoiAsync(string name)
     {
@@ -145,8 +150,13 @@ public partial class CategorySettingsWindow : Window
             "Ví dụ: Bó, Cành, Chậu, Giỏ, Lẵng, Bình...",
             initialValue: string.IsNullOrWhiteSpace(currentText) ? null : currentText);
 
+<<<<<<< HEAD
+        // Nhận trực tiếp đối tượng ProductOption trả về từ database service
+        var newOption = await _dbService.ThemDonViTinhAsync(name);
+=======
         if (string.IsNullOrWhiteSpace(tenDvt))
             return;
+>>>>>>> 0c04bc6c56fe4db491ab7e1d06b1ebef7c1a1088
 
         await ThemDonViTinhMoiAsync(tenDvt);
     }

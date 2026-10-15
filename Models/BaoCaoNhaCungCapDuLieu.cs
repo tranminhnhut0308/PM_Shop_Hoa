@@ -56,6 +56,9 @@ public sealed class BaoCaoNhaCungCapTongHop
 
     public string KhoangHienThi =>
         $"Khoảng thời gian: {TuNgay:dd/MM/yyyy} - {DenNgay:dd/MM/yyyy}";
+
+    /// <summary>Tên file gợi ý khi xuất Excel báo cáo nhà cung cấp.</summary>
+    public string TenFileXuat() => $"BaoCaoNhaCungCap_{TuNgay:yyyyMMdd}_{DenNgay:yyyyMMdd}.xlsx";
 }
 
 /// <summary>

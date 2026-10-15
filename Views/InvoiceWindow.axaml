@@ -23,6 +23,45 @@
       <Setter Property="Background" Value="#056B5D" />
       <Setter Property="Foreground" Value="#FFFFFF" />
     </Style>
+    <Style Selector="Button.btn-pay-debt">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="20,10" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.btn-pay-debt:pointerover">
+      <Setter Property="Background" Value="#056B5D" />
+    </Style>
+    <Style Selector="Button.btn-print">
+      <Setter Property="Background" Value="#E6F5F1" />
+      <Setter Property="Foreground" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="#B2DDD0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="20,10" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.btn-print:pointerover">
+      <Setter Property="Background" Value="#D4EDE6" />
+      <Setter Property="Foreground" Value="#056B5D" />
+    </Style>
+    <Style Selector="Button.btn-close">
+      <Setter Property="Background" Value="#F2F4F7" />
+      <Setter Property="Foreground" Value="#344054" />
+      <Setter Property="BorderBrush" Value="#D0D5DD" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="20,10" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.btn-close:pointerover">
+      <Setter Property="Background" Value="#E4E7EC" />
+    </Style>
   </Window.Styles>
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="28" Spacing="10">
@@ -237,13 +276,13 @@
 
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
         <Button x:Name="ThanhToanCongNoButton" Content="💵 Thanh toán công nợ"
-          Classes="toolbar-primary" IsVisible="False"
-          Click="ThanhToanCongNoButton_OnClick" Padding="24,10"
+          Classes="btn-pay-debt" IsVisible="False"
+          Click="ThanhToanCongNoButton_OnClick"
           ToolTip.Tip="Thu công nợ cho hóa đơn này" />
-        <Button Content="🖨 In hóa đơn" Classes="toolbar-primary"
-          Click="PrintButton_OnClick" Padding="24,10" />
-        <Button Content="Đóng" Classes="toolbar-primary"
-          Click="CloseButton_OnClick" Padding="24,10" />
+        <Button Content="🖨 In hóa đơn" Classes="btn-print"
+          Click="PrintButton_OnClick" />
+        <Button Content="Đóng" Classes="btn-close"
+          Click="CloseButton_OnClick" />
       </StackPanel>
     </StackPanel>
   </ScrollViewer>
