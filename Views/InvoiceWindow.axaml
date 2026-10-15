@@ -64,6 +64,9 @@
         HorizontalAlignment="Center" Foreground="#61736E" />
       <TextBlock Text="{Binding ThoiGianBan, StringFormat=Ngày bán: {0:dd/MM/yyyy HH:mm}}"
         HorizontalAlignment="Center" Foreground="#61736E" />
+      <TextBlock Text="{Binding MaPhieuThu, StringFormat=Phiếu thu: {0}}"
+        IsVisible="{Binding MaPhieuThu, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+        HorizontalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="#087F6E" Margin="0,2,0,0" />
 
       <Border BorderBrush="#D8E5E0" BorderThickness="0,0,0,1" Margin="0,8,0,4" />
       <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">

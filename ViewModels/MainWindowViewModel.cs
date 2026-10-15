@@ -2669,9 +2669,10 @@ public partial class MainWindowViewModel : ObservableObject
             .Replace("_", " ")
             .Replace("  ", " ");
     }
-    private async Task ShowMessageAsync(string title, string message)
+    private async Task ShowMessageAsync(string title, string message, Window? owner = null)
     {
-        if (OwnerWindow is null)
+        var targetOwner = owner ?? OwnerWindow;
+        if (targetOwner is null)
             return;
 
         var dialog = new Window
@@ -2746,7 +2747,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         okButton.Click += (_, _) => dialog.Close();
 
-        await dialog.ShowDialog(OwnerWindow);
+        await dialog.ShowDialog(targetOwner);
     }
     private async Task<bool> ShowConfirmationAsync(string title, string message)
             => await ShowConfirmationAsync(title, message, "Xóa", "Hủy");
@@ -4869,7 +4870,7 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             // dùng vừa sửa ở màn "Thông tin tiệm" cũng thấy ngay ở hóa đơn này.
             receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
 
-            var invoiceWindow = new InvoiceWindow(receipt);
+            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync);
             await invoiceWindow.ShowDialog(owner);
         }
         catch (Exception ex)
@@ -4922,9 +4923,11 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
     /// sổ chi tiết cập nhật số nợ, hoặc null khi người dùng hủy / gặp lỗi.
     /// </summary>
     private async Task<HoaDonBanHangReceipt?> ThuCongNoTuChiTietHoaDonAsync(
-        HoaDonBanHangReceipt hoaDonDangXem)
+        HoaDonBanHangReceipt hoaDonDangXem,
+        Window parentWindow)
     {
-        if (OwnerWindow is null || hoaDonDangXem.ConNo <= 0)
+        var owner = parentWindow ?? OwnerWindow;
+        if (owner is null || hoaDonDangXem.ConNo <= 0)
             return null;
 
         if (!await KiemTraQuyenAsync(
@@ -4944,7 +4947,7 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         };
 
         var dialog = new ThuNoHoaDonWindow(hoaDon);
-        var ketQua = await dialog.ShowDialog<ThuNoHoaDonKetQua?>(OwnerWindow);
+        var ketQua = await dialog.ShowDialog<ThuNoHoaDonKetQua?>(owner);
 
         if (ketQua is null)
         {
@@ -4960,8 +4963,27 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
                 ketQua.PhuongThuc,
                 ketQua.GhiChu);
 
+            // Cập nhật lại danh sách hóa đơn
             _invoicesLoaded = false;
             await LoadInvoicesAsync();
+
+            // Cập nhật lại công nợ và danh sách khách hàng
+            _customersLoaded = false;
+            await LoadCustomersAsync();
+
+            // Cập nhật lại sổ quỹ nếu đang mở tab Sổ quỹ
+            if (IsSoQuySelected)
+            {
+                try
+                {
+                    await TaiLaiSoQuyAsync();
+                }
+                catch (Exception sqEx)
+                {
+                    SafeLog.WriteError("Loi lam moi so quy sau khi thu no", sqEx);
+                }
+            }
+
             _ = LamMoiTongQuanNeuDangMoAsync();
 
             var thongBaoPhieu = string.IsNullOrWhiteSpace(receipt.MaPhieuThu)
@@ -4975,13 +4997,97 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             // Giữ nguyên thông tin tiệm đang hiển thị trên cửa sổ chi tiết.
             receipt.ThongTinTiem = hoaDonDangXem.ThongTinTiem;
 
+            await ShowMessageAsync(
+                "Thu nợ thành công",
+                $"Đã thu {ketQua.SoTien:N0} đ cho hóa đơn {hoaDon.MaHoaDon}.\n"
+                + $"Còn nợ: {receipt.ConNo:N0} đ.\n"
+                + (string.IsNullOrWhiteSpace(receipt.MaPhieuThu) ? "" : $"Mã phiếu thu: {receipt.MaPhieuThu} (đã ghi vào Sổ quỹ)."),
+                owner);
+
             return receipt;
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageAsync("Không thu được công nợ", ex.Message, owner);
+            SafeLog.WriteError("Loi thu no hoa don", ex);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Thu công nợ từ nút "Thu" trên từng dòng của bảng danh sách hóa đơn.
+    /// </summary>
+    [RelayCommand]
+    private async Task ThuNoHoaDonAsync(HoaDon? hoaDon)
+    {
+        if (hoaDon is null || OwnerWindow is null || hoaDon.ConNo <= 0)
+            return;
+
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.CustomersDebtPay,
+                "Bạn không có quyền thu công nợ khách hàng."))
+        {
+            return;
+        }
+
+        var dialog = new ThuNoHoaDonWindow(hoaDon);
+        var ketQua = await dialog.ShowDialog<ThuNoHoaDonKetQua?>(OwnerWindow);
+
+        if (ketQua is null)
+        {
+            StatusMessage = "Đã hủy thu công nợ.";
+            return;
+        }
+
+        try
+        {
+            var receipt = await _db.ThuNoHoaDonAsync(
+                hoaDon.MaHoaDon,
+                ketQua.SoTien,
+                ketQua.PhuongThuc,
+                ketQua.GhiChu);
+
+            // Cập nhật lại danh sách hóa đơn
+            _invoicesLoaded = false;
+            await LoadInvoicesAsync();
+
+            // Cập nhật lại công nợ và danh sách khách hàng
+            _customersLoaded = false;
+            await LoadCustomersAsync();
+
+            // Cập nhật lại sổ quỹ nếu đang mở tab Sổ quỹ
+            if (IsSoQuySelected)
+            {
+                try
+                {
+                    await TaiLaiSoQuyAsync();
+                }
+                catch (Exception sqEx)
+                {
+                    SafeLog.WriteError("Loi lam moi so quy sau khi thu no", sqEx);
+                }
+            }
+
+            _ = LamMoiTongQuanNeuDangMoAsync();
+
+            var thongBaoPhieu = string.IsNullOrWhiteSpace(receipt.MaPhieuThu)
+                ? ""
+                : $" Đã ghi phiếu thu {receipt.MaPhieuThu} vào sổ quỹ.";
+
+            StatusMessage =
+                $"Đã thu {ketQua.SoTien:N0} đ cho hóa đơn {hoaDon.MaHoaDon}. "
+                + $"Còn nợ {receipt.ConNo:N0} đ.{thongBaoPhieu}";
+
+            await ShowMessageAsync(
+                "Thu nợ thành công",
+                $"Đã thu {ketQua.SoTien:N0} đ cho hóa đơn {hoaDon.MaHoaDon}.\n"
+                + $"Còn nợ: {receipt.ConNo:N0} đ.\n"
+                + (string.IsNullOrWhiteSpace(receipt.MaPhieuThu) ? "" : $"Mã phiếu thu: {receipt.MaPhieuThu} (đã ghi vào Sổ quỹ)."));
         }
         catch (Exception ex)
         {
             await ShowMessageAsync("Không thu được công nợ", ex.Message);
             SafeLog.WriteError("Loi thu no hoa don", ex);
-            return null;
         }
     }
 
