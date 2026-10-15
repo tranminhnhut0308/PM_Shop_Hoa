@@ -3386,10 +3386,10 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         // Reset thông báo cũ để UI luôn nhận biết có sự thay đổi mới
         StatusMessage = string.Empty;
 
-        // 1. Kiểm tra sản phẩm đã hết hàng -> Cho phép mở popup chỉnh sửa nhanh để bán ngay
+        // 1. Sản phẩm đã hết hàng -> không thêm vào giỏ, không mở form chỉnh tồn kho
         if (product.HetHang)
         {
-            await ChinhSoLuongNhanhAsync(product);
+            StatusMessage = $"⚠️ Sản phẩm '{product.TenSanPham}' đã hết hàng, không thể thêm vào giỏ.";
             return;
         }
 
