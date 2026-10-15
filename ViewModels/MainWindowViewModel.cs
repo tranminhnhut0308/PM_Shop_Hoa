@@ -2187,9 +2187,16 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             editor.Product.Id = await _db.ThemSanPhamAsync(editor.Product);
-            SanPhams.Add(editor.Product);
+            var refreshed = await _db.GetSanPhamByIdAsync(editor.Product.Id);
+            SanPhams.Add(refreshed ?? editor.Product);
+            ProductTotalCount = SanPhams.Count;
+            OnPropertyChanged(nameof(IsSanPhamListEmpty));
             StatusMessage = $"Đã thêm sản phẩm {editor.Product.MaSanPham}";
             _ = LoadNhomSanPhamAsync();
+
+            await NotificationWindow.ShowSuccessAsync(
+                $"Đã thêm hàng hóa {editor.Product.MaSanPham}.",
+                owner: OwnerWindow);
         }
         catch (Exception ex)
         {

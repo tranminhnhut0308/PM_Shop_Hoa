@@ -9,6 +9,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using ShopHoa.Models;
 using ShopHoa.Services;
 using ShopHoa.ViewModels;
@@ -446,17 +447,28 @@ public partial class MainWindow : Window
     /// đã cập nhật, giữ menu mở chỉ che mất bảng dữ liệu.
     /// </summary>
     private void OnSupplierFilterApplyClicked(object? sender, RoutedEventArgs e)
-        => DongMenuBoLoc();
+        => DongMenuBoLocSauKhiThucThiCommand();
 
     /// <summary>Bấm "Xóa" thì đóng menu bộ lọc sau khi đã reset về "Tất cả".</summary>
     private void OnSupplierFilterClearClicked(object? sender, RoutedEventArgs e)
-        => DongMenuBoLoc();
+        => DongMenuBoLocSauKhiThucThiCommand();
 
     private void OnCustomerFilterApplyClicked(object? sender, RoutedEventArgs e)
-        => DongMenuBoLoc();
+        => DongMenuBoLocSauKhiThucThiCommand();
 
     private void OnCustomerFilterClearClicked(object? sender, RoutedEventArgs e)
-        => DongMenuBoLoc();
+        => DongMenuBoLocSauKhiThucThiCommand();
+
+    /// <summary>
+    /// Hoãn việc đóng menu bộ lọc sang sau khi nút xử lý xong.
+    ///
+    /// <see cref="Button"/> phát sự kiện <c>Click</c> TRƯỚC rồi mới chạy
+    /// <c>Command</c>. Nếu hàm Click đóng Flyout ngay, nút bị gỡ khỏi cây giao
+    /// diện, DataContext thành null nên Command (binding) bị mất và lệnh lọc
+    /// không bao giờ chạy. Đẩy việc đóng xuống dispatcher để Command chạy trước.
+    /// </summary>
+    private void DongMenuBoLocSauKhiThucThiCommand()
+        => Dispatcher.UIThread.Post(DongMenuBoLoc, DispatcherPriority.Background);
 
     /// <summary>
     /// Đóng menu bộ lọc (của khách hàng hoặc nhà cung cấp). Nội dung menu nằm
@@ -750,11 +762,17 @@ public partial class MainWindow : Window
                 var tenSanPham =
                     EscapeCsv(sanPham.TenSanPham);
 
-                var loaiHang =
-                    EscapeCsv(sanPham.LoaiHang);
+                var loaiHang = EscapeCsv(
+                    !string.IsNullOrWhiteSpace(sanPham.LoaiHang)
+                        ? sanPham.LoaiHang
+                        : "Hàng hóa");
 
-                var nhomHang =
-                    EscapeCsv(sanPham.NhomHangBaCap);
+                var nhomHang = EscapeCsv(
+                    !string.IsNullOrWhiteSpace(sanPham.NhomHangBaCap)
+                        ? sanPham.NhomHangBaCap
+                        : (!string.IsNullOrWhiteSpace(sanPham.NhomSanPham)
+                            ? sanPham.NhomSanPham
+                            : ""));
 
                 var giaBan =
                     sanPham.GiaBan.ToString(
@@ -778,8 +796,12 @@ public partial class MainWindow : Window
                         "N0",
                         CultureInfo.GetCultureInfo("vi-VN"));
 
-                var donViTinh =
-                    EscapeCsv(sanPham.DonViTinh);
+                var donViTinh = EscapeCsv(
+                    !string.IsNullOrWhiteSpace(sanPham.DonViTinh)
+                        ? sanPham.DonViTinh
+                        : (!string.IsNullOrWhiteSpace(sanPham.TenDonViTinh)
+                            ? sanPham.TenDonViTinh
+                            : ""));
 
                 var ngayTao =
     EscapeCsv(sanPham.NgayTao);

@@ -88,7 +88,7 @@ public partial class ProductEditorWindow : Window
         TonKhoTextBox.Text = SoLuongFormat.Raw(_product.TonKhoExcel);
         KhachDatTextBox.Text = SoLuongFormat.Raw(_product.KhachDat);
         ViTriKhoTextBox.Text = _product.ViTriKho ?? "";
-        LoaiHangTextBox.Text = _product.LoaiHang ?? "";
+        LoaiHangTextBox.Text = !string.IsNullOrWhiteSpace(_product.LoaiHang) ? _product.LoaiHang : (_isNew ? "Hàng hóa" : "");
         DuKienHetHangTextBox.Text = _product.DuKienHetHang ?? "";
     }
 
@@ -195,15 +195,46 @@ public partial class ProductEditorWindow : Window
         }
 
         // Mọi thông tin đã hợp lệ mới ghi vào đối tượng sản phẩm.
+        var selectedGroup = NhomSanPhamComboBox.SelectedItem as ProductOption;
+        var selectedUnit = DonViTinhComboBox.SelectedItem as ProductOption;
+
         _product.TenSanPham = TenSanPhamTextBox.Text.Trim();
-        _product.NhomSanPhamId = (NhomSanPhamComboBox.SelectedItem as ProductOption)?.Id;
-        _product.DonViTinhId = (DonViTinhComboBox.SelectedItem as ProductOption)?.Id;
+
+        if (selectedGroup != null)
+        {
+            if (_product.NhomSanPhamId != selectedGroup.Id || string.IsNullOrWhiteSpace(_product.NhomHangBaCap))
+            {
+                _product.NhomHangBaCap = selectedGroup.Name;
+            }
+            _product.NhomSanPhamId = selectedGroup.Id;
+            _product.NhomSanPham = selectedGroup.Name;
+        }
+        else
+        {
+            _product.NhomSanPhamId = null;
+            _product.NhomSanPham = null;
+            _product.NhomHangBaCap = null;
+        }
+
+        if (selectedUnit != null)
+        {
+            _product.DonViTinhId = selectedUnit.Id;
+            _product.DonViTinh = selectedUnit.Name;
+            _product.TenDonViTinh = selectedUnit.Name;
+        }
+        else
+        {
+            _product.DonViTinhId = null;
+            _product.DonViTinh = null;
+            _product.TenDonViTinh = null;
+        }
+
         _product.GiaBan = giaBan;
         _product.GiaVon = giaVon;
         _product.TonKhoExcel = tonKho;
         _product.KhachDat = khachDat;
         _product.ViTriKho = NullIfEmpty(ViTriKhoTextBox.Text);
-        _product.LoaiHang = NullIfEmpty(LoaiHangTextBox.Text);
+        _product.LoaiHang = NullIfEmpty(LoaiHangTextBox.Text) ?? "Hàng hóa";
         _product.DuKienHetHang = NullIfEmpty(DuKienHetHangTextBox.Text);
 
         Close(true);
