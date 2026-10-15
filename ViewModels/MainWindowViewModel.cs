@@ -3913,6 +3913,8 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
     [ObservableProperty] private decimal phieuNhapChiPhiKhac;
     [ObservableProperty] private decimal phieuNhapTongTienNhap;
     [ObservableProperty] private decimal phieuNhapDaThanhToan;
+    [ObservableProperty] private string phieuNhapPhuongThuc = "Tiền mặt";
+    public IReadOnlyList<string> PhieuNhapPhuongThucOptions { get; } = ["Tiền mặt", "Chuyển khoản"];
 
     [ObservableProperty] private bool isSavingPhieuNhap;
 
@@ -3933,6 +3935,20 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
     public decimal PhieuNhapConNo => Math.Max(0, PhieuNhapTongTienNhap - PhieuNhapDaThanhToan);
 
     public string PhieuNhapConNoText => PhieuNhapConNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+
+    /// <summary>Hiển thị giải thích nguồn quỹ chi trả tương ứng với số tiền và phương thức chọn.</summary>
+    public string PhieuNhapNguonQuyText
+    {
+        get
+        {
+            if (PhieuNhapDaThanhToan <= 0)
+                return "Chưa thanh toán (toàn bộ tính vào công nợ nhà cung cấp)";
+
+            return PhieuNhapPhuongThuc == "Chuyển khoản"
+                ? "💡 Chi từ Tài khoản ngân hàng (tự động ghi sổ quỹ)"
+                : "💡 Chi từ Quỹ tiền mặt (tự động ghi sổ quỹ)";
+        }
+    }
 
     public bool HasPhieuNhapItems => PhieuNhapItems.Count > 0;
 
@@ -3965,8 +3981,14 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
 
     partial void OnPhieuNhapChiPhiKhacChanged(decimal value) => RecalculatePhieuNhapTotal();
 
-    partial void OnPhieuNhapDaThanhToanChanged(decimal value) =>
+    partial void OnPhieuNhapDaThanhToanChanged(decimal value)
+    {
         OnPropertyChanged(nameof(PhieuNhapConNoText));
+        OnPropertyChanged(nameof(PhieuNhapNguonQuyText));
+    }
+
+    partial void OnPhieuNhapPhuongThucChanged(string value) =>
+        OnPropertyChanged(nameof(PhieuNhapNguonQuyText));
 
     partial void OnIsSavingPhieuNhapChanged(bool value) => OnPropertyChanged(nameof(CanSavePhieuNhap));
 
@@ -4007,6 +4029,7 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         PhieuNhapGhiChu = "";
         PhieuNhapChiPhiKhac = 0;
         PhieuNhapDaThanhToan = 0;
+        PhieuNhapPhuongThuc = "Tiền mặt";
         ImportProductSearch = "";
         ImportSupplierSearch = "";
         SelectedPhieuNhapNcc = null;
@@ -4448,6 +4471,7 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
                 ThoiGianNhap = PhieuNhapNgayNhap.Value,
                 ChiPhiKhac = PhieuNhapChiPhiKhac,
                 DaThanhToan = PhieuNhapDaThanhToan,
+                PhuongThucThanhToan = PhieuNhapPhuongThuc == "Chuyển khoản" ? "CHUYEN_KHOAN" : "TIEN_MAT",
                 GhiChu = PhieuNhapGhiChu,
                 SoHoaDonDauVao = PhieuNhapSoHoaDonDauVao
             };
@@ -4500,6 +4524,19 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         catch (Exception ex)
         {
             SafeLog.WriteError("Loi tai lai danh sach nha cung cap sau khi nhap hang", ex);
+        }
+
+        // Tải lại sổ quỹ nếu màn sổ quỹ đang mở
+        try
+        {
+            if (IsSoQuySelected)
+            {
+                await TaiLaiSoQuyAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi lam moi so quy sau khi nhap hang", ex);
         }
 
         // Báo thành công và CHỜ người dùng đóng hộp thoại.

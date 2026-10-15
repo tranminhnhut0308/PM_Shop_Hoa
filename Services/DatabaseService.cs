@@ -13,8 +13,10 @@ public sealed class DatabaseService
 {
     private readonly DatabaseConfigService _configService;
     private bool? _hasPhieuNhapExtraColumns;
+    private bool? _hasPhieuNhapPhuongThucColumn;
     private bool? _hasPhieuQuyExtraColumns;
     private bool? _hasPhieuQuyHoaDonColumns;
+    private bool? _hasPhieuQuyPhieuNhapColumns;
     private bool? _hasBangTraHang;
     private bool? _coCotDuLieuKiotViet;
     private bool? _cotNgayTaoSanPhamChoPhepNull;
@@ -5514,6 +5516,34 @@ LIMIT 500;
         return "PT" + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// Cấp mã phiếu Chi kế tiếp (PC0001, PC0002...) bằng chính connection và
+    /// transaction của giao dịch đang chạy, tránh mở thêm kết nối và tránh trùng mã.
+    /// </summary>
+    private static async Task<string> SinhMaPhieuChiTrongGiaoDichAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction)
+    {
+        var nextNumber = await DocSoThuTuMaPhieuQuyAsync(connection, transaction, "PC");
+
+        for (var i = 0; i < 100; i++)
+        {
+            var candidate = "PC" + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
+
+            var daTonTai = await connection.ExecuteScalarAsync<int?>(
+                "SELECT 1 FROM phieu_chi WHERE ma_phieu_chi = @Ma LIMIT 1;",
+                new { Ma = candidate },
+                transaction);
+
+            if (daTonTai is null)
+                return candidate;
+
+            nextNumber++;
+        }
+
+        return "PC" + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
+    }
+
     public async Task<IReadOnlyList<NhaCungCap>> GetNhaCungCapAsync(
         string? search = null)
     {
@@ -5855,8 +5885,12 @@ LIMIT 500;
         int limit = 200)
     {
         var safeLimit = limit < 1 ? 200 : limit;
+        var hasPhuongThuc = await EnsurePhieuNhapPhuongThucColumnAsync();
+        var extraSelect = hasPhuongThuc
+            ? ",\n            COALESCE(p.phuong_thuc_thanh_toan, 'TIEN_MAT') AS PhuongThucThanhToan"
+            : string.Empty;
 
-        const string sql = """
+        var sql = $"""
         SELECT
             p.id AS Id,
             p.ma_phieu_nhap AS MaPhieuNhap,
@@ -5872,7 +5906,7 @@ LIMIT 500;
             p.da_thanh_toan AS DaThanhToan,
             p.con_no AS ConNo,
             p.trang_thai AS TrangThai,
-            p.ghi_chu AS GhiChu
+            p.ghi_chu AS GhiChu{extraSelect}
         FROM phieu_nhap_hang p
         LEFT JOIN nha_cung_cap ncc
             ON ncc.id = p.nha_cung_cap_id
@@ -6742,9 +6776,14 @@ LIMIT 500;
     public async Task<IReadOnlyList<PhieuNhapHang>> GetPhieuNhapHangAsync(
         string? search = null)
     {
+        var hasPhuongThuc = await EnsurePhieuNhapPhuongThucColumnAsync();
+        var extraSelect = hasPhuongThuc
+            ? ",\n            COALESCE(p.phuong_thuc_thanh_toan, 'TIEN_MAT') AS PhuongThucThanhToan"
+            : string.Empty;
+
         await using var connection = await OpenAsync();
 
-        const string sql = """
+        var sql = $"""
         SELECT
             p.id AS Id,
             p.ma_phieu_nhap AS MaPhieuNhap,
@@ -6760,7 +6799,7 @@ LIMIT 500;
             p.da_thanh_toan AS DaThanhToan,
             p.con_no AS ConNo,
             p.trang_thai AS TrangThai,
-            p.ghi_chu AS GhiChu
+            p.ghi_chu AS GhiChu{extraSelect}
         FROM phieu_nhap_hang p
         LEFT JOIN nha_cung_cap ncc
             ON ncc.id = p.nha_cung_cap_id
@@ -6802,6 +6841,10 @@ LIMIT 500;
 
         var offset = (page - 1) * pageSize;
         var keyword = (search ?? "").Trim();
+        var hasPhuongThuc = await EnsurePhieuNhapPhuongThucColumnAsync();
+        var extraSelect = hasPhuongThuc
+            ? ",\n            COALESCE(p.phuong_thuc_thanh_toan, 'TIEN_MAT') AS PhuongThucThanhToan"
+            : string.Empty;
 
         const string countSql = """
         SELECT COUNT(*)
@@ -6812,7 +6855,7 @@ LIMIT 500;
            OR p.ma_phieu_nhap LIKE CONCAT('%', @Search, '%');
         """;
 
-        const string pageSql = """
+        var pageSql = $"""
         SELECT
             p.id AS Id,
             p.ma_phieu_nhap AS MaPhieuNhap,
@@ -6828,7 +6871,7 @@ LIMIT 500;
             p.da_thanh_toan AS DaThanhToan,
             p.con_no AS ConNo,
             p.trang_thai AS TrangThai,
-            p.ghi_chu AS GhiChu
+            p.ghi_chu AS GhiChu{extraSelect}
         FROM phieu_nhap_hang p
         LEFT JOIN nha_cung_cap ncc
             ON ncc.id = p.nha_cung_cap_id
@@ -6875,10 +6918,14 @@ LIMIT 500;
         // Hai cột so_hoa_don_dau_vao / ma_dat_hang_nhap là tuỳ chọn (database cũ
         // chưa có); chỉ thêm vào câu SQL khi thực sự tồn tại.
         var hasExtraColumns = await HasPhieuNhapExtraColumnsAsync();
+        var hasPhuongThuc = await EnsurePhieuNhapPhuongThucColumnAsync();
 
-        var extraSelect = hasExtraColumns
+        var extraSelect = (hasExtraColumns
             ? ",\n            p.so_hoa_don_dau_vao AS SoHoaDonDauVao,\n            p.ma_dat_hang_nhap   AS MaDatHangNhap"
-            : string.Empty;
+            : string.Empty)
+            + (hasPhuongThuc
+            ? ",\n            COALESCE(p.phuong_thuc_thanh_toan, 'TIEN_MAT') AS PhuongThucThanhToan"
+            : string.Empty);
 
         var headerSql = $"""
         SELECT
@@ -6984,18 +7031,18 @@ LIMIT 500;
         phieu.TrangThai = "DA_NHAP_HANG";
 
         var hasExtraColumns = await HasPhieuNhapExtraColumnsAsync();
+        var hasPhuongThucColumn = await EnsurePhieuNhapPhuongThucColumnAsync();
+        var hasPhieuQuyExtraColumns = await EnsurePhieuQuyExtraColumnsAsync();
+        var hasPhieuQuyPhieuNhapColumns = await EnsurePhieuQuyPhieuNhapColumnsAsync();
 
-        var extraColumns = hasExtraColumns
-            ? ",\n                    so_hoa_don_dau_vao,\n                    ma_dat_hang_nhap"
-            : string.Empty;
+        var extraColumns = (hasPhuongThucColumn ? ",\n                    phuong_thuc_thanh_toan" : string.Empty)
+            + (hasExtraColumns ? ",\n                    so_hoa_don_dau_vao,\n                    ma_dat_hang_nhap" : string.Empty);
 
-        var extraValues = hasExtraColumns
-            ? ",\n                    @SoHoaDonDauVao,\n                    @MaDatHangNhap"
-            : string.Empty;
+        var extraValues = (hasPhuongThucColumn ? ",\n                    @PhuongThucThanhToan" : string.Empty)
+            + (hasExtraColumns ? ",\n                    @SoHoaDonDauVao,\n                    @MaDatHangNhap" : string.Empty);
 
-        var extraAssignments = hasExtraColumns
-            ? ",\n                    so_hoa_don_dau_vao = @SoHoaDonDauVao,\n                    ma_dat_hang_nhap   = @MaDatHangNhap"
-            : string.Empty;
+        var extraAssignments = (hasPhuongThucColumn ? ",\n                    phuong_thuc_thanh_toan = @PhuongThucThanhToan" : string.Empty)
+            + (hasExtraColumns ? ",\n                    so_hoa_don_dau_vao = @SoHoaDonDauVao,\n                    ma_dat_hang_nhap   = @MaDatHangNhap" : string.Empty);
 
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -7179,6 +7226,21 @@ LIMIT 500;
                 phieu,
                 branchId);
 
+            // ============================================================
+            // 5. SỔ QUỸ (PHIẾU CHI)
+            //    Nếu phiếu nhập có thanh toán tiền (DaThanhToan > 0), ghi
+            //    phiếu chi tương ứng vào sổ quỹ để số dư quỹ tự động giảm đúng nguồn tiền.
+            // ============================================================
+
+            await GhiPhieuChiNhapHangAsync(
+                connection,
+                transaction,
+                branchId,
+                phieu.NguoiNhapId,
+                phieu,
+                hasPhieuQuyExtraColumns,
+                hasPhieuQuyPhieuNhapColumns);
+
             await transaction.CommitAsync();
 
             _ = LogSubAccountActivityAsync(
@@ -7253,6 +7315,125 @@ LIMIT 500;
                 phieu.ThoiGianNhap,
                 phieu.NguoiNhapId,
                 $"Đã thanh toán {phieu.DaThanhToan:N0} cho phiếu {phieu.MaPhieuNhap}");
+        }
+    }
+
+    /// <summary>
+    /// Ghi phiếu Chi trong sổ quỹ cho một phiếu nhập hàng có thanh toán tiền (DaThanhToan > 0),
+    /// dùng CHUNG connection và transaction với lần ghi phiếu nhập.
+    /// Giúp sổ quỹ và các quỹ tiền mặt/ngân hàng phản ánh chính xác nguồn tiền chi trả khi nhập hàng.
+    /// </summary>
+    private static async Task GhiPhieuChiNhapHangAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        uint branchId,
+        uint? userId,
+        PhieuNhapHang phieu,
+        bool coCotNguoiNopNhanGhiChu,
+        bool coCotPhieuNhap)
+    {
+        // 1. Dọn dẹp phiếu chi cũ nếu phiếu nhập được cập nhật lại / hoàn thành lại
+        if (coCotPhieuNhap)
+        {
+            await connection.ExecuteAsync(
+                """
+                DELETE FROM phieu_chi
+                WHERE (phieu_nhap_hang_id = @PhieuNhapId
+                   OR (ma_phieu_nhap = @MaPhieuNhap AND ma_phieu_chi LIKE 'PC%'));
+                """,
+                new { PhieuNhapId = phieu.Id, phieu.MaPhieuNhap },
+                transaction);
+        }
+        else if (coCotNguoiNopNhanGhiChu)
+        {
+            await connection.ExecuteAsync(
+                """
+                DELETE FROM phieu_chi
+                WHERE ma_phieu_chi LIKE 'PC%'
+                  AND ghi_chu LIKE CONCAT('%', @MaPhieuNhap, '%');
+                """,
+                new { phieu.MaPhieuNhap },
+                transaction);
+        }
+
+        // 2. Nếu phiếu có thanh toán tiền (> 0), tạo phiếu chi mới
+        if (phieu.DaThanhToan > 0)
+        {
+            var maPhieuChi = await SinhMaPhieuChiTrongGiaoDichAsync(connection, transaction);
+            var phuongThuc = ChuanHoaPhuongThuc(phieu.PhuongThucThanhToan);
+            var noiDung = $"Thanh toán tiền nhập hàng - phiếu {phieu.MaPhieuNhap}";
+            var tenNcc = string.IsNullOrWhiteSpace(phieu.TenNhaCungCap) ? phieu.NhaCungCapId?.ToString() : phieu.TenNhaCungCap;
+            var ghiChu = $"Chi trả tiền nhập hàng cho nhà cung cấp {tenNcc} theo phiếu nhập {phieu.MaPhieuNhap}.";
+
+            string sql;
+            if (coCotPhieuNhap && coCotNguoiNopNhanGhiChu)
+            {
+                sql = """
+                INSERT INTO phieu_chi
+                (
+                    ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                    noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
+                    nguoi_thuc_hien_id, trang_thai, phieu_nhap_hang_id, ma_phieu_nhap
+                )
+                VALUES
+                (
+                    @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                    @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
+                    @NguoiTaoId, @TrangThai, @PhieuNhapId, @MaPhieuNhap
+                );
+                """;
+            }
+            else if (coCotNguoiNopNhanGhiChu)
+            {
+                sql = """
+                INSERT INTO phieu_chi
+                (
+                    ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                    noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
+                    nguoi_thuc_hien_id, trang_thai
+                )
+                VALUES
+                (
+                    @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                    @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
+                    @NguoiTaoId, @TrangThai
+                );
+                """;
+            }
+            else
+            {
+                sql = """
+                INSERT INTO phieu_chi
+                (
+                    ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                    noi_dung, thoi_gian_chi, nguoi_thuc_hien_id, trang_thai
+                )
+                VALUES
+                (
+                    @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                    @NoiDung, @ThoiGian, @NguoiTaoId, @TrangThai
+                );
+                """;
+            }
+
+            await connection.ExecuteAsync(
+                sql,
+                new
+                {
+                    MaPhieu = maPhieuChi,
+                    ChiNhanhId = branchId,
+                    SoTien = phieu.DaThanhToan,
+                    PhuongThuc = phuongThuc,
+                    NoiDung = noiDung,
+                    NguoiNopNhan = Truncate150(phieu.TenNhaCungCap),
+                    GhiChu = ghiChu,
+                    ThoiGian = phieu.ThoiGianNhap,
+                    NguoiTaoId = userId,
+                    TrangThai = TrangThaiPhieuHoanThanh,
+                    PhieuNhapId = phieu.Id,
+                    phieu.MaPhieuNhap
+                },
+                transaction);
         }
     }
 
@@ -7476,6 +7657,7 @@ LIMIT 500;
         phieu.ChiPhiKhac,
         phieu.TongTienNhap,
         phieu.DaThanhToan,
+        PhuongThucThanhToan = ChuanHoaPhuongThuc(phieu.PhuongThucThanhToan),
         phieu.ConNo,
         phieu.TrangThai,
         GhiChu = string.IsNullOrWhiteSpace(phieu.GhiChu) ? null : phieu.GhiChu.Trim(),
@@ -7513,6 +7695,100 @@ LIMIT 500;
         }
 
         return _hasPhieuNhapExtraColumns.Value;
+    }
+
+    /// <summary>
+    /// Bảo đảm bảng phieu_nhap_hang có cột phuong_thuc_thanh_toan để lưu nguồn tiền chi trả
+    /// (TIEN_MAT, CHUYEN_KHOAN...). Nếu database cũ chưa có thì tự động ALTER TABLE.
+    /// </summary>
+    private async Task<bool> EnsurePhieuNhapPhuongThucColumnAsync()
+    {
+        if (_hasPhieuNhapPhuongThucColumn.HasValue)
+            return _hasPhieuNhapPhuongThucColumn.Value;
+
+        await using var connection = await OpenAsync();
+
+        try
+        {
+            const string sql = """
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'phieu_nhap_hang'
+              AND COLUMN_NAME = 'phuong_thuc_thanh_toan';
+            """;
+
+            var count = await connection.ExecuteScalarAsync<long>(sql);
+            if (count > 0)
+            {
+                _hasPhieuNhapPhuongThucColumn = true;
+                return true;
+            }
+
+            await connection.ExecuteAsync(
+                "ALTER TABLE phieu_nhap_hang ADD COLUMN phuong_thuc_thanh_toan varchar(30) DEFAULT 'TIEN_MAT' AFTER da_thanh_toan;");
+
+            _hasPhieuNhapPhuongThucColumn = true;
+        }
+        catch
+        {
+            _hasPhieuNhapPhuongThucColumn = false;
+        }
+
+        return _hasPhieuNhapPhuongThucColumn.Value;
+    }
+
+    /// <summary>
+    /// Bảo đảm bảng phieu_chi có cột liên kết phiếu nhập hàng:
+    /// phieu_nhap_hang_id và ma_phieu_nhap.
+    /// </summary>
+    private async Task<bool> EnsurePhieuQuyPhieuNhapColumnsAsync()
+    {
+        if (_hasPhieuQuyPhieuNhapColumns.HasValue)
+            return _hasPhieuQuyPhieuNhapColumns.Value;
+
+        await using var connection = await OpenAsync();
+
+        try
+        {
+            var coCot = (await connection.QueryAsync<string>(
+                """
+                SELECT COLUMN_NAME FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'phieu_chi'
+                  AND COLUMN_NAME IN ('phieu_nhap_hang_id', 'ma_phieu_nhap');
+                """)).AsList();
+
+            var daCoPhieuNhapId = false;
+            var daCoMaPhieuNhap = false;
+
+            foreach (var cot in coCot)
+            {
+                if (string.Equals(cot, "phieu_nhap_hang_id", StringComparison.OrdinalIgnoreCase))
+                    daCoPhieuNhapId = true;
+                else if (string.Equals(cot, "ma_phieu_nhap", StringComparison.OrdinalIgnoreCase))
+                    daCoMaPhieuNhap = true;
+            }
+
+            if (!daCoPhieuNhapId)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE phieu_chi ADD COLUMN phieu_nhap_hang_id int(10) unsigned DEFAULT NULL;");
+            }
+
+            if (!daCoMaPhieuNhap)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE phieu_chi ADD COLUMN ma_phieu_nhap varchar(50) DEFAULT NULL;");
+            }
+
+            _hasPhieuQuyPhieuNhapColumns = true;
+        }
+        catch
+        {
+            _hasPhieuQuyPhieuNhapColumns = false;
+        }
+
+        return _hasPhieuQuyPhieuNhapColumns.Value;
     }
 
     /// <summary>

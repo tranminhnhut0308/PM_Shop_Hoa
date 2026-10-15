@@ -43,6 +43,27 @@ public sealed class PhieuNhapHangDetail
 
     public string? MaDatHangNhap { get; set; }
 
+    /// <summary>
+    /// Phương thức thanh toán khi nhập hàng:
+    /// TIEN_MAT = Tiền mặt (Quỹ tiền mặt),
+    /// CHUYEN_KHOAN = Chuyển khoản (Tài khoản ngân hàng).
+    /// </summary>
+    public string PhuongThucThanhToan { get; set; } = "TIEN_MAT";
+
+    public string PhuongThucThanhToanHienThi => PhuongThucThanhToan switch
+    {
+        "CHUYEN_KHOAN" or "CHUYEN_KHOAN_NGAN_HANG" or "NGAN_HANG" => "Chuyển khoản (Quỹ ngân hàng)",
+        "THE" or "THE_TIN_DUNG" => "Thẻ (Quỹ thẻ)",
+        "VI_DIEN_TU" or "VI" => "Ví điện tử",
+        _ => "Tiền mặt (Quỹ tiền mặt)"
+    };
+
+    public string NguonQuyChiTraHienThi => PhuongThucThanhToan switch
+    {
+        "CHUYEN_KHOAN" or "CHUYEN_KHOAN_NGAN_HANG" or "NGAN_HANG" => "Tài khoản ngân hàng",
+        _ => "Quỹ tiền mặt"
+    };
+
     public List<PhieuNhapHangDetailItem> Items { get; set; } = [];
 
     // ============================================================
@@ -85,6 +106,8 @@ public sealed class PhieuNhapHangDetail
     public bool HasGiamGia => GiamGia != 0m;
 
     public bool HasChiPhiKhac => ChiPhiKhac != 0m;
+
+    public bool CoThanhToan => DaThanhToan > 0m;
 
     public string GiamGiaText => GiamGia.ToString("N0", Vi) + " đ";
 

@@ -3722,11 +3722,16 @@
                                             FontSize="12" FontWeight="SemiBold"
                                             Foreground="#163F38" HorizontalAlignment="Right"
                                             VerticalAlignment="Center" />
-                                          <TextBlock Grid.Column="4"
-                                            Text="{Binding DaThanhToan, StringFormat={}{0:N0} đ}"
-                                            FontSize="12" Foreground="#087F6E"
+                                          <StackPanel Grid.Column="4"
                                             HorizontalAlignment="Right"
-                                            VerticalAlignment="Center" />
+                                            VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DaThanhToan, StringFormat={}{0:N0} đ}"
+                                              FontSize="12" Foreground="#087F6E"
+                                              HorizontalAlignment="Right" />
+                                            <TextBlock Text="{Binding NguonQuyHienThi}"
+                                              FontSize="10" Foreground="#61736E"
+                                              HorizontalAlignment="Right" />
+                                          </StackPanel>
                                           <TextBlock Grid.Column="5"
                                             Text="{Binding ConNo, StringFormat={}{0:N0} đ}"
                                             FontSize="12" FontWeight="SemiBold"
@@ -4706,6 +4711,24 @@
                       <controls:MoneyTextBox Value="{Binding PhieuNhapDaThanhToan, Mode=TwoWay}"
                         Height="34"
                         Margin="0" />
+                    </StackPanel>
+
+                    <!-- PHƯƠNG THỨC / NGUỒN QUỸ THANH TOÁN -->
+                    <StackPanel Spacing="5">
+                      <TextBlock Text="Phương thức thanh toán / Nguồn quỹ"
+                        FontSize="12"
+                        Foreground="#61736E" />
+
+                      <ComboBox ItemsSource="{Binding PhieuNhapPhuongThucOptions}"
+                        SelectedItem="{Binding PhieuNhapPhuongThuc, Mode=TwoWay}"
+                        HorizontalAlignment="Stretch"
+                        Height="34" />
+
+                      <TextBlock Text="{Binding PhieuNhapNguonQuyText}"
+                        FontSize="11"
+                        Foreground="#087F6E"
+                        Margin="2,1,0,0"
+                        TextWrapping="Wrap" />
                     </StackPanel>
 
                     <!-- TỔNG TIỀN NHẬP -->
@@ -5854,7 +5877,7 @@
               BorderThickness="0,0,0,1"
               Padding="16,12">
 
-              <Grid ColumnDefinitions="50,50,220,180,160,*,200"
+              <Grid ColumnDefinitions="50,50,170,140,120,*,180,140"
                 ColumnSpacing="10">
 
                 <CheckBox Name="BaoCaoPhieuNhapChonTatCaBox"
@@ -5902,6 +5925,13 @@
                   VerticalAlignment="Center" />
 
                 <TextBlock Grid.Column="6"
+                  Text="PHƯƠNG THỨC / QUỸ"
+                  FontWeight="Bold"
+                  Foreground="#164B40"
+                  FontSize="12"
+                  VerticalAlignment="Center" />
+
+                <TextBlock Grid.Column="7"
                   Text="TRẠNG THÁI"
                   FontWeight="Bold"
                   Foreground="#164B40"
@@ -5940,7 +5970,7 @@
                       ToolTip.Tip="Nhấn vào dòng để xem chi tiết phiếu nhập"
                       Padding="16,11">
 
-                      <Grid ColumnDefinitions="50,50,220,180,160,*,200"
+                      <Grid ColumnDefinitions="50,50,170,140,120,*,180,140"
                         ColumnSpacing="10"
                         VerticalAlignment="Center">
 
@@ -5999,8 +6029,21 @@
                           TextTrimming="CharacterEllipsis"
                           VerticalAlignment="Center" />
 
+                        <!-- PHƯƠNG THỨC / QUỸ CHI TRẢ -->
+                        <StackPanel Grid.Column="6"
+                          VerticalAlignment="Center"
+                          Spacing="2">
+                          <TextBlock Text="{Binding PhuongThucThanhToanHienThi}"
+                            FontSize="12"
+                            FontWeight="SemiBold"
+                            Foreground="#263B35" />
+                          <TextBlock Text="{Binding NguonQuyHienThi}"
+                            FontSize="11"
+                            Foreground="#087F6E" />
+                        </StackPanel>
+
                         <!-- BADGE TRẠNG THÁI -->
-                        <Border Grid.Column="6"
+                        <Border Grid.Column="7"
                           CornerRadius="14"
                           Padding="12,4"
                           HorizontalAlignment="Center"

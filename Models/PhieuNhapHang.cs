@@ -51,6 +51,29 @@ public sealed partial class PhieuNhapHang : ObservableObject
 
     public string? MaDatHangNhap { get; set; }
 
+    /// <summary>
+    /// Phương thức thanh toán khi nhập hàng:
+    /// TIEN_MAT = Tiền mặt (Quỹ tiền mặt),
+    /// CHUYEN_KHOAN = Chuyển khoản (Tài khoản ngân hàng).
+    /// </summary>
+    public string PhuongThucThanhToan { get; set; } = "TIEN_MAT";
+
+    public string PhuongThucThanhToanHienThi => PhuongThucThanhToan switch
+    {
+        "CHUYEN_KHOAN" or "CHUYEN_KHOAN_NGAN_HANG" or "NGAN_HANG" => "Chuyển khoản",
+        "THE" or "THE_TIN_DUNG" => "Thẻ",
+        "VI_DIEN_TU" or "VI" => "Ví điện tử",
+        _ => "Tiền mặt"
+    };
+
+    public string NguonQuyHienThi => PhuongThucThanhToan switch
+    {
+        "CHUYEN_KHOAN" or "CHUYEN_KHOAN_NGAN_HANG" or "NGAN_HANG" => "Quỹ ngân hàng",
+        "THE" or "THE_TIN_DUNG" => "Quỹ thẻ",
+        "VI_DIEN_TU" or "VI" => "Ví điện tử",
+        _ => "Quỹ tiền mặt"
+    };
+
     public string TrangThaiHienThi => TrangThai == "LUU_TAM"
         ? "Lưu tạm"
         : "Đã nhập hàng";

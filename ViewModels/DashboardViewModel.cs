@@ -48,10 +48,10 @@ public sealed partial class DashboardViewModel : ObservableObject
     private bool dungKhoangTuDien;
 
     [ObservableProperty]
-    private DateTime? tuNgayTuChon = DateTime.Today;
+    private DateTimeOffset? tuNgayTuChon = DateTimeOffset.Now.Date;
 
     [ObservableProperty]
-    private DateTime? denNgayTuChon = DateTime.Today;
+    private DateTimeOffset? denNgayTuChon = DateTimeOffset.Now.Date;
 
     public string KhoangThoiGianHienThi => TongQuanKhoangThoiGian.TenHienThi(KhoangThoiGian);
 
@@ -275,8 +275,8 @@ public sealed partial class DashboardViewModel : ObservableObject
                 KhoangThoiGian,
                 ChieuDoanhThu,
                 XepHangTopHang,
-                TuNgayTuChon,
-                DenNgayTuChon,
+                TuNgayTuChon?.Date,
+                DenNgayTuChon?.Date,
                 DateTime.Now,
                 IsAdmin,
                 token);
@@ -411,7 +411,7 @@ public sealed partial class DashboardViewModel : ObservableObject
         if (DungKhoangTuDien)
         {
             if (DenNgayTuChon is null)
-                DenNgayTuChon = DateTime.Today;
+                DenNgayTuChon = DateTimeOffset.Now.Date;
 
             if (TuNgayTuChon is null)
                 TuNgayTuChon = DenNgayTuChon.Value.AddDays(-6);

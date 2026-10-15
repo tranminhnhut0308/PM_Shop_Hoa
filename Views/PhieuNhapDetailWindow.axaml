@@ -104,7 +104,7 @@
       BoxShadow="0 2 8 #080A352E">
 
       <Grid ColumnDefinitions="*,*"
-        RowDefinitions="Auto,Auto,Auto"
+        RowDefinitions="Auto,Auto,Auto,Auto"
         ColumnSpacing="24"
         RowSpacing="10">
 
@@ -128,13 +128,23 @@
           <TextBlock Classes="value" Text="{Binding TenNhaCungCapHienThi}" />
         </StackPanel>
 
-        <StackPanel Grid.Row="2" Spacing="2"
+        <StackPanel Grid.Row="2" Spacing="2">
+          <TextBlock Classes="label" Text="Phương thức thanh toán" />
+          <TextBlock Classes="value" FontWeight="SemiBold" Text="{Binding PhuongThucThanhToanHienThi}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="2">
+          <TextBlock Classes="label" Text="Nguồn quỹ chi trả" />
+          <TextBlock Classes="value" FontWeight="SemiBold" Foreground="#087F6E" Text="{Binding NguonQuyChiTraHienThi}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Spacing="2"
           IsVisible="{Binding CoSoHoaDon}">
           <TextBlock Classes="label" Text="Số hóa đơn đầu vào" />
           <TextBlock Classes="value" Text="{Binding SoHoaDonDauVao}" />
         </StackPanel>
 
-        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="2"
+        <StackPanel Grid.Row="3" Grid.Column="1" Spacing="2"
           IsVisible="{Binding CoMaDatHang}">
           <TextBlock Classes="label" Text="Mã đặt hàng nhập" />
           <TextBlock Classes="value" Text="{Binding MaDatHangNhap}" />
@@ -313,6 +323,17 @@
                 Text="{Binding DaThanhToanText}"
                 FontSize="13"
                 Foreground="#263B35"
+                HorizontalAlignment="Right" />
+            </Grid>
+
+            <Grid ColumnDefinitions="*,Auto"
+              IsVisible="{Binding CoThanhToan}">
+              <TextBlock Classes="label" Text="Nguồn tiền chi trả" />
+              <TextBlock Grid.Column="1"
+                Text="{Binding PhuongThucThanhToanHienThi}"
+                FontSize="12"
+                FontWeight="SemiBold"
+                Foreground="#087F6E"
                 HorizontalAlignment="Right" />
             </Grid>
 
