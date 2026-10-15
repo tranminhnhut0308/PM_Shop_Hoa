@@ -2525,7 +2525,7 @@
 
                           <!-- DÒNG CHÍNH -->
                           <Grid ColumnDefinitions="120,*,150,150,160,190,40" ColumnSpacing="10"
-                            Height="54">
+                            Height="54" Margin="16,0,16,0">
 
                             <TextBlock Grid.Column="0" Text="{Binding MaKhachHang}" FontSize="12"
                               Foreground="#667A74" VerticalAlignment="Center"
@@ -3516,7 +3516,7 @@
 
                           <!-- DÒNG CHÍNH -->
                           <Grid ColumnDefinitions="110,*,140,150,*,130,140,40"
-                            ColumnSpacing="10" Height="54">
+                            ColumnSpacing="10" Height="54" Margin="16,0,16,0">
 
                             <TextBlock Grid.Column="0" Text="{Binding MaNhaCungCap}"
                               FontSize="12" Foreground="#667A74" VerticalAlignment="Center"
