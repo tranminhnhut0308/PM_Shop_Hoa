@@ -5964,7 +5964,7 @@
               BorderThickness="0,0,0,1"
               Padding="16,12">
 
-              <Grid ColumnDefinitions="180,150,130,*,200,150"
+              <Grid ColumnDefinitions="180,150,130,*,200,150,64"
                 ColumnSpacing="10">
 
                 <TextBlock Grid.Column="0"
@@ -6009,6 +6009,14 @@
                   FontSize="12"
                   HorizontalAlignment="Center"
                   VerticalAlignment="Center" />
+
+                <TextBlock Grid.Column="6"
+                  Text="IN"
+                  FontWeight="Bold"
+                  Foreground="#164B40"
+                  FontSize="12"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center" />
               </Grid>
             </Border>
 
@@ -6047,7 +6055,7 @@
                       ToolTip.Tip="Nhấn vào dòng để xem chi tiết phiếu nhập"
                       Padding="16,11">
 
-                      <Grid ColumnDefinitions="180,150,130,*,200,150"
+                      <Grid ColumnDefinitions="180,150,130,*,200,150,64"
                         ColumnSpacing="10"
                         VerticalAlignment="Center">
 
@@ -6114,6 +6122,20 @@
                             VerticalAlignment="Center"
                             Foreground="{Binding TrangThaiBadgeForeground}" />
                         </Border>
+
+                        <!-- NÚT IN PHIẾU NHẬP -->
+                        <Button Grid.Column="6"
+                          Classes="toolbar-action"
+                          Content="🖨"
+                          FontSize="14"
+                          Width="40"
+                          Height="30"
+                          Padding="0"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          ToolTip.Tip="In phiếu nhập"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.InPhieuNhapCommand}"
+                          CommandParameter="{Binding}" />
                       </Grid>
                     </Border>
                   </DataTemplate>

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using Avalonia.Platform.Storage;
 using ClosedXML.Excel;
 using System.Threading;
@@ -3919,6 +3920,54 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
                 : $"Không mở được chi tiết phiếu nhập {maPhieu}: {ex.Message}";
 
             SafeLog.WriteError("Loi xem chi tiet phieu nhap", ex);
+        }
+    }
+
+    /// <summary>
+    /// In lại một phiếu nhập đã lưu: đọc đầy đủ chi tiết + thông tin tiệm, dựng
+    /// file HTML tạm rồi mở bằng trình duyệt mặc định để người dùng Ctrl+P.
+    /// Chỉ đọc dữ liệu, không sửa/xóa phiếu.
+    /// </summary>
+    [RelayCommand]
+    private async Task InPhieuNhapAsync(PhieuNhapHang? item)
+    {
+        if (item is null || item.Id == 0)
+            return;
+
+        var maPhieu = item.MaPhieuNhap;
+
+        try
+        {
+            var detail = await _db.GetPhieuNhapHangDetailAsync(item.Id);
+
+            if (detail is null)
+            {
+                StatusMessage = string.IsNullOrWhiteSpace(maPhieu)
+                    ? "Không tìm thấy phiếu nhập trong database."
+                    : $"Không tìm thấy phiếu nhập {maPhieu} trong database.";
+                return;
+            }
+
+            var tiem = await LayThongTinTiemChoHoaDonAsync();
+            var duongDan = PhieuNhapPrintService.LuuFileTam(detail, tiem);
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = duongDan,
+                UseShellExecute = true
+            });
+
+            StatusMessage = string.IsNullOrWhiteSpace(maPhieu)
+                ? "Đã mở bản in phiếu nhập."
+                : $"Đã mở bản in phiếu nhập {maPhieu}.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = string.IsNullOrWhiteSpace(maPhieu)
+                ? $"Không in được phiếu nhập: {ex.Message}"
+                : $"Không in được phiếu nhập {maPhieu}: {ex.Message}";
+
+            SafeLog.WriteError("Loi in phieu nhap", ex);
         }
     }
 
