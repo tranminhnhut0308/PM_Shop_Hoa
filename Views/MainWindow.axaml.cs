@@ -750,11 +750,17 @@ public partial class MainWindow : Window
                 var tenSanPham =
                     EscapeCsv(sanPham.TenSanPham);
 
-                var loaiHang =
-                    EscapeCsv(sanPham.LoaiHang);
+                var loaiHang = EscapeCsv(
+                    !string.IsNullOrWhiteSpace(sanPham.LoaiHang)
+                        ? sanPham.LoaiHang
+                        : "Hàng hóa");
 
-                var nhomHang =
-                    EscapeCsv(sanPham.NhomHangBaCap);
+                var nhomHang = EscapeCsv(
+                    !string.IsNullOrWhiteSpace(sanPham.NhomHangBaCap)
+                        ? sanPham.NhomHangBaCap
+                        : (!string.IsNullOrWhiteSpace(sanPham.NhomSanPham)
+                            ? sanPham.NhomSanPham
+                            : ""));
 
                 var giaBan =
                     sanPham.GiaBan.ToString(
@@ -778,8 +784,12 @@ public partial class MainWindow : Window
                         "N0",
                         CultureInfo.GetCultureInfo("vi-VN"));
 
-                var donViTinh =
-                    EscapeCsv(sanPham.DonViTinh);
+                var donViTinh = EscapeCsv(
+                    !string.IsNullOrWhiteSpace(sanPham.DonViTinh)
+                        ? sanPham.DonViTinh
+                        : (!string.IsNullOrWhiteSpace(sanPham.TenDonViTinh)
+                            ? sanPham.TenDonViTinh
+                            : ""));
 
                 var ngayTao =
     EscapeCsv(sanPham.NgayTao);

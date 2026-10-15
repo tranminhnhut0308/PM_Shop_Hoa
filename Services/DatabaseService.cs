@@ -317,9 +317,9 @@ public sealed class DatabaseService
                 sp.ngay_tao AS NgayTao,
                 sp.du_kien_het_hang AS DuKienHetHang,
                 dvt.ten_don_vi AS DonViTinh,
-                nsp.ten_nhom AS NhomSanPham,
-                sp.loai_hang_excel AS LoaiHang,
-                sp.nhom_hang_3_cap_excel AS NhomHangBaCap,
+                COALESCE(nsp.ten_nhom, NULLIF(TRIM(sp.nhom_hang_3_cap_excel), '')) AS NhomSanPham,
+                COALESCE(NULLIF(TRIM(sp.loai_hang_excel), ''), 'Hàng hóa') AS LoaiHang,
+                COALESCE(NULLIF(TRIM(sp.nhom_hang_3_cap_excel), ''), nsp.ten_nhom) AS NhomHangBaCap,
                 sp.vi_tri_kho AS ViTriKho,
                 sp.dang_kinh_doanh AS DuocBanTrucTiep,
                 sp.trang_thai AS DangKinhDoanh,
@@ -388,9 +388,9 @@ public sealed class DatabaseService
                 sp.ngay_tao AS NgayTao,
                 sp.du_kien_het_hang AS DuKienHetHang,
                 dvt.ten_don_vi AS DonViTinh,
-                nsp.ten_nhom AS NhomSanPham,
-                sp.loai_hang_excel AS LoaiHang,
-                sp.nhom_hang_3_cap_excel AS NhomHangBaCap,
+                COALESCE(nsp.ten_nhom, NULLIF(TRIM(sp.nhom_hang_3_cap_excel), '')) AS NhomSanPham,
+                COALESCE(NULLIF(TRIM(sp.loai_hang_excel), ''), 'Hàng hóa') AS LoaiHang,
+                COALESCE(NULLIF(TRIM(sp.nhom_hang_3_cap_excel), ''), nsp.ten_nhom) AS NhomHangBaCap,
                 sp.vi_tri_kho AS ViTriKho,
                 sp.dang_kinh_doanh AS DuocBanTrucTiep,
                 sp.trang_thai AS DangKinhDoanh,
@@ -832,6 +832,30 @@ public sealed class DatabaseService
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsCreate, "Bạn không có quyền thêm hàng hóa.");
         await using var connection = await OpenAsync();
 
+        if (string.IsNullOrWhiteSpace(product.LoaiHang))
+        {
+            product.LoaiHang = "Hàng hóa";
+        }
+
+        if (string.IsNullOrWhiteSpace(product.NhomHangBaCap))
+        {
+            if (!string.IsNullOrWhiteSpace(product.NhomSanPham))
+            {
+                product.NhomHangBaCap = product.NhomSanPham;
+            }
+            else if (product.NhomSanPhamId > 0)
+            {
+                var tenNhom = await connection.ExecuteScalarAsync<string>(
+                    "SELECT ten_nhom FROM nhom_san_pham WHERE id = @Id LIMIT 1;",
+                    new { Id = product.NhomSanPhamId });
+                if (!string.IsNullOrWhiteSpace(tenNhom))
+                {
+                    product.NhomSanPham = tenNhom;
+                    product.NhomHangBaCap = tenNhom;
+                }
+            }
+        }
+
         const string sql = """
             INSERT INTO san_pham
             (
@@ -891,6 +915,30 @@ public sealed class DatabaseService
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsEdit, "Bạn không có quyền sửa hàng hóa.");
         await using var connection = await OpenAsync();
+
+        if (string.IsNullOrWhiteSpace(product.LoaiHang))
+        {
+            product.LoaiHang = "Hàng hóa";
+        }
+
+        if (string.IsNullOrWhiteSpace(product.NhomHangBaCap))
+        {
+            if (!string.IsNullOrWhiteSpace(product.NhomSanPham))
+            {
+                product.NhomHangBaCap = product.NhomSanPham;
+            }
+            else if (product.NhomSanPhamId > 0)
+            {
+                var tenNhom = await connection.ExecuteScalarAsync<string>(
+                    "SELECT ten_nhom FROM nhom_san_pham WHERE id = @Id LIMIT 1;",
+                    new { Id = product.NhomSanPhamId });
+                if (!string.IsNullOrWhiteSpace(tenNhom))
+                {
+                    product.NhomSanPham = tenNhom;
+                    product.NhomHangBaCap = tenNhom;
+                }
+            }
+        }
 
         await connection.ExecuteAsync(
             """
