@@ -1555,7 +1555,7 @@
                             Background="White"
                             BorderBrush="#D8E5E0"
                             BorderThickness="1">
-                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                         <Border Width="38" Height="38" CornerRadius="6" Background="#DFF5F0" VerticalAlignment="Center">
                           <TextBlock Text="🌼" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -1584,20 +1584,6 @@
                                            FontSize="11"/>
                               </Border>
                             </StackPanel>
-                          </StackPanel>
-                        </Button>
-
-                        <!-- Nút Chỉnh sửa số lượng nhanh: chỉ hiển thị khi hết hàng -->
-                        <Button Grid.Column="2"
-                                Classes="quickStockEditBtn"
-                                IsVisible="{Binding HetHang}"
-                                VerticalAlignment="Center"
-                                ToolTip.Tip="Chỉnh sửa số lượng tồn kho để bán ngay"
-                                Command="{Binding ElementName=RootWindow, Path=DataContext.ChinhSoLuongNhanhCommand}"
-                                CommandParameter="{Binding}">
-                          <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                            <TextBlock Text="✏" FontSize="12" VerticalAlignment="Center"/>
-                            <TextBlock Text="Sửa SL" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
                           </StackPanel>
                         </Button>
                       </Grid>

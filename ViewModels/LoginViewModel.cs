@@ -304,6 +304,17 @@ public partial class LoginViewModel : ObservableObject
         {
             var mainWindow = new MainWindow();
 
+            // Sau đăng nhập, cửa sổ chính thật là MainWindow chứ không còn là
+            // LoginWindow. Phải cập nhật MainWindow của lifetime, nếu không mọi
+            // nơi lấy cửa sổ qua ApplicationLifetime.MainWindow (hộp thoại chọn
+            // file xuất Excel, hộp thoại con...) vẫn dùng LoginWindow đã đóng nên
+            // thao tác không mở được gì.
+            if (Avalonia.Application.Current?.ApplicationLifetime
+                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                desktop.MainWindow = mainWindow;
+            }
+
             mainWindow.Show();
 
             loginWindow?.Close();
