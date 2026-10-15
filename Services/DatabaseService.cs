@@ -6687,17 +6687,7 @@ LIMIT 500;
     // QUẢN LÝ NHÓM SẢN PHẨM & ĐƠN VỊ TÍNH
     // ==========================================
 
-    public async Task<uint> ThemNhomSanPhamAsync(string tenNhom)
-    {
-        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền thêm nhóm hàng hóa.");
-        await using var connection = await OpenAsync();
-        const string sql = """
-            INSERT INTO nhom_san_pham (ten_nhom, trang_thai)
-            VALUES (@TenNhom, 1);
-            SELECT LAST_INSERT_ID();
-            """;
-        return await connection.ExecuteScalarAsync<uint>(sql, new { TenNhom = tenNhom });
-    }
+
 
     public async Task XoaNhomSanPhamAsync(uint id)
     {

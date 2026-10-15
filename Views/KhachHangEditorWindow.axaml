@@ -128,7 +128,8 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- ===== SỐ ĐIỆN THOẠI (TỐI ĐA 3 SỐ) ===== -->
+                  <!-- ===== SỐ ĐIỆN THOẠI (HIỆN TIẾN ĐỘ X/10 LINH HOẠT) ===== -->
+<!-- ===== SỐ ĐIỆN THOẠI (ÁP DỤNG ĐẦY ĐỦ CHO TẤT CẢ CÁC Ô) ===== -->
 <StackPanel>
     <Grid ColumnDefinitions="*,Auto">
         <TextBlock Classes="label" Text="Số điện thoại liên hệ" VerticalAlignment="Center"/>
@@ -140,31 +141,35 @@
                 Click="OnThemSoDienThoai"/>
     </Grid>
 
-    <!-- Ô số 1 (luôn hiện) -->
+    <!-- Ô số 1 -->
     <TextBox Classes="input" 
              Name="SoDienThoai1Box"
              Margin="0,6,0,0"
-             Watermark="0987 123 456"
-             MaxLength="12"/>
+             Watermark="0987123456"
+             TextChanged="OnSoDienThoaiTextChanged"
+             LostFocus="OnSoDienThoaiLostFocus"/>
+    <TextBlock Name="Sdt1HintBox" Classes="hint" Text=""/>
 
-    <!-- Ô số 2 (ẩn mặc định) -->
+  <!-- Ô số 2 -->
     <TextBox Classes="input" 
              Name="SoDienThoai2Box"
              Margin="0,8,0,0"
              Watermark="Số điện thoại thứ 2"
-             MaxLength="12"
-             IsVisible="False"/>
+             IsVisible="False"
+             TextChanged="OnSoDienThoaiTextChanged"
+             LostFocus="OnSoDienThoaiLostFocus"/>
+    <TextBlock Name="Sdt2HintBox" Classes="hint" Text=""/> <!-- Xóa chữ IsVisible="False" ở đây -->
 
-    <!-- Ô số 3 (ẩn mặc định) -->
+    <!-- Ô số 3 -->
     <TextBox Classes="input" 
              Name="SoDienThoai3Box"
              Margin="0,8,0,0"
              Watermark="Số điện thoại thứ 3"
-             MaxLength="12"
-             IsVisible="False"/>
+             IsVisible="False"
+             TextChanged="OnSoDienThoaiTextChanged"
+             LostFocus="OnSoDienThoaiLostFocus"/>
+    <TextBlock Name="Sdt3HintBox" Classes="hint" Text=""/> <!-- Xóa chữ IsVisible="False" ở đây -->
 
-    <TextBlock Classes="hint" 
-               Text="Tối đa 3 số. Số đầu tiên sẽ được ưu tiên liên hệ."/>
 </StackPanel>
 
                     <!-- Giới tính + Ngày sinh + Email -->
@@ -179,29 +184,103 @@
                             </ComboBox>
                         </StackPanel>
 
-                        <StackPanel Grid.Column="1">
+                       <StackPanel Grid.Column="1">
                             <TextBlock Classes="label" Text="Ngày sinh"/>
-                            <TextBox Classes="input" Name="NgaySinhBox" Watermark="dd/MM/yyyy hoặc 01011990"/>
-                            <TextBlock Classes="hint" Text="Hỗ trợ nhập nhanh: 01011990"/>
-                        </StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="45"/>  <!-- Ô Ngày (dd) -->
+                                    <ColumnDefinition Width="20"/>  <!-- Dấu / -->
+                                    <ColumnDefinition Width="45"/>  <!-- Ô Tháng (MM) -->
+                                    <ColumnDefinition Width="20"/>  <!-- Dấu / -->
+                                    <ColumnDefinition Width="70"/>  <!-- Ô Năm (yyyy) -->
+                                    <ColumnDefinition Width="*"/>   <!-- Nút chọn ngày -->
+                                </Grid.ColumnDefinitions>
 
+                                <!-- 1. Ô nhập Ngày -->
+                                <TextBox Grid.Column="0"
+                                        Classes="input"
+                                        Name="NgayBox"
+                                        Watermark="dd"
+                                        MaxLength="2"
+                                        HorizontalContentAlignment="Center"
+                                        TextChanged="OnNgayTextChanged"
+                                        GotFocus="OnDateBoxGotFocus"/>
+
+                                <TextBlock Grid.Column="1" Text="/" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Gray"/>
+
+                                <!-- 2. Ô nhập Tháng -->
+                                <TextBox Grid.Column="2"
+                                        Classes="input"
+                                        Name="ThangBox"
+                                        Watermark="MM"
+                                        MaxLength="2"
+                                        HorizontalContentAlignment="Center"
+                                        TextChanged="OnThangTextChanged"
+                                        GotFocus="OnDateBoxGotFocus"/>
+
+                                <TextBlock Grid.Column="3" Text="/" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Gray"/>
+
+                                <!-- 3. Ô nhập Năm -->
+                                <TextBox Grid.Column="4"
+                                        Classes="input"
+                                        Name="NamBox"
+                                        Watermark="yyyy"
+                                        MaxLength="4"
+                                        HorizontalContentAlignment="Center"
+                                        TextChanged="OnNamTextChanged"
+                                        GotFocus="OnDateBoxGotFocus"/>
+
+                                <!-- 4. Nút bấm kèm Flyout mở lịch -->
+                                <Button Grid.Column="5" 
+                                        Content="📅" 
+                                        Margin="5,0,0,0"
+                                        VerticalAlignment="Stretch"
+                                        ToolTip.Tip="Chọn ngày từ lịch">
+                                    <Button.Flyout>
+                                        <Flyout Placement="Bottom">
+                                            <Calendar Name="PopupCalendar" SelectionMode="SingleDate" SelectedDatesChanged="OnCalendarSelectedDatesChanged"/>
+                                        </Flyout>
+                                    </Button.Flyout>
+                                </Button>
+                            </Grid>
+                            <TextBlock Classes="hint" Text="Nhập dd/MM/yyyy hoặc bấm 📅 để chọn lịch"/>
+                        </StackPanel>
+                        <!-- Ô Email chia thành 2 phần: Tên email và phần đuôi domain -->
                         <StackPanel Grid.Column="2">
                             <TextBlock Classes="label" Text="Email"/>
-                            <TextBox Classes="input" Name="EmailBox"
-                                     Text="{Binding Customer.Email, Mode=TwoWay}"
-                                     Watermark="nguyenvana"
-                                     LostFocus="OnEmailLostFocus"/>
-                            <TextBlock Classes="hint" Text="Tự thêm @gmail.com (có thể sửa)"/>
+                            <Grid ColumnDefinitions="*, Auto">
+                                <!-- Ô nhập tên tài khoản email trước -->
+                                <TextBox Grid.Column="0"
+                                        Classes="input" 
+                                        Name="EmailUserBox"
+                                        Watermark="nguyenvana"
+                                        TextChanged="OnEmailUserTextChanged"/>
+                                
+                                <!-- Ô phía sau hiển thị phần đuôi @gmail.com mờ (có thể sửa) -->
+                                <TextBox Grid.Column="1"
+                                        Classes="input"
+                                        Name="EmailDomainBox"
+                                        Text="@gmail.com"
+                                        Width="130"
+                                        Margin="4,0,0,0"/>
+                            </Grid>
+                            <TextBlock Classes="hint" Text="Nhập tên tài khoản, phần đuôi có thể tùy chỉnh"/>
                         </StackPanel>
                     </Grid>
 
                     <!-- Nhóm khách hàng -->
                     <StackPanel>
                         <TextBlock Classes="label" Text="Nhóm khách hàng"/>
-                        <ComboBox Classes="input"
-                                  ItemsSource="{Binding DanhSachNhom}"
-                                  SelectedItem="{Binding NhomKhachHangDaChon, Mode=TwoWay}"
-                                  PlaceholderText="Chưa có"/>
+                        <ComboBox Name="NhomKhachHangBox"
+                        ItemsSource="{Binding DanhSachNhom}"
+                        SelectedItem="{Binding NhomKhachHangDaChon, Mode=TwoWay}"
+                        PlaceholderText="Chọn nhóm khách hàng">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding TenNhom}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
                     </StackPanel>
 
                     <!-- ===== ĐỊA CHỈ ===== -->
@@ -211,8 +290,16 @@
 
                             <!-- Chọn loại địa chỉ -->
                             <StackPanel Orientation="Horizontal" Spacing="16">
-                                <RadioButton Name="RadioDiaChiMoi" Content="Địa chỉ mới" IsChecked="True" GroupName="LoaiDiaChi"/>
-                                <RadioButton Name="RadioDiaChiCu" Content="Địa chỉ cũ (trước sáp nhập)" GroupName="LoaiDiaChi"/>
+                               <RadioButton Name="RadioDiaChiMoi" 
+                                Content="Địa chỉ mới" 
+                                IsChecked="True" 
+                                GroupName="LoaiDiaChi"
+                                IsCheckedChanged="OnLoaiDiaChiChanged"/>
+                                
+                                <RadioButton Name="RadioDiaChiCu" 
+                                Content="Địa chỉ cũ (trước sáp nhập)" 
+                                GroupName="LoaiDiaChi"
+                                IsCheckedChanged="OnLoaiDiaChiChanged"/>
                             </StackPanel>
 
                             <!-- Số nhà, đường -->
@@ -233,11 +320,14 @@
                                 </StackPanel>
                             </Grid>
 
-                            <!-- Quận/Huyện chỉ hiện khi chọn Địa chỉ cũ -->
-                            <StackPanel Name="PanelQuanHuyen" IsVisible="False">
+                           <!-- Quận/Huyện chỉ hiện khi chọn Địa chỉ cũ -->
+                            <StackPanel Name="PanelQuanHuyen" IsVisible="False" Margin="0,8,0,0">
                                 <TextBlock Classes="label" Text="Quận / Huyện (địa chỉ cũ)"/>
-                                <TextBox Classes="input" Text="{Binding Customer.QuanHuyen, Mode=TwoWay}" Watermark="Quận / Huyện"/>
-                                <TextBlock Classes="hint" Text="Chỉ điền khi đây là địa chỉ cũ trước khi sáp nhập hành chính."/>
+                                <TextBox Classes="input" 
+                                        Text="{Binding Customer.QuanHuyen, Mode=TwoWay}" 
+                                        Watermark="Quận / Huyện"/>
+                                <TextBlock Classes="hint" 
+                                        Text="Chỉ điền khi đây là địa chỉ cũ trước khi sáp nhập hành chính."/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
