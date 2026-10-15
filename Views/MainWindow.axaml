@@ -5257,52 +5257,11 @@
               </Grid>
 
               <Grid Grid.Row="1"
-                ColumnDefinitions="*,*,*,*"
+                ColumnDefinitions="*,*,*"
                 ColumnSpacing="12">
 
-                <!-- Quỹ đầu kỳ - màu trung tính -->
-                <Border Grid.Column="0"
-                  Background="White"
-                  BorderBrush="#E2ECE8"
-                  BorderThickness="1"
-                  CornerRadius="12"
-                  Padding="16,14"
-                  VerticalAlignment="Stretch">
-
-                  <StackPanel Spacing="8">
-
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                      <Border Grid.Column="0"
-                        Width="28"
-                        Height="28"
-                        CornerRadius="7"
-                        Background="#F2F4F7"
-                        VerticalAlignment="Center">
-                        <TextBlock Text="◎"
-                          FontSize="13"
-                          Foreground="#475467"
-                          HorizontalAlignment="Center"
-                          VerticalAlignment="Center" />
-                      </Border>
-
-                      <TextBlock Grid.Column="1"
-                        Text="QUỸ ĐẦU KỲ"
-                        FontSize="12"
-                        FontWeight="SemiBold"
-                        Foreground="#667085"
-                        VerticalAlignment="Center" />
-                    </Grid>
-
-                    <TextBlock Text="{Binding SoQuyQuyDauKyText}"
-                      FontSize="25"
-                      FontWeight="Bold"
-                      Foreground="#344054"
-                      VerticalAlignment="Center" />
-                  </StackPanel>
-                </Border>
-
                 <!-- Tổng thu - màu xanh dương -->
-                <Border Grid.Column="1"
+                <Border Grid.Column="0"
                   Background="White"
                   BorderBrush="#D6E4FF"
                   BorderThickness="1"
@@ -5344,7 +5303,7 @@
                 </Border>
 
                 <!-- Tổng chi - màu đỏ -->
-                <Border Grid.Column="2"
+                <Border Grid.Column="1"
                   Background="White"
                   BorderBrush="#FBD3D0"
                   BorderThickness="1"
@@ -5386,7 +5345,7 @@
                 </Border>
 
                 <!-- Tồn quỹ - màu xanh lá -->
-                <Border Grid.Column="3"
+                <Border Grid.Column="2"
                   Background="White"
                   BorderBrush="#C3EBD8"
                   BorderThickness="1"
