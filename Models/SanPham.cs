@@ -18,7 +18,11 @@ public sealed partial class SanPham : ObservableObject
     private decimal giaBan;
 
     public decimal GiaVon { get; set; }
-    public decimal TonKho { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HetHang))]
+    private decimal tonKho;
+
     public decimal TonToiThieu { get; set; }
     public decimal TonToiDa { get; set; }
     public decimal KhachDat { get; set; }
@@ -28,7 +32,10 @@ public sealed partial class SanPham : ObservableObject
     public string? NhomSanPham { get; set; }
     public string? LoaiHang { get; set; }
     public string? NhomHangBaCap { get; set; }
-    public decimal TonKhoExcel { get; set; }
+
+    [ObservableProperty]
+    private decimal tonKhoExcel;
+
     public string? ViTriKho { get; set; }
     public bool DangKinhDoanh { get; set; }
     public bool DuocBanTrucTiep { get; set; }

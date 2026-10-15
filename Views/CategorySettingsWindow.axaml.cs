@@ -47,10 +47,13 @@ public partial class CategorySettingsWindow : Window
         var name = NewGroupNameTextBox.Text?.Trim();
         if (string.IsNullOrEmpty(name)) return;
 
+<<<<<<< HEAD
 
         var option = await _dbService.ThemNhomSanPhamAsync(name);
         Groups.Add(option);
 
+=======
+>>>>>>> 4c35eaf227bec3fd1cc6f4460c0ecd688c60604c
         // Nhận về ProductOption thay vì ép kiểu hay gán vào uint
         ProductOption newGroup = await _dbService.ThemNhomSanPhamAsync(name);
 
@@ -74,8 +77,11 @@ public partial class CategorySettingsWindow : Window
         var name = NewUnitNameTextBox.Text?.Trim();
         if (string.IsNullOrEmpty(name)) return;
 
+<<<<<<< HEAD
         var option = await _dbService.ThemDonViTinhAsync(name);
         Units.Add(option);
+=======
+>>>>>>> 4c35eaf227bec3fd1cc6f4460c0ecd688c60604c
         // Nhận trực tiếp đối tượng ProductOption trả về từ database service
         var newOption = await _dbService.ThemDonViTinhAsync(name);
 

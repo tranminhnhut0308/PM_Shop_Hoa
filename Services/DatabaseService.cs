@@ -957,6 +957,190 @@ public sealed class DatabaseService
         return affectedRows > 0;
     }
 
+    /// <summary>
+    /// Cập nhật nhanh số lượng tồn kho của một sản phẩm (dùng trong màn hình bán hàng
+    /// khi sản phẩm hết hàng và người dùng muốn bổ sung tồn để bán ngay).
+    /// Cập nhật bảng ton_kho, san_pham.ton_kho_excel và ghi nhật ký lịch sử kho.
+    /// </summary>
+    public async Task<bool> CapNhatTonKhoSanPhamAsync(
+        uint productId,
+        decimal soLuongTonMoi,
+        uint? chiNhanhId = null)
+    {
+        if (productId == 0)
+            throw new ArgumentException(
+                "Sản phẩm chưa có mã dữ liệu để cập nhật tồn kho.",
+                nameof(productId));
+
+        if (soLuongTonMoi < 0)
+            throw new ArgumentException(
+                "Số lượng tồn kho không được âm.",
+                nameof(soLuongTonMoi));
+
+        var branchId = chiNhanhId ?? Session.CurrentUser?.ChiNhanhId ?? 1;
+        var userId = Session.CurrentUser?.Id;
+
+        await using var connection = await OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            const string selectTonSql = """
+            SELECT so_luong_ton, gia_von_binh_quan
+            FROM ton_kho
+            WHERE chi_nhanh_id = @ChiNhanhId
+              AND san_pham_id = @SanPhamId
+            FOR UPDATE;
+            """;
+
+            var banGhi = (await connection.QueryAsync(
+                selectTonSql,
+                new
+                {
+                    ChiNhanhId = branchId,
+                    SanPhamId = productId
+                },
+                transaction)).ToList();
+
+            decimal tonTruoc = 0;
+            decimal giaVon = 0;
+
+            if (banGhi.FirstOrDefault() is IDictionary<string, object> row)
+            {
+                tonTruoc = ToDecimal(row.TryGetValue("so_luong_ton", out var s) ? s : null);
+                giaVon = ToDecimal(row.TryGetValue("gia_von_binh_quan", out var g) ? g : null);
+            }
+            else
+            {
+                giaVon = await connection.ExecuteScalarAsync<decimal>(
+                    "SELECT COALESCE(gia_von, 0) FROM san_pham WHERE id = @Id;",
+                    new { Id = productId },
+                    transaction);
+            }
+
+            const string upsertTonSql = """
+            INSERT INTO ton_kho
+            (
+                chi_nhanh_id,
+                san_pham_id,
+                so_luong_ton,
+                gia_von_binh_quan,
+                ngay_cap_nhat
+            )
+            VALUES
+            (
+                @ChiNhanhId,
+                @SanPhamId,
+                @SoLuongTon,
+                @GiaVonBinhQuan,
+                NOW()
+            )
+            ON DUPLICATE KEY UPDATE
+                so_luong_ton  = @SoLuongTon,
+                ngay_cap_nhat = NOW();
+            """;
+
+            await connection.ExecuteAsync(
+                upsertTonSql,
+                new
+                {
+                    ChiNhanhId = branchId,
+                    SanPhamId = productId,
+                    SoLuongTon = soLuongTonMoi,
+                    GiaVonBinhQuan = giaVon
+                },
+                transaction);
+
+            await connection.ExecuteAsync(
+                """
+                UPDATE san_pham
+                SET ton_kho_excel = @SoLuongTon,
+                    ngay_cap_nhat = NOW()
+                WHERE id = @SanPhamId;
+                """,
+                new
+                {
+                    SanPhamId = productId,
+                    SoLuongTon = soLuongTonMoi
+                },
+                transaction);
+
+            try
+            {
+                const string insertLichSuSql = """
+                INSERT INTO lich_su_nhap_xuat_kho
+                (
+                    chi_nhanh_id,
+                    san_pham_id,
+                    loai_giao_dich,
+                    loai_chung_tu,
+                    ma_chung_tu,
+                    so_luong,
+                    ton_truoc,
+                    ton_sau,
+                    gia_von,
+                    nguoi_thuc_hien_id,
+                    thoi_gian,
+                    ghi_chu
+                )
+                VALUES
+                (
+                    @ChiNhanhId,
+                    @SanPhamId,
+                    'KIEM_KHO',
+                    'CHINH_SUA_NHANH',
+                    NULL,
+                    @SoLuong,
+                    @TonTruoc,
+                    @TonSau,
+                    @GiaVon,
+                    @NguoiThucHienId,
+                    NOW(),
+                    @GhiChu
+                );
+                """;
+
+                var chenhLech = soLuongTonMoi - tonTruoc;
+                await connection.ExecuteAsync(
+                    insertLichSuSql,
+                    new
+                    {
+                        ChiNhanhId = branchId,
+                        SanPhamId = productId,
+                        SoLuong = Math.Abs(chenhLech),
+                        TonTruoc = tonTruoc,
+                        TonSau = soLuongTonMoi,
+                        GiaVon = giaVon,
+                        NguoiThucHienId = userId,
+                        GhiChu = "Chỉnh sửa tồn kho nhanh tại giao diện bán hàng"
+                    },
+                    transaction);
+            }
+            catch (Exception exLichSu)
+            {
+                SafeLog.WriteError("Ghi lich su ton kho nhanh", exLichSu);
+            }
+
+            await transaction.CommitAsync();
+
+            _ = LogSubAccountActivityAsync(
+                "Chỉnh tồn kho nhanh",
+                "SAN_PHAM",
+                productId,
+                null,
+                $"Cập nhật tồn kho sản phẩm ID {productId} từ {tonTruoc:N0} thành {soLuongTonMoi:N0}",
+                soLuongTonMoi);
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            SafeLog.WriteError("Cap nhat ton kho nhanh", ex);
+            throw;
+        }
+    }
+
     public async Task XoaSanPhamAsync(uint productId)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsDelete, "Bạn không có quyền xóa hàng hóa.");
@@ -1888,6 +2072,56 @@ public sealed class DatabaseService
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Chuyển đổi an toàn giá trị bất kỳ từ cơ sở dữ liệu sang kiểu decimal.
+    /// Hỗ trợ null, DBNull, số nguyên, số thực hoặc chuỗi số.
+    /// </summary>
+    private static decimal ToDecimal(object? value)
+    {
+        if (value is null or DBNull)
+            return 0m;
+
+        if (value is decimal d)
+            return d;
+
+        if (value is double dbl)
+            return (decimal)dbl;
+
+        if (value is float f)
+            return (decimal)f;
+
+        if (value is int i)
+            return i;
+
+        if (value is long l)
+            return l;
+
+        if (value is short s)
+            return s;
+
+        if (value is uint ui)
+            return ui;
+
+        if (value is ulong ul)
+            return ul;
+
+        var str = value.ToString();
+        if (string.IsNullOrWhiteSpace(str))
+            return 0m;
+
+        if (decimal.TryParse(str, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+            return parsed;
+
+        try
+        {
+            return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            return 0m;
+        }
     }
 
     private static decimal ParseDecimal(string? value, decimal defaultValue)
@@ -6687,8 +6921,6 @@ LIMIT 500;
     // QUẢN LÝ NHÓM SẢN PHẨM & ĐƠN VỊ TÍNH
     // ==========================================
 
-
-
     public async Task XoaNhomSanPhamAsync(uint id)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền xóa nhóm hàng hóa.");
@@ -7911,14 +8143,6 @@ LIMIT 500;
         }
 
         return _hasPhieuQuyHoaDonColumns.Value;
-    }
-
-    private static decimal ToDecimal(object? value)
-    {
-        if (value is null || value is DBNull)
-            return 0;
-
-        return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
     }
 
     // ================================================================

@@ -233,6 +233,10 @@
         Foreground="#D92D20" FontSize="12" Margin="0,0,0,6" />
 
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+        <Button x:Name="ThanhToanCongNoButton" Content="💵 Thanh toán công nợ"
+          Classes="toolbar-primary" IsVisible="False"
+          Click="ThanhToanCongNoButton_OnClick" Padding="24,10"
+          ToolTip.Tip="Thu công nợ cho hóa đơn này" />
         <Button Content="🖨 In hóa đơn" Classes="toolbar-primary"
           Click="PrintButton_OnClick" Padding="24,10" />
         <Button Content="Đóng" Classes="toolbar-primary"
