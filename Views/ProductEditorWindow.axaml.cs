@@ -80,11 +80,13 @@ public partial class ProductEditorWindow : Window
         NhomSanPhamComboBox.SelectedItem = FindOption(NhomSanPhamComboBox.ItemsSource, _product.NhomSanPhamId);
         DonViTinhComboBox.SelectedItem = FindOption(DonViTinhComboBox.ItemsSource, _product.DonViTinhId);
 
-        // Giá bán hiển thị kiểu Việt Nam (50.000), các ô số khác giữ nguyên dạng gốc
+        // Giá bán / giá vốn hiển thị kiểu tiền Việt Nam (50.000).
+        // Tồn kho / KH đặt là số lượng nên dùng định dạng số lượng: bỏ các số 0
+        // thập phân vô nghĩa (100.000 -> 100) nhưng giữ phần thập phân thật.
         GiaBanTextBox.Text = MoneyInput.Format(_product.GiaBan);
         GiaVonTextBox.Text =  MoneyInput.Format(_product.GiaVon);
-        TonKhoTextBox.Text = _product.TonKhoExcel.ToString(CultureInfo.InvariantCulture);
-        KhachDatTextBox.Text = _product.KhachDat.ToString(CultureInfo.InvariantCulture);
+        TonKhoTextBox.Text = SoLuongFormat.Raw(_product.TonKhoExcel);
+        KhachDatTextBox.Text = SoLuongFormat.Raw(_product.KhachDat);
         ViTriKhoTextBox.Text = _product.ViTriKho ?? "";
         LoaiHangTextBox.Text = _product.LoaiHang ?? "";
         DuKienHetHangTextBox.Text = _product.DuKienHetHang ?? "";

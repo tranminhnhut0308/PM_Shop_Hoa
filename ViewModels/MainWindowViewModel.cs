@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using Avalonia.Platform.Storage;
 using ClosedXML.Excel;
 using System.Threading;
@@ -3594,25 +3595,6 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
 
     public bool IsBaoCaoPhieuNhapEmpty => BaoCaoPhieuNhaps.Count == 0;
 
-    /// <summary>Trạng thái ô "chọn tất cả" ở đầu bảng: đã chọn / chọn một phần / chưa chọn.</summary>
-    public bool? IsBaoCaoPhieuNhapAllSelected
-    {
-        get
-        {
-            if (BaoCaoPhieuNhaps.Count == 0)
-                return false;
-
-            var soDaChon = BaoCaoPhieuNhaps.Count(x => x.IsSelected);
-
-            if (soDaChon == 0)
-                return false;
-
-            return soDaChon == BaoCaoPhieuNhaps.Count ? true : null;
-        }
-    }
-
-    public int BaoCaoPhieuNhapSelectedCount => BaoCaoPhieuNhaps.Count(x => x.IsSelected);
-
     public bool CanBaoCaoPhieuNhapTrangTruoc => BaoCaoPhieuNhapPage > 1;
 
     public bool CanBaoCaoPhieuNhapTrangSau => BaoCaoPhieuNhapPage < BaoCaoPhieuNhapTotalPages;
@@ -3818,8 +3800,6 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             OnPropertyChanged(nameof(BaoCaoPhieuNhapRangeText));
             OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangTruoc));
             OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangSau));
-            OnPropertyChanged(nameof(IsBaoCaoPhieuNhapAllSelected));
-            OnPropertyChanged(nameof(BaoCaoPhieuNhapSelectedCount));
 
             StatusMessage = BaoCaoPhieuNhaps.Count == 0
                 ? "Không có dữ liệu phiếu nhập phù hợp"
@@ -3906,32 +3886,6 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         await LoadBaoCaoPhieuNhapAsync();
     }
 
-    [RelayCommand]
-    private void ChonTatCaBaoCaoPhieuNhap(bool? isChecked)
-    {
-        foreach (var item in BaoCaoPhieuNhaps)
-            item.IsSelected = isChecked == true;
-
-        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapAllSelected));
-        OnPropertyChanged(nameof(BaoCaoPhieuNhapSelectedCount));
-    }
-
-    [RelayCommand]
-    private static void BatYeuThichBaoCaoPhieuNhap(PhieuNhapHang? item)
-    {
-        if (item is null)
-            return;
-
-        item.IsYeuThich = !item.IsYeuThich;
-    }
-
-    /// <summary>Đồng bộ lại trạng thái ô "chọn tất cả" khi người dùng bấm checkbox của một dòng.</summary>
-    public void CapNhatTrangThaiChonTatCaBaoCaoPhieuNhap()
-    {
-        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapAllSelected));
-        OnPropertyChanged(nameof(BaoCaoPhieuNhapSelectedCount));
-    }
-
     /// <summary>
     /// Mở cửa sổ xem chi tiết một phiếu nhập trong báo cáo (chỉ đọc).
     /// Truy vấn lại đầy đủ header + dòng hàng theo khoá chính phieu_nhap_hang.id,
@@ -3967,6 +3921,54 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
                 : $"Không mở được chi tiết phiếu nhập {maPhieu}: {ex.Message}";
 
             SafeLog.WriteError("Loi xem chi tiet phieu nhap", ex);
+        }
+    }
+
+    /// <summary>
+    /// In lại một phiếu nhập đã lưu: đọc đầy đủ chi tiết + thông tin tiệm, dựng
+    /// file HTML tạm rồi mở bằng trình duyệt mặc định để người dùng Ctrl+P.
+    /// Chỉ đọc dữ liệu, không sửa/xóa phiếu.
+    /// </summary>
+    [RelayCommand]
+    private async Task InPhieuNhapAsync(PhieuNhapHang? item)
+    {
+        if (item is null || item.Id == 0)
+            return;
+
+        var maPhieu = item.MaPhieuNhap;
+
+        try
+        {
+            var detail = await _db.GetPhieuNhapHangDetailAsync(item.Id);
+
+            if (detail is null)
+            {
+                StatusMessage = string.IsNullOrWhiteSpace(maPhieu)
+                    ? "Không tìm thấy phiếu nhập trong database."
+                    : $"Không tìm thấy phiếu nhập {maPhieu} trong database.";
+                return;
+            }
+
+            var tiem = await LayThongTinTiemChoHoaDonAsync();
+            var duongDan = PhieuNhapPrintService.LuuFileTam(detail, tiem);
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = duongDan,
+                UseShellExecute = true
+            });
+
+            StatusMessage = string.IsNullOrWhiteSpace(maPhieu)
+                ? "Đã mở bản in phiếu nhập."
+                : $"Đã mở bản in phiếu nhập {maPhieu}.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = string.IsNullOrWhiteSpace(maPhieu)
+                ? $"Không in được phiếu nhập: {ex.Message}"
+                : $"Không in được phiếu nhập {maPhieu}: {ex.Message}";
+
+            SafeLog.WriteError("Loi in phieu nhap", ex);
         }
     }
 

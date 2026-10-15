@@ -2179,7 +2179,7 @@
 
                             <!-- TỒN KHO -->
                             <TextBlock Grid.Column="5"
-                              Text="{Binding TonKhoExcel, StringFormat={}{0:N0}}"
+                              Text="{Binding TonKhoExcel, Converter={x:Static converters:SoLuongHienThiConverter.Instance}}"
                               Foreground="#344054"
                               FontSize="13"
                               HorizontalAlignment="Right"
@@ -2188,7 +2188,7 @@
 
                             <!-- KHÁCH ĐẶT -->
                             <TextBlock Grid.Column="6"
-                              Text="{Binding KhachDat, StringFormat={}{0:N0}}"
+                              Text="{Binding KhachDat, Converter={x:Static converters:SoLuongHienThiConverter.Instance}}"
                               Foreground="#344054"
                               FontSize="13"
                               HorizontalAlignment="Right"
@@ -5964,62 +5964,54 @@
               BorderThickness="0,0,0,1"
               Padding="16,12">
 
-              <Grid ColumnDefinitions="50,50,170,140,120,*,180,140"
+              <Grid ColumnDefinitions="180,150,130,*,200,150,64"
                 ColumnSpacing="10">
 
-                <CheckBox Name="BaoCaoPhieuNhapChonTatCaBox"
-                  IsThreeState="True"
-                  IsChecked="{Binding IsBaoCaoPhieuNhapAllSelected, Mode=OneWay}"
-                  Checked="OnBaoCaoPhieuNhapChonTatCaChanged"
-                  Unchecked="OnBaoCaoPhieuNhapChonTatCaChanged"
-                  Indeterminate="OnBaoCaoPhieuNhapChonTatCaChanged"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center" />
-
-                <TextBlock Grid.Column="1"
-                  Text="★"
-                  FontSize="14"
-                  Foreground="#164B40"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center" />
-
-                <TextBlock Grid.Column="2"
+                <TextBlock Grid.Column="0"
                   Text="MÃ NHẬP HÀNG"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
                   VerticalAlignment="Center" />
 
-                <TextBlock Grid.Column="3"
+                <TextBlock Grid.Column="1"
                   Text="THỜI GIAN"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
                   VerticalAlignment="Center" />
 
-                <TextBlock Grid.Column="4"
+                <TextBlock Grid.Column="2"
                   Text="MÃ NCC"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
                   VerticalAlignment="Center" />
 
-                <TextBlock Grid.Column="5"
+                <TextBlock Grid.Column="3"
                   Text="NHÀ CUNG CẤP"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
                   VerticalAlignment="Center" />
 
-                <TextBlock Grid.Column="6"
+                <TextBlock Grid.Column="4"
                   Text="PHƯƠNG THỨC / QUỸ"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
                   VerticalAlignment="Center" />
 
-                <TextBlock Grid.Column="7"
+                <TextBlock Grid.Column="5"
                   Text="TRẠNG THÁI"
+                  FontWeight="Bold"
+                  Foreground="#164B40"
+                  FontSize="12"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center" />
+
+                <TextBlock Grid.Column="6"
+                  Text="IN"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
@@ -6045,6 +6037,12 @@
                   <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
                     <Setter Property="Background" Value="#F4FAF8" />
                   </Style>
+                  <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                    <Setter Property="Background" Value="Transparent" />
+                  </Style>
+                  <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter">
+                    <Setter Property="Background" Value="#F4FAF8" />
+                  </Style>
                 </ListBox.Styles>
 
                 <ListBox.ItemTemplate>
@@ -6057,30 +6055,11 @@
                       ToolTip.Tip="Nhấn vào dòng để xem chi tiết phiếu nhập"
                       Padding="16,11">
 
-                      <Grid ColumnDefinitions="50,50,170,140,120,*,180,140"
+                      <Grid ColumnDefinitions="180,150,130,*,200,150,64"
                         ColumnSpacing="10"
                         VerticalAlignment="Center">
 
-                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                          Checked="OnBaoCaoPhieuNhapRowChecked"
-                          Unchecked="OnBaoCaoPhieuNhapRowChecked"
-                          HorizontalAlignment="Center"
-                          VerticalAlignment="Center" />
-
-                        <Button Grid.Column="1"
-                          Background="Transparent"
-                          BorderThickness="0"
-                          Padding="0"
-                          HorizontalAlignment="Center"
-                          VerticalAlignment="Center"
-                          Command="{Binding ElementName=RootWindow, Path=DataContext.BatYeuThichBaoCaoPhieuNhapCommand}"
-                          CommandParameter="{Binding}">
-                          <TextBlock Text="★"
-                            FontSize="16"
-                            Foreground="{Binding IsYeuThich, Converter={x:Static converters:YeuThichConverter.Instance}}" />
-                        </Button>
-
-                        <Button Grid.Column="2"
+                        <Button Grid.Column="0"
                           Background="Transparent"
                           BorderThickness="0"
                           Padding="0"
@@ -6097,19 +6076,19 @@
                             VerticalAlignment="Center" />
                         </Button>
 
-                        <TextBlock Grid.Column="3"
+                        <TextBlock Grid.Column="1"
                           Text="{Binding ThoiGianNhapText}"
                           Foreground="#667A74"
                           FontSize="12"
                           VerticalAlignment="Center" />
 
-                        <TextBlock Grid.Column="4"
+                        <TextBlock Grid.Column="2"
                           Text="{Binding MaNhaCungCap}"
                           Foreground="#667A74"
                           FontSize="12"
                           VerticalAlignment="Center" />
 
-                        <TextBlock Grid.Column="5"
+                        <TextBlock Grid.Column="3"
                           Text="{Binding TenNhaCungCap}"
                           Foreground="#263B35"
                           FontWeight="Medium"
@@ -6117,7 +6096,7 @@
                           VerticalAlignment="Center" />
 
                         <!-- PHƯƠNG THỨC / QUỸ CHI TRẢ -->
-                        <StackPanel Grid.Column="6"
+                        <StackPanel Grid.Column="4"
                           VerticalAlignment="Center"
                           Spacing="2">
                           <TextBlock Text="{Binding PhuongThucThanhToanHienThi}"
@@ -6130,7 +6109,7 @@
                         </StackPanel>
 
                         <!-- BADGE TRẠNG THÁI -->
-                        <Border Grid.Column="7"
+                        <Border Grid.Column="5"
                           CornerRadius="14"
                           Padding="12,4"
                           HorizontalAlignment="Center"
@@ -6143,6 +6122,20 @@
                             VerticalAlignment="Center"
                             Foreground="{Binding TrangThaiBadgeForeground}" />
                         </Border>
+
+                        <!-- NÚT IN PHIẾU NHẬP -->
+                        <Button Grid.Column="6"
+                          Classes="toolbar-action"
+                          Content="🖨"
+                          FontSize="14"
+                          Width="40"
+                          Height="30"
+                          Padding="0"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          ToolTip.Tip="In phiếu nhập"
+                          Command="{Binding ElementName=RootWindow, Path=DataContext.InPhieuNhapCommand}"
+                          CommandParameter="{Binding}" />
                       </Grid>
                     </Border>
                   </DataTemplate>
@@ -6180,7 +6173,7 @@
               BorderThickness="0,1,0,0"
               Padding="16,10">
 
-              <Grid ColumnDefinitions="Auto,*,Auto"
+              <Grid ColumnDefinitions="Auto,*"
                 ColumnSpacing="12">
 
                 <!-- TỔNG SỐ GIAO DỊCH -->
@@ -6264,12 +6257,6 @@
                     ToolTip.Tip="Về trang cuối"
                     Command="{Binding BaoCaoPhieuNhapTrangCuoiCommand}" />
                 </StackPanel>
-
-                <TextBlock Grid.Column="2"
-                  Text="{Binding BaoCaoPhieuNhapSelectedCount, StringFormat='Đã chọn {0} phiếu'}"
-                  FontSize="11"
-                  Foreground="#98A2B3"
-                  VerticalAlignment="Center" />
               </Grid>
             </Border>
           </Grid>
