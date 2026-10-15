@@ -7,6 +7,10 @@
   x:Name="RootView"
   x:DataType="vm:BaoCaoNhaCungCapViewModel">
 
+  <UserControl.Resources>
+    <x:Double x:Key="DatePickerThemeMinWidth">0</x:Double>
+  </UserControl.Resources>
+
   <UserControl.Styles>
     <!-- ===== CARD ===== -->
     <Style Selector="Border.nccCard">
@@ -113,7 +117,26 @@
     </Style>
     <Style Selector="DatePicker.flDate">
       <Setter Property="FontSize" Value="12" />
+      <Setter Property="Height" Value="34" />
       <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="BorderBrush" Value="#D1D5DB" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="DatePicker.flDate /template/ Button#PART_FlyoutButton">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="4,0" />
+    </Style>
+    <Style Selector="DatePicker.flDate /template/ Button#FlyoutButton">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="4,0" />
+    </Style>
+    <Style Selector="DatePicker.flDate TextBlock">
+      <Setter Property="FontSize" Value="11.5" />
     </Style>
     <Style Selector="RadioButton">
       <Setter Property="FontSize" Value="12.5" />
@@ -191,12 +214,12 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid Margin="16" ColumnDefinitions="280,*" ColumnSpacing="16">
+  <Grid Margin="16" ColumnDefinitions="320,*" ColumnSpacing="16">
 
     <!-- ============================================================ -->
     <!-- BÊN TRÁI: PANEL BỘ LỌC (GIỐNG HÌNH THAM KHẢO)               -->
     <!-- ============================================================ -->
-    <Border Grid.Column="0" Classes="nccCard" Padding="18,18" VerticalAlignment="Top">
+    <Border Grid.Column="0" Classes="nccCard" Padding="18,18" VerticalAlignment="Top" ClipToBounds="True">
       <StackPanel Spacing="16">
 
         <!-- TIÊU ĐỀ BỘ LỌC -->

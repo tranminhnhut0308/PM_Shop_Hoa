@@ -4176,31 +4176,6 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         SelectedMenu = "Nhập hàng";
     }
 
-    [RelayCommand]
-    private async Task DongPhieuNhapHangAsync()
-    {
-        if (PhieuNhapItems.Count > 0)
-        {
-            var confirmed = await ShowConfirmationAsync(
-                "Thoát lập phiếu nhập",
-                "Phiếu nhập đang có dữ liệu chưa được lưu. Bạn có chắc muốn thoát?",
-                "Thoát",
-                "Tiếp tục nhập");
-
-            if (!confirmed)
-                return;
-        }
-
-        BoDangKyPhieuNhapItems();
-
-        RecalculatePhieuNhapTongTienHang();
-        OnPropertyChanged(nameof(HasPhieuNhapSuggestions));
-
-        _phieuNhapId = 0;
-
-        IsNhapHangFormVisible = false;
-    }
-
     private void BoDangKyPhieuNhapItems()
     {
         foreach (var item in PhieuNhapItems)

@@ -44,7 +44,8 @@
             <TabItem Header="Nhóm hàng" FontSize="14" FontWeight="SemiBold">
                 <Grid RowDefinitions="Auto,*" Margin="0,14,0,0">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,0,0,12">
-                        <TextBox x:Name="NewGroupNameTextBox" Watermark="Nhập tên nhóm hàng mới..." />
+                        <TextBox x:Name="NewGroupNameTextBox" Watermark="Nhập nhanh tên nhóm và nhấn Enter (hoặc bấm + Thêm nhóm)..."
+                            KeyDown="NewGroupNameTextBox_OnKeyDown" />
                         <Button Grid.Column="1" Classes="primary" Content="+ Thêm nhóm"
                             Click="AddGroup_OnClick" />
                     </Grid>
@@ -72,7 +73,8 @@
                 <Grid RowDefinitions="Auto,*" Margin="0,14,0,0">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,0,0,12">
                         <TextBox x:Name="NewUnitNameTextBox"
-                            Watermark="Nhập đơn vị tính mới (cành, bó, chậu...)" />
+                            Watermark="Nhập nhanh ĐVT và nhấn Enter (hoặc bấm + Thêm ĐVT)..."
+                            KeyDown="NewUnitNameTextBox_OnKeyDown" />
                         <Button Grid.Column="1" Classes="primary" Content="+ Thêm ĐVT"
                             Click="AddUnit_OnClick" />
                     </Grid>

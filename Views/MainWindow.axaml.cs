@@ -71,8 +71,10 @@ public partial class MainWindow : Window
         var settingsDialog = new CategorySettingsWindow();
         await settingsDialog.ShowDialog(this);
 
-        // Tải lại danh sách nhóm hàng & ĐVT trong ViewModel nếu cần
-        // viewModel.ReloadProductOptions();
+        if (DataContext is MainWindowViewModel vm)
+        {
+            await vm.LoadNhomSanPhamCommand.ExecuteAsync(null);
+        }
     }
 
     /// <summary>
