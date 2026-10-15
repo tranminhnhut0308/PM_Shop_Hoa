@@ -724,7 +724,7 @@ public sealed class DatabaseService
         try
         {
             hasMaNhom = await connection.ExecuteScalarAsync<int>(
-                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nhom_san_pham' AND COLUMN_NAME = 'ma_nhom';") > 0;
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'nhom_san_pham' AND LOWER(COLUMN_NAME) = 'ma_nhom';") > 0;
         }
         catch { }
 
@@ -732,14 +732,22 @@ public sealed class DatabaseService
         if (hasMaNhom)
         {
             var maNhom = "N" + DateTime.Now.ToString("yyMMddHHmmss");
-            newId = await connection.ExecuteScalarAsync<uint>(
-                "INSERT INTO nhom_san_pham (ma_nhom, ten_nhom, trang_thai) VALUES (@Ma, @Ten, 1); SELECT LAST_INSERT_ID();",
+            await connection.ExecuteAsync(
+                "INSERT INTO nhom_san_pham (ma_nhom, ten_nhom, trang_thai) VALUES (@Ma, @Ten, 1);",
                 new { Ma = maNhom, Ten = ten });
         }
         else
         {
+            await connection.ExecuteAsync(
+                "INSERT INTO nhom_san_pham (ten_nhom, trang_thai) VALUES (@Ten, 1);",
+                new { Ten = ten });
+        }
+
+        newId = await connection.ExecuteScalarAsync<uint>("SELECT LAST_INSERT_ID();");
+        if (newId == 0)
+        {
             newId = await connection.ExecuteScalarAsync<uint>(
-                "INSERT INTO nhom_san_pham (ten_nhom, trang_thai) VALUES (@Ten, 1); SELECT LAST_INSERT_ID();",
+                "SELECT id FROM nhom_san_pham WHERE LOWER(TRIM(ten_nhom)) = LOWER(@Ten) ORDER BY id DESC LIMIT 1;",
                 new { Ten = ten });
         }
 
@@ -770,7 +778,7 @@ public sealed class DatabaseService
         try
         {
             hasMaDvt = await connection.ExecuteScalarAsync<int>(
-                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'don_vi_tinh' AND COLUMN_NAME = 'ma_don_vi';") > 0;
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'don_vi_tinh' AND LOWER(COLUMN_NAME) = 'ma_don_vi';") > 0;
         }
         catch { }
 
@@ -778,14 +786,22 @@ public sealed class DatabaseService
         if (hasMaDvt)
         {
             var ma = !string.IsNullOrWhiteSpace(maDonVi) ? maDonVi.Trim() : ("DVT" + DateTime.Now.ToString("yyMMddHHmmss"));
-            newId = await connection.ExecuteScalarAsync<uint>(
-                "INSERT INTO don_vi_tinh (ma_don_vi, ten_don_vi, trang_thai) VALUES (@Ma, @Ten, 1); SELECT LAST_INSERT_ID();",
+            await connection.ExecuteAsync(
+                "INSERT INTO don_vi_tinh (ma_don_vi, ten_don_vi, trang_thai) VALUES (@Ma, @Ten, 1);",
                 new { Ma = ma, Ten = ten });
         }
         else
         {
+            await connection.ExecuteAsync(
+                "INSERT INTO don_vi_tinh (ten_don_vi, trang_thai) VALUES (@Ten, 1);",
+                new { Ten = ten });
+        }
+
+        newId = await connection.ExecuteScalarAsync<uint>("SELECT LAST_INSERT_ID();");
+        if (newId == 0)
+        {
             newId = await connection.ExecuteScalarAsync<uint>(
-                "INSERT INTO don_vi_tinh (ten_don_vi, trang_thai) VALUES (@Ten, 1); SELECT LAST_INSERT_ID();",
+                "SELECT id FROM don_vi_tinh WHERE LOWER(TRIM(ten_don_vi)) = LOWER(@Ten) ORDER BY id DESC LIMIT 1;",
                 new { Ten = ten });
         }
 

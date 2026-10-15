@@ -6,6 +6,10 @@
   x:Name="RootView"
   x:DataType="vm:BaoCaoKhachHangViewModel">
 
+  <UserControl.Resources>
+    <x:Double x:Key="DatePickerThemeMinWidth">0</x:Double>
+  </UserControl.Resources>
+
   <UserControl.Styles>
     <!-- ===== CARD ===== -->
     <Style Selector="Border.bcCard">
@@ -203,8 +207,31 @@
       <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
     <Style Selector="DatePicker.flDate">
-      <Setter Property="FontSize" Value="12" />
+      <!-- Cho phép co giãn tự do theo chiều ngang và ôm sát khung cha -->
       <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Padding" Value="4,2" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="BorderBrush" Value="#D5E3DF" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <!-- Ép các nút bấm / ô chọn bên trong DatePicker co giãn đúng kích thước -->
+    <Style Selector="DatePicker.flDate /template/ Button#PART_FlyoutButton">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="4,0" />
+    </Style>
+    <Style Selector="DatePicker.flDate /template/ Button#FlyoutButton">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="4,0" />
+    </Style>
+
+    <!-- Giảm font chữ của văn bản hiển thị ngày/tháng/năm bên trong -->
+    <Style Selector="DatePicker.flDate TextBlock">
+      <Setter Property="FontSize" Value="11.5" />
     </Style>
   </UserControl.Styles>
 
@@ -249,10 +276,10 @@
         Foreground="#087F6E" Background="#EAF9F5" BorderThickness="0" />
 
       <!-- ============ 4. NỘI DUNG 2 CỘT: BỘ LỌC (TRÁI) + NỘI DUNG (PHẢI) ============ -->
-      <Grid ColumnDefinitions="270,*" ColumnSpacing="12">
+      <Grid ColumnDefinitions="310,*" ColumnSpacing="12">
 
         <!-- ===== CỘT TRÁI: BỘ LỌC ===== -->
-        <Border Classes="bcCard" Padding="16,14" VerticalAlignment="Top">
+        <Border Classes="bcCard" Padding="16,14" VerticalAlignment="Top" ClipToBounds="True">
           <StackPanel Spacing="11">
             <TextBlock Classes="bcSectionTitle" Text="Bộ lọc" />
             <Border Height="1" Background="#EEF4F2" />

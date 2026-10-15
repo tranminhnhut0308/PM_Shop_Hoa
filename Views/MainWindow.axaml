@@ -17,6 +17,7 @@
   MinHeight="700">
 
   <Window.Resources>
+    <x:Double x:Key="DatePickerThemeMinWidth">0</x:Double>
     <converters:ThousandsSeparatorConverter x:Key="ThousandsSeparatorConverter" />
     <converters:LuaChonRadioConverter x:Key="LuaChonRadioConverter" />
     <converters:ConNoForegroundConverter x:Key="ConNoForegroundConverter" />
@@ -1167,9 +1168,27 @@
 
     <Style Selector="DatePicker.sq-date">
       <Setter Property="Height" Value="34" />
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontSize" Value="11" />
       <Setter Property="Foreground" Value="#263B35" />
       <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="2,0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="DatePicker.sq-date /template/ Button#PART_FlyoutButton">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="2,0" />
+    </Style>
+    <Style Selector="DatePicker.sq-date /template/ Button#FlyoutButton">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="2,0" />
+    </Style>
+    <Style Selector="DatePicker.sq-date TextBlock">
+      <Setter Property="FontSize" Value="10.5" />
     </Style>
 
   </Window.Styles>
@@ -4148,29 +4167,18 @@
               RowSpacing="12">
 
               <!-- TIÊU ĐỀ -->
-              <Grid Grid.Row="0" Grid.ColumnSpan="2"
-                ColumnDefinitions="*,Auto">
+              <StackPanel Grid.Row="0" Grid.ColumnSpan="2">
+                <TextBlock Text="Lập phiếu nhập hàng"
+                  FontSize="26"
+                  FontWeight="Bold"
+                  Foreground="#163F38" />
 
-                <StackPanel>
-                  <TextBlock Text="Lập phiếu nhập hàng"
-                    FontSize="26"
-                    FontWeight="Bold"
-                    Foreground="#163F38" />
-
-                  <TextBlock
-                    Text="Chọn hàng hóa, nhập số lượng và giá nhập để tạo phiếu nhập từ nhà cung cấp"
-                    Foreground="#61736E"
-                    FontSize="13"
-                    Margin="0,4,0,0" />
-                </StackPanel>
-
-                <Button Grid.Column="1"
-                  Classes="toolbar-action"
-                  Content="←  Danh sách phiếu nhập"
-                  Command="{Binding DongPhieuNhapHangCommand}"
-                  VerticalAlignment="Center"
-                  Margin="0" />
-              </Grid>
+                <TextBlock
+                  Text="Chọn hàng hóa, nhập số lượng và giá nhập để tạo phiếu nhập từ nhà cung cấp"
+                  Foreground="#61736E"
+                  FontSize="13"
+                  Margin="0,4,0,0" />
+              </StackPanel>
 
               <!-- CỘT TRÁI - BẢNG HÀNG HÓA NHẬP                          -->
               <Grid Grid.Row="1" Grid.RowSpan="2" Grid.Column="0"

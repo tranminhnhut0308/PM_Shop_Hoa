@@ -341,6 +341,27 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
         if (KhoangThoiGian != NhanTuyChinh || TuNgayChon is null || DenNgayChon is null)
             return;
 
+        // Đồng bộ khoảng đang áp dụng theo ngày vừa chọn (đổi thứ tự nếu ngược)
+        // rồi mới hẹn tải — trước đây chỉ cập nhật khi bấm "Áp dụng" nên lần tự
+        // tải lại dùng khoảng ngày cũ.
+        var tu = TuNgayChon.Value.Date;
+        var den = DenNgayChon.Value.Date;
+        if (den < tu)
+            (tu, den) = (den, tu);
+
+        _dangDatBoLoc = true;
+        try
+        {
+            TuNgay = tu;
+            DenNgay = den;
+            TuNgayChon = new DateTimeOffset(tu);
+            DenNgayChon = new DateTimeOffset(den);
+        }
+        finally
+        {
+            _dangDatBoLoc = false;
+        }
+
         YeuCauTaiCoTre();
     }
 
