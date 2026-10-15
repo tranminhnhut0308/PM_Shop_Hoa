@@ -597,6 +597,53 @@
       <Setter Property="Background" Value="#BDE5DA" />
       <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
+
+    <!-- Nút sản phẩm trong danh sách tìm kiếm bán hàng -->
+    <Style Selector="Button.productSearchItem">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.productSearchItem /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="Button.productSearchItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <!-- Nút sửa số lượng tồn kho nhanh khi hết hàng -->
+    <Style Selector="Button.quickStockEditBtn">
+      <Setter Property="Background" Value="#E8F5F1" />
+      <Setter Property="Foreground" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.quickStockEditBtn /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#E8F5F1" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="TextElement.Foreground" Value="#087F6E" />
+    </Style>
+
+    <Style Selector="Button.quickStockEditBtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+    </Style>
+
     <Style Selector="Button.toolbar-primary">
       <Setter Property="Background" Value="#087F6E" />
       <Setter Property="Foreground" Value="White" />
@@ -729,6 +776,35 @@
     <Style
       Selector="Button.toolbar-primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="TextElement.Foreground" Value="White" />
+    </Style>
+
+    <!-- Tên khách hàng trong bảng hóa đơn: nhìn như chữ thường nhưng bấm
+         được để mở chi tiết hóa đơn. -->
+    <Style Selector="Button.customerLink">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Foreground" Value="#163F38" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.customerLink:pointerover">
+      <Setter Property="Foreground" Value="#087F6E" />
+    </Style>
+
+    <Style Selector="Button.customerLink:pressed">
+      <Setter Property="Foreground" Value="#056B5D" />
+    </Style>
+
+    <Style
+      Selector="Button.customerLink /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
     </Style>
 
     <Style Selector="TextBox.searchInput">
@@ -1454,49 +1530,59 @@
               <ItemsControl ItemsSource="{Binding ProductSearchResults}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="models:SanPham">
-                    <Button Margin="0,0,0,8"
-                        Padding="8"
-                        CornerRadius="8"
-                        Background="White"
-                        BorderBrush="#D8E5E0"
-                        BorderThickness="1"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        IsEnabled="{Binding !HetHang}"
-                        Command="{Binding ElementName=RootWindow, Path=DataContext.ThemVaoGioHangCommand}"
-                        CommandParameter="{Binding}">
-                      <Button.Styles>
-                        <Style Selector="Button:disabled">
-                          <Setter Property="Opacity" Value="0.65" />
-                        </Style>
-                      </Button.Styles>
-                      
-                      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                            <Border Width="38" Height="38" CornerRadius="6" Background="#DFF5F0" VerticalAlignment="Center">
-                              <TextBlock Text="🌼" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                              <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold" Foreground="#163F38" TextTrimming="CharacterEllipsis" />
-                              <TextBlock Text="{Binding GiaBan, StringFormat={}{0:N0} đ}" Foreground="#087F6E" FontWeight="Bold" FontSize="12" />
-                              
-                              <StackPanel Orientation="Horizontal" Spacing="5">
-                                  <TextBlock Text="Tồn:" Foreground="#666666"/>
-                                  
-                                  <TextBlock Text="{Binding TonKho, StringFormat='{}{0:N0}'}"
-                                             IsVisible="{Binding !HetHang}"
-                                             FontWeight="Bold" Foreground="#078C7A"/>
+                    <Border Margin="0,0,0,8"
+                            Padding="8"
+                            CornerRadius="8"
+                            Background="White"
+                            BorderBrush="#D8E5E0"
+                            BorderThickness="1">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <Border Width="38" Height="38" CornerRadius="6" Background="#DFF5F0" VerticalAlignment="Center">
+                          <TextBlock Text="🌼" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
 
-                                  <Border Background="#FFEEE2" CornerRadius="4" Padding="6,2"
-                                          IsVisible="{Binding HetHang}">
-                                      <TextBlock Text="Hết hàng" 
-                                                 Foreground="#E53935" 
-                                                 FontWeight="Bold" 
-                                                 FontSize="12"/>
-                                  </Border>
-                              </StackPanel>
+                        <!-- Thông tin sản phẩm: Bấm vào để thêm vào giỏ hàng (nếu hết hàng sẽ tự mở popup sửa tồn kho) -->
+                        <Button Grid.Column="1"
+                                Classes="productSearchItem"
+                                Command="{Binding ElementName=RootWindow, Path=DataContext.ThemVaoGioHangCommand}"
+                                CommandParameter="{Binding}">
+                          <StackPanel VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold" Foreground="#163F38" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding GiaBan, StringFormat={}{0:N0} đ}" Foreground="#087F6E" FontWeight="Bold" FontSize="12" />
+
+                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                              <TextBlock Text="Tồn:" Foreground="#666666" FontSize="12" VerticalAlignment="Center"/>
+
+                              <TextBlock Text="{Binding TonKho, StringFormat='{}{0:N0}'}"
+                                         IsVisible="{Binding !HetHang}"
+                                         FontWeight="Bold" Foreground="#078C7A" FontSize="12" VerticalAlignment="Center"/>
+
+                              <Border Background="#FFEEE2" CornerRadius="4" Padding="6,2"
+                                      IsVisible="{Binding HetHang}">
+                                <TextBlock Text="Hết hàng"
+                                           Foreground="#E53935"
+                                           FontWeight="Bold"
+                                           FontSize="11"/>
+                              </Border>
                             </StackPanel>
-                          </Grid>
-                    </Button>
+                          </StackPanel>
+                        </Button>
+
+                        <!-- Nút Chỉnh sửa số lượng nhanh: chỉ hiển thị khi hết hàng -->
+                        <Button Grid.Column="2"
+                                Classes="quickStockEditBtn"
+                                IsVisible="{Binding HetHang}"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Chỉnh sửa số lượng tồn kho để bán ngay"
+                                Command="{Binding ElementName=RootWindow, Path=DataContext.ChinhSoLuongNhanhCommand}"
+                                CommandParameter="{Binding}">
+                          <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <TextBlock Text="✏" FontSize="12" VerticalAlignment="Center"/>
+                            <TextBlock Text="Sửa SL" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                          </StackPanel>
+                        </Button>
+                      </Grid>
+                    </Border>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
@@ -3037,11 +3123,12 @@
                             <StackPanel Orientation="Horizontal" Spacing="6">
                               <TextBlock Text="👤" FontSize="11" Foreground="#8FA39D"
                                 VerticalAlignment="Center" />
-                              <TextBlock Text="{Binding TenKhachHang, FallbackValue='Khách lẻ'}"
-                                Foreground="#263B35"
-                                FontWeight="Medium"
+                              <Button Classes="customerLink"
+                                Content="{Binding TenKhachHang, FallbackValue='Khách lẻ'}"
                                 VerticalAlignment="Center"
-                                TextTrimming="CharacterEllipsis" />
+                                ToolTip.Tip="Bấm để xem chi tiết hóa đơn"
+                                Command="{Binding ElementName=RootWindow, Path=DataContext.XemHoaDonCommand}"
+                                CommandParameter="{Binding}" />
                             </StackPanel>
                             <TextBlock Text="{Binding GhiChu}"
                               IsVisible="{Binding CoGhiChu}"

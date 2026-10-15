@@ -1970,6 +1970,41 @@ public partial class MainWindowViewModel : ObservableObject
             RecalculateSaleTotal();
     }
 
+    /// <summary>
+    /// Đồng bộ số lượng tồn kho mới cho mọi bản sao của sản phẩm đang nạp trong bộ nhớ
+    /// (danh sách hàng hóa, tìm kiếm bán hàng, giỏ hàng) để không màn hình nào
+    /// còn giữ số tồn cũ.
+    /// </summary>
+    private void DongBoTonKho(uint productId, decimal tonKho)
+    {
+        foreach (var item in SanPhams)
+        {
+            if (item.Id == productId)
+            {
+                item.TonKho = tonKho;
+                item.TonKhoExcel = tonKho;
+            }
+        }
+
+        foreach (var item in ProductSearchResults)
+        {
+            if (item.Id == productId)
+            {
+                item.TonKho = tonKho;
+                item.TonKhoExcel = tonKho;
+            }
+        }
+
+        foreach (var item in SaleCart)
+        {
+            if (item.SanPham.Id == productId)
+            {
+                item.SanPham.TonKho = tonKho;
+                item.SanPham.TonKhoExcel = tonKho;
+            }
+        }
+    }
+
     
 
     [RelayCommand]
@@ -3280,6 +3315,59 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         ResetDonHangVeMacDinh();
     }
 
+    /// <summary>
+    /// Mở hộp thoại chỉnh sửa nhanh số lượng tồn kho cho sản phẩm đã hết hàng trong màn hình bán hàng.
+    /// Cho phép người dùng bổ sung số lượng tồn kho để bán ngay lập tức.
+    /// </summary>
+    [RelayCommand]
+    private async Task ChinhSoLuongNhanhAsync(SanPham? product)
+    {
+        if (product is null)
+            return;
+
+        if (OwnerWindow is null)
+        {
+            StatusMessage = "Không xác định được cửa sổ bán hàng.";
+            return;
+        }
+
+        try
+        {
+            var dialog = new ChinhSoLuongNhanhWindow(product);
+            var result = await dialog.ShowDialog<KetQuaChinhSoLuong?>(OwnerWindow);
+
+            if (result is null || result.SoLuongTonMoi <= 0)
+            {
+                StatusMessage = "Đã hủy chỉnh sửa số lượng.";
+                return;
+            }
+
+            var updated = await _db.CapNhatTonKhoSanPhamAsync(product.Id, result.SoLuongTonMoi);
+
+            if (!updated)
+            {
+                StatusMessage = "Không thể cập nhật số lượng tồn kho cho sản phẩm.";
+                return;
+            }
+
+            // Đồng bộ số lượng tồn kho mới vào bộ nhớ
+            DongBoTonKho(product.Id, result.SoLuongTonMoi);
+
+            StatusMessage = $"Đã cập nhật tồn kho cho '{product.TenSanPham}': {result.SoLuongTonMoi:N0}.";
+
+            // Nếu người dùng chọn thêm vào giỏ hàng ngay để bán
+            if (result.ThemVaoGioHang)
+            {
+                await ThemVaoGioHangAsync(product);
+            }
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Chỉnh sửa số lượng nhanh", ex);
+            StatusMessage = "Lỗi khi cập nhật số lượng tồn kho: " + SafeLog.Redact(ex.Message);
+        }
+    }
+
     [RelayCommand]
     private async Task ThemVaoGioHangAsync(SanPham? product)
     {
@@ -3289,10 +3377,10 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         // Reset thông báo cũ để UI luôn nhận biết có sự thay đổi mới
         StatusMessage = string.Empty;
 
-        // 1. Kiểm tra sản phẩm đã hết hàng
+        // 1. Kiểm tra sản phẩm đã hết hàng -> Cho phép mở popup chỉnh sửa nhanh để bán ngay
         if (product.HetHang)
         {
-            StatusMessage = $"⚠️ Sản phẩm '{product.TenSanPham}' đã hết hàng!";
+            await ChinhSoLuongNhanhAsync(product);
             return;
         }
 
@@ -4817,7 +4905,7 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
 
             receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
 
-            var invoiceWindow = new InvoiceWindow(receipt);
+            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync);
             await invoiceWindow.ShowDialog(OwnerWindow);
         }
         catch (Exception ex)
@@ -4825,6 +4913,75 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             StatusMessage = $"Không mở được hóa đơn {maHoaDon}: {ex.Message}";
 
             SafeLog.WriteError("Loi xem hoa don", ex);
+        }
+    }
+
+    /// <summary>
+    /// Nhận yêu cầu thu công nợ từ cửa sổ chi tiết hóa đơn: hỏi số tiền + phương
+    /// thức rồi trừ đúng vào hóa đơn đang xem. Trả về hóa đơn đã đọc lại để cửa
+    /// sổ chi tiết cập nhật số nợ, hoặc null khi người dùng hủy / gặp lỗi.
+    /// </summary>
+    private async Task<HoaDonBanHangReceipt?> ThuCongNoTuChiTietHoaDonAsync(
+        HoaDonBanHangReceipt hoaDonDangXem)
+    {
+        if (OwnerWindow is null || hoaDonDangXem.ConNo <= 0)
+            return null;
+
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.CustomersDebtPay,
+                "Bạn không có quyền thu công nợ khách hàng."))
+        {
+            return null;
+        }
+
+        var hoaDon = new HoaDon
+        {
+            MaHoaDon = hoaDonDangXem.MaHoaDon,
+            TenKhachHang = hoaDonDangXem.TenKhachHang,
+            KhachCanTra = hoaDonDangXem.KhachCanTra,
+            KhachDaThanhToan = hoaDonDangXem.KhachDaThanhToan,
+            ConNo = hoaDonDangXem.ConNo
+        };
+
+        var dialog = new ThuNoHoaDonWindow(hoaDon);
+        var ketQua = await dialog.ShowDialog<ThuNoHoaDonKetQua?>(OwnerWindow);
+
+        if (ketQua is null)
+        {
+            StatusMessage = "Đã hủy thu công nợ.";
+            return null;
+        }
+
+        try
+        {
+            var receipt = await _db.ThuNoHoaDonAsync(
+                hoaDon.MaHoaDon,
+                ketQua.SoTien,
+                ketQua.PhuongThuc,
+                ketQua.GhiChu);
+
+            _invoicesLoaded = false;
+            await LoadInvoicesAsync();
+            _ = LamMoiTongQuanNeuDangMoAsync();
+
+            var thongBaoPhieu = string.IsNullOrWhiteSpace(receipt.MaPhieuThu)
+                ? ""
+                : $" Đã ghi phiếu thu {receipt.MaPhieuThu} vào sổ quỹ.";
+
+            StatusMessage =
+                $"Đã thu {ketQua.SoTien:N0} đ cho hóa đơn {hoaDon.MaHoaDon}. "
+                + $"Còn nợ {receipt.ConNo:N0} đ.{thongBaoPhieu}";
+
+            // Giữ nguyên thông tin tiệm đang hiển thị trên cửa sổ chi tiết.
+            receipt.ThongTinTiem = hoaDonDangXem.ThongTinTiem;
+
+            return receipt;
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageAsync("Không thu được công nợ", ex.Message);
+            SafeLog.WriteError("Loi thu no hoa don", ex);
+            return null;
         }
     }
 
