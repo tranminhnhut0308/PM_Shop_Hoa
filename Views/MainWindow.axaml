@@ -2835,9 +2835,16 @@
                                       <Border BorderBrush="#E2ECE8" BorderThickness="0,0,0,1"
                                         Padding="0,9">
                                         <Grid ColumnDefinitions="170,150,*,120,120,120" ColumnSpacing="10">
-                                          <TextBlock Text="{Binding MaHoaDon}" FontSize="12"
-                                            FontWeight="SemiBold" Foreground="#163F38"
-                                            VerticalAlignment="Center" />
+                                          <!-- Mã hóa đơn: bấm để xem chi tiết hóa đơn -->
+                                          <Button Classes="customerLink"
+                                            Content="{Binding MaHoaDon}"
+                                            FontSize="12"
+                                            FontWeight="SemiBold"
+                                            Foreground="#087F6E"
+                                            VerticalAlignment="Center"
+                                            ToolTip.Tip="Bấm để xem chi tiết hóa đơn"
+                                            Command="{Binding ElementName=RootWindow, Path=DataContext.XemHoaDonCommand}"
+                                            CommandParameter="{Binding}" />
                                           <TextBlock Grid.Column="1" Text="{Binding ThoiGianBanText}"
                                             FontSize="12" Foreground="#667A74"
                                             VerticalAlignment="Center" />
@@ -3120,15 +3127,21 @@
 
                   <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="models:HoaDon">
-                      <Border BorderBrush="#EEF3F1" BorderThickness="0,0,0,1" Padding="16,12">
+                      <Border BorderBrush="#EEF3F1" BorderThickness="0,0,0,1" Padding="16,12"
+                        Background="Transparent"
+                        DoubleTapped="InvoiceRow_OnDoubleTapped">
                         <Grid ColumnDefinitions="200,160,*,140,140,140,140,64,56" ColumnSpacing="12"
                           VerticalAlignment="Center">
 
-                          <!-- Mã hóa đơn -->
-                          <TextBlock Text="{Binding MaHoaDon}"
+                          <!-- Mã hóa đơn: bấm để xem chi tiết hóa đơn -->
+                          <Button Classes="customerLink"
+                            Content="{Binding MaHoaDon}"
                             FontWeight="SemiBold"
-                            Foreground="#163F38"
-                            VerticalAlignment="Center" />
+                            Foreground="#087F6E"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Bấm để xem chi tiết hóa đơn"
+                            Command="{Binding ElementName=RootWindow, Path=DataContext.XemHoaDonCommand}"
+                            CommandParameter="{Binding}" />
 
                           <!-- Thời gian -->
                           <TextBlock Grid.Column="1"

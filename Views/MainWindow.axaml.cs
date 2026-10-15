@@ -1066,4 +1066,15 @@ public partial class MainWindow : Window
         var updateWindow = new UpdateWindow();
         await updateWindow.ShowDialog(this);
     }
+
+    private void InvoiceRow_OnDoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (sender is Border { DataContext: HoaDon hoaDon } && DataContext is MainWindowViewModel vm)
+        {
+            if (vm.XemHoaDonCommand.CanExecute(hoaDon))
+            {
+                vm.XemHoaDonCommand.Execute(hoaDon);
+            }
+        }
+    }
 }
