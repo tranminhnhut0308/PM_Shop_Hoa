@@ -2179,7 +2179,7 @@
 
                             <!-- TỒN KHO -->
                             <TextBlock Grid.Column="5"
-                              Text="{Binding TonKhoExcel, StringFormat={}{0:N0}}"
+                              Text="{Binding TonKhoExcel, Converter={x:Static converters:SoLuongHienThiConverter.Instance}}"
                               Foreground="#344054"
                               FontSize="13"
                               HorizontalAlignment="Right"
@@ -2188,7 +2188,7 @@
 
                             <!-- KHÁCH ĐẶT -->
                             <TextBlock Grid.Column="6"
-                              Text="{Binding KhachDat, StringFormat={}{0:N0}}"
+                              Text="{Binding KhachDat, Converter={x:Static converters:SoLuongHienThiConverter.Instance}}"
                               Foreground="#344054"
                               FontSize="13"
                               HorizontalAlignment="Right"
