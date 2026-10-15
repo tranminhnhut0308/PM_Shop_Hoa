@@ -85,14 +85,6 @@ public sealed partial class PhieuNhapHang : ObservableObject
     /// <summary>Định dạng dd/MM/yyyy HH:mm cho cột "Thời gian" trong báo cáo.</summary>
     public string ThoiGianNhapText => ThoiGianNhap.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
 
-    /// <summary>Checkbox chọn dòng trong báo cáo (chỉ giữ trong bộ nhớ, không lưu database).</summary>
-    [ObservableProperty]
-    private bool isSelected;
-
-    /// <summary>Đánh dấu yêu thích (chỉ giữ trong bộ nhớ, không lưu database).</summary>
-    [ObservableProperty]
-    private bool isYeuThich;
-
     private static readonly IBrush NenDaNhapHang = new SolidColorBrush(Color.Parse("#E8F6F1"));
     private static readonly IBrush ChuDaNhapHang = new SolidColorBrush(Color.Parse("#087F6E"));
     private static readonly IBrush NenLuuTam = new SolidColorBrush(Color.Parse("#FFF7E8"));

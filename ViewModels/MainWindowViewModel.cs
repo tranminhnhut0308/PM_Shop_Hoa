@@ -3593,25 +3593,6 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
 
     public bool IsBaoCaoPhieuNhapEmpty => BaoCaoPhieuNhaps.Count == 0;
 
-    /// <summary>Trạng thái ô "chọn tất cả" ở đầu bảng: đã chọn / chọn một phần / chưa chọn.</summary>
-    public bool? IsBaoCaoPhieuNhapAllSelected
-    {
-        get
-        {
-            if (BaoCaoPhieuNhaps.Count == 0)
-                return false;
-
-            var soDaChon = BaoCaoPhieuNhaps.Count(x => x.IsSelected);
-
-            if (soDaChon == 0)
-                return false;
-
-            return soDaChon == BaoCaoPhieuNhaps.Count ? true : null;
-        }
-    }
-
-    public int BaoCaoPhieuNhapSelectedCount => BaoCaoPhieuNhaps.Count(x => x.IsSelected);
-
     public bool CanBaoCaoPhieuNhapTrangTruoc => BaoCaoPhieuNhapPage > 1;
 
     public bool CanBaoCaoPhieuNhapTrangSau => BaoCaoPhieuNhapPage < BaoCaoPhieuNhapTotalPages;
@@ -3817,8 +3798,6 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             OnPropertyChanged(nameof(BaoCaoPhieuNhapRangeText));
             OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangTruoc));
             OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangSau));
-            OnPropertyChanged(nameof(IsBaoCaoPhieuNhapAllSelected));
-            OnPropertyChanged(nameof(BaoCaoPhieuNhapSelectedCount));
 
             StatusMessage = BaoCaoPhieuNhaps.Count == 0
                 ? "Không có dữ liệu phiếu nhập phù hợp"
@@ -3903,32 +3882,6 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             BaoCaoPhieuNhapPage++;
 
         await LoadBaoCaoPhieuNhapAsync();
-    }
-
-    [RelayCommand]
-    private void ChonTatCaBaoCaoPhieuNhap(bool? isChecked)
-    {
-        foreach (var item in BaoCaoPhieuNhaps)
-            item.IsSelected = isChecked == true;
-
-        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapAllSelected));
-        OnPropertyChanged(nameof(BaoCaoPhieuNhapSelectedCount));
-    }
-
-    [RelayCommand]
-    private static void BatYeuThichBaoCaoPhieuNhap(PhieuNhapHang? item)
-    {
-        if (item is null)
-            return;
-
-        item.IsYeuThich = !item.IsYeuThich;
-    }
-
-    /// <summary>Đồng bộ lại trạng thái ô "chọn tất cả" khi người dùng bấm checkbox của một dòng.</summary>
-    public void CapNhatTrangThaiChonTatCaBaoCaoPhieuNhap()
-    {
-        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapAllSelected));
-        OnPropertyChanged(nameof(BaoCaoPhieuNhapSelectedCount));
     }
 
     /// <summary>
