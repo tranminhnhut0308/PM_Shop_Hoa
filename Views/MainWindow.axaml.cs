@@ -264,29 +264,6 @@ public partial class MainWindow : Window
         viewModel.TimKiemBaoCaoPhieuNhapTuDong();
     }
 
-    private void OnBaoCaoPhieuNhapChonTatCaChanged(
-    object? sender,
-    RoutedEventArgs e)
-    {
-        if (DataContext is not MainWindowViewModel viewModel)
-            return;
-
-        if (sender is not CheckBox checkBox)
-            return;
-
-        viewModel.ChonTatCaBaoCaoPhieuNhapCommand.Execute(checkBox.IsChecked);
-    }
-
-    private void OnBaoCaoPhieuNhapRowChecked(
-    object? sender,
-    RoutedEventArgs e)
-    {
-        if (DataContext is not MainWindowViewModel viewModel)
-            return;
-
-        viewModel.CapNhatTrangThaiChonTatCaBaoCaoPhieuNhap();
-    }
-
     private void OnBaoCaoPhieuNhapRowDoubleTapped(
     object? sender,
         TappedEventArgs e)
@@ -316,11 +293,11 @@ public partial class MainWindow : Window
         if (point.Properties.IsRightButtonPressed)
             return;
 
-        // Bỏ qua nếu bấm vào CheckBox hoặc Button (nút sao yêu thích, mã phiếu đã có command riêng)
+        // Bỏ qua nếu bấm vào Button (mã phiếu đã có command riêng mở chi tiết)
         var element = e.Source as StyledElement;
         while (element is not null && element != sender)
         {
-            if (element is CheckBox or ToggleButton or Button)
+            if (element is Button)
                 return;
 
             element = element.Parent as StyledElement;
