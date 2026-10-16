@@ -2083,35 +2083,46 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task SuaSanPhamAsync(SanPham? product)
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.ProductsEdit, "Bạn không có quyền sửa hàng hóa."))
+        // Mở trang chi tiết chỉ cần quyền "xem chi tiết hàng hóa" (hanghoa.xem_chi_tiet).
+        // Quyền "sửa hàng hóa" (hanghoa.sua) chỉ dùng để cho phép lưu thay đổi.
+        var coQuyenSua = CoQuyen(PermissionKeys.ProductsEdit);
+        var coQuyenXem = CoQuyen(PermissionKeys.ProductsDetail);
+
+        if (!coQuyenSua && !coQuyenXem)
         {
+            await KiemTraQuyenAsync(PermissionKeys.ProductsDetail, "Bạn không có quyền xem chi tiết hàng hóa.");
             return;
         }
+
         if (product is null)
         {
-            StatusMessage = "Vui lòng chọn sản phẩm cần sửa.";
+            StatusMessage = "Vui lòng chọn sản phẩm.";
             return;
         }
 
         if (product.Id == 0)
         {
-            StatusMessage = "Sản phẩm này chưa có mã dữ liệu để sửa.";
+            StatusMessage = "Sản phẩm này chưa có mã dữ liệu để xem.";
             return;
         }
 
         var (groups, units) = await LoadProductOptionsAsync();
 
-        // Ô giá bán chỉ mở khi người dùng có quyền sửa hàng hóa
+        // Không có quyền sửa thì mở ở chế độ chỉ xem. Ô giá bán / giá vốn / tồn kho
+        // mở theo đúng quyền chi tiết tương ứng (sua_gia_ban / sua_gia_von / dieu_chinh_ton_kho).
         var editor = new ProductEditorWindow(
             product,
             groups,
             units,
-            DuocSuaGiaBan);
+            duocSuaGiaBan: DuocSuaGiaBan,
+            duocSuaGiaVon: CoQuyen(PermissionKeys.ProductsUpdateCost),
+            duocDieuChinhTonKho: CoQuyen(PermissionKeys.ProductsAdjustStock),
+            cheDoXem: !coQuyenSua);
 
         var saved = OwnerWindow is not null && await editor.ShowDialog<bool>(OwnerWindow);
 
-        // Hủy thì không gọi UPDATE: giá cũ giữ nguyên trong database
-        if (!saved)
+        // Hủy hoặc chỉ xem thì không gọi UPDATE: dữ liệu cũ giữ nguyên trong database
+        if (!saved || !coQuyenSua)
             return;
 
         try

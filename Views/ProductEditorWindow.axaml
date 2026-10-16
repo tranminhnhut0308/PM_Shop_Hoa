@@ -129,7 +129,7 @@
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" Margin="0,5,0,14">
             <ComboBox x:Name="NhomSanPhamComboBox" PlaceholderText="Chọn nhóm hàng"
               HorizontalAlignment="Stretch" Margin="0" />
-            <Button Grid.Column="1" Classes="primary" Content="＋"
+            <Button x:Name="ThemNhomHangButton" Grid.Column="1" Classes="primary" Content="＋"
               ToolTip.Tip="Thêm nhóm hàng mới"
               Width="38" Height="38" Padding="0"
               HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
@@ -142,7 +142,7 @@
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" Margin="0,5,0,14">
             <ComboBox x:Name="DonViTinhComboBox" PlaceholderText="Chọn đơn vị"
               HorizontalAlignment="Stretch" Margin="0" />
-            <Button Grid.Column="1" Classes="primary" Content="＋"
+            <Button x:Name="ThemDonViTinhButton" Grid.Column="1" Classes="primary" Content="＋"
               ToolTip.Tip="Thêm đơn vị tính mới"
               Width="38" Height="38" Padding="0"
               HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
@@ -204,8 +204,8 @@
 
       <TextBlock x:Name="ErrorTextBlock" Foreground="#C0392B" TextWrapping="Wrap" Margin="0,0,0,12" />
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,4,0,0">
-        <Button Classes="secondary" Content="Hủy" Click="CancelButton_OnClick" />
-        <Button Classes="primary" Content="Lưu sản phẩm" Click="SaveButton_OnClick" />
+        <Button x:Name="CancelButton" Classes="secondary" Content="Hủy" Click="CancelButton_OnClick" />
+        <Button x:Name="SaveButton" Classes="primary" Content="Lưu sản phẩm" Click="SaveButton_OnClick" />
       </StackPanel>
     </StackPanel>
   </ScrollViewer>

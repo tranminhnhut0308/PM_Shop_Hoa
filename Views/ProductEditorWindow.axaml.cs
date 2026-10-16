@@ -17,7 +17,10 @@ public partial class ProductEditorWindow : Window
     private readonly List<ProductOption> _unitsList;
     private readonly SanPham _product;
     private readonly bool _isNew;
+    private readonly bool _cheDoXem;
     private readonly bool _duocSuaGiaBan;
+    private readonly bool _duocSuaGiaVon;
+    private readonly bool _duocDieuChinhTonKho;
     private bool _dangDinhDangTien;
 
     public SanPham Product => _product;
@@ -26,15 +29,29 @@ public partial class ProductEditorWindow : Window
     {
     }
 
+    /// <param name="duocSuaGiaBan">Có quyền <c>hanghoa.sua_gia_ban</c>.</param>
+    /// <param name="duocSuaGiaVon">Có quyền <c>hanghoa.sua_gia_von</c>.</param>
+    /// <param name="duocDieuChinhTonKho">Có quyền <c>hanghoa.dieu_chinh_ton_kho</c>.</param>
+    /// <param name="cheDoXem">
+    /// true = chỉ xem chi tiết (mở bằng quyền <c>hanghoa.xem_chi_tiet</c> mà không có
+    /// <c>hanghoa.sua</c>): mọi trường chỉ đọc và ẩn nút Lưu.
+    /// </param>
     public ProductEditorWindow(
         SanPham? product = null,
         IReadOnlyList<ProductOption>? groups = null,
         IReadOnlyList<ProductOption>? units = null,
-        bool duocSuaGiaBan = true)
+        bool duocSuaGiaBan = true,
+        bool duocSuaGiaVon = true,
+        bool duocDieuChinhTonKho = true,
+        bool cheDoXem = false)
     {
         InitializeComponent();
 
-        _duocSuaGiaBan = duocSuaGiaBan;
+        _cheDoXem = cheDoXem;
+        // Chế độ chỉ xem thì mọi trường đều khóa, bất kể các quyền chi tiết.
+        _duocSuaGiaBan = duocSuaGiaBan && !cheDoXem;
+        _duocSuaGiaVon = duocSuaGiaVon && !cheDoXem;
+        _duocDieuChinhTonKho = duocDieuChinhTonKho && !cheDoXem;
         _isNew = product is null;
         _product = product ?? new SanPham
         {
@@ -48,8 +65,46 @@ public partial class ProductEditorWindow : Window
         NhomSanPhamComboBox.ItemsSource = _groupsList;
         DonViTinhComboBox.ItemsSource = _unitsList;
 
-        // Không có quyền sửa hàng hóa thì không cho gõ giá bán,
-        // nhưng vẫn xem và sửa các thông tin khác của sản phẩm.
+        ApCheQuyenTungTruong();
+
+        GiaBanTextBox.GotFocus += GiaBanTextBox_OnGotFocus;
+        GiaBanTextBox.LostFocus += GiaBanTextBox_OnLostFocus;
+        GiaBanTextBox.TextChanged += GiaBanTextBox_OnTextChanged;
+
+        Title = _isNew ? "Thêm sản phẩm" : (_cheDoXem ? "Chi tiết sản phẩm" : "Sửa sản phẩm");
+        LoadProduct();
+    }
+
+    /// <summary>
+    /// Áp quyền chi tiết lên từng trường: giá bán, giá vốn, tồn kho theo đúng
+    /// quyền tương ứng; chế độ chỉ xem thì khóa toàn bộ và ẩn thao tác lưu.
+    /// </summary>
+    private void ApCheQuyenTungTruong()
+    {
+        if (_cheDoXem)
+        {
+            // Chỉ xem: mọi ô nhập chỉ đọc, ẩn các thao tác thay đổi dữ liệu.
+            foreach (var textBox in new[]
+                     {
+                         TenSanPhamTextBox, GiaBanTextBox, GiaVonTextBox, TonKhoTextBox,
+                         KhachDatTextBox, ViTriKhoTextBox, LoaiHangTextBox, DuKienHetHangTextBox
+                     })
+            {
+                textBox.IsEnabled = true;
+                textBox.IsReadOnly = true;
+            }
+
+            NhomSanPhamComboBox.IsEnabled = false;
+            DonViTinhComboBox.IsEnabled = false;
+            ThemNhomHangButton.IsVisible = false;
+            ThemDonViTinhButton.IsVisible = false;
+            SaveButton.IsVisible = false;
+            CancelButton.Content = "Đóng";
+            return;
+        }
+
+        // Chế độ sửa: ô nào thiếu quyền chi tiết thì khóa lại, vẫn hiện giá trị.
+        // Giá bán chỉ cho gõ khi có quyền sửa giá bán.
         GiaBanTextBox.IsEnabled = _duocSuaGiaBan;
         GiaBanTextBox.IsReadOnly = !_duocSuaGiaBan;
         ToolTip.SetTip(
@@ -57,23 +112,33 @@ public partial class ProductEditorWindow : Window
             _duocSuaGiaBan
                 ? "Nhập số tiền, ví dụ 50.000 hoặc 1500000"
                 : "Bạn không có quyền chỉnh giá bán");
-        GiaBanTextBox.GotFocus += GiaBanTextBox_OnGotFocus;
-        GiaBanTextBox.LostFocus += GiaBanTextBox_OnLostFocus;
-        GiaBanTextBox.TextChanged += GiaBanTextBox_OnTextChanged;
 
-        Title = _isNew ? "Thêm sản phẩm" : "Sửa sản phẩm";
-        LoadProduct();
+        // Giá vốn chỉ cho gõ khi có quyền sửa giá vốn.
+        GiaVonTextBox.IsEnabled = _duocSuaGiaVon;
+        GiaVonTextBox.IsReadOnly = !_duocSuaGiaVon;
+        ToolTip.SetTip(
+            GiaVonTextBox,
+            _duocSuaGiaVon ? "Nhập giá vốn" : "Bạn không có quyền chỉnh giá vốn");
+
+        // Tồn kho chỉ cho gõ khi có quyền điều chỉnh tồn kho.
+        TonKhoTextBox.IsEnabled = _duocDieuChinhTonKho;
+        TonKhoTextBox.IsReadOnly = !_duocDieuChinhTonKho;
+        ToolTip.SetTip(
+            TonKhoTextBox,
+            _duocDieuChinhTonKho ? "Nhập số lượng tồn" : "Bạn không có quyền điều chỉnh tồn kho");
     }
 
     private void LoadProduct()
     {
         TieuDeTextBlock.Text = _isNew
             ? "Thông tin sản phẩm"
-            : $"Sửa sản phẩm {_product.MaSanPham}";
+            : (_cheDoXem ? $"Chi tiết sản phẩm {_product.MaSanPham}" : $"Sửa sản phẩm {_product.MaSanPham}");
 
         MoTaTextBlock.Text = _isNew
             ? "Nhập thông tin để tạo sản phẩm mới trong kho hàng."
-            : "Chỉnh sửa thông tin của sản phẩm đang chọn.";
+            : (_cheDoXem
+                ? "Thông tin chi tiết của sản phẩm đang chọn (chỉ xem)."
+                : "Chỉnh sửa thông tin của sản phẩm đang chọn.");
 
         MaSanPhamTextBlock.Text = _product.MaSanPham;
         TenSanPhamTextBox.Text = _product.TenSanPham;
@@ -159,6 +224,10 @@ public partial class ProductEditorWindow : Window
 
     private void SaveButton_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
+        // Chế độ chỉ xem không có nút Lưu; chặn thêm ở đây để không lưu nhầm.
+        if (_cheDoXem)
+            return;
+
         ErrorTextBlock.Text = "";
         LoiGiaBanTextBlock.Text = "";
 

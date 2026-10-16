@@ -942,33 +942,44 @@ public sealed class DatabaseService
             }
         }
 
-        await connection.ExecuteAsync(
-            """
-                UPDATE san_pham
-                SET ma_san_pham = @MaSanPham,
-                    ma_vach = @MaVach,
-                    ten_san_pham = @TenSanPham,
-                    nhom_san_pham_id = @NhomSanPhamId,
-                    don_vi_tinh_id = @DonViTinhId,
-                    thuong_hieu_id = @ThuongHieuId,
-                    gia_ban = @GiaBan,
-                    gia_von = @GiaVon,
-                    ton_kho_excel = @TonKhoExcel,
-                    ton_toi_thieu = @TonToiThieu,
-                    ton_toi_da = @TonToiDa,
-                    khach_dat = @KhachDat,
-                    du_kien_het_hang = @DuKienHetHang,
-                    loai_hang_excel = @LoaiHang,
-                    nhom_hang_3_cap_excel = @NhomHangBaCap,
-                    vi_tri_kho = @ViTriKho,
-                    mo_ta = @MoTa,
-                    ghi_chu = @GhiChu,
-                    co_ban_truc_tiep = @DuocBanTrucTiep,
-                    trang_thai = @DangKinhDoanh,
-                    ngay_cap_nhat = NOW()
-                WHERE id = @Id;
-                """,
-            product);
+        // Trường nào người dùng thiếu quyền chi tiết tương ứng thì bỏ hẳn khỏi
+        // câu UPDATE (giá bán -> sua_gia_ban, giá vốn -> sua_gia_von, tồn kho ->
+        // dieu_chinh_ton_kho). Nhờ vậy giá trị đang có trong database được giữ
+        // nguyên, kể cả khi hàm này bị gọi thẳng thay vì qua giao diện đã khóa ô.
+        var danhSachCot = new List<string>
+        {
+            "ma_san_pham = @MaSanPham",
+            "ma_vach = @MaVach",
+            "ten_san_pham = @TenSanPham",
+            "nhom_san_pham_id = @NhomSanPhamId",
+            "don_vi_tinh_id = @DonViTinhId",
+            "thuong_hieu_id = @ThuongHieuId",
+            "ton_toi_thieu = @TonToiThieu",
+            "ton_toi_da = @TonToiDa",
+            "khach_dat = @KhachDat",
+            "du_kien_het_hang = @DuKienHetHang",
+            "loai_hang_excel = @LoaiHang",
+            "nhom_hang_3_cap_excel = @NhomHangBaCap",
+            "vi_tri_kho = @ViTriKho",
+            "mo_ta = @MoTa",
+            "ghi_chu = @GhiChu",
+            "co_ban_truc_tiep = @DuocBanTrucTiep",
+            "trang_thai = @DangKinhDoanh",
+            "ngay_cap_nhat = NOW()"
+        };
+
+        if (Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsUpdatePrice))
+            danhSachCot.Add("gia_ban = @GiaBan");
+
+        if (Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsUpdateCost))
+            danhSachCot.Add("gia_von = @GiaVon");
+
+        if (Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsAdjustStock))
+            danhSachCot.Add("ton_kho_excel = @TonKhoExcel");
+
+        var sql = $"UPDATE san_pham SET {string.Join(", ", danhSachCot)} WHERE id = @Id;";
+
+        await connection.ExecuteAsync(sql, product);
 
         _ = LogSubAccountActivityAsync("Cập nhật hàng hóa", "SAN_PHAM", product.Id, product.MaSanPham, $"Cập nhật sản phẩm: {product.TenSanPham} ({product.MaSanPham})", product.GiaBan);
     }
