@@ -5492,6 +5492,339 @@ LIMIT 500;
         public decimal ConNo { get; set; }
     }
 
+    /// <summary>Dòng phiếu nhập cần cho việc ghi nhận thanh toán công nợ.</summary>
+    private sealed class PhieuNhapCongNoRow
+    {
+        public uint Id { get; set; }
+        public uint ChiNhanhId { get; set; }
+        public uint? NhaCungCapId { get; set; }
+        public string MaPhieuNhap { get; set; } = "";
+        public string? TenNhaCungCap { get; set; }
+        public decimal TongTienNhap { get; set; }
+        public decimal DaThanhToan { get; set; }
+        public decimal ConNo { get; set; }
+        public string TrangThai { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Ghi nhận thanh toán công nợ cho MỘT phiếu nhập hàng. Toàn bộ thao tác nằm
+    /// trong MỘT giao dịch:
+    /// <list type="number">
+    /// <item>Khoá dòng phiếu và kiểm tra còn nợ, số tiền không vượt quá công nợ.</item>
+    /// <item>Cập nhật <c>da_thanh_toan</c> / <c>con_no</c> của đầu phiếu.</item>
+    /// <item>Lưu một dòng lịch sử vào <c>thanh_toan_nha_cung_cap</c> (mã TTNCC...).</item>
+    /// <item>Ghi có vào sổ cái công nợ nhà cung cấp để công nợ giảm đúng số đã trả.</item>
+    /// <item>Ghi phiếu chi (mã PC...) vào sổ quỹ, gắn với chính phiếu nhập.</item>
+    /// </list>
+    /// Trạng thái thanh toán (chưa/một phần/đủ) được SUY RA từ số đã trả và còn nợ,
+    /// không lưu thêm cột riêng.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Phiếu không tồn tại, đang lưu tạm/hủy, đã trả đủ, hoặc số tiền không hợp lệ.
+    /// </exception>
+    public async Task<ThanhToanPhieuNhapKetQua> ThanhToanPhieuNhapAsync(
+        string maPhieuNhap,
+        decimal soTien,
+        string? phuongThucThanhToan = null,
+        DateTime? thoiGianThanhToan = null,
+        string? ghiChu = null)
+    {
+        Quyen.RequirePermission(
+            Session.CurrentUser,
+            PermissionKeys.SuppliersDebtPay,
+            "Bạn không có quyền thanh toán công nợ nhà cung cấp.");
+
+        if (string.IsNullOrWhiteSpace(maPhieuNhap))
+            throw new InvalidOperationException("Thiếu mã phiếu nhập cần thanh toán.");
+
+        if (soTien <= 0)
+            throw new InvalidOperationException("Số tiền thanh toán phải lớn hơn 0.");
+
+        var maCanTim = maPhieuNhap.Trim();
+        var now = thoiGianThanhToan ?? DateTime.Now;
+        var userId = Session.CurrentUser?.Id;
+
+        var coCotNguoiNopNhanGhiChu = await EnsurePhieuQuyExtraColumnsAsync();
+        var coCotPhieuNhap = await EnsurePhieuQuyPhieuNhapColumnsAsync();
+
+        await using var connection = await OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        var daCommit = false;
+
+        try
+        {
+            const string selectSql = """
+            SELECT
+                p.id                 AS Id,
+                p.chi_nhanh_id       AS ChiNhanhId,
+                p.nha_cung_cap_id    AS NhaCungCapId,
+                p.ma_phieu_nhap      AS MaPhieuNhap,
+                ncc.ten_nha_cung_cap AS TenNhaCungCap,
+                p.tong_tien_nhap     AS TongTienNhap,
+                p.da_thanh_toan      AS DaThanhToan,
+                p.con_no             AS ConNo,
+                p.trang_thai         AS TrangThai
+            FROM phieu_nhap_hang p
+            LEFT JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
+            WHERE p.ma_phieu_nhap = @MaPhieuNhap
+            LIMIT 1
+            FOR UPDATE;
+            """;
+
+            var phieu = await connection.QueryFirstOrDefaultAsync<PhieuNhapCongNoRow>(
+                selectSql,
+                new { MaPhieuNhap = maCanTim },
+                transaction);
+
+            if (phieu is null)
+                throw new InvalidOperationException($"Không tìm thấy phiếu nhập {maCanTim} trong database.");
+
+            if (!TrangThaiThanhToanPhieuNhap.LaPhieuThanhToanDuoc(phieu.TrangThai))
+                throw new InvalidOperationException(
+                    $"Phiếu nhập {maCanTim} đang ở trạng thái không thể thanh toán.");
+
+            if (phieu.ConNo <= 0m)
+                throw new InvalidOperationException(
+                    $"Phiếu nhập {maCanTim} đã thanh toán đủ, không còn công nợ.");
+
+            if (soTien > phieu.ConNo)
+                throw new InvalidOperationException(
+                    $"Số tiền thanh toán ({soTien:N0} đ) vượt quá công nợ còn lại ({phieu.ConNo:N0} đ).");
+
+            var daTraMoi = phieu.DaThanhToan + soTien;
+            var conNoMoi = Math.Max(0m, phieu.TongTienNhap - daTraMoi);
+            var phuongThuc = ChuanHoaPhuongThuc(phuongThucThanhToan);
+
+            // 1. Cập nhật đầu phiếu: tổng đã trả tăng, còn nợ giảm.
+            await connection.ExecuteAsync(
+                """
+                UPDATE phieu_nhap_hang
+                SET da_thanh_toan = @DaThanhToan,
+                    con_no        = @ConNo,
+                    ngay_cap_nhat = @ThoiGian
+                WHERE id = @Id;
+                """,
+                new
+                {
+                    DaThanhToan = daTraMoi,
+                    ConNo = conNoMoi,
+                    ThoiGian = now,
+                    Id = phieu.Id
+                },
+                transaction);
+
+            // 2. Lưu một dòng lịch sử thanh toán riêng cho lần trả này.
+            var maThanhToan = await SinhMaThanhToanNhaCungCapTrongGiaoDichAsync(connection, transaction);
+
+            if (phieu.NhaCungCapId is uint nccId && nccId > 0)
+            {
+                await connection.ExecuteAsync(
+                    """
+                    INSERT INTO thanh_toan_nha_cung_cap
+                    (
+                        ma_thanh_toan, nha_cung_cap_id, phieu_nhap_id, so_tien,
+                        phuong_thuc, thoi_gian, nguoi_thuc_hien_id, ghi_chu
+                    )
+                    VALUES
+                    (
+                        @MaThanhToan, @NhaCungCapId, @PhieuNhapId, @SoTien,
+                        @PhuongThuc, @ThoiGian, @NguoiThucHienId, @GhiChu
+                    );
+                    """,
+                    new
+                    {
+                        MaThanhToan = maThanhToan,
+                        NhaCungCapId = nccId,
+                        PhieuNhapId = phieu.Id,
+                        SoTien = soTien,
+                        PhuongThuc = phuongThuc,
+                        ThoiGian = now,
+                        NguoiThucHienId = userId,
+                        GhiChu = BlankToNull(ghiChu)
+                    },
+                    transaction);
+
+                // 3. Ghi có sổ cái công nợ nhà cung cấp -> công nợ giảm đúng số đã trả.
+                await GhiMotDongCongNoNhaCungCapAsync(
+                    connection,
+                    transaction,
+                    nccId,
+                    phieu.ChiNhanhId,
+                    "THANH_TOAN_NHAP",
+                    maCanTim,
+                    0,
+                    soTien,
+                    now,
+                    userId,
+                    string.IsNullOrWhiteSpace(ghiChu)
+                        ? $"Thanh toán {soTien:N0} đ cho phiếu {maCanTim}"
+                        : $"Thanh toán {soTien:N0} đ cho phiếu {maCanTim}. {ghiChu.Trim()}");
+            }
+
+            // 4. Ghi phiếu chi trong sổ quỹ.
+            var maPhieuChi = await SinhMaPhieuChiTrongGiaoDichAsync(connection, transaction);
+            var tenNcc = string.IsNullOrWhiteSpace(phieu.TenNhaCungCap)
+                ? phieu.NhaCungCapId?.ToString()
+                : phieu.TenNhaCungCap;
+            var noiDung = $"Thanh toán công nợ nhập hàng - phiếu {maCanTim}";
+            var ghiChuPhieu = $"Chi trả công nợ cho nhà cung cấp {tenNcc} theo phiếu nhập {maCanTim}.";
+
+            string insertPhieuChiSql;
+            if (coCotPhieuNhap && coCotNguoiNopNhanGhiChu)
+            {
+                insertPhieuChiSql = """
+                INSERT INTO phieu_chi
+                (
+                    ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                    noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
+                    nguoi_thuc_hien_id, trang_thai, phieu_nhap_hang_id, ma_phieu_nhap
+                )
+                VALUES
+                (
+                    @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                    @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
+                    @NguoiTaoId, @TrangThai, @PhieuNhapId, @MaPhieuNhap
+                );
+                """;
+            }
+            else if (coCotNguoiNopNhanGhiChu)
+            {
+                insertPhieuChiSql = """
+                INSERT INTO phieu_chi
+                (
+                    ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                    noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
+                    nguoi_thuc_hien_id, trang_thai
+                )
+                VALUES
+                (
+                    @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                    @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
+                    @NguoiTaoId, @TrangThai
+                );
+                """;
+            }
+            else
+            {
+                insertPhieuChiSql = """
+                INSERT INTO phieu_chi
+                (
+                    ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                    noi_dung, thoi_gian_chi, nguoi_thuc_hien_id, trang_thai
+                )
+                VALUES
+                (
+                    @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                    @NoiDung, @ThoiGian, @NguoiTaoId, @TrangThai
+                );
+                """;
+            }
+
+            await connection.ExecuteAsync(
+                insertPhieuChiSql,
+                new
+                {
+                    MaPhieu = maPhieuChi,
+                    ChiNhanhId = phieu.ChiNhanhId,
+                    SoTien = soTien,
+                    PhuongThuc = phuongThuc,
+                    NoiDung = noiDung,
+                    NguoiNopNhan = Truncate150(phieu.TenNhaCungCap),
+                    GhiChu = ghiChuPhieu,
+                    ThoiGian = now,
+                    NguoiTaoId = userId,
+                    TrangThai = TrangThaiPhieuHoanThanh,
+                    PhieuNhapId = phieu.Id,
+                    MaPhieuNhap = maCanTim
+                },
+                transaction);
+
+            await transaction.CommitAsync();
+            daCommit = true;
+
+            _ = LogSubAccountActivityAsync(
+                "Thanh toán NCC",
+                "PHIEU_NHAP",
+                phieu.Id,
+                maCanTim,
+                $"Thanh toán công nợ phiếu {maCanTim}: {soTien:N0} đ (còn nợ {conNoMoi:N0} đ)",
+                soTien);
+
+            return new ThanhToanPhieuNhapKetQua
+            {
+                PhieuNhapId = phieu.Id,
+                MaPhieuNhap = maCanTim,
+                TenNhaCungCap = phieu.TenNhaCungCap,
+                TongTienNhap = phieu.TongTienNhap,
+                DaThanhToan = daTraMoi,
+                ConNo = conNoMoi,
+                SoTienThanhToan = soTien,
+                MaThanhToan = maThanhToan,
+                MaPhieuChi = maPhieuChi,
+                TrangThaiThanhToan = TrangThaiThanhToanPhieuNhap.Tinh(daTraMoi, conNoMoi)
+            };
+        }
+        catch (Exception ex)
+        {
+            if (!daCommit)
+            {
+                try
+                {
+                    await transaction.RollbackAsync();
+                }
+                catch (Exception rollbackEx)
+                {
+                    SafeLog.WriteError("Không rollback được giao dịch thanh toán phiếu nhập", rollbackEx);
+                }
+            }
+
+            SafeLog.WriteError("Lỗi thanh toán công nợ phiếu nhập", ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Cấp mã lịch sử thanh toán nhà cung cấp kế tiếp (TTNCC0001, TTNCC0002...)
+    /// bằng chính connection và transaction đang chạy, tránh trùng mã
+    /// (cột <c>ma_thanh_toan</c> có UNIQUE).
+    /// </summary>
+    private static async Task<string> SinhMaThanhToanNhaCungCapTrongGiaoDichAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction)
+    {
+        const string prefix = "TTNCC";
+
+        var maxSuffix = await connection.ExecuteScalarAsync<long?>(
+            """
+            SELECT COALESCE(MAX(CAST(SUBSTRING(TRIM(ma_thanh_toan), 6) AS SIGNED)), 0)
+            FROM thanh_toan_nha_cung_cap
+            WHERE ma_thanh_toan LIKE CONCAT(@Prefix, '%')
+              AND TRIM(ma_thanh_toan) REGEXP CONCAT('^', @Prefix, '[0-9]+$');
+            """,
+            new { Prefix = prefix },
+            transaction) ?? 0L;
+
+        var nextNumber = maxSuffix > 0 ? maxSuffix + 1 : 1L;
+
+        for (var i = 0; i < 100; i++)
+        {
+            var candidate = prefix + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
+
+            var daTonTai = await connection.ExecuteScalarAsync<int?>(
+                "SELECT 1 FROM thanh_toan_nha_cung_cap WHERE ma_thanh_toan = @Ma LIMIT 1;",
+                new { Ma = candidate },
+                transaction);
+
+            if (daTonTai is null)
+                return candidate;
+
+            nextNumber++;
+        }
+
+        return prefix + nextNumber.ToString("D4", CultureInfo.InvariantCulture);
+    }
+
     /// <summary>
     /// Cấp mã thanh toán kế tiếp (TT0001, TT0002...) bằng chính connection và
     /// transaction đang chạy, tránh trùng mã (cột <c>ma_thanh_toan</c> có UNIQUE).

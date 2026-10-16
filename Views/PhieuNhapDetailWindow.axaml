@@ -91,6 +91,18 @@
             FontWeight="SemiBold"
             Foreground="#087F6E" />
         </Border>
+
+        <Border IsVisible="{Binding !IsLuuTam}"
+          Background="{Binding TrangThaiThanhToanBadgeBrush}"
+          CornerRadius="14"
+          Padding="14,6"
+          Margin="0,6,0,0"
+          HorizontalAlignment="Right">
+          <TextBlock Text="{Binding TrangThaiThanhToanHienThi}"
+            FontSize="12"
+            FontWeight="SemiBold"
+            Foreground="{Binding TrangThaiThanhToanBadgeForeground}" />
+        </Border>
       </StackPanel>
     </Grid>
 
@@ -356,7 +368,7 @@
 
     <!-- 4. GHI CHÚ + NÚT ĐÓNG -->
     <Grid Grid.Row="3"
-      ColumnDefinitions="*,Auto"
+      ColumnDefinitions="*,Auto,Auto"
       ColumnSpacing="14">
 
       <Border Background="#FFFDF5"
@@ -375,6 +387,14 @@
       </Border>
 
       <Button Grid.Column="1"
+        x:Name="ThanhToanButton"
+        Classes="toolbar-primary"
+        Content="✓  Thanh toán công nợ"
+        IsVisible="False"
+        VerticalAlignment="Center"
+        Click="ThanhToanButton_OnClick" />
+
+      <Button Grid.Column="2"
         Classes="toolbar-primary"
         Content="Đóng"
         VerticalAlignment="Center"
