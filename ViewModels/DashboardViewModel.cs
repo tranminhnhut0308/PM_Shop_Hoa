@@ -425,9 +425,11 @@ public sealed partial class DashboardViewModel : ObservableObject
     {
         var key = gia ?? "";
 
-        if (!TongQuanChieuDoanhThu.TatCa.Contains(key) || key == ChieuDoanhThu)
+        if (!TongQuanChieuDoanhThu.TatCa.Contains(key))
             return;
 
+        // Ô radio đã ghi giá trị mới vào binding trước khi lệnh chạy nên khi key
+        // trùng giá trị hiện tại vẫn phải tải lại, nếu không biểu đồ không đổi.
         ChieuDoanhThu = key;
 
         await TaiDuLieuAsync();
@@ -438,9 +440,11 @@ public sealed partial class DashboardViewModel : ObservableObject
     {
         var key = gia ?? "";
 
-        if (!TongQuanXepHang.TatCa.Contains(key) || key == XepHangTopHang)
+        if (!TongQuanXepHang.TatCa.Contains(key))
             return;
 
+        // Ô radio đã ghi giá trị mới vào binding trước khi lệnh chạy nên khi key
+        // trùng giá trị hiện tại vẫn phải tải lại, nếu không bảng Top không đổi.
         XepHangTopHang = key;
 
         await TaiDuLieuAsync();

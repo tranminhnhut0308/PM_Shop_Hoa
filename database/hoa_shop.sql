@@ -416,7 +416,9 @@ INSERT INTO `nhom_chi_phi` (`id`, `ma_nhom`, `ten_nhom`, `ghi_chu`, `trang_thai`
 (3, 'BAO_BI', 'Bao bì', NULL, 1),
 (4, 'HU_HAO', 'Hư hao', NULL, 1),
 (5, 'LUONG', 'Lương', NULL, 1),
-(6, 'KHAC', 'Chi phí khác', NULL, 1);
+(6, 'KHAC', 'Chi phí khác', NULL, 1),
+(7, 'THU_KHACH_HANG', 'Thu khách hàng', NULL, 1),
+(8, 'CHI_NHA_CUNG_CAP', 'Chi nhà cung cấp', NULL, 1);
 
 -- --------------------------------------------------------
 
@@ -1127,7 +1129,7 @@ ALTER TABLE `nha_cung_cap`
 -- AUTO_INCREMENT cho bảng `nhom_chi_phi`
 --
 ALTER TABLE `nhom_chi_phi`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 --
 -- AUTO_INCREMENT cho bảng `nhom_khach_hang`
 --

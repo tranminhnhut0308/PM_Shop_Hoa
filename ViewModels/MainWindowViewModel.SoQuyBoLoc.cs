@@ -59,9 +59,6 @@ public sealed partial class MainWindowViewModel
     /// <summary>Loại thu/chi lấy từ bảng nhom_chi_phi (rỗng nếu hệ thống chưa có loại nào).</summary>
     public ObservableCollection<SoQuyLuaChonItem> SoQuyLoaiThuChiOptions { get; } = new();
 
-    /// <summary>Trạng thái chứng từ lấy từ cột trang_thai của bảng phieu_chi.</summary>
-    public ObservableCollection<SoQuyLuaChonItem> SoQuyTrangThaiOptions { get; } = new();
-
     /// <summary>Người tạo phiếu lấy từ bảng nguoi_dung.</summary>
     public ObservableCollection<SoQuyLuaChonItem> SoQuyNguoiTaoOptions { get; } = new();
 
@@ -176,9 +173,6 @@ public sealed partial class MainWindowViewModel
     /// <summary>true khi bảng nhom_chi_phi có ít nhất một loại đang hoạt động.</summary>
     public bool SoQuyCoLoaiThuChi => SoQuyLoaiThuChiOptions.Count > 0;
 
-    /// <summary>true khi cột trang_thai có ít nhất một giá trị thực tế.</summary>
-    public bool SoQuyCoTrangThai => SoQuyTrangThaiOptions.Count > 0;
-
     /// <summary>true khi bảng nguoi_dung có ít nhất một người dùng.</summary>
     public bool SoQuyCoNguoiTao => SoQuyNguoiTaoOptions.Count > 0;
 
@@ -200,7 +194,6 @@ public sealed partial class MainWindowViewModel
     {
         var quy = await _db.GetSoQuyQuyOptionsAsync();
         var loai = await _db.GetSoQuyLoaiThuChiOptionsAsync();
-        var trangThai = await _db.GetSoQuyTrangThaiOptionsAsync();
         var nguoiTao = await _db.GetSoQuyNguoiTaoOptionsAsync();
 
         // Giữ lại quỹ đang chọn trước khi nạp lại danh sách (danh sách mới là
@@ -234,17 +227,14 @@ public sealed partial class MainWindowViewModel
             SoQuyLocKhoangThoiGian = SoQuyKhoangThoiGianMacDinh;
 
         ThayTheLuaChon(SoQuyLoaiThuChiOptions, loai);
-        ThayTheLuaChon(SoQuyTrangThaiOptions, trangThai);
         ThayTheLuaChon(SoQuyNguoiTaoOptions, nguoiTao);
 
         // Danh sách vừa thay => các nhóm điều kiện phải ẩn/hiện lại,
         // đồng thời chữ tóm tắt trên ô chọn nhiều cũng phải cập nhật theo.
         OnPropertyChanged(nameof(SoQuyCoLoaiThuChi));
-        OnPropertyChanged(nameof(SoQuyCoTrangThai));
         OnPropertyChanged(nameof(SoQuyCoNguoiTao));
         OnPropertyChanged(nameof(SoQuyLocLoaiThuChiText));
         OnPropertyChanged(nameof(SoQuyLocNguoiTaoText));
-        OnPropertyChanged(nameof(SoQuyLocTrangThaiText));
     }
 
     /// <summary>
@@ -286,7 +276,6 @@ public sealed partial class MainWindowViewModel
         // Ô chọn nhiều hiển thị tóm tắt theo số mục đang tick nên phải báo lại.
         OnPropertyChanged(nameof(SoQuyLocLoaiThuChiText));
         OnPropertyChanged(nameof(SoQuyLocNguoiTaoText));
-        OnPropertyChanged(nameof(SoQuyLocTrangThaiText));
 
         BaoLocSoQuyThayDoi();
     }
@@ -315,9 +304,6 @@ public sealed partial class MainWindowViewModel
 
     /// <summary>Chữ hiển thị trên ô chọn người tạo.</summary>
     public string SoQuyLocNguoiTaoText => TomTatLuaChonDaChon(SoQuyNguoiTaoOptions, "người");
-
-    /// <summary>Chữ hiển thị trên ô chọn trạng thái.</summary>
-    public string SoQuyLocTrangThaiText => TomTatLuaChonDaChon(SoQuyTrangThaiOptions, "trạng thái");
 
     /// <summary>Gộp các mục đang tick thành chuỗi id phân tách bằng dấu phẩy cho SQL.</summary>
     private static string GopGiaTriDaChon(ObservableCollection<SoQuyLuaChonItem> items)
@@ -400,7 +386,6 @@ public sealed partial class MainWindowViewModel
             TuNgay = tuNgay,
             DenNgay = denNgay,
             LoaiThuChiIds = GopGiaTriDaChon(SoQuyLoaiThuChiOptions),
-            TrangThaiList = GopGiaTriDaChon(SoQuyTrangThaiOptions),
             NguoiTaoIds = GopGiaTriDaChon(SoQuyNguoiTaoOptions),
             TienTu = ParseTienLoc(SoQuyLocTienTuText),
             TienDen = ParseTienLoc(SoQuyLocTienDenText)
@@ -520,9 +505,6 @@ public sealed partial class MainWindowViewModel
         SoQuyLocTienDenText = "";
 
         foreach (var item in SoQuyLoaiThuChiOptions)
-            item.IsChecked = false;
-
-        foreach (var item in SoQuyTrangThaiOptions)
             item.IsChecked = false;
 
         foreach (var item in SoQuyNguoiTaoOptions)

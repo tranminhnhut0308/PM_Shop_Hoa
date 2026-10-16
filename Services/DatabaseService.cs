@@ -8714,8 +8714,6 @@ LIMIT 500;
             " AND (@LoaiThuChiIds = ''"
             + " OR FIND_IN_SET(CAST(pc.nhom_chi_phi_id AS CHAR), @LoaiThuChiIds) > 0)");
         dieuKien.Append(
-            " AND (@TrangThaiList = '' OR FIND_IN_SET(pc.trang_thai, @TrangThaiList) > 0)");
-        dieuKien.Append(
             " AND (@NguoiTaoIds = ''"
             + " OR FIND_IN_SET(CAST(pc.nguoi_thuc_hien_id AS CHAR), @NguoiTaoIds) > 0)");
 
@@ -8742,7 +8740,6 @@ LIMIT 500;
             TuNgay = loc.TuNgay,
             DenNgay = loc.DenNgay,
             LoaiThuChiIds = loc.LoaiThuChiIds ?? "",
-            TrangThaiList = loc.TrangThaiList ?? "",
             NguoiTaoIds = loc.NguoiTaoIds ?? "",
             TienTu = apDungKhoangTien ? loc.TienTu : null,
             TienDen = apDungKhoangTien ? loc.TienDen : null
@@ -9106,6 +9103,44 @@ LIMIT 500;
         }
     }
 
+    private static bool _daDamBaoNhomChiPhiMacDinh;
+
+    /// <summary>
+    /// Bảo đảm hai danh mục "Thu khách hàng" và "Chi nhà cung cấp" luôn có trong
+    /// bảng <c>nhom_chi_phi</c> để người dùng chọn khi tạo phiếu thu/chi thủ công
+    /// và dùng làm tiêu chí lọc ở sổ quỹ. Mục nào đã tồn tại thì bỏ qua.
+    /// </summary>
+    public async Task EnsureNhomChiPhiMacDinhAsync()
+    {
+        if (_daDamBaoNhomChiPhiMacDinh)
+            return;
+
+        try
+        {
+            await using var connection = await OpenAsync();
+
+            const string sql = """
+            INSERT INTO nhom_chi_phi (ma_nhom, ten_nhom, ghi_chu, trang_thai)
+            SELECT @MaNhom, @TenNhom, NULL, 1
+            WHERE NOT EXISTS (SELECT 1 FROM nhom_chi_phi WHERE ma_nhom = @MaNhom);
+            """;
+
+            var nhomMacDinh = new[]
+            {
+                new { MaNhom = "THU_KHACH_HANG", TenNhom = "Thu khách hàng" },
+                new { MaNhom = "CHI_NHA_CUNG_CAP", TenNhom = "Chi nhà cung cấp" }
+            };
+
+            await connection.ExecuteAsync(sql, nhomMacDinh);
+
+            _daDamBaoNhomChiPhiMacDinh = true;
+        }
+        catch (Exception ex)
+        {
+            Helpers.SafeLog.WriteError("EnsureNhomChiPhiMacDinhAsync error", ex);
+        }
+    }
+
     /// <summary>
     /// Các loại thu/chi thực tế đang có trong bảng nhom_chi_phi.
     /// Bảng này rỗng thì bộ lọc hiển thị rỗng, không bịa thêm loại giả.
@@ -9114,6 +9149,8 @@ LIMIT 500;
     {
         try
         {
+            await EnsureNhomChiPhiMacDinhAsync();
+
             await using var connection = await OpenAsync();
 
             // Dapper khớp tên cột theo đúng tên thuộc tính (bỏ qua dấu gạch dưới),
@@ -9159,53 +9196,6 @@ LIMIT 500;
         }
     }
 
-    /// <summary>Các trạng thái chứng từ thực tế đang có trong bảng phieu_chi.</summary>
-    public async Task<IReadOnlyList<SoQuyLuaChonItem>> GetSoQuyTrangThaiOptionsAsync()
-    {
-        try
-        {
-            await using var connection = await OpenAsync();
-
-            const string sql = """
-            SELECT DISTINCT trang_thai
-            FROM phieu_chi
-            WHERE trang_thai IS NOT NULL AND trang_thai <> ''
-            ORDER BY trang_thai;
-            """;
-
-            var trangThai = await connection.QueryAsync<string>(sql);
-
-            // Hai trạng thái này luôn là trạng thái mà sổ quỹ hỗ trợ (khi
-            // lưu phiếu và khi hủy phiếu), nên hiện sẵn trong bộ lọc kể cả khi
-            // hiện tại database chưa có phiếu nào ở trạng thái đó. Đây là
-            // trạng thái nghiệp vụ của phần mềm, không phải dữ liệu bịa thêm.
-            var ds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                TrangThaiPhieuHoanThanh,
-                TrangThaiPhieuHuy
-            };
-
-            foreach (var ma in trangThai)
-            {
-                if (!string.IsNullOrWhiteSpace(ma))
-                    ds.Add(ma);
-            }
-
-            // "Đã thanh toán" luôn đứng trước, "Đã hủy" sau cho dễ đọc.
-            return ds
-                .OrderBy(ma => ma.Equals(TrangThaiPhieuHoanThanh, StringComparison.OrdinalIgnoreCase) ? 0
-                    : ma.Equals(TrangThaiPhieuHuy, StringComparison.OrdinalIgnoreCase) ? 1
-                    : 2)
-                .ThenBy(ma => ma, StringComparer.OrdinalIgnoreCase)
-                .Select(ma => new SoQuyLuaChonItem(ma, TenHienThiTrangThaiPhieu(ma)))
-                .ToList();
-        }
-        catch
-        {
-            return Array.Empty<SoQuyLuaChonItem>();
-        }
-    }
-
     /// <summary>Người dùng thực tế trong bảng nguoi_dung, dùng cho bộ lọc "Người tạo".</summary>
     public async Task<IReadOnlyList<SoQuyLuaChonItem>> GetSoQuyNguoiTaoOptionsAsync()
     {
@@ -9245,14 +9235,6 @@ LIMIT 500;
         "CHUYEN_KHOAN" or "CHUYEN_KHOAN_NGAN_HANG" or "NGAN_HANG" => "Ngân hàng",
         "THE" or "THE_TIN_DUNG" => "Thẻ",
         "VI_DIEN_TU" or "VI" => "Ví điện tử",
-        _ => ma
-    };
-
-    /// <summary>Đổi mã trạng thái chứng từ sang nhãn tiếng Việt.</summary>
-    private static string TenHienThiTrangThaiPhieu(string ma) => ma.Trim().ToUpperInvariant() switch
-    {
-        "HOAN_THANH" => "Đã thanh toán",
-        "HUY" or "DA_HUY" => "Đã hủy",
         _ => ma
     };
 
