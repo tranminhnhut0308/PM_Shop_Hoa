@@ -16,11 +16,21 @@ public sealed class BaoCaoMenuItem : ObservableObject
 
     public string BieuTuong { get; init; } = "";
 
+    /// <summary>Mã quyền cần có để mục báo cáo này hiện trong menu.</summary>
+    public string PermissionKey { get; init; } = "";
+
     private bool _isSelected;
     public bool IsSelected
     {
         get => _isSelected;
         set => SetProperty(ref _isSelected, value);
+    }
+
+    private bool _isVisible = true;
+    public bool IsVisible
+    {
+        get => _isVisible;
+        set => SetProperty(ref _isVisible, value);
     }
 }
 

@@ -1318,9 +1318,13 @@ public partial class MainWindowViewModel : ObservableObject
                     break;
 
                 case "Báo cáo":
-                    // Báo cáo chưa chọn mục nào thì mở mặc định báo cáo phiếu nhập
-                    if (string.IsNullOrEmpty(SelectedReportKey))
-                        SelectedReportKey = BaoCaoMenuItems.FirstOrDefault()?.Key ?? "";
+                    // Báo cáo chưa chọn mục nào (hoặc mục đang chọn đã bị ẩn do thiếu
+                    // quyền) thì mở mặc định báo cáo đầu tiên mà người dùng được xem.
+                    if (string.IsNullOrEmpty(SelectedReportKey)
+                        || BaoCaoMenuItems.All(i => !i.IsVisible || i.Key != SelectedReportKey))
+                    {
+                        SelectedReportKey = BaoCaoMenuItems.FirstOrDefault(i => i.IsVisible)?.Key ?? "";
+                    }
 
                     // Chỉ tải lần đầu khi vào màn, các lần sau giữ nguyên trang/tìm kiếm đang xem
                     if (SelectedReportKey == "phieu-nhap-hang" && !_baoCaoPhieuNhapLoaded)
@@ -3536,39 +3540,58 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         {
             Key = "cuoi-ngay",
             TieuDe = "Báo cáo cuối ngày",
-            BieuTuong = "🗓"
+            BieuTuong = "🗓",
+            PermissionKey = PermissionKeys.ReportsEndOfDay
         },
         new BaoCaoMenuItem
         {
             Key = "ban-hang",
             TieuDe = "Báo cáo bán hàng",
-            BieuTuong = "📊"
+            BieuTuong = "📊",
+            PermissionKey = PermissionKeys.ReportsSales
         },
         new BaoCaoMenuItem
         {
             Key = "hang-hoa",
             TieuDe = "Báo cáo hàng hóa",
-            BieuTuong = "📦"
+            BieuTuong = "📦",
+            PermissionKey = PermissionKeys.ReportsProducts
         },
         new BaoCaoMenuItem
         {
             Key = "khach-hang",
             TieuDe = "Báo cáo khách hàng",
-            BieuTuong = "👥"
+            BieuTuong = "👥",
+            PermissionKey = PermissionKeys.ReportsSales
         },
         new BaoCaoMenuItem
         {
             Key = "nha-cung-cap",
             TieuDe = "Báo cáo nhà cung cấp",
-            BieuTuong = "🏢"
+            BieuTuong = "🏢",
+            PermissionKey = PermissionKeys.ReportsPurchases
         },
         new BaoCaoMenuItem
         {
             Key = "phieu-nhap-hang",
             TieuDe = "Báo cáo phiếu nhập hàng",
-            BieuTuong = "📥"
+            BieuTuong = "📥",
+            PermissionKey = PermissionKeys.ReportsPurchases
         }
     };
+
+    /// <summary>
+    /// Chỉ hiện những mục báo cáo mà người dùng có quyền xem.
+    /// Gọi mỗi khi phiên đăng nhập thay đổi để menu không hiện mục thừa.
+    /// </summary>
+    public void CapNhatBaoCaoMenuVisibility()
+    {
+        foreach (var item in BaoCaoMenuItems)
+        {
+            item.IsVisible = string.IsNullOrWhiteSpace(item.PermissionKey)
+                || CoQuyen(item.PermissionKey);
+        }
+    }
 
     public ObservableCollection<PhieuNhapHang> BaoCaoPhieuNhaps { get; } = new();
 
@@ -5253,6 +5276,8 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
     {
         OnPropertyChanged(name);
     }
+
+    CapNhatBaoCaoMenuVisibility();
 }
 
 public bool IsTongQuanSelected => SelectedMenu == "Tổng quan";
@@ -5286,7 +5311,12 @@ public bool CanViewSales => Quyen.HasPermission(Session.CurrentUser, PermissionK
 public bool CanViewCustomers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.CustomersView) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewSuppliers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SuppliersView) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewCashBook => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.CashBookView) || Quyen.IsAdmin(Session.CurrentUser);
-public bool CanViewReports => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ReportsView) || Quyen.IsAdmin(Session.CurrentUser);
+public bool CanViewReports => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ReportsView)
+    || Quyen.HasAnyPermission(
+        Session.CurrentUser,
+        PermissionKeys.ReportsEndOfDay, PermissionKeys.ReportsSales,
+        PermissionKeys.ReportsProducts, PermissionKeys.ReportsPurchases)
+    || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewUsers => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersView) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersCreate) || Quyen.HasPermission(Session.CurrentUser, PermissionKeys.UsersAssignPermission) || Quyen.IsAdmin(Session.CurrentUser);
 public bool CanViewSettings => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.SettingsView) || Quyen.IsAdmin(Session.CurrentUser);
 

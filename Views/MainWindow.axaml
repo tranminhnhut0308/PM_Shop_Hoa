@@ -1318,6 +1318,7 @@
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="models:BaoCaoMenuItem">
                     <Button Classes="subMenu" Classes.active="{Binding IsSelected}"
+                      IsVisible="{Binding IsVisible}"
                       Command="{Binding ElementName=RootWindow, Path=DataContext.ChonBaoCaoCommand}"
                       CommandParameter="{Binding}">
                       <StackPanel Orientation="Horizontal" Spacing="7">
