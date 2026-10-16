@@ -20,6 +20,14 @@ public sealed class HoaDonBanHangReceipt
     public decimal ConNo { get; set; }
     public string TrangThaiThanhToan { get; set; } = "";
 
+    public string? SoDienThoai { get; set; }
+    public string? DiaChi { get; set; }
+    public bool InKemThongTin { get; set; }
+
+    public bool HienThiThongTinLienHe => InKemThongTin && (!string.IsNullOrWhiteSpace(SoDienThoai) || !string.IsNullOrWhiteSpace(DiaChi));
+    public string SoDienThoaiHienThi => string.IsNullOrWhiteSpace(SoDienThoai) ? "Chưa có" : SoDienThoai;
+    public string DiaChiHienThi => string.IsNullOrWhiteSpace(DiaChi) ? "Chưa có" : DiaChi;
+
     /// <summary>Ghi chú riêng của hóa đơn (yêu cầu riêng của khách...).</summary>
     public string? GhiChu { get; set; }
 

@@ -404,36 +404,59 @@
 
           <Border Height="1" Background="#EEF4F2" />
 
-          <Panel Height="205" IsVisible="{Binding CoBieuDo}">
-            <ScrollViewer VerticalScrollBarVisibility="Disabled"
-              HorizontalScrollBarVisibility="Auto">
-              <ItemsControl ItemsSource="{Binding BieuDoItems}">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="models:BaoCaoNhaCungCapDiemThoiGian">
-                    <StackPanel Width="{Binding BeRongCot}" Margin="2,0"
-                      ToolTip.Tip="{Binding ToolTip}">
-                      <Grid Height="190">
-                        <Border Height="{Binding ChieuCaoCot}" CornerRadius="3,3,0,0"
-                          Background="#0E9382" VerticalAlignment="Bottom"
-                          HorizontalAlignment="Stretch" Margin="1,0,1,0" />
-                      </Grid>
-                      <TextBlock Text="{Binding NhanXet}" FontSize="9.5" Height="14"
-                        Foreground="#61736E" HorizontalAlignment="Center"
-                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                    </StackPanel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </ScrollViewer>
+          <Grid Height="205" ColumnDefinitions="Auto,*" IsVisible="{Binding CoBieuDo}">
+            <!-- Trục tung (5 nhãn: 0 ở dưới, lớn nhất ở trên) -->
+            <Grid Grid.Column="0" Height="190" VerticalAlignment="Top"
+              RowDefinitions="*,*,*,*" Margin="0,0,8,0">
+              <TextBlock Grid.Row="0" Text="{Binding BieuDoTrucY4}" FontSize="10"
+                Foreground="#8595A0" HorizontalAlignment="Right" VerticalAlignment="Top" />
+              <TextBlock Grid.Row="0" Text="{Binding BieuDoTrucY3}" FontSize="10"
+                Foreground="#8595A0" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+              <TextBlock Grid.Row="1" Text="{Binding BieuDoTrucY2}" FontSize="10"
+                Foreground="#8595A0" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+              <TextBlock Grid.Row="2" Text="{Binding BieuDoTrucY1}" FontSize="10"
+                Foreground="#8595A0" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+              <TextBlock Grid.Row="3" Text="{Binding BieuDoTrucY0}" FontSize="10"
+                Foreground="#8595A0" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+            </Grid>
 
-            <Border Height="1" Background="#DCE7E4" VerticalAlignment="Bottom"
-              Margin="0,14,0,0" />
-          </Panel>
+            <Panel Grid.Column="1">
+              <!-- Đường lưới ngang khớp đúng 5 mốc trục tung -->
+              <Grid RowDefinitions="*,*,*,*" Margin="0,0,0,15">
+                <Border Grid.Row="0" BorderBrush="#F0F4F3" BorderThickness="0,1,0,0" />
+                <Border Grid.Row="0" BorderBrush="#F0F4F3" BorderThickness="0,0,0,1" />
+                <Border Grid.Row="1" BorderBrush="#F0F4F3" BorderThickness="0,0,0,1" />
+                <Border Grid.Row="2" BorderBrush="#F0F4F3" BorderThickness="0,0,0,1" />
+                <Border Grid.Row="3" BorderBrush="#DCE7E4" BorderThickness="0,0,0,1" />
+              </Grid>
+
+              <ScrollViewer VerticalScrollBarVisibility="Disabled"
+                HorizontalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding BieuDoItems}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="models:BaoCaoNhaCungCapDiemThoiGian">
+                      <StackPanel Width="{Binding BeRongCot}" Margin="2,0"
+                        ToolTip.Tip="{Binding ToolTip}">
+                        <Grid Height="190">
+                          <Border Height="{Binding ChieuCaoCot}" CornerRadius="3,3,0,0"
+                            Background="#0E9382" VerticalAlignment="Bottom"
+                            HorizontalAlignment="Stretch" Margin="1,0,1,0" />
+                        </Grid>
+                        <TextBlock Text="{Binding NhanXet}" FontSize="9.5" Height="14"
+                          Foreground="#61736E" HorizontalAlignment="Center"
+                          VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Panel>
+          </Grid>
 
           <Border Classes="bcEmpty" MinHeight="150" IsVisible="{Binding !CoBieuDo}">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6">
@@ -498,12 +521,17 @@
                   <ItemsControl ItemsSource="{Binding TopItems}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="models:BaoCaoNhaCungCapTop">
-                        <Border Height="30" VerticalAlignment="Center">
-                          <Border Background="#087F6E" CornerRadius="0"
-                            Height="15" Width="{Binding RongBar}"
-                            HorizontalAlignment="Left" VerticalAlignment="Center"
-                            ToolTip.Tip="{Binding TooltipHienThi}"
-                            Cursor="Hand" />
+                        <Border Height="30" VerticalAlignment="Center"
+                          ToolTip.Tip="{Binding TooltipHienThi}">
+                          <Grid ColumnDefinitions="Auto,*">
+                            <Border Grid.Column="0" Background="#087F6E" CornerRadius="0"
+                              Height="15" Width="{Binding RongBar}"
+                              HorizontalAlignment="Left" VerticalAlignment="Center"
+                              Cursor="Hand" />
+                            <TextBlock Grid.Column="1" Text="{Binding GiaTriRutGon}"
+                              FontSize="10" Foreground="#4B5563" Margin="6,0,0,0"
+                              VerticalAlignment="Center" />
+                          </Grid>
                         </Border>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>

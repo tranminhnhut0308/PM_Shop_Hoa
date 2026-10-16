@@ -21,6 +21,8 @@ public sealed class DatabaseService
     private bool? _coCotDuLieuKiotViet;
     private bool? _cotNgayTaoSanPhamChoPhepNull;
     private bool? _coCotDuLieuKiotVietNhaCungCap;
+    private bool? _hasHoaDonContactColumns;
+    private bool _daBackfillNhomSoQuy;
 
     public DatabaseService()
     {
@@ -4359,9 +4361,23 @@ LIMIT 500;
 
         var maCanTim = maHoaDon.Trim();
 
+        var coCotContact = await EnsureHoaDonContactColumnsAsync();
+
         await using var connection = await OpenAsync();
 
-        const string headerSql = """
+        var contactCols = coCotContact
+            ? """
+              COALESCE(hd.so_dien_thoai, kh.so_dien_thoai, '') AS SoDienThoai,
+              COALESCE(hd.dia_chi, kh.dia_chi, '')             AS DiaChi,
+              COALESCE(hd.in_kem_thong_tin, 0)                 AS InKemThongTin
+              """
+            : """
+              COALESCE(kh.so_dien_thoai, '')                   AS SoDienThoai,
+              COALESCE(kh.dia_chi, '')                         AS DiaChi,
+              0                                                AS InKemThongTin
+              """;
+
+        var headerSql = $"""
         SELECT
             hd.id                       AS HoaDonId,
             hd.ma_hoa_don               AS MaHoaDon,
@@ -4374,7 +4390,8 @@ LIMIT 500;
             hd.khach_can_tra            AS KhachCanTra,
             hd.khach_da_thanh_toan      AS KhachDaThanhToan,
             hd.con_no                   AS ConNo,
-            hd.ghi_chu                  AS GhiChu
+            hd.ghi_chu                  AS GhiChu,
+            {contactCols}
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
         LEFT JOIN nguoi_dung  nd ON nd.id = hd.nguoi_ban_id
@@ -4408,6 +4425,12 @@ LIMIT 500;
         var daThanhToan = ToDecimal(header.KhachDaThanhToan);
         var conNo = ToDecimal(header.ConNo);
 
+        var inKem = Convert.ToInt32(header.InKemThongTin) == 1;
+        if (conNo > 0)
+        {
+            inKem = true;
+        }
+
         return new HoaDonBanHangReceipt
         {
             HoaDonId = (uint)header.HoaDonId,
@@ -4415,6 +4438,9 @@ LIMIT 500;
             ThoiGianBan = header.ThoiGianBan,
             TenKhachHang = header.TenKhachHang ?? "Khách lẻ",
             TenNhanVien = header.TenNhanVien ?? "",
+            SoDienThoai = header.SoDienThoai?.ToString(),
+            DiaChi = header.DiaChi?.ToString(),
+            InKemThongTin = inKem,
 
             TongTienHang = ToDecimal(header.TongTienHang),
             GiamGia = ToDecimal(header.GiamGia),
@@ -4454,7 +4480,10 @@ LIMIT 500;
     decimal discount,
     decimal tienKhachDua,
     string? phuongThucThanhToan = null,
-    string? ghiChu = null)
+    string? ghiChu = null,
+    string? soDienThoai = null,
+    string? diaChi = null,
+    bool inKemThongTin = false)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SalesPayment, "Bạn không có quyền tạo hóa đơn bán hàng.");
         if (items.Count == 0)
@@ -4507,6 +4536,16 @@ LIMIT 500;
         // Công nợ phát sinh
         var debtAmount = Math.Max(0, amountDue - paidAmount);
 
+        // Khách lẻ (không gắn hồ sơ khách hàng) KHÔNG được phép ghi nợ.
+        // Chặn ngay tại tầng nghiệp vụ, TRƯỚC khi mở giao dịch, nên không tạo hóa đơn,
+        // không trừ tồn kho, không ghi sổ quỹ và không ghi công nợ khách hàng.
+        if (debtAmount > 0m && (customer is null || customer.Id == 0))
+        {
+            throw new InvalidOperationException(
+                "Khách lẻ không được phép ghi nợ. Vui lòng nhập đủ số tiền khách thanh toán " +
+                "hoặc chọn khách hàng có thông tin để ghi nhận công nợ.");
+        }
+
         // Tiền thối
         var changeAmount = Math.Max(0, cashReceived - amountDue);
 
@@ -4516,10 +4555,11 @@ LIMIT 500;
         var branchId = Session.CurrentUser?.ChiNhanhId ?? 1;
         var userId = Session.CurrentUser?.Id;
 
-        // Đảm bảo cột liên kết phiếu thu tồn tại TRƯỚC khi mở giao dịch.
+        // Đảm bảo cột liên kết phiếu thu và cột thông tin liên hệ tồn tại TRƯỚC khi mở giao dịch.
         // ALTER TABLE bên trong transaction sẽ làm MySQL báo
         // "Table definition has changed" và huỷ cả giao dịch.
         var coCotPhieuThuLienKet = await EnsurePhieuQuyHoaDonColumnsAsync();
+        var coCotContactHoaDon = await EnsureHoaDonContactColumnsAsync();
 
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -4537,46 +4577,93 @@ LIMIT 500;
             //    không trùng mã, và thử lại nếu chạm UNIQUE index ma_hoa_don.
             // ============================================================
 
-            const string insertInvoiceSql = """
-            INSERT INTO hoa_don_ban_hang
-            (
-                ma_hoa_don,
-                chi_nhanh_id,
-                khach_hang_id,
-                nguoi_ban_id,
-                thoi_gian_ban,
-                tong_tien_hang,
-                giam_gia,
-                thu_khac,
-                khach_can_tra,
-                khach_da_thanh_toan,
-                con_no,
-                trang_thai_thanh_toan,
-                trang_thai_hoa_don,
-                ghi_chu,
-                ngay_tao,
-                ngay_cap_nhat
-            )
-            VALUES
-            (
-                @MaHoaDon,
-                @ChiNhanhId,
-                @KhachHangId,
-                @NguoiBanId,
-                @ThoiGianBan,
-                @TongTienHang,
-                @GiamGia,
-                @ThuKhac,
-                @KhachCanTra,
-                @KhachDaThanhToan,
-                @ConNo,
-                @TrangThaiThanhToan,
-                'HOAN_THANH',
-                @GhiChu,
-                @ThoiGianBan,
-                @ThoiGianBan
-            );
-            """;
+            var insertInvoiceSql = coCotContactHoaDon
+                ? """
+                INSERT INTO hoa_don_ban_hang
+                (
+                    ma_hoa_don,
+                    chi_nhanh_id,
+                    khach_hang_id,
+                    nguoi_ban_id,
+                    so_dien_thoai,
+                    dia_chi,
+                    in_kem_thong_tin,
+                    thoi_gian_ban,
+                    tong_tien_hang,
+                    giam_gia,
+                    thu_khac,
+                    khach_can_tra,
+                    khach_da_thanh_toan,
+                    con_no,
+                    trang_thai_thanh_toan,
+                    trang_thai_hoa_don,
+                    ghi_chu,
+                    ngay_tao,
+                    ngay_cap_nhat
+                )
+                VALUES
+                (
+                    @MaHoaDon,
+                    @ChiNhanhId,
+                    @KhachHangId,
+                    @NguoiBanId,
+                    @SoDienThoai,
+                    @DiaChi,
+                    @InKemThongTin,
+                    @ThoiGianBan,
+                    @TongTienHang,
+                    @GiamGia,
+                    @ThuKhac,
+                    @KhachCanTra,
+                    @KhachDaThanhToan,
+                    @ConNo,
+                    @TrangThaiThanhToan,
+                    'HOAN_THANH',
+                    @GhiChu,
+                    @ThoiGianBan,
+                    @ThoiGianBan
+                );
+                """
+                : """
+                INSERT INTO hoa_don_ban_hang
+                (
+                    ma_hoa_don,
+                    chi_nhanh_id,
+                    khach_hang_id,
+                    nguoi_ban_id,
+                    thoi_gian_ban,
+                    tong_tien_hang,
+                    giam_gia,
+                    thu_khac,
+                    khach_can_tra,
+                    khach_da_thanh_toan,
+                    con_no,
+                    trang_thai_thanh_toan,
+                    trang_thai_hoa_don,
+                    ghi_chu,
+                    ngay_tao,
+                    ngay_cap_nhat
+                )
+                VALUES
+                (
+                    @MaHoaDon,
+                    @ChiNhanhId,
+                    @KhachHangId,
+                    @NguoiBanId,
+                    @ThoiGianBan,
+                    @TongTienHang,
+                    @GiamGia,
+                    @ThuKhac,
+                    @KhachCanTra,
+                    @KhachDaThanhToan,
+                    @ConNo,
+                    @TrangThaiThanhToan,
+                    'HOAN_THANH',
+                    @GhiChu,
+                    @ThoiGianBan,
+                    @ThoiGianBan
+                );
+                """;
 
             var invoiceCode = "";
             uint invoiceId = 0;
@@ -4599,6 +4686,9 @@ LIMIT 500;
                             ChiNhanhId = branchId,
                             KhachHangId = customer?.Id,
                             NguoiBanId = userId,
+                            SoDienThoai = BlankToNull(string.IsNullOrWhiteSpace(soDienThoai) ? customer?.SoDienThoai : soDienThoai),
+                            DiaChi = BlankToNull(string.IsNullOrWhiteSpace(diaChi) ? customer?.DiaChi : diaChi),
+                            InKemThongTin = inKemThongTin ? 1 : 0,
                             ThoiGianBan = now,
 
                             TongTienHang = total,
@@ -5125,6 +5215,9 @@ LIMIT 500;
         // duy nhất chỉ cho phép 1 phiếu/hóa đơn — phiếu thu đầu tiên đã giữ chỗ đó.
         var maPhieu = await SinhMaPhieuThuTrongGiaoDichAsync(connection, transaction);
 
+        // Phiếu thu nợ hóa đơn luôn thuộc loại "Thu khách hàng".
+        var idNhomThuKhachHang = await LayIdNhomChiPhiTheoMaAsync(connection, transaction, "THU_KHACH_HANG");
+
         var noiDung = $"Thu nợ hóa đơn {maHoaDon}";
         var ghiChuPhieu = string.IsNullOrWhiteSpace(ghiChu)
             ? noiDung
@@ -5137,7 +5230,7 @@ LIMIT 500;
                noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
                nguoi_thuc_hien_id, trang_thai, hoa_don_ban_hang_id, ma_hoa_don)
               VALUES
-              (@MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+              (@MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc,
                @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
                @NguoiTaoId, @TrangThai, NULL, @MaHoaDon);
               """
@@ -5147,7 +5240,7 @@ LIMIT 500;
                noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
                nguoi_thuc_hien_id, trang_thai)
               VALUES
-              (@MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+              (@MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc,
                @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
                @NguoiTaoId, @TrangThai);
               """;
@@ -5165,6 +5258,7 @@ LIMIT 500;
             {
                 MaPhieu = maPhieu,
                 ChiNhanhId = chiNhanhId,
+                NhomChiPhiId = idNhomThuKhachHang,
                 SoTien = thu,
                 PhuongThuc = ChuanHoaPhuongThuc(phuongThucThanhToan),
                 NoiDung = noiDung,
@@ -5425,6 +5519,9 @@ LIMIT 500;
 
         var maPhieu = await SinhMaPhieuThuTrongGiaoDichAsync(connection, transaction);
 
+        // Phiếu thu nợ khách hàng luôn thuộc loại "Thu khách hàng".
+        var idNhomThuKhachHang = await LayIdNhomChiPhiTheoMaAsync(connection, transaction, "THU_KHACH_HANG");
+
         var noiDung = "Thu nợ khách hàng";
         var ghiChuPhieu = string.IsNullOrWhiteSpace(ghiChu)
             ? noiDung
@@ -5437,7 +5534,7 @@ LIMIT 500;
                noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
                nguoi_thuc_hien_id, trang_thai, hoa_don_ban_hang_id, ma_hoa_don)
               VALUES
-              (@MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+              (@MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc,
                @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
                @NguoiTaoId, @TrangThai, NULL, NULL);
               """
@@ -5447,7 +5544,7 @@ LIMIT 500;
                noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
                nguoi_thuc_hien_id, trang_thai)
               VALUES
-              (@MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+              (@MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc,
                @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
                @NguoiTaoId, @TrangThai);
               """;
@@ -5458,6 +5555,7 @@ LIMIT 500;
             {
                 MaPhieu = maPhieu,
                 ChiNhanhId = chiNhanhId,
+                NhomChiPhiId = idNhomThuKhachHang,
                 SoTien = soTien,
                 PhuongThuc = ChuanHoaPhuongThuc(phuongThucThanhToan),
                 NoiDung = noiDung,
@@ -5664,6 +5762,10 @@ LIMIT 500;
 
             // 4. Ghi phiếu chi trong sổ quỹ.
             var maPhieuChi = await SinhMaPhieuChiTrongGiaoDichAsync(connection, transaction);
+
+            // Phiếu chi thanh toán nhập hàng luôn thuộc loại "Chi nhà cung cấp".
+            var idNhomChiNhaCungCap = await LayIdNhomChiPhiTheoMaAsync(connection, transaction, "CHI_NHA_CUNG_CAP");
+
             var tenNcc = string.IsNullOrWhiteSpace(phieu.TenNhaCungCap)
                 ? phieu.NhaCungCapId?.ToString()
                 : phieu.TenNhaCungCap;
@@ -5682,7 +5784,7 @@ LIMIT 500;
                 )
                 VALUES
                 (
-                    @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                    @MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc,
                     @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
                     @NguoiTaoId, @TrangThai, @PhieuNhapId, @MaPhieuNhap
                 );
@@ -5699,7 +5801,7 @@ LIMIT 500;
                 )
                 VALUES
                 (
-                    @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                    @MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc,
                     @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
                     @NguoiTaoId, @TrangThai
                 );
@@ -5715,7 +5817,7 @@ LIMIT 500;
                 )
                 VALUES
                 (
-                    @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                    @MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc,
                     @NoiDung, @ThoiGian, @NguoiTaoId, @TrangThai
                 );
                 """;
@@ -5727,6 +5829,7 @@ LIMIT 500;
                 {
                     MaPhieu = maPhieuChi,
                     ChiNhanhId = phieu.ChiNhanhId,
+                    NhomChiPhiId = idNhomChiNhaCungCap,
                     SoTien = soTien,
                     PhuongThuc = phuongThuc,
                     NoiDung = noiDung,
@@ -6040,6 +6143,9 @@ LIMIT 500;
         // Cấp mã PT ngay trong giao dịch để không trùng với phiếu đang mở ở máy khác.
         var maPhieu = await SinhMaPhieuThuTrongGiaoDichAsync(connection, transaction);
 
+        // Phiếu thu bán hàng luôn thuộc loại "Thu khách hàng".
+        var idNhomThuKhachHang = await LayIdNhomChiPhiTheoMaAsync(connection, transaction, "THU_KHACH_HANG");
+
         var ghiChu = $"Thu tiền thanh toán hóa đơn {invoiceCode}.";
 
         if (changeAmount > 0)
@@ -6058,7 +6164,7 @@ LIMIT 500;
               )
               VALUES
               (
-                  @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                  @MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc,
                   @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
                   @NguoiTaoId, @TrangThai, @HoaDonId, @MaHoaDon
               );
@@ -6072,7 +6178,7 @@ LIMIT 500;
               )
               VALUES
               (
-                  @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                  @MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc,
                   @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
                   @NguoiTaoId, @TrangThai
               );
@@ -6084,6 +6190,7 @@ LIMIT 500;
             {
                 MaPhieu = maPhieu,
                 ChiNhanhId = branchId,
+                NhomChiPhiId = idNhomThuKhachHang,
                 SoTien = paidAmount,
                 PhuongThuc = phuongThucThanhToan,
                 NoiDung = $"Thu tiền bán hàng - hóa đơn {invoiceCode}",
@@ -7449,6 +7556,7 @@ LIMIT 500;
         WHERE (
                 @Search = ''
                 OR p.ma_phieu_nhap LIKE CONCAT('%', @Search, '%')
+                OR ncc.ma_nha_cung_cap LIKE CONCAT('%', @Search, '%')
                 OR ncc.ten_nha_cung_cap LIKE CONCAT('%', @Search, '%')
               )
         ORDER BY p.thoi_gian_nhap DESC, p.id DESC;
@@ -7466,13 +7574,15 @@ LIMIT 500;
 
     /// <summary>
     /// Lấy danh sách phiếu nhập theo trang cho báo cáo.
+    /// Hỗ trợ tìm kiếm theo mã phiếu, mã NCC, tên NCC và lọc theo tình trạng thanh toán.
     /// Chỉ đọc dữ liệu của trang hiện tại (LIMIT/OFFSET) kèm tổng số bản ghi,
     /// không tải toàn bộ bảng lên giao diện.
     /// </summary>
     public async Task<(IReadOnlyList<PhieuNhapHang> Items, int TongSoBanGhi)> GetPhieuNhapHangPagedAsync(
         string? search,
         int page,
-        int pageSize)
+        int pageSize,
+        string? tinhTrangThanhToan = null)
     {
         if (page < 1)
             page = 1;
@@ -7487,13 +7597,26 @@ LIMIT 500;
             ? ",\n            COALESCE(p.phuong_thuc_thanh_toan, 'TIEN_MAT') AS PhuongThucThanhToan"
             : string.Empty;
 
-        const string countSql = """
+        var paymentCondition = (tinhTrangThanhToan?.ToUpperInvariant()) switch
+        {
+            "DA_THANH_TOAN" => "AND p.con_no <= 0",
+            "CHUA_THANH_TOAN" => "AND p.da_thanh_toan <= 0",
+            "MOT_PHAN" => "AND p.da_thanh_toan > 0 AND p.con_no > 0",
+            _ => ""
+        };
+
+        var searchCondition = @"(@Search = ''
+            OR p.ma_phieu_nhap LIKE CONCAT('%', @Search, '%')
+            OR ncc.ma_nha_cung_cap LIKE CONCAT('%', @Search, '%')
+            OR ncc.ten_nha_cung_cap LIKE CONCAT('%', @Search, '%'))";
+
+        var countSql = $"""
         SELECT COUNT(*)
         FROM phieu_nhap_hang p
         LEFT JOIN nha_cung_cap ncc
             ON ncc.id = p.nha_cung_cap_id
-        WHERE @Search = ''
-           OR p.ma_phieu_nhap LIKE CONCAT('%', @Search, '%');
+        WHERE {searchCondition}
+          {paymentCondition};
         """;
 
         var pageSql = $"""
@@ -7518,8 +7641,8 @@ LIMIT 500;
             ON ncc.id = p.nha_cung_cap_id
         LEFT JOIN nguoi_dung nd
             ON nd.id = p.nguoi_nhap_id
-        WHERE @Search = ''
-           OR p.ma_phieu_nhap LIKE CONCAT('%', @Search, '%')
+        WHERE {searchCondition}
+          {paymentCondition}
         ORDER BY p.thoi_gian_nhap DESC, p.id DESC
         LIMIT @PageSize OFFSET @Offset;
         """;
@@ -8001,6 +8124,10 @@ LIMIT 500;
         if (phieu.DaThanhToan > 0)
         {
             var maPhieuChi = await SinhMaPhieuChiTrongGiaoDichAsync(connection, transaction);
+
+            // Phiếu chi thanh toán nhập hàng luôn thuộc loại "Chi nhà cung cấp".
+            var idNhomChiNhaCungCap = await LayIdNhomChiPhiTheoMaAsync(connection, transaction, "CHI_NHA_CUNG_CAP");
+
             var phuongThuc = ChuanHoaPhuongThuc(phieu.PhuongThucThanhToan);
             var noiDung = $"Thanh toán tiền nhập hàng - phiếu {phieu.MaPhieuNhap}";
             var tenNcc = string.IsNullOrWhiteSpace(phieu.TenNhaCungCap) ? phieu.NhaCungCapId?.ToString() : phieu.TenNhaCungCap;
@@ -8018,7 +8145,7 @@ LIMIT 500;
                 )
                 VALUES
                 (
-                    @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                    @MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc,
                     @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
                     @NguoiTaoId, @TrangThai, @PhieuNhapId, @MaPhieuNhap
                 );
@@ -8035,7 +8162,7 @@ LIMIT 500;
                 )
                 VALUES
                 (
-                    @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                    @MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc,
                     @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
                     @NguoiTaoId, @TrangThai
                 );
@@ -8051,7 +8178,7 @@ LIMIT 500;
                 )
                 VALUES
                 (
-                    @MaPhieu, @ChiNhanhId, NULL, @SoTien, @PhuongThuc,
+                    @MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc,
                     @NoiDung, @ThoiGian, @NguoiTaoId, @TrangThai
                 );
                 """;
@@ -8063,6 +8190,7 @@ LIMIT 500;
                 {
                     MaPhieu = maPhieuChi,
                     ChiNhanhId = branchId,
+                    NhomChiPhiId = idNhomChiNhaCungCap,
                     SoTien = phieu.DaThanhToan,
                     PhuongThuc = phuongThuc,
                     NoiDung = noiDung,
@@ -8184,8 +8312,9 @@ LIMIT 500;
 
         const string updateGiaVonSql = """
         UPDATE san_pham
-        SET gia_von      = @GiaVon,
-            ngay_cap_nhat = NOW()
+        SET gia_von        = @GiaVon,
+            don_vi_tinh_id = COALESCE(@DonViTinhIdMoi, don_vi_tinh_id),
+            ngay_cap_nhat  = NOW()
         WHERE id = @SanPhamId;
         """;
 
@@ -8265,9 +8394,17 @@ LIMIT 500;
                 new
                 {
                     GiaVon = item.DonGiaNhap,
+                    DonViTinhIdMoi = item.DonViTinhIdMoi,
                     SanPhamId = item.SanPham.Id
                 },
                 transaction);
+
+            if (item.SelectedDonViTinh is { Id: > 0 } donViMoi)
+            {
+                item.SanPham.DonViTinhId = donViMoi.Id;
+                item.SanPham.DonViTinh = donViMoi.Name;
+                item.SanPham.TenDonViTinh = donViMoi.Name;
+            }
 
             await connection.ExecuteAsync(
                 insertLichSuSql,
@@ -8564,6 +8701,159 @@ LIMIT 500;
         return _hasPhieuQuyHoaDonColumns.Value;
     }
 
+    /// <summary>
+    /// Trả về id của một loại thu/chi theo mã (<c>nhom_chi_phi.ma_nhom</c>),
+    /// <c>null</c> nếu danh mục chưa tồn tại. Dùng để gắn đúng loại
+    /// "Thu khách hàng" / "Chi nhà cung cấp" cho các phiếu quỹ do hệ thống tự
+    /// sinh (bán hàng, thu nợ khách hàng, thanh toán nhập hàng).
+    /// </summary>
+    private static async Task<uint?> LayIdNhomChiPhiTheoMaAsync(
+        MySqlConnection connection,
+        MySqlTransaction? transaction,
+        string maNhom)
+    {
+        return await connection.ExecuteScalarAsync<uint?>(
+            "SELECT id FROM nhom_chi_phi WHERE ma_nhom = @MaNhom LIMIT 1;",
+            new { MaNhom = maNhom },
+            transaction);
+    }
+
+    /// <summary>
+    /// Gắn loại thu/chi cho các phiếu quỹ cũ do hệ thống tự sinh nhưng còn để
+    /// <c>nhom_chi_phi_id = NULL</c>: phiếu thu bán hàng / thu nợ khách hàng
+    /// (mã hóa đơn, liên kết hóa đơn hoặc nội dung "Thu nợ...") và phiếu chi
+    /// thanh toán nhập hàng (liên kết phiếu nhập). Nhờ vậy bộ lọc
+    /// "Thu khách hàng" / "Chi nhà cung cấp" lọc đúng cả dữ liệu cũ.
+    /// <para>
+    /// Chỉ chạy một lần, chỉ đụng các dòng đang NULL nên chạy lại vẫn an toàn
+    /// và không bao giờ ghi đè loại mà người dùng đã chọn.
+    /// </para>
+    /// </summary>
+    private async Task EnsureSoQuyNhomChiPhiChoPhieuCuAsync()
+    {
+        if (_daBackfillNhomSoQuy)
+            return;
+
+        _daBackfillNhomSoQuy = true;
+
+        try
+        {
+            var coCotHoaDon = await EnsurePhieuQuyHoaDonColumnsAsync();
+            var coCotPhieuNhap = await EnsurePhieuQuyPhieuNhapColumnsAsync();
+
+            await using var connection = await OpenAsync();
+
+            var idThuKhachHang = await LayIdNhomChiPhiTheoMaAsync(connection, null, "THU_KHACH_HANG");
+
+            if (idThuKhachHang is uint idThu && idThu > 0)
+            {
+                // Phiếu thu bán hàng có liên kết hóa đơn hoặc mã hóa đơn; phiếu
+                // thu nợ có nội dung bắt đầu bằng "Thu nợ".
+                var nhanDienKhachHang = coCotHoaDon
+                    ? "(pc.hoa_don_ban_hang_id IS NOT NULL"
+                      + " OR NULLIF(TRIM(pc.ma_hoa_don), '') IS NOT NULL"
+                      + " OR COALESCE(pc.noi_dung, '') LIKE 'Thu nợ%')"
+                    : "COALESCE(pc.noi_dung, '') LIKE 'Thu nợ%'";
+
+                await connection.ExecuteAsync(
+                    $"""
+                    UPDATE phieu_chi pc
+                    SET pc.nhom_chi_phi_id = @IdNhom
+                    WHERE pc.nhom_chi_phi_id IS NULL
+                      AND pc.ma_phieu_chi LIKE 'PT%'
+                      AND {nhanDienKhachHang};
+                    """,
+                    new { IdNhom = idThu });
+            }
+
+            var idChiNhaCungCap = await LayIdNhomChiPhiTheoMaAsync(connection, null, "CHI_NHA_CUNG_CAP");
+
+            if (idChiNhaCungCap is uint idChi && idChi > 0)
+            {
+                var nhanDienNhaCungCap = coCotPhieuNhap
+                    ? "pc.phieu_nhap_hang_id IS NOT NULL"
+                    : "COALESCE(pc.noi_dung, '') LIKE 'Thanh toán%nhập hàng%'";
+
+                await connection.ExecuteAsync(
+                    $"""
+                    UPDATE phieu_chi pc
+                    SET pc.nhom_chi_phi_id = @IdNhom
+                    WHERE pc.nhom_chi_phi_id IS NULL
+                      AND pc.ma_phieu_chi LIKE 'PC%'
+                      AND {nhanDienNhaCungCap};
+                    """,
+                    new { IdNhom = idChi });
+            }
+        }
+        catch
+        {
+            // Best-effort: lỗi migration không được làm hỏng việc nạp sổ quỹ.
+        }
+    }
+
+    /// <summary>
+    /// Bảo đảm bảng hoa_don_ban_hang có 3 cột:
+    /// so_dien_thoai, dia_chi, in_kem_thong_tin.
+    /// Nếu database chưa có thì tự động ALTER TABLE trước khi mở transaction.
+    /// </summary>
+    private async Task<bool> EnsureHoaDonContactColumnsAsync()
+    {
+        if (_hasHoaDonContactColumns.HasValue)
+            return _hasHoaDonContactColumns.Value;
+
+        await using var connection = await OpenAsync();
+
+        try
+        {
+            var coCot = (await connection.QueryAsync<string>(
+                """
+                SELECT COLUMN_NAME FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'hoa_don_ban_hang'
+                  AND COLUMN_NAME IN ('so_dien_thoai', 'dia_chi', 'in_kem_thong_tin');
+                """)).AsList();
+
+            var daCoSdt = false;
+            var daCoDiaChi = false;
+            var daCoInKem = false;
+
+            foreach (var cot in coCot)
+            {
+                if (string.Equals(cot, "so_dien_thoai", StringComparison.OrdinalIgnoreCase))
+                    daCoSdt = true;
+                else if (string.Equals(cot, "dia_chi", StringComparison.OrdinalIgnoreCase))
+                    daCoDiaChi = true;
+                else if (string.Equals(cot, "in_kem_thong_tin", StringComparison.OrdinalIgnoreCase))
+                    daCoInKem = true;
+            }
+
+            if (!daCoSdt)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE hoa_don_ban_hang ADD COLUMN so_dien_thoai varchar(50) DEFAULT NULL AFTER khach_hang_id;");
+            }
+
+            if (!daCoDiaChi)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE hoa_don_ban_hang ADD COLUMN dia_chi text DEFAULT NULL AFTER so_dien_thoai;");
+            }
+
+            if (!daCoInKem)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE hoa_don_ban_hang ADD COLUMN in_kem_thong_tin tinyint(1) NOT NULL DEFAULT 0 AFTER dia_chi;");
+            }
+
+            _hasHoaDonContactColumns = true;
+        }
+        catch
+        {
+            _hasHoaDonContactColumns = false;
+        }
+
+        return _hasHoaDonContactColumns.Value;
+    }
+
     // ================================================================
     // SỔ QUỸ - PHIẾU THU / PHIẾU CHI
     // Database hiện có bảng `phieu_chi` (chưa có bảng `phieu_thu`),
@@ -8691,63 +8981,78 @@ LIMIT 500;
     /// vào SQL. Khoảng thời gian và khoảng tiền có thể tắt riêng vì quỹ đầu kỳ
     /// cần tới tận các phiếu trước mốc thời gian nhưng không được lọc theo số tiền.
     /// </para>
+    /// <para>
+    /// <paramref name="apDungBoLocHienThi"/> = false để bỏ toàn bộ các bộ lọc chỉ
+    /// dùng cho việc xem danh sách (tìm kiếm, loại chứng từ, loại thu/chi, người
+    /// tạo, trạng thái, khoảng tiền). Thẻ tổng quan của sổ quỹ dùng chế độ này để
+    /// tồn quỹ luôn đúng số dư thực tế, không bị bóp méo khi người dùng lọc bảng.
+    /// </para>
     /// </summary>
     private static string TaoDieuKienSoQuy(
         bool apDungKhoangThoiGian,
         bool apDungKhoangTien,
-        bool coCotNguoiNopNhanGhiChu = true)
+        bool coCotNguoiNopNhanGhiChu = true,
+        bool apDungBoLocHienThi = true)
     {
-        var dieuKien = new StringBuilder();
+        var dieuKien = new List<string>();
 
-        // Ô tìm kiếm: mã phiếu, nội dung, ghi chú, người nộp/nhận, người tạo, tên loại thu/chi.
-        dieuKien.Append(
-            "(@TimKiem = ''"
-            + " OR pc.ma_phieu_chi LIKE @TimKiemLike"
-            + " OR COALESCE(pc.noi_dung, '') LIKE @TimKiemLike"
-            + " OR COALESCE(nd.ho_ten, '') LIKE @TimKiemLike"
-            + " OR COALESCE(ncp.ten_nhom, '') LIKE @TimKiemLike");
-
-        // Hai cột này chỉ tồn tại khi migration đã chạy thành công.
-        if (coCotNguoiNopNhanGhiChu)
+        if (apDungBoLocHienThi)
         {
-            dieuKien.Append(" OR COALESCE(pc.nguoi_nop_nhan, '') LIKE @TimKiemLike");
-            dieuKien.Append(" OR COALESCE(pc.ghi_chu, '') LIKE @TimKiemLike");
+            // Ô tìm kiếm: mã phiếu, nội dung, ghi chú, người nộp/nhận, người tạo, tên loại thu/chi.
+            var timKiem = new StringBuilder();
+            timKiem.Append(
+                "(@TimKiem = ''"
+                + " OR pc.ma_phieu_chi LIKE @TimKiemLike"
+                + " OR COALESCE(pc.noi_dung, '') LIKE @TimKiemLike"
+                + " OR COALESCE(nd.ho_ten, '') LIKE @TimKiemLike"
+                + " OR COALESCE(ncp.ten_nhom, '') LIKE @TimKiemLike");
+
+            // Hai cột này chỉ tồn tại khi migration đã chạy thành công.
+            if (coCotNguoiNopNhanGhiChu)
+            {
+                timKiem.Append(" OR COALESCE(pc.nguoi_nop_nhan, '') LIKE @TimKiemLike");
+                timKiem.Append(" OR COALESCE(pc.ghi_chu, '') LIKE @TimKiemLike");
+            }
+
+            timKiem.Append(")");
+            dieuKien.Add(timKiem.ToString());
+
+            // Loại chứng từ: 0 = cả hai, 1 = chỉ phiếu thu, 2 = chỉ phiếu chi.
+            dieuKien.Add(
+                "(@LoaiChungTu = 0"
+                + " OR (@LoaiChungTu = 1 AND pc.ma_phieu_chi LIKE 'PT%')"
+                + " OR (@LoaiChungTu = 2 AND pc.ma_phieu_chi LIKE 'PC%'))");
         }
 
-        dieuKien.Append(")");
-
-        // Loại chứng từ: 0 = cả hai, 1 = chỉ phiếu thu, 2 = chỉ phiếu chi.
-        dieuKien.Append(
-            " AND (@LoaiChungTu = 0"
-            + " OR (@LoaiChungTu = 1 AND pc.ma_phieu_chi LIKE 'PT%')"
-            + " OR (@LoaiChungTu = 2 AND pc.ma_phieu_chi LIKE 'PC%'))");
-
         // Quỹ: so khớp đúng mã phương thức đang có trong bảng phieu_chi.
-        dieuKien.Append(" AND (@PhuongThuc = '' OR pc.phuong_thuc = @PhuongThuc)");
+        dieuKien.Add("(@PhuongThuc = '' OR pc.phuong_thuc = @PhuongThuc)");
 
         if (apDungKhoangThoiGian)
         {
-            dieuKien.Append(" AND (@TuNgay IS NULL OR pc.thoi_gian_chi >= @TuNgay)");
-            dieuKien.Append(" AND (@DenNgay IS NULL OR pc.thoi_gian_chi < @DenNgay)");
+            dieuKien.Add("(@TuNgay IS NULL OR pc.thoi_gian_chi >= @TuNgay)");
+            dieuKien.Add("(@DenNgay IS NULL OR pc.thoi_gian_chi < @DenNgay)");
         }
 
-        // Các nhóm lựa chọn nhiều mục gửi lên dạng danh sách id cách nhau bằng dấu phẩy.
-        dieuKien.Append(
-            " AND (@LoaiThuChiIds = ''"
-            + " OR FIND_IN_SET(CAST(pc.nhom_chi_phi_id AS CHAR), @LoaiThuChiIds) > 0)");
-        dieuKien.Append(
-            " AND (@TrangThaiList = '' OR FIND_IN_SET(pc.trang_thai, @TrangThaiList) > 0)");
-        dieuKien.Append(
-            " AND (@NguoiTaoIds = ''"
-            + " OR FIND_IN_SET(CAST(pc.nguoi_thuc_hien_id AS CHAR), @NguoiTaoIds) > 0)");
+        if (apDungBoLocHienThi)
+        {
+            // Các nhóm lựa chọn nhiều mục gửi lên dạng danh sách id cách nhau bằng dấu phẩy.
+            dieuKien.Add(
+                "(@LoaiThuChiIds = ''"
+                + " OR FIND_IN_SET(CAST(pc.nhom_chi_phi_id AS CHAR), @LoaiThuChiIds) > 0)");
+            dieuKien.Add(
+                "(@TrangThaiList = '' OR FIND_IN_SET(pc.trang_thai, @TrangThaiList) > 0)");
+            dieuKien.Add(
+                "(@NguoiTaoIds = ''"
+                + " OR FIND_IN_SET(CAST(pc.nguoi_thuc_hien_id AS CHAR), @NguoiTaoIds) > 0)");
+        }
 
         if (apDungKhoangTien)
         {
-            dieuKien.Append(" AND (@TienTu IS NULL OR pc.so_tien >= @TienTu)");
-            dieuKien.Append(" AND (@TienDen IS NULL OR pc.so_tien <= @TienDen)");
+            dieuKien.Add("(@TienTu IS NULL OR pc.so_tien >= @TienTu)");
+            dieuKien.Add("(@TienDen IS NULL OR pc.so_tien <= @TienDen)");
         }
 
-        return dieuKien.ToString();
+        return string.Join(" AND ", dieuKien);
     }
 
     /// <summary>Gom bộ lọc thành đúng bộ tham số mà các câu SQL kia đang mong đợi.</summary>
@@ -8781,6 +9086,10 @@ LIMIT 500;
         int pageSize)
     {
         loc ??= new SoQuyBoLoc();
+
+        // Gắn loại cho các phiếu tự sinh còn NULL trước khi lọc, để bộ lọc
+        // "Thu khách hàng" / "Chi nhà cung cấp" áp đúng cả dữ liệu cũ.
+        await EnsureSoQuyNhomChiPhiChoPhieuCuAsync();
 
         var coCotMoi = await EnsurePhieuQuyExtraColumnsAsync();
 
@@ -8994,6 +9303,8 @@ LIMIT 500;
     {
         loc ??= new SoQuyBoLoc();
 
+        await EnsureSoQuyNhomChiPhiChoPhieuCuAsync();
+
         var coCotMoi = await EnsurePhieuQuyExtraColumnsAsync();
 
         await using var connection = await OpenAsync();
@@ -9032,7 +9343,11 @@ LIMIT 500;
     }
 
     /// <summary>
-    /// Thống kê sổ quỹ theo bộ lọc: quỹ đầu kỳ, tổng thu, tổng chi, tồn quỹ, tổng số phiếu.
+    /// Thống kê sổ quỹ: quỹ đầu kỳ, tổng thu, tổng chi, tồn quỹ, tổng số phiếu.
+    /// Bốn thẻ chỉ số luôn tính trên CẢ phiếu thu lẫn phiếu chi, chỉ theo kỳ thời
+    /// gian và quỹ đang chọn, nên tồn quỹ luôn là số dư thực tế chứ không bị
+    /// bóp méo khi người dùng lọc loại chứng từ / tìm kiếm / loại thu chi / người
+    /// tạo / khoảng tiền (các bộ lọc đó chỉ ảnh hưởng danh sách bên dưới).
     /// Tổng thu/tổng chi chỉ cộng phiếu <see cref="TrangThaiPhieuHoanThanh"/> nên
     /// phiếu đã hủy không làm thay đổi quỹ.
     /// </summary>
@@ -9046,13 +9361,23 @@ LIMIT 500;
 
             await using var connection = await OpenAsync();
 
+            // Thẻ tổng quan bỏ qua các bộ lọc chỉ dùng để xem danh sách
+            // (loại chứng từ, tìm kiếm, loại thu/chi, người tạo, trạng thái,
+            // khoảng tiền) để quỹ đầu kỳ và tồn quỹ luôn là số dư thực tế.
+            var dieuKienDauKy = TaoDieuKienSoQuy(
+                apDungKhoangThoiGian: false,
+                apDungKhoangTien: false,
+                coCotMoi,
+                apDungBoLocHienThi: false);
+
+            var dieuKienKy = TaoDieuKienSoQuy(
+                apDungKhoangThoiGian: true,
+                apDungKhoangTien: false,
+                coCotMoi,
+                apDungBoLocHienThi: false);
+
             // Quỹ đầu kỳ chỉ có nghĩa khi đang giới hạn bởi mốc bắt đầu: gom tất cả
-            // phiếu trước mốc đó, thu trừ chi, và không lọc theo khoảng tiền
-            // (quỹ đầu kỳ là số dư mang sang, không phải giao dịch của kỳ này).
-            var dieuKienDauKy = TaoDieuKienSoQuy(apDungKhoangThoiGian: false, apDungKhoangTien: false, coCotMoi);
-
-            var dieuKienKy = TaoDieuKienSoQuy(apDungKhoangThoiGian: true, apDungKhoangTien: true, coCotMoi);
-
+            // phiếu trước mốc đó, thu trừ chi.
             var sql = $"""
             SELECT
                 (
@@ -9066,30 +9391,54 @@ LIMIT 500;
                       AND pc.trang_thai = @TrangThaiHoanThanh
                 ) AS QuyDauKy,
                 COALESCE(SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PT%' THEN pc.so_tien ELSE 0 END), 0) AS TongThu,
-                COALESCE(SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PC%' THEN pc.so_tien ELSE 0 END), 0) AS TongChi,
-                COUNT(*) AS TongSoPhieu
+                COALESCE(SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PC%' THEN pc.so_tien ELSE 0 END), 0) AS TongChi
             {SoQuyFrom}
             WHERE {dieuKienKy}
               AND pc.trang_thai = @TrangThaiHoanThanh;
             """;
 
-            var thamSo = TaoThamSoSoQuy(loc, apDungKhoangTien: true);
+            var thamSo = TaoThamSoSoQuy(loc, apDungKhoangTien: false);
 
             var parameters = GopThamSo(thamSo, 0, 0);
             parameters["TrangThaiHoanThanh"] = TrangThaiPhieuHoanThanh;
 
             var row = await connection.QueryFirstOrDefaultAsync<SoQuyTongHopRow>(sql, parameters);
 
+            // Tổng số phiếu phải khớp danh sách đang hiển thị nên đếm theo đúng
+            // bộ lọc hiển thị (gồm cả phiếu đã hủy).
+            var dieuKienDem = TaoDieuKienSoQuy(apDungKhoangThoiGian: true, apDungKhoangTien: true, coCotMoi);
+            var thamSoDem = TaoThamSoSoQuy(loc, apDungKhoangTien: true);
+
+            var quyDauKy = row?.QuyDauKy ?? 0m;
+            var tongThu = row?.TongThu ?? 0m;
+            var tongChi = row?.TongChi ?? 0m;
+            var tonQuy = quyDauKy + tongThu - tongChi;
+
+            // Nghiệp vụ: khi lọc phiếu thu thì tổng chi = 0, tồn quỹ = 0.
+            // Khi lọc phiếu chi thì tổng thu = 0, tồn quỹ = 0.
+            // Khi lọc tất cả thì hiển thị đầy đủ tổng thu, tổng chi và tồn quỹ thực tế.
+            if (loc.LoaiChungTu == SoQuyBoLoc.ChiPhieuThu)
+            {
+                tongChi = 0m;
+                tonQuy = 0m;
+                quyDauKy = 0m;
+            }
+            else if (loc.LoaiChungTu == SoQuyBoLoc.ChiPhieuChi)
+            {
+                tongThu = 0m;
+                tonQuy = 0m;
+                quyDauKy = 0m;
+            }
+
             return new SoQuyTongHop
             {
-                QuyDauKy = row?.QuyDauKy ?? 0m,
-                TongThu = row?.TongThu ?? 0m,
-                TongChi = row?.TongChi ?? 0m,
-                // Đếm cả phiếu đã hủy để tổng số phiếu khớp bộ lọc khớp
-                // với danh sách đang hiển thị bên dưới.
+                QuyDauKy = quyDauKy,
+                TongThu = tongThu,
+                TongChi = tongChi,
+                TonQuy = tonQuy,
                 TongSoPhieu = await connection.ExecuteScalarAsync<int>(
-                    $"SELECT COUNT(*) {SoQuyFrom} WHERE {dieuKienKy};",
-                    thamSo)
+                    $"SELECT COUNT(*) {SoQuyFrom} WHERE {dieuKienDem};",
+                    thamSoDem)
             };
         }
         catch

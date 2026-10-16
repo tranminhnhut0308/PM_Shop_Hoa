@@ -11,7 +11,10 @@ public sealed partial class SanPham : ObservableObject
     public string? MaVach { get; set; }
     public string TenSanPham { get; set; } = "";
     public uint? NhomSanPhamId { get; set; }
-    public uint? DonViTinhId { get; set; }
+
+    [ObservableProperty]
+    private uint? donViTinhId;
+
     public uint? ThuongHieuId { get; set; }
 
     [ObservableProperty]
@@ -28,7 +31,10 @@ public sealed partial class SanPham : ObservableObject
     public decimal KhachDat { get; set; }
     public DateTime? NgayTao { get; set; }
     public string? DuKienHetHang { get; set; }
-    public string? DonViTinh { get; set; }
+
+    [ObservableProperty]
+    private string? donViTinh;
+
     public string? NhomSanPham { get; set; }
     public string? LoaiHang { get; set; }
     public string? NhomHangBaCap { get; set; }

@@ -284,8 +284,10 @@ public sealed partial class MainWindowViewModel
     }
 
     /// <summary>
-    /// Cập nhật 4 thẻ tổng quan. Cả bốn chỉ số đều do MySQL tính theo đúng bộ lọc
-    /// đang áp dụng; tồn quỹ = quỹ đầu kỳ + tổng thu - tổng chi.
+    /// Cập nhật 4 thẻ tổng quan. Bốn chỉ số luôn tính trên cả phiếu thu lẫn phiếu
+    /// chi, chỉ theo kỳ thời gian và quỹ đang chọn, nên tồn quỹ = quỹ đầu kỳ +
+    /// tổng thu - tổng chi luôn đúng số dư thực tế. Các bộ lọc hiển thị (loại
+    /// chứng từ, tìm kiếm, loại thu chi...) chỉ lọc danh sách, không đổi 4 thẻ.
     /// </summary>
     private async Task LoadSoQuyTongHopAsync()
     {

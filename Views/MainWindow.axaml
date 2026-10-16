@@ -1750,6 +1750,34 @@
                 </ScrollViewer>
               </Border>
 
+              <!-- SỐ ĐIỆN THOẠI & ĐỊA CHỈ -->
+              <TextBlock Text="Số điện thoại" Foreground="#61736E" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,2" />
+              <TextBox Text="{Binding SaleCustomerPhone, Mode=TwoWay}"
+                       Watermark="Nhập SĐT khách hàng..."
+                       FontSize="12"
+                       Margin="0,0,0,4" />
+
+              <TextBlock Text="Địa chỉ" Foreground="#61736E" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,2" />
+              <TextBox Text="{Binding SaleCustomerAddress, Mode=TwoWay}"
+                       Watermark="Nhập địa chỉ giao hàng / khách..."
+                       AcceptsReturn="True"
+                       TextWrapping="Wrap"
+                       MinHeight="36"
+                       MaxHeight="54"
+                       FontSize="12"
+                       Margin="0,0,0,4" />
+
+              <!-- TÙY CHỌN GIAO HÀNG & IN KÈM SĐT/ĐỊA CHỈ -->
+              <CheckBox IsChecked="{Binding SaleCanGiaoHang, Mode=TwoWay}"
+                        Content="Giao đến địa chỉ của khách"
+                        FontSize="11.5"
+                        Margin="0,0,0,2" />
+
+              <CheckBox IsChecked="{Binding SaleInKemSdtDiaChi, Mode=TwoWay}"
+                        Content="In kèm SĐT và địa chỉ lên hóa đơn"
+                        FontSize="11.5"
+                        Margin="0,0,0,4" />
+
               <!-- GHI CHÚ HÓA ĐƠN -->
               <TextBlock Text="Ghi chú hóa đơn" Foreground="#61736E" FontSize="12"
                 FontWeight="SemiBold" Margin="0,0,0,2" />
@@ -1757,8 +1785,8 @@
                 Watermark="Yêu cầu riêng của khách (băng rôn, thiệp chúc...)"
                 AcceptsReturn="True"
                 TextWrapping="Wrap"
-                MinHeight="54"
-                MaxHeight="80"
+                MinHeight="40"
+                MaxHeight="60"
                 FontSize="12" />
             </StackPanel>
 
@@ -4367,7 +4395,7 @@
                       BorderThickness="0,0,0,1"
                       Padding="10,0">
 
-                      <Grid ColumnDefinitions="50,140,*,80,108,150,130,60"
+                      <Grid ColumnDefinitions="50,140,*,160,108,150,130,60"
                         Height="42">
 
                         <TextBlock Text="STT"
@@ -4442,7 +4470,7 @@
                               BorderThickness="0,0,0,1"
                               Padding="10,0">
 
-                              <Grid ColumnDefinitions="50,140,*,80,108,150,130,60"
+                              <Grid ColumnDefinitions="50,140,*,160,108,150,130,60"
                                 Height="52">
 
                                 <!-- STT -->
@@ -4468,13 +4496,72 @@
                                   VerticalAlignment="Center"
                                   TextTrimming="CharacterEllipsis" />
 
-                                <!-- ĐVT -->
-                                <TextBlock Grid.Column="3"
-                                  Text="{Binding DonViTinh}"
-                                  Foreground="#667085"
-                                  FontSize="13"
+                                <!-- ĐVT: hiển thị sẵn nếu hàng đã có ĐVT, hoặc cho chọn/thêm trực tiếp nếu hàng chưa có ĐVT -->
+                                <Grid Grid.Column="3"
                                   VerticalAlignment="Center"
-                                  TextTrimming="CharacterEllipsis" />
+                                  Margin="0,0,8,0">
+
+                                  <TextBlock Text="{Binding DonViTinh}"
+                                    IsVisible="{Binding CoDonViTinhCoSan}"
+                                    Foreground="#667085"
+                                    FontSize="13"
+                                    VerticalAlignment="Center"
+                                    TextTrimming="CharacterEllipsis" />
+
+                                  <Grid ColumnDefinitions="*,Auto"
+                                    ColumnSpacing="4"
+                                    IsVisible="{Binding ChoPhepChonDonViTinh}"
+                                    VerticalAlignment="Center">
+
+                                    <ComboBox Grid.Column="0"
+                                      ItemsSource="{Binding DonViTinhOptions}"
+                                      SelectedItem="{Binding SelectedDonViTinh, Mode=TwoWay}"
+                                      PlaceholderText="Chọn ĐVT"
+                                      Height="30"
+                                      MinHeight="30"
+                                      Padding="8,3"
+                                      FontSize="12.5"
+                                      CornerRadius="6"
+                                      Background="#F8FBFA"
+                                      BorderBrush="#087F6E"
+                                      BorderThickness="1"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Center"
+                                      ToolTip.Tip="Hàng hóa này chưa có ĐVT — chọn ĐVT tại đây để tự động cập nhật vào danh sách hàng hóa sau khi hoàn thành phiếu nhập">
+                                      <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="models:ProductOption">
+                                          <TextBlock Text="{Binding Name}" FontSize="12.5" VerticalAlignment="Center" />
+                                        </DataTemplate>
+                                      </ComboBox.ItemTemplate>
+                                    </ComboBox>
+
+                                    <Button Grid.Column="1"
+                                      Width="26"
+                                      Height="30"
+                                      MinWidth="26"
+                                      MaxWidth="26"
+                                      Margin="0"
+                                      Padding="0"
+                                      CornerRadius="6"
+                                      Background="#EEF7F4"
+                                      Foreground="#0C756A"
+                                      BorderBrush="#CFE6E1"
+                                      BorderThickness="1"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center"
+                                      ToolTip.Tip="Thêm đơn vị tính mới"
+                                      Command="{Binding ElementName=RootWindow, Path=DataContext.ThemDonViTinhPhieuNhapCommand}"
+                                      CommandParameter="{Binding}">
+                                      <Path Width="10"
+                                        Height="10"
+                                        Stretch="Uniform"
+                                        Fill="#0C756A"
+                                        Data="M 4.6,0 H 6.4 V 4.6 H 11 V 6.4 H 6.4 V 11 H 4.6 V 6.4 H 0 V 4.6 H 4.6 Z"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center" />
+                                    </Button>
+                                  </Grid>
+                                </Grid>
 
                                 <!-- SỐ LƯỢNG (sửa trực tiếp) -->
                                 <!-- Icon của 3 nút dùng hình học (Rectangle/Path) thay cho chữ "+", "−", "×":
@@ -5848,7 +5935,7 @@
       <!-- BÁO CÁO PHIẾU NHẬP HÀNG                                       -->
       <!-- (khác với Mua hàng → Nhập hàng: đây là màn đọc dữ liệu)      -->
       <Grid IsVisible="{Binding IsBaoCaoPhieuNhapSelected}"
-        RowDefinitions="Auto,Auto,Auto,*"
+        RowDefinitions="Auto,Auto,*"
         RowSpacing="14">
 
         <!-- 1. TIÊU ĐỀ + NÚT + NHẬP HÀNG -->
@@ -5898,7 +5985,7 @@
             Margin="0" />
         </Grid>
 
-        <!-- 2. THANH TÌM KIẾM -->
+        <!-- 2. THANH TÌM KIẾM & BỘ LỌC THANH TOÁN -->
         <Border Grid.Row="1"
           Background="White"
           BorderBrush="#E2ECE8"
@@ -5907,12 +5994,12 @@
           Padding="12"
           BoxShadow="0 2 8 #080A352E">
 
-          <Grid ColumnDefinitions="*,Auto"
+          <Grid ColumnDefinitions="*,Auto,Auto"
             ColumnSpacing="10">
 
             <TextBox Name="BaoCaoPhieuNhapSearchBox"
               Classes="searchInput"
-              Watermark="⌕  Theo mã phiếu nhập"
+              Watermark="🔍 Tìm theo mã phiếu, mã NCC, tên NCC..."
               Text="{Binding BaoCaoPhieuNhapSearch, Mode=TwoWay}"
               TextChanged="OnBaoCaoPhieuNhapSearchTextChanged"
               Padding="12,9"
@@ -5923,6 +6010,33 @@
               Content="🔍  Tìm kiếm"
               Command="{Binding TimKiemBaoCaoPhieuNhapCommand}"
               Margin="0" />
+
+            <!-- BỘ LỌC TÌNH TRẠNG THANH TOÁN -->
+            <StackPanel Grid.Column="2"
+              Orientation="Horizontal"
+              Spacing="6"
+              VerticalAlignment="Center">
+              <Button Classes="filterChip"
+                Classes.active="{Binding IsBaoCaoPhieuNhapLocTatCa}"
+                Content="Tất cả"
+                Command="{Binding LocBaoCaoPhieuNhapThanhToanCommand}"
+                CommandParameter="TAT_CA" />
+              <Button Classes="filterChip"
+                Classes.active="{Binding IsBaoCaoPhieuNhapLocDaThanhToan}"
+                Content="Đã thanh toán"
+                Command="{Binding LocBaoCaoPhieuNhapThanhToanCommand}"
+                CommandParameter="DA_THANH_TOAN" />
+              <Button Classes="filterChip"
+                Classes.active="{Binding IsBaoCaoPhieuNhapLocChuaThanhToan}"
+                Content="Chưa thanh toán"
+                Command="{Binding LocBaoCaoPhieuNhapThanhToanCommand}"
+                CommandParameter="CHUA_THANH_TOAN" />
+              <Button Classes="filterChip"
+                Classes.active="{Binding IsBaoCaoPhieuNhapLocThanhToanMotPhan}"
+                Content="Thanh toán 1 phần"
+                Command="{Binding LocBaoCaoPhieuNhapThanhToanCommand}"
+                CommandParameter="MOT_PHAN" />
+            </StackPanel>
           </Grid>
         </Border>
 

@@ -108,6 +108,32 @@ public sealed partial class BaoCaoNhaCungCapTop : ObservableObject
     public string GiaTriHienThi =>
         GiaTriNhapHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
 
+    /// <summary>Nhãn tiền rút gọn hiển thị ngay sau thanh biểu đồ (vd: 10,3 tr).</summary>
+    public string GiaTriRutGon => RutGonTien(GiaTriNhapHang);
+
+    private static string RutGonTien(decimal val)
+    {
+        if (val >= 1_000_000_000m)
+        {
+            var ty = val / 1_000_000_000m;
+            return ty == Math.Floor(ty) ? $"{ty:0} tỷ" : $"{ty:0.#} tỷ";
+        }
+
+        if (val >= 1_000_000m)
+        {
+            var tr = val / 1_000_000m;
+            return tr == Math.Floor(tr) ? $"{tr:0} tr" : $"{tr:0.#} tr";
+        }
+
+        if (val >= 1_000m)
+        {
+            var k = val / 1_000m;
+            return $"{k:0.#} k";
+        }
+
+        return val.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+    }
+
     /// <summary>Nội dung chi tiết khi rê chuột vào thanh biểu đồ.</summary>
     public string TooltipHienThi =>
         $"{TenNhaCungCap} ({MaNhaCungCap})\n" +
@@ -255,6 +281,10 @@ public sealed class BaoCaoNhaCungCapDuLieu
     public List<BaoCaoNhaCungCapDong> DongTrang { get; set; } = new();
     public List<BaoCaoNhaCungCapScaleMark> ScaleMarks { get; set; } = new();
     public string[] ScaleLabels { get; set; } = new string[11];
+
+    /// <summary>Nhãn trục tung biểu đồ thời gian, từ thấp đến cao (5 mốc).</summary>
+    public string[] BieuDoTrucY { get; set; } = new string[5];
+
     public int TongSoBanGhi { get; set; }
     public decimal MaxScaleValue { get; set; }
 }

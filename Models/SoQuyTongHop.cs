@@ -20,6 +20,12 @@ public sealed class SoQuyTongHop
     /// <summary>Tổng số phiếu khớp bộ lọc (kể cả phiếu đã hủy).</summary>
     public int TongSoPhieu { get; set; }
 
-    /// <summary>Công thức nghiệp vụ: tồn quỹ = quỹ đầu kỳ + tổng thu - tổng chi.</summary>
-    public decimal TonQuy => QuyDauKy + TongThu - TongChi;
+    private decimal? _tonQuy;
+
+    /// <summary>Công thức nghiệp vụ: tồn quỹ = quỹ đầu kỳ + tổng thu - tổng chi (hoặc được gán trực tiếp theo bộ lọc).</summary>
+    public decimal TonQuy
+    {
+        get => _tonQuy ?? (QuyDauKy + TongThu - TongChi);
+        set => _tonQuy = value;
+    }
 }

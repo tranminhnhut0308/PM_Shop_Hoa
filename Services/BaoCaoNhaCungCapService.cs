@@ -134,7 +134,7 @@ public sealed class BaoCaoNhaCungCapService
             top[i].Stt = i + 1;
 
         // 4b. Biểu đồ nhập hàng theo thời gian (ngày/giờ)
-        var bieuDo = await TaiBieuDoAsync(conn, dk, token);
+        var (bieuDo, bieuDoTrucY) = await TaiBieuDoAsync(conn, dk, token);
 
         // 5. Tính thanh biểu đồ và mốc chia trục X (chuẩn 10 khoảng như hình tham khảo)
         var (scaleMarks, scaleLabels, maxScale) = TinhThanhBieuDoVaMocChia(top);
@@ -147,6 +147,7 @@ public sealed class BaoCaoNhaCungCapService
             DongTrang = dongTrang,
             ScaleMarks = scaleMarks,
             ScaleLabels = scaleLabels,
+            BieuDoTrucY = bieuDoTrucY,
             TongSoBanGhi = tongSoBanGhi,
             MaxScaleValue = maxScale
         };
@@ -441,12 +442,12 @@ public sealed class BaoCaoNhaCungCapService
     /// Biểu đồ "Nhập hàng theo thời gian": khoảng ≤ 1 ngày chia theo giờ, dài hơn chia
     /// theo ngày. Gộp tiền nhập (từ phiếu nhập) và tiền trả hàng (từ sổ cái công nợ).
     /// </summary>
-    private async Task<List<BaoCaoNhaCungCapDiemThoiGian>> TaiBieuDoAsync(
+    private async Task<(List<BaoCaoNhaCungCapDiemThoiGian> Diem, string[] TrucY)> TaiBieuDoAsync(
         MySqlConnection conn, DieuKien dk, CancellationToken token)
     {
         // Nhánh KiotViet không có phiếu nhập nội bộ nên không dựng được chuỗi thời gian.
         if (dk.SuDungKiotViet)
-            return new List<BaoCaoNhaCungCapDiemThoiGian>();
+            return (new List<BaoCaoNhaCungCapDiemThoiGian>(), new string[5]);
 
         bool theoGio = (dk.DenKeTiep - dk.TuNgay).TotalDays <= 1;
         string format = theoGio ? "%Y-%m-%d %H:00:00" : "%Y-%m-%d";
@@ -507,11 +508,15 @@ public sealed class BaoCaoNhaCungCapService
 
         if (list.Count > 0)
         {
-            // Chiều cao cột tính theo giá trị nhập ròng lớn nhất để XAML bind thẳng.
-            var max = list.Max(x => x.GiaTriNhap);
+            // Điền đủ các mốc thời gian bị thiếu để mỗi ngày/giờ đúng một cột (không có khoảng trống).
+            var dayDu = DienDayDuThoiGian(list, dk, theoGio, format);
+
+            // Trục tung làm tròn đẹp (4 khoảng, 5 nhãn) để cột không bị lệch thang.
+            var max = dayDu.Max(x => x.GiaTriNhap);
+            var (trucMax, nhanTrucY) = TinhTrucY(max);
 
             // Bề rộng cột giãn theo số điểm: ít điểm thì cột rộng, nhiều điểm thì hẹp.
-            double beRongMongMuon = list.Count switch
+            double beRongMongMuon = dayDu.Count switch
             {
                 <= 10 => 64,
                 <= 24 => 44,
@@ -519,14 +524,80 @@ public sealed class BaoCaoNhaCungCapService
                 _ => 22
             };
 
-            foreach (var x in list)
+            foreach (var x in dayDu)
             {
-                x.TyLeChieuCao = max <= 0 ? 0 : (double)(x.GiaTriNhap / max * 100m);
+                var giaTri = Math.Max(0m, x.GiaTriNhap);
+                x.TyLeChieuCao = trucMax <= 0 ? 0 : (double)(giaTri / trucMax * 100m);
                 x.TyLeBeRong = beRongMongMuon / BaoCaoNhaCungCapDiemThoiGian.BeRongToiDa * 100d;
+            }
+
+            return (dayDu, nhanTrucY);
+        }
+
+        return (list, new string[5]);
+    }
+
+    /// <summary>
+    /// Điền các mốc thời gian còn thiếu giữa TuNgay và DenKeTiep để biểu đồ luôn có
+    /// một cột cho mỗi ngày/giờ. Nếu khoảng quá dài (&gt; 400 mốc) thì giữ nguyên dữ liệu thưa.
+    /// </summary>
+    private static List<BaoCaoNhaCungCapDiemThoiGian> DienDayDuThoiGian(
+        List<BaoCaoNhaCungCapDiemThoiGian> tho, DieuKien dk, bool theoGio, string format)
+    {
+        var buoc = theoGio ? TimeSpan.FromHours(1) : TimeSpan.FromDays(1);
+        var soMoc = (int)Math.Round((dk.DenKeTiep - dk.TuNgay).TotalMinutes / buoc.TotalMinutes);
+        if (soMoc <= 0 || soMoc > 400)
+            return tho;
+
+        var map = tho.ToDictionary(x => x.ThoiGian, x => x);
+        var dayDu = new List<BaoCaoNhaCungCapDiemThoiGian>(soMoc);
+
+        for (int i = 0; i < soMoc; i++)
+        {
+            var tg = dk.TuNgay + buoc * i;
+            if (map.TryGetValue(tg, out var co))
+            {
+                dayDu.Add(co);
+            }
+            else
+            {
+                dayDu.Add(new BaoCaoNhaCungCapDiemThoiGian
+                {
+                    ThoiGian = tg,
+                    TienNhap = 0,
+                    TienTraHang = 0,
+                    SoPhieuNhap = 0,
+                    NhanXet = tg.ToString(theoGio ? "HH:00" : "dd/MM", CultureInfo.InvariantCulture)
+                });
             }
         }
 
-        return list;
+        return dayDu;
+    }
+
+    /// <summary>
+    /// Trục tung làm tròn "đẹp" cho biểu đồ thời gian: chia 4 khoảng đều, trả về giá trị
+    /// lớn nhất của trục và 5 nhãn (từ 0 ở dưới lên giá trị lớn nhất ở trên).
+    /// </summary>
+    private static (decimal TrucMax, string[] Nhan) TinhTrucY(decimal maxGiaTri)
+    {
+        var nhan = new string[5];
+        if (maxGiaTri <= 0)
+        {
+            for (int i = 0; i < nhan.Length; i++)
+                nhan[i] = string.Empty;
+            return (0m, nhan);
+        }
+
+        var step = TinhBuocChiaDep(maxGiaTri / 4m);
+        if (step <= 0)
+            step = 1_000_000m;
+
+        var trucMax = step * 4m;
+        for (int i = 0; i < nhan.Length; i++)
+            nhan[i] = DinhDangNhanMoc(step * i);
+
+        return (trucMax, nhan);
     }
 
     /// <summary>
@@ -593,10 +664,12 @@ public sealed class BaoCaoNhaCungCapService
             step = 1_000_000m;
 
         var maxScale = step * 10m;
-        while (maxScale < maxNet)
+
+        // Bộ bước "đẹp" dày nên maxScale luôn >= maxNet; chỉ chặn sai số làm tròn.
+        if (maxScale < maxNet)
         {
-            step += TinhBuocChiaDep(step);
-            maxScale = step * 10m;
+            step = maxNet / 10m;
+            maxScale = maxNet;
         }
 
         for (int i = 0; i <= 10; i++)
@@ -623,6 +696,12 @@ public sealed class BaoCaoNhaCungCapService
         return (marks, labels, maxScale);
     }
 
+    /// <summary>Bộ bước chia "đẹp" dày để trục không nhảy gấp đôi khi giá trị vừa vượt mốc.</summary>
+    private static readonly decimal[] BuocChiaDep =
+    {
+        1m, 1.2m, 1.4m, 1.6m, 1.8m, 2m, 2.5m, 3m, 3.5m, 4m, 5m, 6m, 7m, 8m, 10m
+    };
+
     private static decimal TinhBuocChiaDep(decimal roughStep)
     {
         if (roughStep <= 0)
@@ -631,14 +710,13 @@ public sealed class BaoCaoNhaCungCapService
         var power = (decimal)Math.Pow(10, Math.Floor(Math.Log10((double)roughStep)));
         var fraction = roughStep / power;
 
-        decimal niceFraction;
-        if (fraction <= 1.25m) niceFraction = 1m;
-        else if (fraction <= 2.5m) niceFraction = 2m;
-        else if (fraction <= 3.5m) niceFraction = 3m;
-        else if (fraction <= 7.5m) niceFraction = 5m;
-        else niceFraction = 10m;
+        foreach (var f in BuocChiaDep)
+        {
+            if (fraction <= f + 0.0000001m)
+                return f * power;
+        }
 
-        return niceFraction * power;
+        return 10m * power;
     }
 
     private static string DinhDangNhanMoc(decimal val)

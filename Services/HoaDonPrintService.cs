@@ -83,6 +83,13 @@ public static class HoaDonPrintService
         sb.Append("<table>");
         sb.Append("<tr><td style=\"border:0;padding-left:0;\"><b>Khách hàng:</b></td><td style=\"border:0;\">")
           .Append(Enc(receipt.TenKhachHang)).Append("</td></tr>");
+        if (receipt.HienThiThongTinLienHe)
+        {
+            sb.Append("<tr><td style=\"border:0;padding-left:0;\"><b>Số điện thoại:</b></td><td style=\"border:0;\">")
+              .Append(Enc(receipt.SoDienThoaiHienThi)).Append("</td></tr>");
+            sb.Append("<tr><td style=\"border:0;padding-left:0;\"><b>Địa chỉ:</b></td><td style=\"border:0;\">")
+              .Append(Enc(receipt.DiaChiHienThi)).Append("</td></tr>");
+        }
         if (!string.IsNullOrWhiteSpace(receipt.TenNhanVien))
         {
             sb.Append("<tr><td style=\"border:0;padding-left:0;\"><b>Nhân viên:</b></td><td style=\"border:0;\">")

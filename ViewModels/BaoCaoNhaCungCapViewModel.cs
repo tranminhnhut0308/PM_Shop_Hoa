@@ -347,6 +347,14 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
     public string ScaleMark9 => _scaleLabels.Length > 9 ? _scaleLabels[9] : "";
     public string ScaleMark10 => _scaleLabels.Length > 10 ? _scaleLabels[10] : "";
 
+    private string[] _bieuDoTrucY = ["", "", "", "", ""];
+
+    public string BieuDoTrucY0 => _bieuDoTrucY.Length > 0 ? _bieuDoTrucY[0] : "";
+    public string BieuDoTrucY1 => _bieuDoTrucY.Length > 1 ? _bieuDoTrucY[1] : "";
+    public string BieuDoTrucY2 => _bieuDoTrucY.Length > 2 ? _bieuDoTrucY[2] : "";
+    public string BieuDoTrucY3 => _bieuDoTrucY.Length > 3 ? _bieuDoTrucY[3] : "";
+    public string BieuDoTrucY4 => _bieuDoTrucY.Length > 4 ? _bieuDoTrucY[4] : "";
+
     private double _currentPlotWidth;
 
     public void CapNhatDoRongBieuDo(double plotWidth)
@@ -525,6 +533,13 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
                 _scaleLabels = res.ScaleLabels;
                 for (int i = 0; i <= 10; i++)
                     OnPropertyChanged($"ScaleMark{i}");
+            }
+
+            if (res.BieuDoTrucY is { Length: >= 5 })
+            {
+                _bieuDoTrucY = res.BieuDoTrucY;
+                for (int i = 0; i < 5; i++)
+                    OnPropertyChanged($"BieuDoTrucY{i}");
             }
 
             BieuDoItems.Clear();

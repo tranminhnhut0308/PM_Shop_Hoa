@@ -196,6 +196,16 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string saleSearchText = "";
     [ObservableProperty] private bool isSalesPanelVisible;
     [ObservableProperty] private string saleCustomerName = "Khách lẻ";
+    [ObservableProperty] private string saleCustomerPhone = "";
+    [ObservableProperty] private string saleCustomerAddress = "";
+    [ObservableProperty] private bool saleCanGiaoHang;
+    [ObservableProperty] private bool saleInKemSdtDiaChi;
+
+    partial void OnSaleCanGiaoHangChanged(bool value)
+    {
+        if (value)
+            SaleInKemSdtDiaChi = true;
+    }
 
     /// <summary>Ghi chú riêng của hóa đơn (yêu cầu riêng của khách...).</summary>
     [ObservableProperty] private string saleGhiChu = "";
@@ -218,6 +228,26 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string saleDiscountMode = "Số tiền";
     [ObservableProperty] private NhaCungCap? selectedNhaCungCap;
     [ObservableProperty] private KhachHang? selectedSaleCustomer;
+
+    /// <summary>
+    /// Đang bán cho "Khách lẻ" (không gắn hồ sơ khách hàng) hay không.
+    /// <para>
+    /// Khách lẻ KHÔNG được phép ghi nợ nên bắt buộc thanh toán đủ. Nhận diện theo
+    /// hồ sơ khách hàng (SelectedSaleCustomer rỗng hoặc chưa có Id), tuyệt đối không
+    /// dựa vào tên hiển thị vì tên có thể trùng với khách hàng thật.
+    /// </para>
+    /// </summary>
+    public bool LaKhachLe => SelectedSaleCustomer is null || SelectedSaleCustomer.Id == 0;
+
+    /// <summary>
+    /// Đổi khách hàng bán (kể cả về "Khách lẻ") phải tính lại tiền và kiểm tra lại
+    /// công nợ, tránh trường hợp đang nợ của khách cũ rồi đổi sang khách lẻ mà vẫn lưu.
+    /// </summary>
+    partial void OnSelectedSaleCustomerChanged(KhachHang? value)
+    {
+        OnPropertyChanged(nameof(LaKhachLe));
+        RecalculatePayment();
+    }
 
     // =========================================================
     // TRẠNG THÁI ĐƠN HÀNG ĐANG BÁN
@@ -550,6 +580,8 @@ public partial class MainWindowViewModel : ObservableObject
 
         SelectedSaleCustomer = customer;
         SaleCustomerName = customer.TenKhachHang;
+        SaleCustomerPhone = customer.SoDienThoai ?? "";
+        SaleCustomerAddress = customer.DiaChi ?? "";
         SaleCustomerSuggestions.Clear();
     }
 
@@ -558,6 +590,8 @@ public partial class MainWindowViewModel : ObservableObject
     {
         SelectedSaleCustomer = null;
         SaleCustomerName = "Khách lẻ";
+        SaleCustomerPhone = "";
+        SaleCustomerAddress = "";
         SaleCustomerSuggestions.Clear();
     }
 
@@ -620,6 +654,8 @@ public partial class MainWindowViewModel : ObservableObject
             // để ô "Khách hàng" không làm mất lựa chọn.
             SelectedSaleCustomer = khachHangMoi;
             SaleCustomerName = khachHangMoi.TenKhachHang;
+            SaleCustomerPhone = khachHangMoi.SoDienThoai ?? "";
+            SaleCustomerAddress = khachHangMoi.DiaChi ?? "";
             SaleCustomerSuggestions.Clear();
 
             StatusMessage = $"Đã thêm khách hàng: {khachHangMoi.TenKhachHang}";
@@ -3230,6 +3266,10 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
 
         SelectedSaleCustomer = null;
         SaleCustomerName = "Khách lẻ";
+        SaleCustomerPhone = "";
+        SaleCustomerAddress = "";
+        SaleCanGiaoHang = false;
+        SaleInKemSdtDiaChi = false;
         SaleSearchText = "";
         SaleGhiChu = "";
 
@@ -3600,6 +3640,29 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
     [ObservableProperty] private int baoCaoPhieuNhapPageSize = 10;
     [ObservableProperty] private int baoCaoPhieuNhapTotalCount;
     [ObservableProperty] private bool isLoadingBaoCaoPhieuNhap;
+    [ObservableProperty] private string baoCaoPhieuNhapLocThanhToan = "TAT_CA";
+
+    public bool IsBaoCaoPhieuNhapLocTatCa => BaoCaoPhieuNhapLocThanhToan == "TAT_CA";
+    public bool IsBaoCaoPhieuNhapLocDaThanhToan => BaoCaoPhieuNhapLocThanhToan == "DA_THANH_TOAN";
+    public bool IsBaoCaoPhieuNhapLocChuaThanhToan => BaoCaoPhieuNhapLocThanhToan == "CHUA_THANH_TOAN";
+    public bool IsBaoCaoPhieuNhapLocThanhToanMotPhan => BaoCaoPhieuNhapLocThanhToan == "MOT_PHAN";
+
+    [RelayCommand]
+    private async Task LocBaoCaoPhieuNhapThanhToanAsync(string? loai)
+    {
+        var filter = string.IsNullOrWhiteSpace(loai) ? "TAT_CA" : loai;
+        if (BaoCaoPhieuNhapLocThanhToan == filter)
+            return;
+
+        BaoCaoPhieuNhapLocThanhToan = filter;
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocTatCa));
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocDaThanhToan));
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocChuaThanhToan));
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocThanhToanMotPhan));
+
+        BaoCaoPhieuNhapPage = 1;
+        await LoadBaoCaoPhieuNhapAsync();
+    }
 
     public int BaoCaoPhieuNhapTotalPages =>
         BaoCaoPhieuNhapPageSize <= 0
@@ -3800,7 +3863,8 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             var (items, tongSoBanGhi) = await _db.GetPhieuNhapHangPagedAsync(
                 BaoCaoPhieuNhapSearch,
                 page,
-                BaoCaoPhieuNhapPageSize);
+                BaoCaoPhieuNhapPageSize,
+                BaoCaoPhieuNhapLocThanhToan);
 
             if (version != _baoCaoPhieuNhapLoadVersion)
                 return;
@@ -3876,7 +3940,8 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             var (items, _) = await _db.GetPhieuNhapHangPagedAsync(
                 BaoCaoPhieuNhapSearch,
                 1,
-                soDong);
+                soDong,
+                BaoCaoPhieuNhapLocThanhToan);
 
             using var wb = BaoCaoPhieuNhapExcel.TaoWorkbook(items, DateTime.Now);
 
@@ -4068,6 +4133,7 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
     public ObservableCollection<ChiTietPhieuNhapHang> PhieuNhapItems { get; } = new();
     public ObservableCollection<SanPham> PhieuNhapProductSuggestions { get; } = new();
     public ObservableCollection<NhaCungCap> PhieuNhapSupplierSuggestions { get; } = new();
+    public ObservableCollection<ProductOption> PhieuNhapDonViTinhOptions { get; } = new();
 
     [ObservableProperty] private bool isNhapHangFormVisible;
     [ObservableProperty] private string importProductSearch = "";
@@ -4177,6 +4243,71 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         PhieuNhapTongTienNhap = PhieuNhapTongTienHang + PhieuNhapChiPhiKhac;
     }
 
+    private async Task LoadPhieuNhapDonViTinhOptionsAsync()
+    {
+        try
+        {
+            var units = await _db.GetDonViTinhAsync();
+            PhieuNhapDonViTinhOptions.Clear();
+            foreach (var unit in units)
+                PhieuNhapDonViTinhOptions.Add(unit);
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi tai danh sach don vi tinh cho phieu nhap", ex);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ThemDonViTinhPhieuNhapAsync(ChiTietPhieuNhapHang? item)
+    {
+        if (OwnerWindow is null)
+            return;
+
+        try
+        {
+            var tenDvt = await QuickOptionEditorWindow.ShowAsync(
+                OwnerWindow,
+                "Thêm đơn vị tính mới",
+                "Tên đơn vị tính *",
+                "Ví dụ: Bó, Cành, Chậu, Cây, Giỏ, Lẵng, Bình...");
+
+            if (string.IsNullOrWhiteSpace(tenDvt))
+                return;
+
+            var newOption = await _db.ThemDonViTinhAsync(tenDvt);
+
+            var existing = PhieuNhapDonViTinhOptions.FirstOrDefault(x => x.Id == newOption.Id);
+            if (existing is null)
+            {
+                var insertIndex = 0;
+                while (insertIndex < PhieuNhapDonViTinhOptions.Count &&
+                       string.Compare(
+                           PhieuNhapDonViTinhOptions[insertIndex].Name,
+                           newOption.Name,
+                           StringComparison.CurrentCultureIgnoreCase) < 0)
+                {
+                    insertIndex++;
+                }
+
+                PhieuNhapDonViTinhOptions.Insert(insertIndex, newOption);
+                existing = newOption;
+            }
+
+            if (item is not null)
+                item.SelectedDonViTinh = existing;
+
+            StatusMessage = $"Đã thêm và chọn đơn vị tính \"{existing.Name}\"";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể thêm đơn vị tính: " + ex.Message;
+            await NotificationWindow.ShowErrorAsync(
+                "Không thể thêm đơn vị tính: " + ex.Message,
+                owner: OwnerWindow);
+        }
+    }
+
     [RelayCommand]
     private async Task MoPhieuNhapHangAsync()
     {
@@ -4227,6 +4358,7 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
 
         RecalculatePhieuNhapTongTienHang();
 
+        await LoadPhieuNhapDonViTinhOptionsAsync();
         await LoadPhieuNhapProductSuggestionsAsync();
     }
 
@@ -4318,7 +4450,7 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             return;
         }
 
-        var dongMoi = new ChiTietPhieuNhapHang(product);
+        var dongMoi = new ChiTietPhieuNhapHang(product, PhieuNhapDonViTinhOptions);
 
         // Nghe thay đổi số lượng / giá nhập / giảm giá để tính lại tổng realtime
         dongMoi.PropertyChanged += ChiTietPhieuNhapHang_OnPropertyChanged;
@@ -4590,9 +4722,14 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             return;
         }
 
+        var soHangCapNhatDvt = dongHopLe.Count(item => item.DonViTinhIdMoi is > 0);
+        var thongBaoDvtConfirm = soHangCapNhatDvt > 0
+            ? $"\nĐồng thời cập nhật đơn vị tính cho {soHangCapNhatDvt} mặt hàng vào danh sách hàng hóa."
+            : string.Empty;
+
         var confirmed = await ShowConfirmationAsync(
             "Hoàn thành phiếu nhập",
-            "Tồn kho sẽ được cộng thêm số lượng vừa nhập và giá vốn được cập nhật. Bạn có chắc muốn tiếp tục?",
+            $"Tồn kho sẽ được cộng thêm số lượng vừa nhập và giá vốn được cập nhật.{thongBaoDvtConfirm}\nBạn có chắc muốn tiếp tục?",
             "Hoàn thành",
             "Hủy");
 
@@ -4620,7 +4757,7 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
                 SoHoaDonDauVao = PhieuNhapSoHoaDonDauVao
             };
 
-            // Lưu header + chi tiết + tồn kho + giá vốn + công nợ trong MỘT transaction.
+            // Lưu header + chi tiết + tồn kho + giá vốn + ĐVT + công nợ trong MỘT transaction.
             // Service tự rollback toàn bộ nếu bất kỳ bước nào lỗi.
             _phieuNhapId = await _db.LuuPhieuNhapHangAsync(phieu, dongHopLe);
         }
@@ -4648,12 +4785,12 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         // Dashboard thống kê phiếu nhập trong hoạt động gần đây và thống kê kho.
         _ = LamMoiTongQuanNeuDangMoAsync();
 
-        // Tồn kho và giá vốn đã đổi -> nạp lại danh sách sản phẩm.
+        // Tồn kho, giá vốn và đơn vị tính đã đổi -> nạp lại danh sách sản phẩm.
         // Bọc try/catch riêng: nạp lại thất bại không được làm hỏng kết quả
         // đã commit (phiếu vẫn lưu thành công).
         try
         {
-            await LoadProductsAsync();
+            await RefreshProductsAsync();
         }
         catch (Exception ex)
         {
@@ -4683,13 +4820,18 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             SafeLog.WriteError("Loi lam moi so quy sau khi nhap hang", ex);
         }
 
+        var ghiChuDvt = soHangCapNhatDvt > 0
+            ? $"\nĐã cập nhật ĐVT cho {soHangCapNhatDvt} mặt hàng vào danh sách hàng hóa."
+            : string.Empty;
+
         // Báo thành công và CHỜ người dùng đóng hộp thoại.
-        StatusMessage =
-            $"✅ Phiếu nhập {maPhieuVuaLuu} đã được lưu - tổng {tongTienVuaLuu} đ.";
+        StatusMessage = soHangCapNhatDvt > 0
+            ? $"✅ Phiếu nhập {maPhieuVuaLuu} đã được lưu ({tongTienVuaLuu} đ) • Đã cập nhật ĐVT cho {soHangCapNhatDvt} mặt hàng."
+            : $"✅ Phiếu nhập {maPhieuVuaLuu} đã được lưu - tổng {tongTienVuaLuu} đ.";
 
         await ShowMessageAsync(
             "Thành công – Phiếu nhập đã được lưu.",
-            $"Mã phiếu: {maPhieuVuaLuu}\nTổng tiền nhập: {tongTienVuaLuu} đ");
+            $"Mã phiếu: {maPhieuVuaLuu}\nTổng tiền nhập: {tongTienVuaLuu} đ{ghiChuDvt}");
 
         // Chỉ reset SAU khi hộp thoại thành công đã đóng, và vẫn giữ nguyên
         // màn hình "Lập phiếu nhập hàng" (IsNhapHangFormVisible vẫn = true).
@@ -4745,7 +4887,9 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             TienThoi = 0;
             TienCongNo = canTra - khachDua;
 
-            if (khachDua == 0)
+            if (LaKhachLe)
+                TrangThaiThanhToan = "Khách lẻ không được ghi nợ - cần thanh toán đủ";
+            else if (khachDua == 0)
                 TrangThaiThanhToan = "Chưa thanh toán - Công nợ";
             else
                 TrangThaiThanhToan = "Thanh toán thiếu - Công nợ";
@@ -4755,6 +4899,11 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             TienThoi = 0;
             TienCongNo = 0;
             TrangThaiThanhToan = "Đã thanh toán đủ";
+        }
+
+        if (TienCongNo > 0)
+        {
+            SaleInKemSdtDiaChi = true;
         }
     }
 
@@ -4849,6 +4998,57 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
         var discountSnapshot = SaleDiscountAmount;
         var cashSnapshot = TienKhachDua;
 
+        // 2b. Khách lẻ không được phép mua chịu: bắt buộc thanh toán đủ trước khi
+        // hoàn tất. Kiểm tra bằng số tiền thực tế (decimal) chứ không chỉ dựa vào
+        // nội dung hiển thị, và chặn TRƯỚC khi gọi database nên không tạo hóa đơn,
+        // không trừ tồn kho, không ghi sổ quỹ và không ghi công nợ.
+        if (customer is null || customer.Id == 0)
+        {
+            var canTra = Math.Max(0m, SaleTotal);
+            var khachDua = Math.Max(0m, cashSnapshot);
+            var conNoConLai = canTra - khachDua;
+
+            if (conNoConLai > 0m)
+            {
+                StatusMessage =
+                    "Khách lẻ không được phép ghi nợ. Vui lòng nhập đủ số tiền khách thanh toán " +
+                    "hoặc chọn khách hàng có thông tin để ghi nhận công nợ.";
+                return;
+            }
+        }
+
+        // 2c. Bắt buộc thông tin liên hệ và in kèm đối với đơn nợ lại hoặc giao hàng:
+        // nếu không thỏa mãn thì không thể tạo đơn.
+        var laDonNoLai = TienCongNo > 0;
+        var laDonGiaoHang = SaleCanGiaoHang;
+        if (laDonNoLai || laDonGiaoHang)
+        {
+            var lyDo = laDonNoLai && laDonGiaoHang
+                ? "đơn còn công nợ và giao hàng tận nơi"
+                : laDonNoLai ? "đơn còn công nợ (nợ lại)" : "đơn cần giao đến địa chỉ của khách";
+
+            if (!SaleInKemSdtDiaChi)
+            {
+                StatusMessage = $"⚠️ {lyDo}: Bắt buộc phải tích chọn in kèm SĐT và địa chỉ.";
+                await ShowMessageAsync("Bắt buộc in kèm thông tin liên hệ", $"Đối với {lyDo}, bạn bắt buộc phải tích chọn 'In kèm SĐT và địa chỉ' lên hóa đơn.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(SaleCustomerPhone))
+            {
+                StatusMessage = $"⚠️ {lyDo}: Vui lòng nhập số điện thoại của khách hàng.";
+                await ShowMessageAsync("Thiếu số điện thoại", $"Đối với {lyDo}, bắt buộc phải có số điện thoại khách hàng. Vui lòng nhập số điện thoại.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(SaleCustomerAddress))
+            {
+                StatusMessage = $"⚠️ {lyDo}: Vui lòng nhập địa chỉ của khách hàng.";
+                await ShowMessageAsync("Thiếu địa chỉ", $"Đối với {lyDo}, bắt buộc phải có địa chỉ khách hàng. Vui lòng nhập địa chỉ.");
+                return;
+            }
+        }
+
         // 3. Xác nhận thanh toán
         var confirmWindow = new ThanhToanConfirmWindow(
             customerName,
@@ -4876,7 +5076,10 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
                 customer,
                 discountSnapshot,
                 cashSnapshot,
-                ghiChu: SaleGhiChu);
+                ghiChu: SaleGhiChu,
+                soDienThoai: SaleCustomerPhone,
+                diaChi: SaleCustomerAddress,
+                inKemThongTin: SaleInKemSdtDiaChi);
         }
         catch (Exception ex)
         {
