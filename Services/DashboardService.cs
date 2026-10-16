@@ -75,12 +75,13 @@ public sealed class DashboardService
     {
         return chieu switch
         {
+            // Theo giờ: gom theo 24 khung giờ trong ngày (0..23) để phân tích giờ cao điểm.
             TongQuanChieuDoanhThu.TheoGio =>
-                "DATE_FORMAT(hd.thoi_gian_ban, '%Y-%m-%d %H:00:00')",
+                "CAST(HOUR(hd.thoi_gian_ban) AS CHAR)",
 
             // Theo thứ: gom theo thứ trong tuần (0 = Thứ 2 ... 6 = Chủ nhật).
             TongQuanChieuDoanhThu.TheoThu =>
-                "WEEKDAY(hd.thoi_gian_ban)",
+                "CAST(WEEKDAY(hd.thoi_gian_ban) AS CHAR)",
 
             _ => "DATE_FORMAT(hd.thoi_gian_ban, '%Y-%m-%d')"
         };
@@ -109,16 +110,16 @@ public sealed class DashboardService
             ThoiGianHienThi = $"{TongQuanDuLieu.NgayHienThi(tuNgay)} – {TongQuanDuLieu.NgayHienThi(denNgay)}"
         };
 
-        // Các nhóm độc lập: chạy song song, mỗi nhóm là 1-2 câu SQL có LIMIT.
-        var taskBanHangHomNay = TaiSoLieuBanHangHomNayAsync(homNay, token);
+        // Các nhóm độc lập: chạy song song, tất cả đều lọc theo đúng khoảng [tuNgay, denNgay] đang chọn.
+        var taskBanHangTheoKy = TaiSoLieuBanHangHomNayAsync(tuNgay, denNgay, token);
         var taskBieuDo = TaiBieuDoDoanhThuAsync(chieuDoanhThu, tuNgay, denNgay, token);
         var taskTopHang = TaiTopHangBanChayAsync(xepHangTopHang, tuNgay, denNgay, token);
         var taskTopKhach = TaiTopKhachHangAsync(tuNgay, denNgay, token);
         var taskHoatDongSub = laAdmin ? TaiHoatDongTaiKhoanConAsync(token) : Task.FromResult(new List<TongQuanHoatDongTaiKhoanCon>());
 
-        await Task.WhenAll(taskBanHangHomNay, taskBieuDo, taskTopHang, taskTopKhach, taskHoatDongSub);
+        await Task.WhenAll(taskBanHangTheoKy, taskBieuDo, taskTopHang, taskTopKhach, taskHoatDongSub);
 
-        var banHang = await taskBanHangHomNay;
+        var banHang = await taskBanHangTheoKy;
         var (tongDoanhThu, tongSoHoaDon, bieuDo) = await taskBieuDo;
         var topHang = await taskTopHang;
         var topKhach = await taskTopKhach;
@@ -133,6 +134,8 @@ public sealed class DashboardService
         ketQua.TongDoanhThuKyChon = tongDoanhThu;
         ketQua.TongSoHoaDonKyChon = tongSoHoaDon;
         ketQua.BieuDoDoanhThu = bieuDo;
+        DienPhanTichTheoChieu(ketQua, chieuDoanhThu, tuNgay, denNgay, tongDoanhThu, tongSoHoaDon, bieuDo);
+
         ketQua.HoatDongTaiKhoanCon = hoatDongSub;
         ketQua.TopHangBanChay = topHang;
         ketQua.TopKhachHang = topKhach;
@@ -144,15 +147,13 @@ public sealed class DashboardService
         return ketQua;
     }
 
-    /// <summary>5 thẻ "Kết quả bán hàng hôm nay" — 1 câu COUNT/SUM duy nhất.</summary>
+    /// <summary>5 thẻ kết quả bán hàng theo khoảng thời gian đang chọn — 1 câu COUNT/SUM duy nhất.</summary>
     private async Task<(decimal DoanhThu, int SoHoaDon, decimal DaThu, decimal ConNo)> TaiSoLieuBanHangHomNayAsync(
-        DateTime homNay,
+        DateTime tuNgay,
+        DateTime denNgay,
         CancellationToken token)
     {
         await using var connection = await _taoKetNoi();
-
-        var dauNgay = homNay.Date;
-        var cuoiNgay = dauNgay.AddDays(1);
 
         const string sql = """
         SELECT
@@ -162,8 +163,8 @@ public sealed class DashboardService
             COALESCE(SUM(hd.con_no), 0) AS ConNo
         FROM hoa_don_ban_hang hd
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
-          AND hd.thoi_gian_ban >= @DauNgay
-          AND hd.thoi_gian_ban < @CuoiNgay;
+          AND hd.thoi_gian_ban >= @TuNgay
+          AND hd.thoi_gian_ban <= @DenNgay;
         """;
 
         var row = await connection.QuerySingleAsync<(decimal DoanhThu, int SoHoaDon, decimal DaThu, decimal ConNo)>(
@@ -171,8 +172,8 @@ public sealed class DashboardService
                 sql,
                 new
                 {
-                    DauNgay = dauNgay,
-                    CuoiNgay = cuoiNgay
+                    TuNgay = tuNgay,
+                    DenNgay = denNgay
                 },
                 cancellationToken: token));
 
@@ -180,8 +181,8 @@ public sealed class DashboardService
     }
 
     /// <summary>
-    /// Biểu đồ doanh thu: GROUP BY theo bucket trong DB, rồi chuẩn hoá chiều cao
-    /// cột ngay ở database nên client không phải tính lại.
+    /// Biểu đồ doanh thu: GROUP BY theo bucket trong DB (theo ngày / khung giờ / thứ trong tuần),
+    /// sau đó dựng đầy đủ trục thời gian để người dùng thấy rõ sự phân bổ và so sánh giữa các mốc.
     /// </summary>
     private async Task<(decimal TongDoanhThu, int TongSoHoaDon, List<TongQuanDiemDoanhThu> Diem)> TaiBieuDoDoanhThuAsync(
         string chieu,
@@ -193,11 +194,9 @@ public sealed class DashboardService
 
         var bucket = BieuThucBucket(chieu);
 
-        // Ngày: giới hạn 366 điểm để biểu đồ không kẹt khi chọn "Năm nay".
-        // Giờ: 24 điểm/ngày nhưng chỉ lấy các giờ có phát sinh.
         var gioiHanDiem = chieu switch
         {
-            TongQuanChieuDoanhThu.TheoGio => 24 * 31,
+            TongQuanChieuDoanhThu.TheoGio => 24,
             TongQuanChieuDoanhThu.TheoThu => 7,
             _ => 366
         };
@@ -236,46 +235,220 @@ public sealed class DashboardService
         var tongDoanhThu = hangDuLieu.Sum(r => r.TongDoanhThu);
         var tongSoHoaDon = hangDuLieu.Sum(r => r.SoHoaDon);
 
-        var maxDoanhThu = hangDuLieu.Count == 0 ? 0m : hangDuLieu.Max(r => r.TongDoanhThu);
-        var tyLeBeRong = hangDuLieu.Count == 0 ? 0d : 100d / hangDuLieu.Count;
+        var diem = new List<TongQuanDiemDoanhThu>();
 
-        var diem = new List<TongQuanDiemDoanhThu>(hangDuLieu.Count);
-
-        foreach (var r in hangDuLieu)
+        if (chieu == TongQuanChieuDoanhThu.TheoGio)
         {
-            // "Theo thứ" gom cả tuần nên Bucket là số 0..6, không phải chuỗi ngày.
-            // Với ngày/giờ thì Bucket là chuỗi đã format sẵn từ DATE_FORMAT.
-            var theoThu = chieu == TongQuanChieuDoanhThu.TheoThu;
-
-            var mocThoiGian = !theoThu && DateTime.TryParse(r.Bucket, out var parsed)
-                ? parsed
-                : r.ThoiGianLonNhat;
-
-            var tenThu = theoThu && int.TryParse(r.Bucket, out var thu)
-                ? TenThuTrongTuan((DayOfWeek)((thu + 1) % 7))
-                : TenThuTrongTuan(mocThoiGian.DayOfWeek);
-
-            diem.Add(new TongQuanDiemDoanhThu
+            // Gom theo 24 khung giờ trong ngày (00:00 -> 23:00)
+            var mapGio = new Dictionary<int, (decimal DoanhThu, int SoHoaDon)>();
+            foreach (var r in hangDuLieu)
             {
-                Nhan = chieu switch
+                var gio = int.TryParse(r.Bucket, out var parsedGio)
+                    ? parsedGio
+                    : r.ThoiGianLonNhat.Hour;
+                if (gio is >= 0 and <= 23)
+                    mapGio[gio] = (r.TongDoanhThu, r.SoHoaDon);
+            }
+
+            for (var gio = 0; gio < 24; gio++)
+            {
+                mapGio.TryGetValue(gio, out var val);
+                diem.Add(new TongQuanDiemDoanhThu
                 {
-                    TongQuanChieuDoanhThu.TheoThu => tenThu,
-                    TongQuanChieuDoanhThu.TheoGio => mocThoiGian.ToString("HH:00"),
-                    _ => mocThoiGian.ToString("dd/MM"),
-                },
-                NhanDayDu = theoThu
-                    ? $"{tenThu} trong khoảng đang chọn"
-                    : chieu == TongQuanChieuDoanhThu.TheoGio
-                        ? $"Giờ {mocThoiGian:HH:mm} ngày {mocThoiGian:dd/MM/yyyy}"
-                        : $"Ngày {mocThoiGian:dd/MM/yyyy}",
-                DoanhThu = r.TongDoanhThu,
-                SoHoaDon = r.SoHoaDon,
-                TyLeChieuCao = maxDoanhThu <= 0 ? 0 : (double)(r.TongDoanhThu / maxDoanhThu * 100m),
-                TyLeBeRong = tyLeBeRong
-            });
+                    Nhan = $"{gio:D2}:00",
+                    NhanDayDu = $"Khung giờ {gio:D2}:00 – {gio:D2}:59 ({TongQuanDuLieu.NgayHienThi(tuNgay)} – {TongQuanDuLieu.NgayHienThi(denNgay)})",
+                    DoanhThu = val.DoanhThu,
+                    SoHoaDon = val.SoHoaDon,
+                    BeRongCotTuyChinh = 46
+                });
+            }
+        }
+        else if (chieu == TongQuanChieuDoanhThu.TheoThu)
+        {
+            // Gom theo 7 thứ trong tuần (0 = Thứ 2 ... 6 = Chủ nhật)
+            var mapThu = new Dictionary<int, (decimal DoanhThu, int SoHoaDon)>();
+            foreach (var r in hangDuLieu)
+            {
+                var thu = int.TryParse(r.Bucket, out var parsedThu)
+                    ? parsedThu
+                    : ((int)r.ThoiGianLonNhat.DayOfWeek + 6) % 7;
+                if (thu is >= 0 and <= 6)
+                    mapThu[thu] = (r.TongDoanhThu, r.SoHoaDon);
+            }
+
+            for (var thu = 0; thu < 7; thu++)
+            {
+                mapThu.TryGetValue(thu, out var val);
+                var tenThu = TenThuTrongTuan((DayOfWeek)((thu + 1) % 7));
+                diem.Add(new TongQuanDiemDoanhThu
+                {
+                    Nhan = tenThu,
+                    NhanDayDu = $"{tenThu} (trong kỳ {TongQuanDuLieu.NgayHienThi(tuNgay)} – {TongQuanDuLieu.NgayHienThi(denNgay)})",
+                    DoanhThu = val.DoanhThu,
+                    SoHoaDon = val.SoHoaDon,
+                    BeRongCotTuyChinh = 82
+                });
+            }
+        }
+        else
+        {
+            // Theo ngày: hiển thị đầy đủ các ngày trong khoảng (tối đa 62 ngày liên tục),
+            // nếu khoảng dài hơn (như Năm nay) thì hiển thị các ngày có phát sinh + ngày đầu/cuối kỳ.
+            var mapNgay = new Dictionary<DateTime, (decimal DoanhThu, int SoHoaDon)>();
+            foreach (var r in hangDuLieu)
+            {
+                var ngay = DateTime.TryParse(r.Bucket, out var parsedNgay)
+                    ? parsedNgay.Date
+                    : r.ThoiGianLonNhat.Date;
+                mapNgay[ngay] = (r.TongDoanhThu, r.SoHoaDon);
+            }
+
+            var soNgay = Math.Max(1, (int)(denNgay.Date - tuNgay.Date).TotalDays + 1);
+            if (soNgay <= 62)
+            {
+                var beRong = soNgay == 1 ? 110 : (soNgay <= 7 ? 74 : (soNgay <= 16 ? 56 : 46));
+                for (var d = tuNgay.Date; d <= denNgay.Date; d = d.AddDays(1))
+                {
+                    mapNgay.TryGetValue(d, out var val);
+                    var tenThu = TenThuTrongTuan(d.DayOfWeek);
+                    diem.Add(new TongQuanDiemDoanhThu
+                    {
+                        Nhan = soNgay == 1 ? $"{d:dd/MM/yyyy}" : d.ToString("dd/MM"),
+                        NhanDayDu = $"{tenThu}, ngày {d:dd/MM/yyyy}",
+                        DoanhThu = val.DoanhThu,
+                        SoHoaDon = val.SoHoaDon,
+                        BeRongCotTuyChinh = beRong
+                    });
+                }
+            }
+            else
+            {
+                var danhSachNgay = mapNgay.Keys.OrderBy(d => d).ToList();
+                if (danhSachNgay.Count == 0)
+                {
+                    danhSachNgay.Add(tuNgay.Date);
+                    if (denNgay.Date != tuNgay.Date)
+                        danhSachNgay.Add(denNgay.Date);
+                }
+
+                var beRong = danhSachNgay.Count <= 7 ? 74 : (danhSachNgay.Count <= 16 ? 56 : 48);
+                foreach (var d in danhSachNgay)
+                {
+                    mapNgay.TryGetValue(d, out var val);
+                    var tenThu = TenThuTrongTuan(d.DayOfWeek);
+                    diem.Add(new TongQuanDiemDoanhThu
+                    {
+                        Nhan = d.ToString("dd/MM"),
+                        NhanDayDu = $"{tenThu}, ngày {d:dd/MM/yyyy}",
+                        DoanhThu = val.DoanhThu,
+                        SoHoaDon = val.SoHoaDon,
+                        BeRongCotTuyChinh = beRong
+                    });
+                }
+            }
+        }
+
+        var maxDoanhThu = diem.Count == 0 ? 0m : diem.Max(r => r.DoanhThu);
+        var tyLeBeRong = diem.Count == 0 ? 0d : 100d / diem.Count;
+
+        foreach (var item in diem)
+        {
+            item.TyLeChieuCao = maxDoanhThu <= 0 ? 0 : (double)(item.DoanhThu / maxDoanhThu * 100m);
+            item.TyLeBeRong = tyLeBeRong;
+            item.LaDiemCaoNhat = maxDoanhThu > 0 && item.DoanhThu == maxDoanhThu;
         }
 
         return (tongDoanhThu, tongSoHoaDon, diem);
+    }
+
+    private static void DienPhanTichTheoChieu(
+        TongQuanDuLieu ketQua,
+        string chieu,
+        DateTime tuNgay,
+        DateTime denNgay,
+        decimal tongDoanhThu,
+        int tongSoHoaDon,
+        List<TongQuanDiemDoanhThu> bieuDo)
+    {
+        var diemCoDon = bieuDo.Where(d => d.CoDuLieu).ToList();
+        var diemMax = diemCoDon.OrderByDescending(d => d.DoanhThu).ThenByDescending(d => d.SoHoaDon).FirstOrDefault();
+        var tbMoiHoaDon = tongSoHoaDon > 0 ? tongDoanhThu / tongSoHoaDon : 0m;
+
+        if (chieu == TongQuanChieuDoanhThu.TheoGio)
+        {
+            ketQua.TieuDeDiemCaoNhat = "KHUNG GIỜ CAO ĐIỂM";
+            if (diemMax is not null)
+            {
+                ketQua.GiaTriDiemCaoNhat = $"{diemMax.Nhan} – {diemMax.Nhan[..2]}:59";
+                ketQua.PhuDeDiemCaoNhat = $"{diemMax.DoanhThuHienThi} • {diemMax.SoHoaDonHienThi}";
+            }
+            else
+            {
+                ketQua.GiaTriDiemCaoNhat = "Chưa có phát sinh";
+                ketQua.PhuDeDiemCaoNhat = "0 đ • 0 hóa đơn";
+            }
+
+            var tbGioCoDon = diemCoDon.Count > 0 ? tongDoanhThu / diemCoDon.Count : 0m;
+            ketQua.TieuDeTrungBinhChieu = "TB KHUNG GIỜ CÓ ĐƠN";
+            ketQua.GiaTriTrungBinhChieu = $"{tbGioCoDon:N0} đ";
+            ketQua.PhuDeTrungBinhChieu = $"TB mỗi hóa đơn: {tbMoiHoaDon:N0} đ";
+
+            ketQua.TieuDeMatDoChieu = "KHUNG GIỜ HOẠT ĐỘNG";
+            ketQua.GiaTriMatDoChieu = $"{diemCoDon.Count} / 24 giờ";
+            ketQua.PhuDeMatDoChieu = diemCoDon.Count > 0
+                ? $"Có giao dịch trong {diemCoDon.Count} khung giờ"
+                : "Chưa có khung giờ nào phát sinh đơn";
+        }
+        else if (chieu == TongQuanChieuDoanhThu.TheoThu)
+        {
+            ketQua.TieuDeDiemCaoNhat = "THỨ BÁN CHẠY NHẤT";
+            if (diemMax is not null)
+            {
+                ketQua.GiaTriDiemCaoNhat = diemMax.Nhan;
+                ketQua.PhuDeDiemCaoNhat = $"{diemMax.DoanhThuHienThi} • {diemMax.SoHoaDonHienThi}";
+            }
+            else
+            {
+                ketQua.GiaTriDiemCaoNhat = "Chưa có phát sinh";
+                ketQua.PhuDeDiemCaoNhat = "0 đ • 0 hóa đơn";
+            }
+
+            var tbThuCoDon = diemCoDon.Count > 0 ? tongDoanhThu / diemCoDon.Count : 0m;
+            ketQua.TieuDeTrungBinhChieu = "TB MỖI THỨ CÓ ĐƠN";
+            ketQua.GiaTriTrungBinhChieu = $"{tbThuCoDon:N0} đ";
+            ketQua.PhuDeTrungBinhChieu = $"TB mỗi hóa đơn: {tbMoiHoaDon:N0} đ";
+
+            ketQua.TieuDeMatDoChieu = "THỨ CÓ GIAO DỊCH";
+            ketQua.GiaTriMatDoChieu = $"{diemCoDon.Count} / 7 thứ";
+            ketQua.PhuDeMatDoChieu = diemCoDon.Count > 0
+                ? $"Phát sinh đơn vào { string.Join(", ", diemCoDon.Select(d => d.Nhan)) }"
+                : "Chưa có ngày thứ nào phát sinh đơn";
+        }
+        else
+        {
+            var soNgayTrongKy = Math.Max(1, (int)(denNgay.Date - tuNgay.Date).TotalDays + 1);
+            ketQua.TieuDeDiemCaoNhat = "NGÀY CAO ĐIỂM NHẤT";
+            if (diemMax is not null)
+            {
+                ketQua.GiaTriDiemCaoNhat = diemMax.NhanDayDu.Replace("Ngày ", "");
+                ketQua.PhuDeDiemCaoNhat = $"{diemMax.DoanhThuHienThi} • {diemMax.SoHoaDonHienThi}";
+            }
+            else
+            {
+                ketQua.GiaTriDiemCaoNhat = "Chưa có phát sinh";
+                ketQua.PhuDeDiemCaoNhat = "0 đ • 0 hóa đơn";
+            }
+
+            var tbMoiNgay = tongDoanhThu / soNgayTrongKy;
+            var tbNgayCoDon = diemCoDon.Count > 0 ? tongDoanhThu / diemCoDon.Count : 0m;
+            ketQua.TieuDeTrungBinhChieu = "TRUNG BÌNH MỖI NGÀY";
+            ketQua.GiaTriTrungBinhChieu = $"{tbMoiNgay:N0} đ";
+            ketQua.PhuDeTrungBinhChieu = $"TB ngày có đơn: {tbNgayCoDon:N0} đ";
+
+            ketQua.TieuDeMatDoChieu = "SỐ NGÀY CÓ ĐƠN";
+            ketQua.GiaTriMatDoChieu = $"{diemCoDon.Count} / {soNgayTrongKy} ngày";
+            ketQua.PhuDeMatDoChieu = $"TB mỗi hóa đơn: {tbMoiHoaDon:N0} đ";
+        }
     }
 
     private static string TenThuTrongTuan(DayOfWeek thu) => thu switch

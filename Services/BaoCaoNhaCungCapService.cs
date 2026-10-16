@@ -133,6 +133,9 @@ public sealed class BaoCaoNhaCungCapService
         for (int i = 0; i < top.Count; i++)
             top[i].Stt = i + 1;
 
+        // 4b. Biểu đồ nhập hàng theo thời gian (ngày/giờ)
+        var bieuDo = await TaiBieuDoAsync(conn, dk, token);
+
         // 5. Tính thanh biểu đồ và mốc chia trục X (chuẩn 10 khoảng như hình tham khảo)
         var (scaleMarks, scaleLabels, maxScale) = TinhThanhBieuDoVaMocChia(top);
 
@@ -140,6 +143,7 @@ public sealed class BaoCaoNhaCungCapService
         {
             TongHop = tongHop,
             Top = top,
+            BieuDo = bieuDo,
             DongTrang = dongTrang,
             ScaleMarks = scaleMarks,
             ScaleLabels = scaleLabels,
@@ -430,6 +434,134 @@ public sealed class BaoCaoNhaCungCapService
 
         var rs = await conn.QueryAsync<BaoCaoNhaCungCapTop>(
             new CommandDefinition(sql, dk.Params, cancellationToken: token));
+        return rs.AsList();
+    }
+
+    /// <summary>
+    /// Biểu đồ "Nhập hàng theo thời gian": khoảng ≤ 1 ngày chia theo giờ, dài hơn chia
+    /// theo ngày. Gộp tiền nhập (từ phiếu nhập) và tiền trả hàng (từ sổ cái công nợ).
+    /// </summary>
+    private async Task<List<BaoCaoNhaCungCapDiemThoiGian>> TaiBieuDoAsync(
+        MySqlConnection conn, DieuKien dk, CancellationToken token)
+    {
+        // Nhánh KiotViet không có phiếu nhập nội bộ nên không dựng được chuỗi thời gian.
+        if (dk.SuDungKiotViet)
+            return new List<BaoCaoNhaCungCapDiemThoiGian>();
+
+        bool theoGio = (dk.DenKeTiep - dk.TuNgay).TotalDays <= 1;
+        string format = theoGio ? "%Y-%m-%d %H:00:00" : "%Y-%m-%d";
+
+        var sql = $"""
+        SELECT ThoiGianStr,
+               COALESCE(SUM(TienNhap), 0) AS TienNhap,
+               COALESCE(SUM(TienTraHang), 0) AS TienTraHang,
+               COALESCE(SUM(SoPhieuNhap), 0) AS SoPhieuNhap
+        FROM (
+            SELECT DATE_FORMAT(p.thoi_gian_nhap, '{format}') AS ThoiGianStr,
+                   COALESCE(SUM(p.tong_tien_nhap), 0) AS TienNhap,
+                   0 AS TienTraHang,
+                   COUNT(*) AS SoPhieuNhap
+            FROM phieu_nhap_hang p
+            INNER JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
+            WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
+              AND p.trang_thai != 'LUU_TAM' AND p.trang_thai != 'HUY'
+              AND ncc.trang_thai = 1
+              {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")}
+            GROUP BY ThoiGianStr
+            UNION ALL
+            SELECT DATE_FORMAT(ls.thoi_gian, '{format}') AS ThoiGianStr,
+                   0 AS TienNhap,
+                   COALESCE(SUM(ls.ghi_co), 0) AS TienTraHang,
+                   0 AS SoPhieuNhap
+            FROM lich_su_cong_no_nha_cung_cap ls
+            INNER JOIN nha_cung_cap ncc ON ncc.id = ls.nha_cung_cap_id
+            WHERE ls.thoi_gian >= @TuNgay AND ls.thoi_gian < @DenKeTiep
+              AND ls.loai_giao_dich IN ('TRA_HANG', 'TRA_HANG_NHAP', 'XUAT_TRA', 'GIAM_TRU')
+              AND ncc.trang_thai = 1
+              {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")}
+            GROUP BY ThoiGianStr
+        ) t
+        GROUP BY ThoiGianStr
+        ORDER BY ThoiGianStr ASC;
+        """;
+
+        var rs = await conn.QueryAsync<dynamic>(
+            new CommandDefinition(sql, dk.Params, cancellationToken: token));
+
+        var list = new List<BaoCaoNhaCungCapDiemThoiGian>();
+        foreach (var r in rs)
+        {
+            var tg = DateTime.Parse(Convert.ToString(r.ThoiGianStr) ?? string.Empty, CultureInfo.InvariantCulture);
+
+            // Dapper trả COUNT(*) kiểu long và SUM(decimal) có thể về long/decimal tuỳ
+            // MySQL — ép kiểu tường minh để tránh lỗi runtime với truy vấn dynamic.
+            list.Add(new BaoCaoNhaCungCapDiemThoiGian
+            {
+                ThoiGian = tg,
+                TienNhap = Convert.ToDecimal(r.TienNhap),
+                TienTraHang = Convert.ToDecimal(r.TienTraHang),
+                SoPhieuNhap = Convert.ToInt32(r.SoPhieuNhap),
+                NhanXet = tg.ToString(theoGio ? "HH:00" : "dd/MM")
+            });
+        }
+
+        if (list.Count > 0)
+        {
+            // Chiều cao cột tính theo giá trị nhập ròng lớn nhất để XAML bind thẳng.
+            var max = list.Max(x => x.GiaTriNhap);
+
+            // Bề rộng cột giãn theo số điểm: ít điểm thì cột rộng, nhiều điểm thì hẹp.
+            double beRongMongMuon = list.Count switch
+            {
+                <= 10 => 64,
+                <= 24 => 44,
+                <= 40 => 30,
+                _ => 22
+            };
+
+            foreach (var x in list)
+            {
+                x.TyLeChieuCao = max <= 0 ? 0 : (double)(x.GiaTriNhap / max * 100m);
+                x.TyLeBeRong = beRongMongMuon / BaoCaoNhaCungCapDiemThoiGian.BeRongToiDa * 100d;
+            }
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// Danh sách phiếu nhập hàng của MỘT nhà cung cấp trong khoảng đang xem
+    /// (dùng cho bảng chi tiết khi bấm vào một dòng nhà cung cấp).
+    /// </summary>
+    public async Task<List<BaoCaoNhaCungCapPhieuNhap>> TaiPhieuNhapCuaNhaCungCapAsync(
+        uint nhaCungCapId, DateTime tuNgay, DateTime denNgay, CancellationToken token = default)
+    {
+        var (tu, denKeTiep) = TinhKhoang(tuNgay, denNgay);
+
+        await using var conn = await _taoKetNoi();
+
+        const string sql = """
+        SELECT
+            p.id AS Id,
+            COALESCE(p.ma_phieu_nhap, '') AS MaPhieuNhap,
+            p.thoi_gian_nhap AS ThoiGianNhap,
+            COALESCE(p.tong_tien_nhap, 0) AS TongTienNhap,
+            COALESCE(p.da_thanh_toan, 0) AS DaThanhToan,
+            COALESCE(p.con_no, 0) AS ConNo,
+            COALESCE(p.trang_thai, '') AS TrangThai
+        FROM phieu_nhap_hang p
+        WHERE p.nha_cung_cap_id = @NhaCungCapId
+          AND p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
+          AND p.trang_thai != 'LUU_TAM' AND p.trang_thai != 'HUY'
+        ORDER BY p.thoi_gian_nhap DESC, p.id DESC;
+        """;
+
+        var rs = await conn.QueryAsync<BaoCaoNhaCungCapPhieuNhap>(
+            new CommandDefinition(
+                sql,
+                new { NhaCungCapId = nhaCungCapId, TuNgay = tu, DenKeTiep = denKeTiep },
+                cancellationToken: token));
+
         return rs.AsList();
     }
 
