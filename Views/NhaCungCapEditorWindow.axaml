@@ -4,9 +4,9 @@
         x:Class="ShopHoa.Views.NhaCungCapEditorWindow"
         x:DataType="views:NhaCungCapEditorWindow"
         Width="720"
-        Height="760"
+        Height="700"
         MinWidth="650"
-        MinHeight="700"
+        MinHeight="640"
         WindowStartupLocation="CenterOwner"
         Title="Nhà cung cấp">
 
@@ -176,7 +176,7 @@
             <ScrollViewer Grid.Row="1"
                           VerticalScrollBarVisibility="Auto">
 
-                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
                       ColumnDefinitions="*,*"
                       ColumnSpacing="16"
                       RowSpacing="14">
@@ -301,37 +301,6 @@
                                  TextWrapping="Wrap"
                                  VerticalContentAlignment="Top"/>
                     </StackPanel>
-
-                    <!-- Trạng thái -->
-                    <Border Grid.Row="6"
-                            Grid.ColumnSpan="2"
-                            Background="White"
-                            BorderBrush="#D8E5E0"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="14">
-
-                        <Grid ColumnDefinitions="*,Auto">
-
-                            <StackPanel>
-                                <TextBlock Text="Trạng thái"
-                                           FontWeight="SemiBold"
-                                           Foreground="#263B35"/>
-
-                                <TextBlock Text="{Binding Supplier.TrangThaiHienThi}"
-                                           FontSize="12"
-                                           Foreground="#61736E"
-                                           Margin="0,3,0,0"/>
-                            </StackPanel>
-
-                            <CheckBox Grid.Column="1"
-                                      Content="Đang hoạt động"
-                                      IsChecked="{Binding Supplier.TrangThai, Mode=TwoWay}"
-                                      VerticalAlignment="Center"/>
-
-                        </Grid>
-
-                    </Border>
 
                 </Grid>
 

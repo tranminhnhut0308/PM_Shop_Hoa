@@ -109,6 +109,35 @@ public sealed class PhieuNhapHangDetail
 
     public bool CoThanhToan => DaThanhToan > 0m;
 
+    /// <summary>Phiếu đã hoàn thành và còn nợ thì mới được ghi nhận thanh toán.</summary>
+    public bool CoTheThanhToan =>
+        TrangThaiThanhToanPhieuNhap.LaPhieuThanhToanDuoc(TrangThai) && ConNo > 0m;
+
+    public bool CoCongNo => ConNo > 0m;
+
+    /// <summary>Mã trạng thái thanh toán (xem <see cref="TrangThaiThanhToanPhieuNhap"/>).</summary>
+    public string TrangThaiThanhToan => TrangThaiThanhToanPhieuNhap.Tinh(DaThanhToan, ConNo);
+
+    public string TrangThaiThanhToanHienThi => TrangThaiThanhToanPhieuNhap.HienThi(TrangThaiThanhToan);
+
+    public Avalonia.Media.IBrush TrangThaiThanhToanBadgeBrush => TrangThaiThanhToan switch
+    {
+        TrangThaiThanhToanPhieuNhap.DaThanhToan =>
+            new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#E8F6F1")),
+        TrangThaiThanhToanPhieuNhap.ThanhToanMotPhan =>
+            new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#FFF7E8")),
+        _ => new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#FDECEC"))
+    };
+
+    public Avalonia.Media.IBrush TrangThaiThanhToanBadgeForeground => TrangThaiThanhToan switch
+    {
+        TrangThaiThanhToanPhieuNhap.DaThanhToan =>
+            new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#087F6E")),
+        TrangThaiThanhToanPhieuNhap.ThanhToanMotPhan =>
+            new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#B06A00")),
+        _ => new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#C0392B"))
+    };
+
     public string GiamGiaText => GiamGia.ToString("N0", Vi) + " đ";
 
     public string ChiPhiKhacText => ChiPhiKhac.ToString("N0", Vi) + " đ";

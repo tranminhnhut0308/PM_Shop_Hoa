@@ -79,11 +79,33 @@ public sealed partial class PhieuNhapHang : ObservableObject
         : "Đã nhập hàng";
 
     // ============================================================
+    // CÔNG NỢ / THANH TOÁN: trạng thái thanh toán được suy ra từ
+    // cặp (da_thanh_toan, con_no), không lưu cột riêng.
+    // ============================================================
+
+    /// <summary>Phiếu đã hoàn thành và còn nợ thì mới được ghi nhận thanh toán.</summary>
+    public bool CoTheThanhToan =>
+        TrangThaiThanhToanPhieuNhap.LaPhieuThanhToanDuoc(TrangThai) && ConNo > 0m;
+
+    public bool CoCongNo => ConNo > 0m;
+
+    /// <summary>Mã trạng thái thanh toán (xem <see cref="TrangThaiThanhToanPhieuNhap"/>).</summary>
+    public string TrangThaiThanhToan => TrangThaiThanhToanPhieuNhap.Tinh(DaThanhToan, ConNo);
+
+    public string TrangThaiThanhToanHienThi =>
+        TrangThaiThanhToanPhieuNhap.LaPhieuThanhToanDuoc(TrangThai)
+            ? TrangThaiThanhToanPhieuNhap.HienThi(TrangThaiThanhToan)
+            : "—";
+
+    // ============================================================
     // THÔNG TIN CHỈ DÙNG CHO BÁO CÁO
     // ============================================================
 
     /// <summary>Định dạng dd/MM/yyyy HH:mm cho cột "Thời gian" trong báo cáo.</summary>
     public string ThoiGianNhapText => ThoiGianNhap.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+
+    /// <summary>Số công nợ còn lại, định dạng theo kiểu Việt Nam cho cột "Còn nợ".</summary>
+    public string ConNoText => ConNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
 
     private static readonly IBrush NenDaNhapHang = new SolidColorBrush(Color.Parse("#E8F6F1"));
     private static readonly IBrush ChuDaNhapHang = new SolidColorBrush(Color.Parse("#087F6E"));
@@ -99,4 +121,47 @@ public sealed partial class PhieuNhapHang : ObservableObject
     public IBrush TrangThaiBadgeForeground => TrangThai == "LUU_TAM"
         ? ChuLuuTam
         : ChuDaNhapHang;
+
+    private static readonly IBrush NenChuaThanhToan = new SolidColorBrush(Color.Parse("#FDECEC"));
+    private static readonly IBrush ChuChuaThanhToan = new SolidColorBrush(Color.Parse("#C0392B"));
+    private static readonly IBrush NenThanhToanMotPhan = new SolidColorBrush(Color.Parse("#FFF7E8"));
+    private static readonly IBrush ChuThanhToanMotPhan = new SolidColorBrush(Color.Parse("#B06A00"));
+    private static readonly IBrush NenDaThanhToan = new SolidColorBrush(Color.Parse("#E8F6F1"));
+    private static readonly IBrush ChuDaThanhToan = new SolidColorBrush(Color.Parse("#087F6E"));
+    private static readonly IBrush NenTrungTinh = new SolidColorBrush(Color.Parse("#F1F4F3"));
+    private static readonly IBrush ChuTrungTinh = new SolidColorBrush(Color.Parse("#7A8C87"));
+
+    /// <summary>Màu nền badge trạng thái thanh toán.</summary>
+    public IBrush TrangThaiThanhToanBadgeBrush
+    {
+        get
+        {
+            if (!TrangThaiThanhToanPhieuNhap.LaPhieuThanhToanDuoc(TrangThai))
+                return NenTrungTinh;
+
+            return TrangThaiThanhToan switch
+            {
+                TrangThaiThanhToanPhieuNhap.DaThanhToan => NenDaThanhToan,
+                TrangThaiThanhToanPhieuNhap.ThanhToanMotPhan => NenThanhToanMotPhan,
+                _ => NenChuaThanhToan
+            };
+        }
+    }
+
+    /// <summary>Màu chữ badge trạng thái thanh toán.</summary>
+    public IBrush TrangThaiThanhToanBadgeForeground
+    {
+        get
+        {
+            if (!TrangThaiThanhToanPhieuNhap.LaPhieuThanhToanDuoc(TrangThai))
+                return ChuTrungTinh;
+
+            return TrangThaiThanhToan switch
+            {
+                TrangThaiThanhToanPhieuNhap.DaThanhToan => ChuDaThanhToan,
+                TrangThaiThanhToanPhieuNhap.ThanhToanMotPhan => ChuThanhToanMotPhan,
+                _ => ChuChuaThanhToan
+            };
+        }
+    }
 }

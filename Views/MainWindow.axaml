@@ -533,6 +533,62 @@
       <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
+    <!-- ============ NÚT THANH TOÁN CÔNG NỢ PHIẾU NHẬP (TRÊN BÁO CÁO) ============ -->
+    <!-- Nút xanh có cả icon + chữ "Thanh toán", kích thước đồng đều, có hiệu ứng hover -->
+    <Style Selector="Button.payRowButton">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border x:Name="PART_Root"
+            Background="#087F6E"
+            CornerRadius="8"
+            Padding="{TemplateBinding Padding}">
+            <ContentPresenter Content="{TemplateBinding Content}"
+              ContentTemplate="{TemplateBinding ContentTemplate}"
+              HorizontalContentAlignment="Center"
+              VerticalContentAlignment="Center"
+              TextElement.Foreground="White" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+
+    <Style Selector="Button.payRowButton /template/ Border#PART_Root">
+      <Setter Property="Background" Value="#087F6E" />
+    </Style>
+
+    <Style Selector="Button.payRowButton:pointerover /template/ Border#PART_Root">
+      <Setter Property="Background" Value="#06695A" />
+    </Style>
+
+    <Style Selector="Button.payRowButton:pressed /template/ Border#PART_Root">
+      <Setter Property="Background" Value="#055C4F" />
+    </Style>
+
+    <Style Selector="Button.payRowButton:disabled /template/ Border#PART_Root">
+      <Setter Property="Background" Value="#9DBFB7" />
+    </Style>
+
+    <Style Selector="Button.payRowButton /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White" />
+    </Style>
+
+    <Style Selector="Button.payRowButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White" />
+    </Style>
+
     <!-- ============ CHỈNH GIÁ NHANH NGAY TRÊN DANH SÁCH HÀNG HÓA ============ -->
 
     <!-- Nút ✏ mở ô nhập giá: ẩn cho tới khi rê chuột vào dòng -->
@@ -5886,7 +5942,7 @@
               BorderThickness="0,0,0,1"
               Padding="16,12">
 
-              <Grid ColumnDefinitions="180,150,130,*,200,150,64"
+              <Grid ColumnDefinitions="106,108,76,*,138,100,104,136,150"
                 ColumnSpacing="10">
 
                 <TextBlock Grid.Column="0"
@@ -5925,6 +5981,14 @@
                   VerticalAlignment="Center" />
 
                 <TextBlock Grid.Column="5"
+                  Text="CÒN NỢ"
+                  FontWeight="Bold"
+                  Foreground="#164B40"
+                  FontSize="12"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Center" />
+
+                <TextBlock Grid.Column="6"
                   Text="TRẠNG THÁI"
                   FontWeight="Bold"
                   Foreground="#164B40"
@@ -5932,8 +5996,16 @@
                   HorizontalAlignment="Center"
                   VerticalAlignment="Center" />
 
-                <TextBlock Grid.Column="6"
-                  Text="IN"
+                <TextBlock Grid.Column="7"
+                  Text="THANH TOÁN"
+                  FontWeight="Bold"
+                  Foreground="#164B40"
+                  FontSize="12"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center" />
+
+                <TextBlock Grid.Column="8"
+                  Text="THAO TÁC"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
@@ -5977,7 +6049,7 @@
                       ToolTip.Tip="Nhấn vào dòng để xem chi tiết phiếu nhập"
                       Padding="16,11">
 
-                      <Grid ColumnDefinitions="180,150,130,*,200,150,64"
+                      <Grid ColumnDefinitions="106,108,76,*,138,100,104,136,150"
                         ColumnSpacing="10"
                         VerticalAlignment="Center">
 
@@ -6030,10 +6102,20 @@
                             Foreground="#087F6E" />
                         </StackPanel>
 
-                        <!-- BADGE TRẠNG THÁI -->
-                        <Border Grid.Column="5"
+                        <!-- SỐ CÒN NỢ -->
+                        <TextBlock Grid.Column="5"
+                          Text="{Binding ConNoText}"
+                          FontSize="12"
+                          FontWeight="SemiBold"
+                          Foreground="#D64545"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Center" />
+
+                        <!-- BADGE TRẠNG THÁI PHIẾU -->
+                        <Border Grid.Column="6"
                           CornerRadius="14"
                           Padding="12,4"
+                          MinWidth="96"
                           HorizontalAlignment="Center"
                           VerticalAlignment="Center"
                           Background="{Binding TrangThaiBadgeBrush}">
@@ -6045,19 +6127,67 @@
                             Foreground="{Binding TrangThaiBadgeForeground}" />
                         </Border>
 
-                        <!-- NÚT IN PHIẾU NHẬP -->
-                        <Button Grid.Column="6"
-                          Classes="toolbar-action"
-                          Content="🖨"
-                          FontSize="14"
-                          Width="40"
-                          Height="30"
-                          Padding="0"
+                        <!-- BADGE TRẠNG THÁI THANH TOÁN -->
+                        <Border Grid.Column="7"
+                          CornerRadius="14"
+                          Padding="10,4"
+                          MinWidth="132"
                           HorizontalAlignment="Center"
                           VerticalAlignment="Center"
-                          ToolTip.Tip="In phiếu nhập"
-                          Command="{Binding ElementName=RootWindow, Path=DataContext.InPhieuNhapCommand}"
-                          CommandParameter="{Binding}" />
+                          Background="{Binding TrangThaiThanhToanBadgeBrush}">
+                          <TextBlock Text="{Binding TrangThaiThanhToanHienThi}"
+                            FontSize="11"
+                            FontWeight="SemiBold"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Foreground="{Binding TrangThaiThanhToanBadgeForeground}" />
+                        </Border>
+
+                        <!-- NÚT THANH TOÁN + IN PHIẾU NHẬP -->
+                        <StackPanel Grid.Column="8"
+                          Orientation="Horizontal"
+                          Spacing="6"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center">
+                          <Button
+                            Classes="payRowButton"
+                            Width="114"
+                            Height="32"
+                            Padding="10,0"
+                            Margin="0"
+                            IsVisible="{Binding CoTheThanhToan}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Thanh toán công nợ phiếu nhập"
+                            Command="{Binding ElementName=RootWindow, Path=DataContext.ThanhToanPhieuNhapCommand}"
+                            CommandParameter="{Binding}">
+                            <StackPanel Orientation="Horizontal"
+                              Spacing="6"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center">
+                              <TextBlock Text="💳"
+                                FontSize="14"
+                                VerticalAlignment="Center" />
+                              <TextBlock Text="Thanh toán"
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                          <Button
+                            Classes="toolbar-action"
+                            Content="🖨"
+                            FontSize="13"
+                            Width="30"
+                            Height="32"
+                            Padding="0"
+                            Margin="0"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="In phiếu nhập"
+                            Command="{Binding ElementName=RootWindow, Path=DataContext.InPhieuNhapCommand}"
+                            CommandParameter="{Binding}" />
+                        </StackPanel>
                       </Grid>
                     </Border>
                   </DataTemplate>

@@ -3966,7 +3966,7 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
                 return;
             }
 
-            var window = new PhieuNhapDetailWindow(detail);
+            var window = new PhieuNhapDetailWindow(detail, ThanhToanTuChiTietPhieuNhapAsync);
             await window.ShowDialog(OwnerWindow);
         }
         catch (Exception ex)
@@ -5122,6 +5122,165 @@ private async Task TimKiemHoaBanAsync(string? keyword = null)
             SafeLog.WriteError("Loi thu no hoa don", ex);
         }
     }
+
+    #region Thanh toán công nợ phiếu nhập
+
+    /// <summary>
+    /// Thanh toán công nợ cho một phiếu nhập từ nút trên bảng báo cáo phiếu nhập.
+    /// Mở hộp thoại nhập số tiền/phương thức, ghi nhận vào database rồi làm mới
+    /// báo cáo, danh sách nhà cung cấp, sổ quỹ và tổng quan (nếu đang mở).
+    /// </summary>
+    [RelayCommand]
+    private async Task ThanhToanPhieuNhapAsync(PhieuNhapHang? phieu)
+    {
+        if (phieu is null || OwnerWindow is null || phieu.Id == 0)
+            return;
+
+        if (!phieu.CoTheThanhToan)
+        {
+            StatusMessage = phieu.ConNo <= 0
+                ? $"Phiếu nhập {phieu.MaPhieuNhap} đã thanh toán đủ."
+                : $"Phiếu nhập {phieu.MaPhieuNhap} không thể thanh toán ở trạng thái hiện tại.";
+            return;
+        }
+
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.SuppliersDebtPay,
+                "Bạn không có quyền thanh toán công nợ nhà cung cấp."))
+        {
+            return;
+        }
+
+        var dialog = new ThanhToanPhieuNhapWindow(phieu);
+        var ketQua = await dialog.ShowDialog<ThanhToanPhieuNhapYeuCau?>(OwnerWindow);
+
+        if (ketQua is null)
+        {
+            StatusMessage = "Đã hủy thanh toán công nợ.";
+            return;
+        }
+
+        try
+        {
+            var kq = await _db.ThanhToanPhieuNhapAsync(
+                phieu.MaPhieuNhap,
+                ketQua.SoTien,
+                ketQua.PhuongThuc,
+                ketQua.ThoiGian,
+                ketQua.GhiChu);
+
+            await LamMoiSauThanhToanPhieuNhapAsync();
+
+            StatusMessage = $"Đã thanh toán {kq.SoTienThanhToan:N0} đ cho phiếu {kq.MaPhieuNhap}. "
+                + $"Còn nợ {kq.ConNo:N0} đ.";
+
+            await ShowMessageAsync(
+                "Thanh toán thành công",
+                $"Đã thanh toán {kq.SoTienThanhToan:N0} đ cho phiếu {kq.MaPhieuNhap}.\n"
+                + $"Còn nợ: {kq.ConNo:N0} đ.\n"
+                + $"Mã lịch sử: {kq.MaThanhToan}"
+                + (string.IsNullOrWhiteSpace(kq.MaPhieuChi) ? "" : $" • Phiếu chi: {kq.MaPhieuChi} (đã ghi Sổ quỹ)."));
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageAsync("Không thanh toán được công nợ", ex.Message);
+            SafeLog.WriteError("Loi thanh toan phieu nhap", ex);
+        }
+    }
+
+    /// <summary>
+    /// Nhận yêu cầu thanh toán từ cửa sổ chi tiết phiếu nhập: mở hộp thoại, ghi
+    /// nhận thanh toán rồi đọc lại chi tiết để cửa sổ cập nhật số nợ. Trả về null
+    /// khi người dùng hủy hoặc gặp lỗi.
+    /// </summary>
+    private async Task<PhieuNhapHangDetail?> ThanhToanTuChiTietPhieuNhapAsync(
+        PhieuNhapHangDetail detail,
+        Window parentWindow)
+    {
+        var owner = parentWindow ?? OwnerWindow;
+        if (owner is null || detail.ConNo <= 0m)
+            return null;
+
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.SuppliersDebtPay,
+                "Bạn không có quyền thanh toán công nợ nhà cung cấp."))
+        {
+            return null;
+        }
+
+        var dialog = new ThanhToanPhieuNhapWindow(detail);
+        var ketQua = await dialog.ShowDialog<ThanhToanPhieuNhapYeuCau?>(owner);
+
+        if (ketQua is null)
+        {
+            StatusMessage = "Đã hủy thanh toán công nợ.";
+            return null;
+        }
+
+        try
+        {
+            var kq = await _db.ThanhToanPhieuNhapAsync(
+                detail.MaPhieuNhap,
+                ketQua.SoTien,
+                ketQua.PhuongThuc,
+                ketQua.ThoiGian,
+                ketQua.GhiChu);
+
+            await LamMoiSauThanhToanPhieuNhapAsync();
+
+            StatusMessage = $"Đã thanh toán {kq.SoTienThanhToan:N0} đ cho phiếu {kq.MaPhieuNhap}. "
+                + $"Còn nợ {kq.ConNo:N0} đ.";
+
+            await ShowMessageAsync(
+                "Thanh toán thành công",
+                $"Đã thanh toán {kq.SoTienThanhToan:N0} đ cho phiếu {kq.MaPhieuNhap}.\n"
+                + $"Còn nợ: {kq.ConNo:N0} đ.\n"
+                + $"Mã lịch sử: {kq.MaThanhToan}"
+                + (string.IsNullOrWhiteSpace(kq.MaPhieuChi) ? "" : $" • Phiếu chi: {kq.MaPhieuChi} (đã ghi Sổ quỹ)."),
+                owner);
+
+            return await _db.GetPhieuNhapHangDetailAsync(detail.PhieuNhapId);
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageAsync("Không thanh toán được công nợ", ex.Message, owner);
+            SafeLog.WriteError("Loi thanh toan phieu nhap", ex);
+            return null;
+        }
+    }
+
+    /// <summary>Làm mới các màn hình bị ảnh hưởng sau khi thanh toán công nợ phiếu nhập.</summary>
+    private async Task LamMoiSauThanhToanPhieuNhapAsync()
+    {
+        // Báo cáo phiếu nhập: cập nhật số còn nợ + trạng thái thanh toán của dòng.
+        if (IsBaoCaoPhieuNhapSelected)
+        {
+            await LoadBaoCaoPhieuNhapAsync();
+        }
+
+        // Danh sách nhà cung cấp: cập nhật lại tổng công nợ.
+        if (IsNhaCungCapSelected)
+        {
+            await LoadSupplierPageAsync();
+        }
+
+        // Sổ quỹ: phiếu chi vừa ghi.
+        if (IsSoQuySelected)
+        {
+            try
+            {
+                await TaiLaiSoQuyAsync();
+            }
+            catch (Exception ex)
+            {
+                SafeLog.WriteError("Loi lam moi so quy sau khi thanh toan phieu nhap", ex);
+            }
+        }
+
+        _ = LamMoiTongQuanNeuDangMoAsync();
+    }
+
+    #endregion
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(BaoCaoArrowText))]
