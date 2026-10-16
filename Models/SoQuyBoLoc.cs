@@ -43,9 +43,6 @@ public sealed class SoQuyBoLoc
     /// <summary>Danh sách id loại thu/chi, phân tách bằng dấu phẩy. Rỗng = tất cả.</summary>
     public string LoaiThuChiIds { get; set; } = "";
 
-    /// <summary>Danh sách mã trạng thái phiếu, phân tách bằng dấu phẩy. Rỗng = tất cả.</summary>
-    public string TrangThaiList { get; set; } = "";
-
     /// <summary>Danh sách id người tạo phiếu, phân tách bằng dấu phẩy. Rỗng = tất cả.</summary>
     public string NguoiTaoIds { get; set; } = "";
 
@@ -66,7 +63,6 @@ public sealed class SoQuyBoLoc
                 || TuNgay.HasValue
                 || DenNgay.HasValue
                 || !string.IsNullOrWhiteSpace(LoaiThuChiIds)
-                || !string.IsNullOrWhiteSpace(TrangThaiList)
                 || !string.IsNullOrWhiteSpace(NguoiTaoIds)
                 || TienTu.HasValue
                 || TienDen.HasValue)

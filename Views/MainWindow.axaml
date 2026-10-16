@@ -5219,25 +5219,7 @@
                       </ItemsControl>
                     </StackPanel>
 
-                    <!-- 5. TRẠNG THÁI (lấy từ cột trang_thai) -->
-                    <StackPanel Spacing="6"
-                      IsVisible="{Binding SoQuyCoTrangThai}">
-                      <TextBlock Classes="sq-label" Text="TRẠNG THÁI" />
-
-                      <ItemsControl ItemsSource="{Binding SoQuyTrangThaiOptions}">
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate x:DataType="models:SoQuyLuaChonItem">
-                            <CheckBox Content="{Binding HienThi}"
-                              IsChecked="{Binding IsChecked, Mode=TwoWay}"
-                              FontSize="12"
-                              Foreground="#344054"
-                              Margin="0,0,0,4" />
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
-                    </StackPanel>
-
-                    <!-- 6. NGƯỜI TẠO (lấy từ bảng nguoi_dung) -->
+                    <!-- 5. NGƯỜI TẠO (lấy từ bảng nguoi_dung) -->
                     <StackPanel Spacing="6"
                       IsVisible="{Binding SoQuyCoNguoiTao}">
                       <TextBlock Classes="sq-label" Text="NGƯỜI TẠO" />
@@ -5255,7 +5237,7 @@
                       </ItemsControl>
                     </StackPanel>
 
-                    <!-- 7. KHOẢNG TIỀN -->
+                    <!-- 6. KHOẢNG TIỀN -->
                     <StackPanel Spacing="6">
                       <TextBlock Classes="sq-label" Text="KHOẢNG TIỀN" />
 
