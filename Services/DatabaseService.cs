@@ -6708,12 +6708,33 @@ LIMIT 500;
         return $"NCC{nextNumber:D7}";
     }
 
+    private bool _daMoRongCotSoDienThoaiNcc;
+
+    private async Task DamBaoDoDaiSoDienThoaiNhaCungCapAsync(MySqlConnection connection)
+    {
+        if (_daMoRongCotSoDienThoaiNcc)
+            return;
+
+        try
+        {
+            await connection.ExecuteAsync(
+                "ALTER TABLE nha_cung_cap MODIFY COLUMN so_dien_thoai VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL;");
+            _daMoRongCotSoDienThoaiNcc = true;
+        }
+        catch
+        {
+            // Bỏ qua nếu không đủ quyền ALTER hoặc cột đã thỏa mãn
+            _daMoRongCotSoDienThoaiNcc = true;
+        }
+    }
+
     public async Task<uint> ThemNhaCungCapAsync(NhaCungCap supplier)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SuppliersCreate, "Bạn không có quyền thêm nhà cung cấp.");
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
 
         await using var connection = await OpenAsync();
+        await DamBaoDoDaiSoDienThoaiNhaCungCapAsync(connection);
 
         // Bản đầy đủ ghi cả các cột lấy từ file danh sách nhà cung cấp. Nếu bảng
         // cũ không thêm được cột thì dùng bản rút gọn như trước để vẫn nhập được.
@@ -6792,6 +6813,7 @@ LIMIT 500;
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SuppliersEdit, "Bạn không có quyền sửa nhà cung cấp.");
         await using var connection = await OpenAsync();
+        await DamBaoDoDaiSoDienThoaiNhaCungCapAsync(connection);
 
         const string sql = """
         UPDATE nha_cung_cap

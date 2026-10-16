@@ -6,47 +6,45 @@ using ShopHoa.Services;
 
 namespace ShopHoa.ViewModels;
 
-public enum BaoCaoNhaCungCapKieuHienThi { BieuDo, BaoCao }
-
 /// <summary>
-/// ViewModel cho màn hình "Báo cáo nhà cung cấp":
-/// - Panel bộ lọc bên trái: Kiểu hiển thị (Biểu đồ / Báo cáo), Mối quan tâm, Thời gian, Tìm kiếm nhà cung cấp.
-/// - Bên phải: Biểu đồ thanh ngang Top 10 nhà cung cấp nhập hàng nhiều nhất (đã trừ trả hàng) HOẶC Bảng dữ liệu chi tiết có sắp xếp + phân trang.
-/// - Không hard-code, truy vấn dữ liệu thực tế từ database với hiệu năng cao.
+/// ViewModel cho màn hình "Báo cáo nhà cung cấp" (thiết kế đồng bộ với Báo cáo bán hàng):
+/// - Header tiêu đề + bộ lọc thời gian (Hôm nay / Hôm qua / Tuần này / Tháng này / Tùy chỉnh) + Xuất Excel.
+/// - Thẻ chỉ số tổng hợp, biểu đồ nhập hàng theo thời gian và biểu đồ Top 10 nhà cung cấp.
+/// - Bảng chi tiết nhà cung cấp có sắp xếp, phân trang, dòng tổng cộng; bấm một dòng để
+///   xem danh sách phiếu nhập của nhà cung cấp đó trong kỳ.
+/// - Không hard-code: mọi con số truy vấn trực tiếp từ database.
 /// </summary>
 public partial class BaoCaoNhaCungCapViewModel : ObservableObject
 {
-    private const string NhanTuyChinh = "Tùy chỉnh";
     private readonly BaoCaoNhaCungCapService _service;
 
     private bool _khoiTaoXong;
-    private bool _dangDatBoLoc;
     private CancellationTokenSource? _searchCts;
     private int _phienBan;
+
+    // Danh sách phiếu nhập của nhà cung cấp đang xem chi tiết (chưa phân trang / lọc).
+    private readonly List<BaoCaoNhaCungCapPhieuNhap> _chiTietPhieuNhapAll = new();
 
     public BaoCaoNhaCungCapViewModel(DatabaseService db)
     {
         _service = new BaoCaoNhaCungCapService(db.TaoKetNoiAsync);
 
-        KieuHienThi = BaoCaoNhaCungCapKieuHienThi.BieuDo;
-        MocQuanTamChon = MocQuanTamOptions[0];
         SapXepKho = BaoCaoNhaCungCapService.KhoaMacDinh;
         SapXepTang = false;
         TimKiem = string.Empty;
         SoDongTrang = 15;
         Trang = 1;
 
-        // Mặc định chọn "Tuần này" như giao diện tham khảo
+        // Mặc định chọn "Tuần này" như giao diện Báo cáo bán hàng.
         DatKhoangTuanNay();
 
         _khoiTaoXong = true;
     }
 
     // ============================================================
-    // TRẠNG THÁI / CHẾ ĐỘ HIỂN THỊ
+    // TRẠNG THÁI
     // ============================================================
 
-    [ObservableProperty] private BaoCaoNhaCungCapKieuHienThi kieuHienThi;
     [ObservableProperty] private bool dangTai;
 
     [ObservableProperty]
@@ -54,101 +52,6 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
     private string thongBaoLoi = string.Empty;
 
     public bool CoLoi => !string.IsNullOrEmpty(ThongBaoLoi);
-
-    /// <summary>Kiểu hiển thị là Biểu đồ.</summary>
-    public bool HienThiBieuDo
-    {
-        get => KieuHienThi == BaoCaoNhaCungCapKieuHienThi.BieuDo;
-        set
-        {
-            if (value)
-                KieuHienThi = BaoCaoNhaCungCapKieuHienThi.BieuDo;
-        }
-    }
-
-    /// <summary>Kiểu hiển thị là Báo cáo.</summary>
-    public bool HienThiBaoCao
-    {
-        get => KieuHienThi == BaoCaoNhaCungCapKieuHienThi.BaoCao;
-        set
-        {
-            if (value)
-                KieuHienThi = BaoCaoNhaCungCapKieuHienThi.BaoCao;
-        }
-    }
-
-    partial void OnKieuHienThiChanged(BaoCaoNhaCungCapKieuHienThi value)
-    {
-        OnPropertyChanged(nameof(HienThiBieuDo));
-        OnPropertyChanged(nameof(HienThiBaoCao));
-    }
-
-    [RelayCommand]
-    private void ChonBieuDo() => KieuHienThi = BaoCaoNhaCungCapKieuHienThi.BieuDo;
-
-    [RelayCommand]
-    private void ChonBaoCao() => KieuHienThi = BaoCaoNhaCungCapKieuHienThi.BaoCao;
-
-    /// <summary>
-    /// Xuất Excel toàn bộ nhà cung cấp khớp bộ lọc hiện tại (không phụ thuộc trang
-    /// đang xem): truy vấn lại với cỡ trang bằng tổng số bản ghi.
-    /// </summary>
-    [RelayCommand]
-    private async Task XuatExcelAsync()
-    {
-        try
-        {
-            var cuaSo = Avalonia.Application.Current?.ApplicationLifetime
-                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt
-                ? lt.MainWindow
-                : null;
-
-            if (cuaSo is null)
-                return;
-
-            var soDong = Math.Max(1, TongSoBanGhi);
-
-            var duLieu = await _service.TaiDuLieuAsync(
-                TuNgay,
-                DenNgay,
-                TimKiem,
-                SapXepKho,
-                SapXepTang,
-                1,
-                soDong,
-                default);
-
-            using var wb = BaoCaoNhaCungCapExcel.TaoWorkbook(duLieu);
-
-            var file = await cuaSo.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
-            {
-                Title = "Xuất Excel báo cáo nhà cung cấp",
-                FileTypeChoices = new[]
-                {
-                    new Avalonia.Platform.Storage.FilePickerFileType("Excel") { Patterns = new[] { "*.xlsx" } }
-                },
-                SuggestedFileName = duLieu.TongHop.TenFileXuat()
-            });
-
-            if (file is not null)
-            {
-                await using var stream = await file.OpenWriteAsync();
-                wb.SaveAs(stream);
-            }
-        }
-        catch (Exception ex)
-        {
-            ThongBaoLoi = "Không xuất được file Excel: " + ex.Message;
-        }
-    }
-
-    // ============================================================
-    // MỐI QUAN TÂM
-    // ============================================================
-
-    public IReadOnlyList<string> MocQuanTamOptions { get; } = ["Nhập hàng"];
-
-    [ObservableProperty] private string mocQuanTamChon = "Nhập hàng";
 
     // ============================================================
     // BỘ LỌC THỜI GIAN
@@ -162,43 +65,20 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(KhoangHienThi))]
     private DateTime denNgay;
 
-    public IReadOnlyList<string> PresetThoiGianOptions { get; } = ["Tuần này", "Tháng này", "Quý này", "Năm nay"];
-
-    [ObservableProperty]
-    private string presetThoiGianChon = "Tuần này";
-
-    public bool DangChonPresetThoiGian => KhoangThoiGian != NhanTuyChinh;
-
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(KhoangHienThi))]
+    [NotifyPropertyChangedFor(nameof(DangChonHomNay))]
+    [NotifyPropertyChangedFor(nameof(DangChonHomQua))]
     [NotifyPropertyChangedFor(nameof(DangChonTuanNay))]
     [NotifyPropertyChangedFor(nameof(DangChonThangNay))]
-    [NotifyPropertyChangedFor(nameof(DangChonQuyNay))]
-    [NotifyPropertyChangedFor(nameof(DangChonNamNay))]
     [NotifyPropertyChangedFor(nameof(DangChonTuyChinh))]
-    [NotifyPropertyChangedFor(nameof(DangChonPresetThoiGian))]
     private string khoangThoiGian = "Tuần này";
 
+    public bool DangChonHomNay => KhoangThoiGian == "Hôm nay";
+    public bool DangChonHomQua => KhoangThoiGian == "Hôm qua";
     public bool DangChonTuanNay => KhoangThoiGian == "Tuần này";
     public bool DangChonThangNay => KhoangThoiGian == "Tháng này";
-    public bool DangChonQuyNay => KhoangThoiGian == "Quý này";
-    public bool DangChonNamNay => KhoangThoiGian == "Năm nay";
-    public bool DangChonTuyChinh => KhoangThoiGian == NhanTuyChinh;
-
-    partial void OnPresetThoiGianChonChanged(string value)
-    {
-        if (!_khoiTaoXong || _dangDatBoLoc) return;
-        _ = ChonKhoangThoiGianAsync(value);
-    }
-
-    [RelayCommand]
-    private async Task ChonPresetThoiGianAsync()
-    {
-        if (KhoangThoiGian == NhanTuyChinh)
-        {
-            await ChonKhoangThoiGianAsync(PresetThoiGianChon);
-        }
-    }
+    public bool DangChonTuyChinh => KhoangThoiGian == "Tùy chọn";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CoKhoangTuyChinh))]
@@ -210,53 +90,64 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
 
     public bool CoKhoangTuyChinh => TuNgayChon is not null && DenNgayChon is not null;
 
-    public string KhoangHienThi => $"Từ {TuNgay:dd/MM/yyyy} đến {DenNgay:dd/MM/yyyy}";
+    public string KhoangHienThi => $"Khoảng thời gian: {TuNgay:dd/MM/yyyy} - {DenNgay:dd/MM/yyyy}";
 
-    [RelayCommand]
-    private async Task ChonKhoangThoiGianAsync(string? nhan)
+    private async Task DatKhoangAsync(DateTime tu, DateTime den, string nhan)
     {
-        if (string.IsNullOrWhiteSpace(nhan))
-            return;
-
-        if (nhan == NhanTuyChinh)
-        {
-            KhoangThoiGian = NhanTuyChinh;
-            TuNgayChon ??= new DateTimeOffset(TuNgay);
-            DenNgayChon ??= new DateTimeOffset(DenNgay);
-            return;
-        }
-
-        if (PresetThoiGianOptions.Contains(nhan))
-        {
-            PresetThoiGianChon = nhan;
-        }
-
-        _dangDatBoLoc = true;
-        try
-        {
-            switch (nhan)
-            {
-                case "Tuần này":
-                    DatKhoangTuanNay();
-                    break;
-                case "Tháng này":
-                    DatKhoangThangNay();
-                    break;
-                case "Quý này":
-                    DatKhoangQuyNay();
-                    break;
-                case "Năm nay":
-                    DatKhoangNamNay();
-                    break;
-            }
-        }
-        finally
-        {
-            _dangDatBoLoc = false;
-        }
+        TuNgay = tu.Date;
+        DenNgay = den.Date;
+        TuNgayChon = new DateTimeOffset(tu.Date);
+        DenNgayChon = new DateTimeOffset(den.Date);
+        KhoangThoiGian = nhan;
 
         Trang = 1;
+        DongChiTietNoiBo();
         await TaiLaiAsync();
+    }
+
+    [RelayCommand]
+    private async Task VeHomNayAsync()
+    {
+        await DatKhoangAsync(DateTime.Today, DateTime.Today, "Hôm nay");
+    }
+
+    [RelayCommand]
+    private async Task VeNgayQuaAsync()
+    {
+        var homQua = DateTime.Today.AddDays(-1);
+        await DatKhoangAsync(homQua, homQua, "Hôm qua");
+    }
+
+    [RelayCommand]
+    private async Task VeTuanNayAsync()
+    {
+        // Tuần bắt đầu từ thứ Hai.
+        var homNay = DateTime.Today;
+        var soNgayDaQua = ((int)homNay.DayOfWeek + 6) % 7;
+        await DatKhoangAsync(homNay.AddDays(-soNgayDaQua), homNay, "Tuần này");
+    }
+
+    [RelayCommand]
+    private async Task VeThangNayAsync()
+    {
+        var homNay = DateTime.Today;
+        await DatKhoangAsync(new DateTime(homNay.Year, homNay.Month, 1), homNay, "Tháng này");
+    }
+
+    [RelayCommand]
+    private async Task ApDungTuyChinhAsync()
+    {
+        if (TuNgayChon is null || DenNgayChon is null)
+            return;
+
+        var tu = TuNgayChon.Value.Date;
+        var den = DenNgayChon.Value.Date;
+
+        // Người dùng chọn ngược vẫn phải chạy được.
+        if (den < tu)
+            (tu, den) = (den, tu);
+
+        await DatKhoangAsync(tu, den, "Tùy chọn");
     }
 
     private void DatKhoangTuanNay()
@@ -270,58 +161,6 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
         KhoangThoiGian = "Tuần này";
     }
 
-    private void DatKhoangThangNay()
-    {
-        var homNay = DateTime.Today;
-        TuNgay = new DateTime(homNay.Year, homNay.Month, 1);
-        DenNgay = homNay;
-        TuNgayChon = new DateTimeOffset(TuNgay);
-        DenNgayChon = new DateTimeOffset(DenNgay);
-        KhoangThoiGian = "Tháng này";
-    }
-
-    private void DatKhoangQuyNay()
-    {
-        var homNay = DateTime.Today;
-        int quy = (homNay.Month - 1) / 3;
-        TuNgay = new DateTime(homNay.Year, quy * 3 + 1, 1);
-        DenNgay = homNay;
-        TuNgayChon = new DateTimeOffset(TuNgay);
-        DenNgayChon = new DateTimeOffset(DenNgay);
-        KhoangThoiGian = "Quý này";
-    }
-
-    private void DatKhoangNamNay()
-    {
-        var homNay = DateTime.Today;
-        TuNgay = new DateTime(homNay.Year, 1, 1);
-        DenNgay = homNay;
-        TuNgayChon = new DateTimeOffset(TuNgay);
-        DenNgayChon = new DateTimeOffset(DenNgay);
-        KhoangThoiGian = "Năm nay";
-    }
-
-    [RelayCommand]
-    private async Task ApDungTuyChinhAsync()
-    {
-        if (TuNgayChon is null || DenNgayChon is null)
-            return;
-
-        var tu = TuNgayChon.Value.Date;
-        var den = DenNgayChon.Value.Date;
-
-        if (tu > den)
-            (tu, den) = (den, tu);
-
-        _dangDatBoLoc = true;
-        TuNgay = tu;
-        DenNgay = den;
-        _dangDatBoLoc = false;
-
-        Trang = 1;
-        await TaiLaiAsync();
-    }
-
     // ============================================================
     // TÌM KIẾM NHÀ CUNG CẤP
     // ============================================================
@@ -330,7 +169,7 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
 
     partial void OnTimKiemChanged(string value)
     {
-        if (!_khoiTaoXong || _dangDatBoLoc)
+        if (!_khoiTaoXong)
             return;
 
         _searchCts?.Cancel();
@@ -482,10 +321,12 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
 
     [ObservableProperty] private BaoCaoNhaCungCapTongHop tongHop = new();
 
+    public ObservableCollection<BaoCaoNhaCungCapDiemThoiGian> BieuDoItems { get; } = new();
     public ObservableCollection<BaoCaoNhaCungCapTop> TopItems { get; } = new();
     public ObservableCollection<BaoCaoNhaCungCapDong> DongTrangs { get; } = new();
     public ObservableCollection<BaoCaoNhaCungCapScaleMark> ScaleMarks { get; } = new();
 
+    [ObservableProperty] private bool coBieuDo;
     [ObservableProperty] private bool coTop;
     [ObservableProperty] private bool coDongTrang;
 
@@ -506,7 +347,7 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
     public string ScaleMark9 => _scaleLabels.Length > 9 ? _scaleLabels[9] : "";
     public string ScaleMark10 => _scaleLabels.Length > 10 ? _scaleLabels[10] : "";
 
-    private double _currentPlotWidth = 0;
+    private double _currentPlotWidth;
 
     public void CapNhatDoRongBieuDo(double plotWidth)
     {
@@ -518,6 +359,135 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
         {
             item.RongBar = Math.Max(0, (double)(item.GiaTriNhapHang / MaxScaleValue) * plotWidth);
         }
+    }
+
+    // ============================================================
+    // CHI TIẾT PHIẾU NHẬP THEO NHÀ CUNG CẤP
+    // ============================================================
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DangXemChiTiet))]
+    [NotifyPropertyChangedFor(nameof(CoChiTietPhieuNhap))]
+    [NotifyPropertyChangedFor(nameof(ChiTietTieuDe))]
+    [NotifyPropertyChangedFor(nameof(ChiTietPhuDe))]
+    private BaoCaoNhaCungCapDong? nhaCungCapChiTiet;
+
+    public ObservableCollection<BaoCaoNhaCungCapPhieuNhap> ChiTietPhieuNhapList { get; } = new();
+
+    [ObservableProperty] private string chiTietSearch = string.Empty;
+    [ObservableProperty] private int chiTietPage = 1;
+    [ObservableProperty] private int chiTietPageSize = 20;
+
+    /// <summary>Có đang mở bảng chi tiết phiếu nhập của một nhà cung cấp hay không.</summary>
+    public bool DangXemChiTiet => NhaCungCapChiTiet is not null;
+
+    public string ChiTietTieuDe => NhaCungCapChiTiet is null
+        ? "Chi tiết phiếu nhập"
+        : $"Phiếu nhập của {NhaCungCapChiTiet.TenNhaCungCap}";
+
+    public string ChiTietPhuDe => NhaCungCapChiTiet is null
+        ? string.Empty
+        : $"{NhaCungCapChiTiet.MaNhaCungCap} • {KhoangHienThi}";
+
+    private List<BaoCaoNhaCungCapPhieuNhap> ChiTietDaLoc =>
+        string.IsNullOrWhiteSpace(ChiTietSearch)
+            ? _chiTietPhieuNhapAll
+            : _chiTietPhieuNhapAll.Where(x =>
+                    x.MaPhieuNhap.Contains(ChiTietSearch, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+    public int ChiTietTotalCount => ChiTietDaLoc.Count;
+    public int ChiTietTotalPages => ChiTietTotalCount <= 0 ? 0 : (int)Math.Ceiling(ChiTietTotalCount / (double)ChiTietPageSize);
+    public bool CanChiTietTrangTruoc => ChiTietPage > 1;
+    public bool CanChiTietTrangSau => ChiTietPage < ChiTietTotalPages;
+    public string ChiTietTrangText => ChiTietTotalPages <= 0 ? "0/0" : $"{ChiTietPage}/{ChiTietTotalPages}";
+
+    public bool CoChiTietPhieuNhap => NhaCungCapChiTiet is not null && ChiTietDaLoc.Count > 0;
+
+    [RelayCommand]
+    private async Task XemChiTietNhaCungCapAsync(BaoCaoNhaCungCapDong? dong)
+    {
+        if (dong is null)
+            return;
+
+        try
+        {
+            NhaCungCapChiTiet = dong;
+            _chiTietPhieuNhapAll.Clear();
+            _chiTietPhieuNhapAll.AddRange(
+                await _service.TaiPhieuNhapCuaNhaCungCapAsync(dong.Id, TuNgay, DenNgay, default));
+
+            ChiTietSearch = string.Empty;
+            ChiTietPage = 1;
+            CapNhatChiTietHienThi();
+            OnPropertyChanged(nameof(CoChiTietPhieuNhap));
+        }
+        catch (Exception ex)
+        {
+            ThongBaoLoi = "Không tải được chi tiết phiếu nhập: " + ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void DongChiTiet() => DongChiTietNoiBo();
+
+    private void DongChiTietNoiBo()
+    {
+        NhaCungCapChiTiet = null;
+        _chiTietPhieuNhapAll.Clear();
+        ChiTietSearch = string.Empty;
+        ChiTietPage = 1;
+        ChiTietPhieuNhapList.Clear();
+
+        OnPropertyChanged(nameof(CoChiTietPhieuNhap));
+        ThongBaoChiTietPhanTrang();
+    }
+
+    partial void OnChiTietSearchChanged(string value)
+    {
+        if (ChiTietPage != 1)
+            ChiTietPage = 1;
+        else
+            CapNhatChiTietHienThi();
+
+        OnPropertyChanged(nameof(CoChiTietPhieuNhap));
+    }
+
+    partial void OnChiTietPageChanged(int value) => CapNhatChiTietHienThi();
+
+    private void CapNhatChiTietHienThi()
+    {
+        var daLoc = ChiTietDaLoc;
+        var trang = Math.Max(1, ChiTietPage);
+        ChiTietPhieuNhapList.Clear();
+
+        foreach (var row in daLoc.Skip((trang - 1) * ChiTietPageSize).Take(ChiTietPageSize))
+            ChiTietPhieuNhapList.Add(row);
+
+        ThongBaoChiTietPhanTrang();
+    }
+
+    private void ThongBaoChiTietPhanTrang()
+    {
+        OnPropertyChanged(nameof(ChiTietTotalCount));
+        OnPropertyChanged(nameof(ChiTietTotalPages));
+        OnPropertyChanged(nameof(CanChiTietTrangTruoc));
+        OnPropertyChanged(nameof(CanChiTietTrangSau));
+        OnPropertyChanged(nameof(ChiTietTrangText));
+    }
+
+    [RelayCommand]
+    private void ChiTietTrangTruoc()
+    {
+        if (ChiTietPage > 1)
+            ChiTietPage--;
+    }
+
+    [RelayCommand]
+    private void ChiTietTrangSau()
+    {
+        if (ChiTietPage < ChiTietTotalPages)
+            ChiTietPage++;
     }
 
     // ============================================================
@@ -557,6 +527,10 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
                     OnPropertyChanged($"ScaleMark{i}");
             }
 
+            BieuDoItems.Clear();
+            foreach (var item in res.BieuDo)
+                BieuDoItems.Add(item);
+
             TopItems.Clear();
             foreach (var item in res.Top)
             {
@@ -575,6 +549,7 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
             foreach (var m in res.ScaleMarks)
                 ScaleMarks.Add(m);
 
+            CoBieuDo = BieuDoItems.Count > 0;
             CoTop = TopItems.Count > 0;
             CoDongTrang = DongTrangs.Count > 0;
 
@@ -599,6 +574,63 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
                 OnPropertyChanged(nameof(CanTrangTruoc));
                 OnPropertyChanged(nameof(CanTrangSau));
             }
+        }
+    }
+
+    // ============================================================
+    // XUẤT EXCEL
+    // ============================================================
+
+    /// <summary>
+    /// Xuất Excel toàn bộ nhà cung cấp khớp bộ lọc hiện tại (không phụ thuộc trang
+    /// đang xem): truy vấn lại với cỡ trang bằng tổng số bản ghi.
+    /// </summary>
+    [RelayCommand]
+    private async Task XuatExcelAsync()
+    {
+        try
+        {
+            var cuaSo = Avalonia.Application.Current?.ApplicationLifetime
+                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt
+                ? lt.MainWindow
+                : null;
+
+            if (cuaSo is null)
+                return;
+
+            var soDong = Math.Max(1, TongSoBanGhi);
+
+            var duLieu = await _service.TaiDuLieuAsync(
+                TuNgay,
+                DenNgay,
+                TimKiem,
+                SapXepKho,
+                SapXepTang,
+                1,
+                soDong,
+                default);
+
+            using var wb = BaoCaoNhaCungCapExcel.TaoWorkbook(duLieu);
+
+            var file = await cuaSo.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+            {
+                Title = "Xuất Excel báo cáo nhà cung cấp",
+                FileTypeChoices = new[]
+                {
+                    new Avalonia.Platform.Storage.FilePickerFileType("Excel") { Patterns = new[] { "*.xlsx" } }
+                },
+                SuggestedFileName = duLieu.TongHop.TenFileXuat()
+            });
+
+            if (file is not null)
+            {
+                await using var stream = await file.OpenWriteAsync();
+                wb.SaveAs(stream);
+            }
+        }
+        catch (Exception ex)
+        {
+            ThongBaoLoi = "Không xuất được file Excel: " + ex.Message;
         }
     }
 }

@@ -33,10 +33,19 @@ public sealed partial class DashboardViewModel : ObservableObject
     // ============================================================
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(KhoangThoiGianHienThi))]
+    [NotifyPropertyChangedFor(nameof(TieuDeTheDoanhThu))]
+    [NotifyPropertyChangedFor(nameof(PhuDeTheDoanhThu))]
+    [NotifyPropertyChangedFor(nameof(PhuDeTheSoHoaDon))]
+    [NotifyPropertyChangedFor(nameof(PhuDeTheDaThu))]
+    [NotifyPropertyChangedFor(nameof(PhuDeTheConNo))]
+    [NotifyPropertyChangedFor(nameof(PhuDeTheSoDonHang))]
     private string khoangThoiGian = TongQuanKhoangThoiGian.ThangNay;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ChieuDoanhThuHienThi))]
+    [NotifyPropertyChangedFor(nameof(TieuDeBieuDo))]
+    [NotifyPropertyChangedFor(nameof(MoTaChieuDoanhThu))]
     private string chieuDoanhThu = TongQuanChieuDoanhThu.TheoNgay;
 
     [ObservableProperty]
@@ -58,6 +67,81 @@ public sealed partial class DashboardViewModel : ObservableObject
     public string ChieuDoanhThuHienThi => TongQuanChieuDoanhThu.TenHienThi(ChieuDoanhThu);
 
     public string XepHangTopHangHienThi => TongQuanXepHang.TenHienThi(XepHangTopHang);
+
+    public string TieuDeTheDoanhThu => KhoangThoiGian switch
+    {
+        TongQuanKhoangThoiGian.HomNay => "DOANH THU HÔM NAY",
+        TongQuanKhoangThoiGian.BayNgay => "DOANH THU 7 NGÀY",
+        TongQuanKhoangThoiGian.ThangNay => "DOANH THU THÁNG NÀY",
+        TongQuanKhoangThoiGian.ThangTruoc => "DOANH THU THÁNG TRƯỚC",
+        TongQuanKhoangThoiGian.NamNay => "DOANH THU NĂM NAY",
+        TongQuanKhoangThoiGian.TuDien => "DOANH THU KỲ CHỌN",
+        _ => "DOANH THU"
+    };
+
+    public string PhuDeTheDoanhThu => KhoangThoiGian switch
+    {
+        TongQuanKhoangThoiGian.HomNay => "Tổng khách phải trả hôm nay",
+        TongQuanKhoangThoiGian.BayNgay => "Tổng khách phải trả 7 ngày qua",
+        TongQuanKhoangThoiGian.ThangNay => "Tổng khách phải trả tháng này",
+        TongQuanKhoangThoiGian.ThangTruoc => "Tổng khách phải trả tháng trước",
+        TongQuanKhoangThoiGian.NamNay => "Tổng khách phải trả năm nay",
+        _ => "Tổng khách phải trả trong kỳ"
+    };
+
+    public string PhuDeTheSoHoaDon => KhoangThoiGian switch
+    {
+        TongQuanKhoangThoiGian.HomNay => "Hóa đơn hoàn thành hôm nay",
+        TongQuanKhoangThoiGian.BayNgay => "Hóa đơn hoàn thành 7 ngày qua",
+        TongQuanKhoangThoiGian.ThangNay => "Hóa đơn hoàn thành tháng này",
+        TongQuanKhoangThoiGian.ThangTruoc => "Hóa đơn hoàn thành tháng trước",
+        TongQuanKhoangThoiGian.NamNay => "Hóa đơn hoàn thành năm nay",
+        _ => "Hóa đơn hoàn thành trong kỳ"
+    };
+
+    public string PhuDeTheDaThu => KhoangThoiGian switch
+    {
+        TongQuanKhoangThoiGian.HomNay => "Tiền đã thu trong ngày",
+        TongQuanKhoangThoiGian.BayNgay => "Tiền đã thu trong 7 ngày",
+        TongQuanKhoangThoiGian.ThangNay => "Tiền đã thu trong tháng này",
+        TongQuanKhoangThoiGian.ThangTruoc => "Tiền đã thu trong tháng trước",
+        TongQuanKhoangThoiGian.NamNay => "Tiền đã thu trong năm nay",
+        _ => "Tiền đã thu trong kỳ"
+    };
+
+    public string PhuDeTheConNo => KhoangThoiGian switch
+    {
+        TongQuanKhoangThoiGian.HomNay => "Khách còn nợ hôm nay",
+        TongQuanKhoangThoiGian.BayNgay => "Khách còn nợ 7 ngày qua",
+        TongQuanKhoangThoiGian.ThangNay => "Khách còn nợ tháng này",
+        TongQuanKhoangThoiGian.ThangTruoc => "Khách còn nợ tháng trước",
+        TongQuanKhoangThoiGian.NamNay => "Khách còn nợ năm nay",
+        _ => "Khách còn nợ trong kỳ"
+    };
+
+    public string PhuDeTheSoDonHang => KhoangThoiGian switch
+    {
+        TongQuanKhoangThoiGian.HomNay => "Lượt bán trong ngày",
+        TongQuanKhoangThoiGian.BayNgay => "Lượt bán trong 7 ngày",
+        TongQuanKhoangThoiGian.ThangNay => "Lượt bán trong tháng này",
+        TongQuanKhoangThoiGian.ThangTruoc => "Lượt bán trong tháng trước",
+        TongQuanKhoangThoiGian.NamNay => "Lượt bán trong năm nay",
+        _ => "Lượt bán trong kỳ"
+    };
+
+    public string TieuDeBieuDo => ChieuDoanhThu switch
+    {
+        TongQuanChieuDoanhThu.TheoGio => "DOANH THU THEO KHUNG GIỜ TRONG NGÀY (00:00 – 23:00)",
+        TongQuanChieuDoanhThu.TheoThu => "DOANH THU THEO THỨ TRONG TUẦN (THỨ 2 – CHỦ NHẬT)",
+        _ => "DOANH THU THEO TỪNG NGÀY TRONG KỲ"
+    };
+
+    public string MoTaChieuDoanhThu => ChieuDoanhThu switch
+    {
+        TongQuanChieuDoanhThu.TheoGio => "Tổng hợp theo 24 khung giờ trong ngày để nhận diện giờ cao điểm bán hàng",
+        TongQuanChieuDoanhThu.TheoThu => "So sánh doanh thu giữa các thứ trong tuần để nắm bắt ngày đông khách nhất",
+        _ => "Theo dõi biến động doanh thu qua từng ngày trong khoảng thời gian đang chọn"
+    };
 
     public bool CoTheDungNgayTuChon => DungKhoangTuDien;
 
@@ -95,7 +179,7 @@ public sealed partial class DashboardViewModel : ObservableObject
     private string thoiGianHienThi = "";
 
     // ============================================================
-    // 5 THẺ KẾT QUẢ BÁN HÀNG HÔM NAY
+    // 5 THẺ KẾT QUẢ BÁN HÀNG THEO KỲ ĐANG CHỌN
     // ============================================================
 
     [ObservableProperty]
@@ -114,7 +198,7 @@ public sealed partial class DashboardViewModel : ObservableObject
     private string soDonHangHomNayHienThi = "0";
 
     // ============================================================
-    // THẺ DOANH THU + BIỂU ĐỒ
+    // THẺ DOANH THU + BIỂU ĐỒ + CHỈ SỐ PHÂN TÍCH GÓC NHÌN
     // ============================================================
 
     [ObservableProperty]
@@ -122,6 +206,33 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     [ObservableProperty]
     private string tongSoHoaDonKyChonHienThi = "0 hóa đơn";
+
+    [ObservableProperty]
+    private string tieuDeDiemCaoNhat = "MỐC CAO ĐIỂM NHẤT";
+
+    [ObservableProperty]
+    private string giaTriDiemCaoNhat = "Chưa có phát sinh";
+
+    [ObservableProperty]
+    private string phuDeDiemCaoNhat = "0 đ • 0 hóa đơn";
+
+    [ObservableProperty]
+    private string tieuDeTrungBinhChieu = "DOANH THU TRUNG BÌNH";
+
+    [ObservableProperty]
+    private string giaTriTrungBinhChieu = "0 đ";
+
+    [ObservableProperty]
+    private string phuDeTrungBinhChieu = "Trung bình theo kỳ";
+
+    [ObservableProperty]
+    private string tieuDeMatDoChieu = "MẬT ĐỘ GIAO DỊCH";
+
+    [ObservableProperty]
+    private string giaTriMatDoChieu = "0";
+
+    [ObservableProperty]
+    private string phuDeMatDoChieu = "Chưa có đơn hoàn thành";
 
     public ObservableCollection<TongQuanDiemDoanhThu> BieuDoDoanhThu { get; } = new();
 
@@ -324,6 +435,18 @@ public sealed partial class DashboardViewModel : ObservableObject
 
         TongDoanhThuKyChonHienThi = duLieu.TongDoanhThuKyChonHienThi;
         TongSoHoaDonKyChonHienThi = duLieu.TongSoHoaDonKyChonHienThi;
+
+        TieuDeDiemCaoNhat = duLieu.TieuDeDiemCaoNhat;
+        GiaTriDiemCaoNhat = duLieu.GiaTriDiemCaoNhat;
+        PhuDeDiemCaoNhat = duLieu.PhuDeDiemCaoNhat;
+
+        TieuDeTrungBinhChieu = duLieu.TieuDeTrungBinhChieu;
+        GiaTriTrungBinhChieu = duLieu.GiaTriTrungBinhChieu;
+        PhuDeTrungBinhChieu = duLieu.PhuDeTrungBinhChieu;
+
+        TieuDeMatDoChieu = duLieu.TieuDeMatDoChieu;
+        GiaTriMatDoChieu = duLieu.GiaTriMatDoChieu;
+        PhuDeMatDoChieu = duLieu.PhuDeMatDoChieu;
 
         DoDanhSachMoi(BieuDoDoanhThu, duLieu.BieuDoDoanhThu);
         DoDanhSachMoi(TopHangBanChay, duLieu.TopHangBanChay);

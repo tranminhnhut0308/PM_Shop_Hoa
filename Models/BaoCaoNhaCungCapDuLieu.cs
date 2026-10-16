@@ -33,6 +33,13 @@ public sealed class BaoCaoNhaCungCapTongHop
     /// <summary>Tổng công nợ hiện tại với các nhà cung cấp.</summary>
     public decimal CongNo { get; set; }
 
+    /// <summary>Giá trị nhập trung bình mỗi phiếu: Giá trị nhập hàng / số phiếu nhập.</summary>
+    public decimal GiaTriNhapTrungBinh =>
+        SoPhieuNhap <= 0 ? 0m : GiaTriNhapHang / SoPhieuNhap;
+
+    public string GiaTriNhapTrungBinhHienThi =>
+        GiaTriNhapTrungBinh.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+
     public string TongNhaCungCapHienThi =>
         TongNhaCungCap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
 
@@ -152,6 +159,82 @@ public sealed class BaoCaoNhaCungCapDong
 }
 
 /// <summary>
+/// Một điểm thời gian trên biểu đồ "Nhập hàng theo thời gian".
+/// Khoảng ≤ 1 ngày chia theo giờ, dài hơn chia theo ngày.
+/// </summary>
+public sealed class BaoCaoNhaCungCapDiemThoiGian
+{
+    public DateTime ThoiGian { get; set; }
+    public string NhanXet { get; set; } = string.Empty;
+
+    /// <summary>Tổng tiền nhập hàng trong điểm thời gian này.</summary>
+    public decimal TienNhap { get; set; }
+
+    /// <summary>Tổng tiền hàng đã trả lại nhà cung cấp trong điểm thời gian này.</summary>
+    public decimal TienTraHang { get; set; }
+
+    /// <summary>Giá trị nhập ròng: TienNhap - TienTraHang.</summary>
+    public decimal GiaTriNhap => TienNhap - TienTraHang;
+
+    public int SoPhieuNhap { get; set; }
+
+    /// <summary>Tỉ lệ chiều cao cột so với điểm cao nhất trong khoảng (0..100).</summary>
+    public double TyLeChieuCao { get; set; }
+
+    /// <summary>Bề rộng cột (0..100) — mọi cột trong biểu đồ rộng đều nhau.</summary>
+    public double TyLeBeRong { get; set; } = 100;
+
+    public const double ChieuCaoToiDa = 190;
+    public const double BeRongToiDa = 72;
+
+    /// <summary>Chiều cao cột tính bằng pixel để XAML bind thẳng.</summary>
+    public double ChieuCaoCot => GiaTriNhap <= 0 ? 0 : Math.Max(3, TyLeChieuCao / 100d * ChieuCaoToiDa);
+
+    /// <summary>Bề rộng cột (px); nhiều điểm thì cuộn ngang trong vùng biểu đồ.</summary>
+    public double BeRongCot => Math.Max(20, Math.Min(BeRongToiDa, TyLeBeRong / 100d * BeRongToiDa));
+
+    public string TienNhapHienThi => TienNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string TienTraHangHienThi => TienTraHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string GiaTriNhapHienThi => GiaTriNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string SoPhieuNhapHienThi => SoPhieuNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " phiếu";
+
+    public string NgayDayDu => ThoiGian.ToString(NhanXet.Contains(':') ? "dd/MM/yyyy HH:00" : "dd/MM/yyyy");
+
+    public string ToolTip =>
+        $"{NgayDayDu}\n" +
+        $"Tổng tiền nhập: {TienNhapHienThi}\n" +
+        $"Tiền trả hàng: {TienTraHangHienThi}\n" +
+        $"Giá trị nhập ròng: {GiaTriNhapHienThi}\n" +
+        $"Số phiếu nhập: {SoPhieuNhapHienThi}";
+}
+
+/// <summary>
+/// Một phiếu nhập hàng của nhà cung cấp đang xem chi tiết trong báo cáo.
+/// </summary>
+public sealed class BaoCaoNhaCungCapPhieuNhap
+{
+    public uint Id { get; set; }
+    public string MaPhieuNhap { get; set; } = string.Empty;
+    public DateTime ThoiGianNhap { get; set; }
+    public decimal TongTienNhap { get; set; }
+    public decimal DaThanhToan { get; set; }
+    public decimal ConNo { get; set; }
+    public string TrangThai { get; set; } = string.Empty;
+
+    public string ThoiGianNhapHienThi => ThoiGianNhap.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+    public string TongTienNhapHienThi => TongTienNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string DaThanhToanHienThi => DaThanhToan.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string ConNoHienThi => ConNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+
+    public string TrangThaiHienThi => TrangThai switch
+    {
+        "LUU_TAM" => "Lưu tạm",
+        "HUY" => "Đã hủy",
+        _ => "Đã nhập hàng"
+    };
+}
+
+/// <summary>
 /// Mốc chia trên trục hoành X của biểu đồ (ví dụ: 0, 3 tr, 6 tr, 9 tr...).
 /// </summary>
 public sealed class BaoCaoNhaCungCapScaleMark
@@ -168,6 +251,7 @@ public sealed class BaoCaoNhaCungCapDuLieu
 {
     public BaoCaoNhaCungCapTongHop TongHop { get; set; } = new();
     public List<BaoCaoNhaCungCapTop> Top { get; set; } = new();
+    public List<BaoCaoNhaCungCapDiemThoiGian> BieuDo { get; set; } = new();
     public List<BaoCaoNhaCungCapDong> DongTrang { get; set; } = new();
     public List<BaoCaoNhaCungCapScaleMark> ScaleMarks { get; set; } = new();
     public string[] ScaleLabels { get; set; } = new string[11];
