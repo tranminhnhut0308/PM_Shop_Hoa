@@ -2065,18 +2065,27 @@ public partial class MainWindowViewModel : ObservableObject
         {
             var confirmed = await ShowConfirmationAsync(
                 "Xóa sản phẩm",
-                $"Bạn có chắc muốn xóa sản phẩm \"{product.TenSanPham}\" không?");
+                $"Bạn có chắc muốn xóa hàng hóa \"{product.TenSanPham}\" khỏi danh sách không?\n" +
+                "Sản phẩm đã phát sinh giao dịch sẽ được ẩn đi để giữ nguyên lịch sử hóa đơn, phiếu nhập và báo cáo.");
 
             if (!confirmed)
                 return;
 
-            await _db.XoaSanPhamAsync(product.Id);
+            var ketQua = await _db.XoaSanPhamAsync(product.Id);
+
             SanPhams.Remove(product);
-            StatusMessage = $"Đã xóa sản phẩm {product.MaSanPham}";
+            if (ProductTotalCount > 0)
+                ProductTotalCount--;
+            OnPropertyChanged(nameof(IsSanPhamListEmpty));
+
+            StatusMessage = ketQua == KetQuaXoaSanPham.DaXoa
+                ? $"Đã xóa hàng hóa {product.MaSanPham}"
+                : $"Đã ẩn hàng hóa {product.MaSanPham} khỏi danh sách (đã phát sinh giao dịch)";
         }
         catch (Exception ex)
         {
-            StatusMessage = "Không thể xóa sản phẩm: " + ex.Message;
+            SafeLog.WriteError("Xóa sản phẩm", ex);
+            StatusMessage = "Không thể xóa sản phẩm: " + SafeLog.Redact(ex.Message);
         }
     }
 

@@ -9,6 +9,19 @@ using ShopHoa.Models;
 
 namespace ShopHoa.Services;
 
+/// <summary>Kết quả xóa một sản phẩm: xóa hẳn khỏi database hoặc chỉ ẩn khỏi danh sách.</summary>
+public enum KetQuaXoaSanPham
+{
+    /// <summary>DELETE thành công: sản phẩm chưa từng phát sinh giao dịch nên được xóa vĩnh viễn.</summary>
+    DaXoa,
+
+    /// <summary>
+    /// Sản phẩm đã phát sinh giao dịch (hóa đơn, phiếu nhập, tồn kho...) nên không thể
+    /// xóa hẳn vì vướng khóa ngoại; đã chuyển sang trạng thái ẩn khỏi danh sách.
+    /// </summary>
+    DaAnKhoiDanhSach,
+}
+
 public sealed class DatabaseService
 {
     private readonly DatabaseConfigService _configService;
@@ -278,7 +291,11 @@ public sealed class DatabaseService
             "sp.ma_vach",
             "sp.ten_san_pham");
 
-        var whereSql = dieuKien.Length == 0 ? "" : "WHERE " + dieuKien;
+        // Luôn lọc bỏ sản phẩm đã ẩn khỏi danh sách (trang_thai = 0). Điều kiện này
+        // cũng áp cho câu COUNT nên tổng số bản ghi luôn khớp với danh sách hiển thị.
+        var whereSql = dieuKien.Length == 0
+            ? "WHERE sp.trang_thai = 1"
+            : "WHERE sp.trang_thai = 1 AND " + dieuKien;
 
         // Khớp chính xác mã hàng / mã vạch thì đưa lên đầu, tên hàng bắt đầu bằng
         // từ khóa thì kế sau, còn lại sắp theo tên hàng. Điều kiện này so sánh trên
@@ -1218,14 +1235,37 @@ public sealed class DatabaseService
         }
     }
 
-    public async Task XoaSanPhamAsync(uint productId)
+    /// <summary>
+    /// Xóa hàng hóa. Ưu tiên xóa hẳn khỏi database; nếu sản phẩm đã được tham chiếu
+    /// bởi hóa đơn / phiếu nhập / tồn kho (khóa ngoại chặn DELETE) thì chuyển sang
+    /// ẩn khỏi danh sách để giữ nguyên lịch sử bán hàng và báo cáo.
+    /// </summary>
+    public async Task<KetQuaXoaSanPham> XoaSanPhamAsync(uint productId)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsDelete, "Bạn không có quyền xóa hàng hóa.");
         await using var connection = await OpenAsync();
 
-        await connection.ExecuteAsync(
-            "DELETE FROM san_pham WHERE id = @Id;",
-            new { Id = productId });
+        try
+        {
+            await connection.ExecuteAsync(
+                "DELETE FROM san_pham WHERE id = @Id;",
+                new { Id = productId });
+
+            _ = LogSubAccountActivityAsync("Xóa hàng hóa", "SAN_PHAM", productId, null, $"Đã xóa sản phẩm (id={productId})");
+
+            return KetQuaXoaSanPham.DaXoa;
+        }
+        catch (MySqlException ex) when (ex.Number == 1451)
+        {
+            // 1451 = không xóa được dòng cha vì vướng khóa ngoại con (đã phát sinh giao dịch).
+            await connection.ExecuteAsync(
+                "UPDATE san_pham SET trang_thai = 0, ngay_cap_nhat = NOW() WHERE id = @Id;",
+                new { Id = productId });
+
+            _ = LogSubAccountActivityAsync("Ẩn hàng hóa", "SAN_PHAM", productId, null, $"Đã ẩn sản phẩm khỏi danh sách (id={productId})");
+
+            return KetQuaXoaSanPham.DaAnKhoiDanhSach;
+        }
     }
 
     /// <summary>
