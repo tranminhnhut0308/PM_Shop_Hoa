@@ -3069,7 +3069,7 @@
               CornerRadius="12"
               Padding="14,10"
               BoxShadow="0 2 8 #080A352E">
-              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
                 <TextBox Classes="searchInput"
                   Watermark="🔍 Tìm theo mã hóa đơn hoặc tên khách hàng..."
                   Text="{Binding InvoiceSearch, Mode=TwoWay}"
@@ -3077,7 +3077,23 @@
                   VerticalContentAlignment="Center"
                   Padding="12,0" />
 
-                <Button Grid.Column="1"
+                <!-- BỘ LỌC NGÀY -->
+                <StackPanel Grid.Column="1"
+                  Orientation="Horizontal"
+                  Spacing="6"
+                  VerticalAlignment="Center">
+                  <Button Classes="filterChip"
+                    Classes.active="{Binding IsInvoiceDateToday}"
+                    Content="Hôm nay"
+                    Command="{Binding SetInvoiceDateTodayCommand}"
+                    ToolTip.Tip="Lọc hóa đơn ngày hôm nay" />
+                  <DatePicker SelectedDate="{Binding InvoiceFilterDate, Mode=TwoWay}"
+                    Width="140"
+                    Height="38"
+                    ToolTip.Tip="Chọn ngày để lọc hóa đơn" />
+                </StackPanel>
+
+                <Button Grid.Column="2"
                   Classes="toolbar-primary"
                   Content="Tìm kiếm"
                   Height="38"
@@ -3085,7 +3101,7 @@
                   Command="{Binding SearchInvoicesCommand}" />
 
                 <!-- LỌC NHANH: TẤT CẢ / ĐÃ THANH TOÁN / CÒN NỢ -->
-                <StackPanel Grid.Column="2"
+                <StackPanel Grid.Column="3"
                   Orientation="Horizontal"
                   Spacing="6"
                   VerticalAlignment="Center">
@@ -6036,9 +6052,7 @@
           Padding="12"
           BoxShadow="0 2 8 #080A352E">
 
-          <Grid ColumnDefinitions="*,Auto,Auto"
-            ColumnSpacing="10">
-
+          <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
             <TextBox Name="BaoCaoPhieuNhapSearchBox"
               Classes="searchInput"
               Watermark="🔍 Tìm theo mã phiếu, mã NCC, tên NCC..."
@@ -6047,14 +6061,30 @@
               Padding="12,9"
               Margin="0" />
 
-            <Button Grid.Column="1"
+            <!-- BỘ LỌC NGÀY -->
+            <StackPanel Grid.Column="1"
+              Orientation="Horizontal"
+              Spacing="6"
+              VerticalAlignment="Center">
+              <Button Classes="filterChip"
+                Classes.active="{Binding IsBaoCaoPhieuNhapDateToday}"
+                Content="Hôm nay"
+                Command="{Binding SetBaoCaoPhieuNhapDateTodayCommand}"
+                ToolTip.Tip="Lọc phiếu nhập ngày hôm nay" />
+              <DatePicker SelectedDate="{Binding BaoCaoPhieuNhapFilterDate, Mode=TwoWay}"
+                Width="140"
+                Height="38"
+                ToolTip.Tip="Chọn ngày để lọc phiếu nhập" />
+            </StackPanel>
+
+            <Button Grid.Column="2"
               Classes="toolbar-primary"
               Content="🔍  Tìm kiếm"
               Command="{Binding TimKiemBaoCaoPhieuNhapCommand}"
               Margin="0" />
 
             <!-- BỘ LỌC TÌNH TRẠNG THANH TOÁN -->
-            <StackPanel Grid.Column="2"
+            <StackPanel Grid.Column="3"
               Orientation="Horizontal"
               Spacing="6"
               VerticalAlignment="Center">

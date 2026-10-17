@@ -4295,8 +4295,9 @@ public sealed class DatabaseService
     }
 
     public async Task<IReadOnlyList<HoaDon>> GetHoaDonAsync(
-        string? search = null,
-        string? trangThaiLoc = null)
+     string? search = null,
+     string? trangThaiLoc = null,
+     DateTime? ngayLoc = null)
     {
         await using var connection = await OpenAsync();
 
@@ -4334,17 +4335,23 @@ AND (
     OR (@Loc = 'PAID' AND hd.con_no <= 0)
     OR (@Loc = 'DEBT' AND hd.con_no > 0)
 )
+AND (
+    @Ngay IS NULL
+    OR DATE(hd.thoi_gian_ban) = DATE(@Ngay)
+)
 
 ORDER BY hd.thoi_gian_ban DESC
 LIMIT 500;
 """;
+
         return (
             await connection.QueryAsync<HoaDon>(
                 sql,
                 new
                 {
                     Search = search ?? "",
-                    Loc = (trangThaiLoc ?? "").Trim().ToUpperInvariant()
+                    Loc = (trangThaiLoc ?? "").Trim().ToUpperInvariant(),
+                    Ngay = ngayLoc?.Date   // chỉ lấy phần ngày, bỏ giờ
                 })
         ).AsList();
     }
@@ -7631,15 +7638,16 @@ LIMIT 500;
 
     /// <summary>
     /// Lấy danh sách phiếu nhập theo trang cho báo cáo.
-    /// Hỗ trợ tìm kiếm theo mã phiếu, mã NCC, tên NCC và lọc theo tình trạng thanh toán.
-    /// Chỉ đọc dữ liệu của trang hiện tại (LIMIT/OFFSET) kèm tổng số bản ghi,
-    /// không tải toàn bộ bảng lên giao diện.
+    /// Hỗ trợ tìm kiếm theo mã phiếu, mã NCC, tên NCC, lọc theo tình trạng thanh toán
+    /// và lọc theo một ngày nhập cụ thể (mặc định null = không lọc ngày).
+    /// Chỉ đọc dữ liệu của trang hiện tại (LIMIT/OFFSET) kèm tổng số bản ghi.
     /// </summary>
     public async Task<(IReadOnlyList<PhieuNhapHang> Items, int TongSoBanGhi)> GetPhieuNhapHangPagedAsync(
         string? search,
         int page,
         int pageSize,
-        string? tinhTrangThanhToan = null)
+        string? tinhTrangThanhToan = null,
+        DateTime? ngayLoc = null)
     {
         if (page < 1)
             page = 1;
@@ -7662,47 +7670,54 @@ LIMIT 500;
             _ => ""
         };
 
+        // Lọc đúng 1 ngày (bỏ phần giờ). Null = không lọc ngày.
+        var dateCondition = ngayLoc.HasValue
+            ? "AND DATE(p.thoi_gian_nhap) = DATE(@Ngay)"
+            : "";
+
         var searchCondition = @"(@Search = ''
-            OR p.ma_phieu_nhap LIKE CONCAT('%', @Search, '%')
-            OR ncc.ma_nha_cung_cap LIKE CONCAT('%', @Search, '%')
-            OR ncc.ten_nha_cung_cap LIKE CONCAT('%', @Search, '%'))";
+        OR p.ma_phieu_nhap LIKE CONCAT('%', @Search, '%')
+        OR ncc.ma_nha_cung_cap LIKE CONCAT('%', @Search, '%')
+        OR ncc.ten_nha_cung_cap LIKE CONCAT('%', @Search, '%'))";
 
         var countSql = $"""
-        SELECT COUNT(*)
-        FROM phieu_nhap_hang p
-        LEFT JOIN nha_cung_cap ncc
-            ON ncc.id = p.nha_cung_cap_id
-        WHERE {searchCondition}
-          {paymentCondition};
-        """;
+    SELECT COUNT(*)
+    FROM phieu_nhap_hang p
+    LEFT JOIN nha_cung_cap ncc
+        ON ncc.id = p.nha_cung_cap_id
+    WHERE {searchCondition}
+      {paymentCondition}
+      {dateCondition};
+    """;
 
         var pageSql = $"""
-        SELECT
-            p.id AS Id,
-            p.ma_phieu_nhap AS MaPhieuNhap,
-            p.nha_cung_cap_id AS NhaCungCapId,
-            ncc.ma_nha_cung_cap AS MaNhaCungCap,
-            ncc.ten_nha_cung_cap AS TenNhaCungCap,
-            p.nguoi_nhap_id AS NguoiNhapId,
-            nd.ho_ten AS TenNhanVien,
-            p.thoi_gian_nhap AS ThoiGianNhap,
-            p.tong_tien_hang AS TongTienHang,
-            p.chi_phi_khac AS ChiPhiKhac,
-            p.tong_tien_nhap AS TongTienNhap,
-            p.da_thanh_toan AS DaThanhToan,
-            p.con_no AS ConNo,
-            p.trang_thai AS TrangThai,
-            p.ghi_chu AS GhiChu{extraSelect}
-        FROM phieu_nhap_hang p
-        LEFT JOIN nha_cung_cap ncc
-            ON ncc.id = p.nha_cung_cap_id
-        LEFT JOIN nguoi_dung nd
-            ON nd.id = p.nguoi_nhap_id
-        WHERE {searchCondition}
-          {paymentCondition}
-        ORDER BY p.thoi_gian_nhap DESC, p.id DESC
-        LIMIT @PageSize OFFSET @Offset;
-        """;
+    SELECT
+        p.id AS Id,
+        p.ma_phieu_nhap AS MaPhieuNhap,
+        p.nha_cung_cap_id AS NhaCungCapId,
+        ncc.ma_nha_cung_cap AS MaNhaCungCap,
+        ncc.ten_nha_cung_cap AS TenNhaCungCap,
+        p.nguoi_nhap_id AS NguoiNhapId,
+        nd.ho_ten AS TenNhanVien,
+        p.thoi_gian_nhap AS ThoiGianNhap,
+        p.tong_tien_hang AS TongTienHang,
+        p.chi_phi_khac AS ChiPhiKhac,
+        p.tong_tien_nhap AS TongTienNhap,
+        p.da_thanh_toan AS DaThanhToan,
+        p.con_no AS ConNo,
+        p.trang_thai AS TrangThai,
+        p.ghi_chu AS GhiChu{extraSelect}
+    FROM phieu_nhap_hang p
+    LEFT JOIN nha_cung_cap ncc
+        ON ncc.id = p.nha_cung_cap_id
+    LEFT JOIN nguoi_dung nd
+        ON nd.id = p.nguoi_nhap_id
+    WHERE {searchCondition}
+      {paymentCondition}
+      {dateCondition}
+    ORDER BY p.thoi_gian_nhap DESC, p.id DESC
+    LIMIT @PageSize OFFSET @Offset;
+    """;
 
         await using var connection = await OpenAsync();
 
@@ -7710,7 +7725,8 @@ LIMIT 500;
         {
             Search = keyword,
             PageSize = pageSize,
-            Offset = offset
+            Offset = offset,
+            Ngay = ngayLoc?.Date
         };
 
         var tongSoBanGhi = Convert.ToInt32(

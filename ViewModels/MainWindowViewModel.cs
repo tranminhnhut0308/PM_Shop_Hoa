@@ -2911,24 +2911,30 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             HoaDons.Clear();
-            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, LocHoaDonHienTai))
+            var ngay = InvoiceFilterDate?.Date;   // null = không lọc ngày (nếu sau này muốn)
+            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, LocHoaDonHienTai, InvoiceFilterDate?.Date))
                 HoaDons.Add(item);
             StatusMessage = $"Tìm thấy {HoaDons.Count} hóa đơn";
         }
-        catch (Exception ex) { StatusMessage = ex.Message; }
+        catch (Exception ex)
+        {
+            StatusMessage = ex.Message;
+        }
     }
+
     [RelayCommand]
     private async Task ClearInvoiceSearchAsync()
     {
         InvoiceSearch = "";
+        // Giữ nguyên ngày đang chọn; nếu muốn về hôm nay thì bỏ comment dòng dưới:
+        // InvoiceFilterDate = DateTimeOffset.Now.Date;
 
         try
         {
             HoaDons.Clear();
-
-            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, LocHoaDonHienTai))
+            var ngay = InvoiceFilterDate?.Date;
+            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, LocHoaDonHienTai, ngay))
                 HoaDons.Add(item);
-
             StatusMessage = $"Đã tải {HoaDons.Count} hóa đơn";
         }
         catch (Exception ex)
@@ -2936,6 +2942,7 @@ public partial class MainWindowViewModel : ObservableObject
             StatusMessage = "Không thể tải hóa đơn: " + ex.Message;
         }
     }
+
     [RelayCommand]
     private async Task ThemNhaCungCapAsync()
     {
@@ -3885,7 +3892,8 @@ public partial class MainWindowViewModel : ObservableObject
                 BaoCaoPhieuNhapSearch,
                 page,
                 BaoCaoPhieuNhapPageSize,
-                BaoCaoPhieuNhapLocThanhToan);
+                BaoCaoPhieuNhapLocThanhToan,
+                BaoCaoPhieuNhapFilterDate?.Date);
 
             if (version != _baoCaoPhieuNhapLoadVersion)
                 return;
@@ -3962,7 +3970,8 @@ public partial class MainWindowViewModel : ObservableObject
                 BaoCaoPhieuNhapSearch,
                 1,
                 soDong,
-                BaoCaoPhieuNhapLocThanhToan);
+                BaoCaoPhieuNhapLocThanhToan,
+                BaoCaoPhieuNhapFilterDate?.Date);
 
             using var wb = BaoCaoPhieuNhapExcel.TaoWorkbook(items, DateTime.Now);
 
@@ -5874,6 +5883,53 @@ public partial class MainWindowViewModel : ObservableObject
 
         await ShowMessageAsync("Thông báo", message);
         return false;
+    }
+
+    private DateTimeOffset? _invoiceFilterDate = DateTimeOffset.Now.Date;
+    public DateTimeOffset? InvoiceFilterDate
+    {
+        get => _invoiceFilterDate;
+        set
+        {
+            if (SetProperty(ref _invoiceFilterDate, value?.Date))
+            {
+                OnPropertyChanged(nameof(IsInvoiceDateToday));
+                // Đổi ngày → tìm lại luôn
+                _ = SearchInvoicesAsync();
+            }
+        }
+    }
+
+    public bool IsInvoiceDateToday =>
+        InvoiceFilterDate?.Date == DateTime.Today;
+
+    [RelayCommand]
+    private void SetInvoiceDateToday()
+    {
+        InvoiceFilterDate = DateTimeOffset.Now.Date;
+    }
+    private DateTimeOffset? _baoCaoPhieuNhapFilterDate = DateTimeOffset.Now.Date;
+    public DateTimeOffset? BaoCaoPhieuNhapFilterDate
+    {
+        get => _baoCaoPhieuNhapFilterDate;
+        set
+        {
+            if (SetProperty(ref _baoCaoPhieuNhapFilterDate, value?.Date))
+            {
+                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateToday));
+                BaoCaoPhieuNhapPage = 1;
+                _ = LoadBaoCaoPhieuNhapAsync();
+            }
+        }
+    }
+
+    public bool IsBaoCaoPhieuNhapDateToday =>
+        BaoCaoPhieuNhapFilterDate?.Date == DateTime.Today;
+
+    [RelayCommand]
+    private void SetBaoCaoPhieuNhapDateToday()
+    {
+        BaoCaoPhieuNhapFilterDate = DateTimeOffset.Now.Date;
     }
 
 }
