@@ -4517,9 +4517,10 @@ LIMIT 500;
                 throw new InvalidOperationException(
                     $"Sản phẩm \"{item.SanPham.TenSanPham}\" chưa được lưu vào hệ thống nên không thể bán.");
 
-            if (item.SoLuong <= 0)
+            if (item.SoLuong > item.SanPham.TonKho)
                 throw new InvalidOperationException(
-                    $"Số lượng của sản phẩm \"{item.SanPham.TenSanPham}\" phải lớn hơn 0.");
+                    $"Sản phẩm \"{item.SanPham.TenSanPham}\" chỉ còn tồn kho {item.SanPham.TonKho:N0}, " +
+                    $"không thể bán {item.SoLuong:N0}.");
 
             if (item.SanPham.GiaBan <= 0)
                 throw new InvalidOperationException(
@@ -4698,7 +4699,12 @@ LIMIT 500;
                             KhachHangId = customer?.Id,
                             NguoiBanId = userId,
                             SoDienThoai = BlankToNull(string.IsNullOrWhiteSpace(soDienThoai) ? customer?.SoDienThoai : soDienThoai),
-                            DiaChi = BlankToNull(string.IsNullOrWhiteSpace(diaChi) ? customer?.DiaChi : diaChi),
+                            // Ưu tiên địa chỉ mà màn hình bán hàng truyền vào (đã ghép đầy đủ).
+                            // Nếu trống thì mới fallback về địa chỉ chi tiết của khách hàng.
+                            DiaChi = BlankToNull(
+                                    !string.IsNullOrWhiteSpace(diaChi)
+                                        ? diaChi
+                                        : customer?.DiaChi),
                             InKemThongTin = inKemThongTin ? 1 : 0,
                             ThoiGianBan = now,
 

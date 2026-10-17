@@ -1099,4 +1099,31 @@ public partial class MainWindow : Window
             }
         }
     }
+
+    private void OnCartQuantityKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || sender is not TextBox tb)
+            return;
+
+        // Rời focus → LostFocus sẽ chạy và sửa chữ trên ô
+        if (tb.Parent is Control parent)
+            parent.Focus();
+
+        e.Handled = true;
+    }
+
+    private void OnCartQuantityLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox tb)
+            return;
+
+        if (tb.DataContext is not SaleCartItem item)
+            return;
+
+        // Ép chữ trên ô = số thật trong model (đã clamp)
+        var v = item.SoLuong;
+        tb.Text = v == Math.Truncate(v)
+            ? ((long)v).ToString()
+            : v.ToString("0.##");
+    }
 }
