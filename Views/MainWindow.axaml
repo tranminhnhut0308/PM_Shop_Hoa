@@ -2060,7 +2060,7 @@
               <ScrollViewer HorizontalScrollBarVisibility="Auto"
                 VerticalScrollBarVisibility="Auto">
 
-                <Grid MinWidth="1450"
+                <Grid MinWidth="1540"
                   RowDefinitions="Auto,*">
 
                   <!-- HEADER -->
@@ -2070,7 +2070,7 @@
                     BorderThickness="0,0,0,1"
                     Padding="8,0">
 
-                    <Grid ColumnDefinitions="42,150,260,120,120,120,120,120,170,130"
+                    <Grid ColumnDefinitions="42,150,260,120,120,120,120,120,170,130,90"
                       Height="42">
 
                       <TextBlock Grid.Column="0"
@@ -2139,6 +2139,14 @@
                         FontWeight="SemiBold"
                         Foreground="#344054"
                         VerticalAlignment="Center" />
+
+                      <TextBlock Grid.Column="10"
+                        Text="Thao tác"
+                        FontWeight="SemiBold"
+                        Foreground="#344054"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).CanDeleteProduct}" />
                     </Grid>
                   </Border>
 
@@ -2155,7 +2163,7 @@
                           Padding="8,0"
                           PointerPressed="OnProductRowPointerPressed">
 
-                          <Grid ColumnDefinitions="42,150,260,120,120,120,120,120,170,130"
+                          <Grid ColumnDefinitions="42,150,260,120,120,120,120,120,170,130,90"
                             Height="56">
 
                             <!-- ẢNH -->
@@ -2308,6 +2316,19 @@
                               FontSize="13"
                               VerticalAlignment="Center"
                               TextTrimming="CharacterEllipsis" />
+
+                            <!-- THAO TÁC: XÓA HÀNG HÓA KHỎI DANH SÁCH -->
+                            <Button Grid.Column="10"
+                              Classes="toolbar-action"
+                              Content="🗑 Xóa"
+                              Margin="0"
+                              Padding="8,6"
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Center"
+                              ToolTip.Tip="Xóa hàng hóa khỏi danh sách"
+                              Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).XoaSanPhamCommand}"
+                              CommandParameter="{Binding}"
+                              IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).CanDeleteProduct}" />
 
 
                           </Grid>
