@@ -3087,10 +3087,30 @@
                     Content="Hôm nay"
                     Command="{Binding SetInvoiceDateTodayCommand}"
                     ToolTip.Tip="Lọc hóa đơn ngày hôm nay" />
+                  <Button Classes="filterChip"
+                    Classes.active="{Binding IsInvoiceDateYesterday}"
+                    Content="Hôm qua"
+                    Command="{Binding SetInvoiceDateYesterdayCommand}"
+                    ToolTip.Tip="Lọc hóa đơn ngày hôm qua" />
+                  <Button Classes="filterChip"
+                    Content="◀"
+                    Padding="10,4"
+                    Command="{Binding InvoiceDatePrevDayCommand}"
+                    ToolTip.Tip="Quay về ngày trước đó" />
                   <DatePicker SelectedDate="{Binding InvoiceFilterDate, Mode=TwoWay}"
                     Width="140"
                     Height="38"
                     ToolTip.Tip="Chọn ngày để lọc hóa đơn" />
+                  <Button Classes="filterChip"
+                    Content="▶"
+                    Padding="10,4"
+                    Command="{Binding InvoiceDateNextDayCommand}"
+                    ToolTip.Tip="Chuyển đến ngày kế tiếp (tối đa hôm nay)" />
+                  <Button Classes="filterChip"
+                    Classes.active="{Binding IsInvoiceDateAll}"
+                    Content="Mọi ngày"
+                    Command="{Binding SetInvoiceDateAllCommand}"
+                    ToolTip.Tip="Không lọc theo ngày — xem hóa đơn của tất cả các ngày" />
                 </StackPanel>
 
                 <Button Grid.Column="2"
@@ -6071,10 +6091,30 @@
                 Content="Hôm nay"
                 Command="{Binding SetBaoCaoPhieuNhapDateTodayCommand}"
                 ToolTip.Tip="Lọc phiếu nhập ngày hôm nay" />
+              <Button Classes="filterChip"
+                Classes.active="{Binding IsBaoCaoPhieuNhapDateYesterday}"
+                Content="Hôm qua"
+                Command="{Binding SetBaoCaoPhieuNhapDateYesterdayCommand}"
+                ToolTip.Tip="Lọc phiếu nhập ngày hôm qua" />
+              <Button Classes="filterChip"
+                Content="◀"
+                Padding="10,4"
+                Command="{Binding BaoCaoPhieuNhapDatePrevDayCommand}"
+                ToolTip.Tip="Quay về ngày trước đó" />
               <DatePicker SelectedDate="{Binding BaoCaoPhieuNhapFilterDate, Mode=TwoWay}"
                 Width="140"
                 Height="38"
                 ToolTip.Tip="Chọn ngày để lọc phiếu nhập" />
+              <Button Classes="filterChip"
+                Content="▶"
+                Padding="10,4"
+                Command="{Binding BaoCaoPhieuNhapDateNextDayCommand}"
+                ToolTip.Tip="Chuyển đến ngày kế tiếp (tối đa hôm nay)" />
+              <Button Classes="filterChip"
+                Classes.active="{Binding IsBaoCaoPhieuNhapDateAll}"
+                Content="Mọi ngày"
+                Command="{Binding SetBaoCaoPhieuNhapDateAllCommand}"
+                ToolTip.Tip="Không lọc theo ngày — xem phiếu nhập của tất cả các ngày" />
             </StackPanel>
 
             <Button Grid.Column="2"

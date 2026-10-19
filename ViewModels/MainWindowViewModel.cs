@@ -1613,7 +1613,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         try
         {
-            var invoices = await _db.GetHoaDonAsync(InvoiceSearch, LocHoaDonHienTai);
+            var invoices = await _db.GetHoaDonAsync(InvoiceSearch, LocHoaDonHienTai, InvoiceFilterDate?.Date);
 
             HoaDons.Clear();
 
@@ -5885,6 +5885,10 @@ public partial class MainWindowViewModel : ObservableObject
         return false;
     }
 
+    // =========================================================
+    // BỘ LỌC NGÀY — MÀN HÓA ĐƠN
+    // =========================================================
+
     private DateTimeOffset? _invoiceFilterDate = DateTimeOffset.Now.Date;
     public DateTimeOffset? InvoiceFilterDate
     {
@@ -5894,6 +5898,8 @@ public partial class MainWindowViewModel : ObservableObject
             if (SetProperty(ref _invoiceFilterDate, value?.Date))
             {
                 OnPropertyChanged(nameof(IsInvoiceDateToday));
+                OnPropertyChanged(nameof(IsInvoiceDateYesterday));
+                OnPropertyChanged(nameof(IsInvoiceDateAll));
                 // Đổi ngày → tìm lại luôn
                 _ = SearchInvoicesAsync();
             }
@@ -5903,11 +5909,55 @@ public partial class MainWindowViewModel : ObservableObject
     public bool IsInvoiceDateToday =>
         InvoiceFilterDate?.Date == DateTime.Today;
 
+    public bool IsInvoiceDateYesterday =>
+        InvoiceFilterDate?.Date == DateTime.Today.AddDays(-1);
+
+    /// <summary>Đang xem tất cả các ngày (không lọc theo ngày).</summary>
+    public bool IsInvoiceDateAll =>
+        InvoiceFilterDate is null;
+
     [RelayCommand]
     private void SetInvoiceDateToday()
     {
         InvoiceFilterDate = DateTimeOffset.Now.Date;
     }
+
+    [RelayCommand]
+    private void SetInvoiceDateYesterday()
+    {
+        InvoiceFilterDate = new DateTimeOffset(DateTime.Today.AddDays(-1));
+    }
+
+    [RelayCommand]
+    private void SetInvoiceDateAll()
+    {
+        InvoiceFilterDate = null;
+    }
+
+    /// <summary>Quay về ngày trước đó (◀) — dùng để lướt xem lại từng ngày.</summary>
+    [RelayCommand]
+    private void InvoiceDatePrevDay()
+    {
+        var hienTai = InvoiceFilterDate?.Date ?? DateTime.Today;
+        InvoiceFilterDate = new DateTimeOffset(hienTai.AddDays(-1));
+    }
+
+    /// <summary>Chuyển đến ngày kế tiếp (▶), tối đa là hôm nay.</summary>
+    [RelayCommand]
+    private void InvoiceDateNextDay()
+    {
+        var hienTai = InvoiceFilterDate?.Date ?? DateTime.Today;
+        var moi = hienTai.AddDays(1);
+        if (moi > DateTime.Today)
+            moi = DateTime.Today;
+
+        InvoiceFilterDate = new DateTimeOffset(moi);
+    }
+
+    // =========================================================
+    // BỘ LỌC NGÀY — MÀN BÁO CÁO PHIẾU NHẬP HÀNG
+    // =========================================================
+
     private DateTimeOffset? _baoCaoPhieuNhapFilterDate = DateTimeOffset.Now.Date;
     public DateTimeOffset? BaoCaoPhieuNhapFilterDate
     {
@@ -5917,6 +5967,8 @@ public partial class MainWindowViewModel : ObservableObject
             if (SetProperty(ref _baoCaoPhieuNhapFilterDate, value?.Date))
             {
                 OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateToday));
+                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateYesterday));
+                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateAll));
                 BaoCaoPhieuNhapPage = 1;
                 _ = LoadBaoCaoPhieuNhapAsync();
             }
@@ -5926,10 +5978,49 @@ public partial class MainWindowViewModel : ObservableObject
     public bool IsBaoCaoPhieuNhapDateToday =>
         BaoCaoPhieuNhapFilterDate?.Date == DateTime.Today;
 
+    public bool IsBaoCaoPhieuNhapDateYesterday =>
+        BaoCaoPhieuNhapFilterDate?.Date == DateTime.Today.AddDays(-1);
+
+    /// <summary>Đang xem tất cả các ngày (không lọc theo ngày).</summary>
+    public bool IsBaoCaoPhieuNhapDateAll =>
+        BaoCaoPhieuNhapFilterDate is null;
+
     [RelayCommand]
     private void SetBaoCaoPhieuNhapDateToday()
     {
         BaoCaoPhieuNhapFilterDate = DateTimeOffset.Now.Date;
+    }
+
+    [RelayCommand]
+    private void SetBaoCaoPhieuNhapDateYesterday()
+    {
+        BaoCaoPhieuNhapFilterDate = new DateTimeOffset(DateTime.Today.AddDays(-1));
+    }
+
+    [RelayCommand]
+    private void SetBaoCaoPhieuNhapDateAll()
+    {
+        BaoCaoPhieuNhapFilterDate = null;
+    }
+
+    /// <summary>Quay về ngày trước đó (◀) — dùng để lướt xem lại từng ngày.</summary>
+    [RelayCommand]
+    private void BaoCaoPhieuNhapDatePrevDay()
+    {
+        var hienTai = BaoCaoPhieuNhapFilterDate?.Date ?? DateTime.Today;
+        BaoCaoPhieuNhapFilterDate = new DateTimeOffset(hienTai.AddDays(-1));
+    }
+
+    /// <summary>Chuyển đến ngày kế tiếp (▶), tối đa là hôm nay.</summary>
+    [RelayCommand]
+    private void BaoCaoPhieuNhapDateNextDay()
+    {
+        var hienTai = BaoCaoPhieuNhapFilterDate?.Date ?? DateTime.Today;
+        var moi = hienTai.AddDays(1);
+        if (moi > DateTime.Today)
+            moi = DateTime.Today;
+
+        BaoCaoPhieuNhapFilterDate = new DateTimeOffset(moi);
     }
 
 }
