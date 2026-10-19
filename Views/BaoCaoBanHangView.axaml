@@ -409,7 +409,8 @@
       </Border>
 
       <!-- ============ 4. BẢNG DOANH THU THEO NGÀY ============ -->
-      <Border Classes="bcCard" Padding="16,13">
+      <!-- Chỉ hiện khi khoảng lọc lớn hơn 1 ngày; báo cáo 1 ngày đã đủ ở các thẻ tổng quan. -->
+      <Border Classes="bcCard" Padding="16,13" IsVisible="{Binding HienThiBangTheoNgay}">
         <StackPanel Spacing="8">
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
             <StackPanel VerticalAlignment="Center" Spacing="2">

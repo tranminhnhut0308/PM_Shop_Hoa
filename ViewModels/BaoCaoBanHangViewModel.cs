@@ -58,10 +58,12 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(KhoangHienThi))]
+    [NotifyPropertyChangedFor(nameof(HienThiBangTheoNgay))]
     private DateTime tuNgay;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(KhoangHienThi))]
+    [NotifyPropertyChangedFor(nameof(HienThiBangTheoNgay))]
     private DateTime denNgay;
 
     /// <summary>Tên khoảng đang xem: "Hôm nay", "Tuần này", "Tùy chọn"...</summary>
@@ -167,6 +169,13 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
     public bool CoLoi => !string.IsNullOrWhiteSpace(ThongBaoLoi);
     public bool CoBieuDo => DuLieu.BieuDo.Count > 0;
     public bool CoBang => _bangAll.Count > 0;
+
+    /// <summary>
+    /// Chỉ hiện bảng doanh thu theo ngày khi khoảng lọc lớn hơn 1 ngày.
+    /// Báo cáo 1 ngày (Hôm nay / Hôm qua / tùy chỉnh trùng ngày) đã đủ
+    /// thông tin ở các thẻ tổng quan phía trên nên ẩn cả khối bảng.
+    /// </summary>
+    public bool HienThiBangTheoNgay => DenNgay.Date > TuNgay.Date;
     public bool CoTopSanPham => DuLieu.TopSanPham.Count > 0;
     public bool CoTopKhachHang => DuLieu.TopKhachHang.Count > 0;
     public bool CoNhomHang => DuLieu.NhomHang.Count > 0;
