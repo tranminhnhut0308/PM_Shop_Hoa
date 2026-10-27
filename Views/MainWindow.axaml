@@ -2370,7 +2370,7 @@
           <Grid RowDefinitions="Auto,Auto,*" Margin="0,14,16,0" RowSpacing="12">
 
             <!-- 1. THANH CÔNG CỤ -->
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
               <TextBox Classes="searchInput" Height="38" VerticalAlignment="Top"
                 Watermark="🔍 Tìm theo mã, tên, số điện thoại..."
                 Text="{Binding CustomerSearch, Mode=TwoWay}"
@@ -2443,7 +2443,12 @@
                 Margin="0,0,10,0"
                 Command="{Binding ThemKhachHangTuFileCommand}"
                 IsVisible="{Binding CanImportCustomer}" />
-              <Button Grid.Column="4" Classes="toolbar-primary" Content="＋ Thêm mới"
+              <Button Grid.Column="4" Classes="toolbar-action" Content="📤 Xuất file"
+                Margin="0,0,10,0"
+                Command="{Binding XuatFileKhachHangCommand}"
+                ToolTip.Tip="Xuất toàn bộ danh sách khách hàng đang xem ra file Excel"
+                IsVisible="{Binding CanExportCustomer}" />
+              <Button Grid.Column="5" Classes="toolbar-primary" Content="＋ Thêm mới"
                 Margin="0"
                 Command="{Binding ThemMoiKhachHangCommand}"
                 IsVisible="{Binding CanCreateCustomer}" />

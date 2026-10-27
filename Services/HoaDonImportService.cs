@@ -4,6 +4,7 @@ using System.Text;
 using ClosedXML.Excel;
 using Dapper;
 using MySqlConnector;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
 
 namespace ShopHoa.Services;
@@ -1650,7 +1651,8 @@ public sealed class HoaDonImportService
 
     private static async Task<Dictionary<string, HoaDonImportSanPham>> TaiSanPhamAsync(
         MySqlConnection connection,
-        CancellationToken ct)
+        CancellationToken ct,
+        MySqlTransaction? transaction = null)
     {
         var ketQua = new Dictionary<string, HoaDonImportSanPham>(StringComparer.OrdinalIgnoreCase);
 
@@ -1664,7 +1666,8 @@ public sealed class HoaDonImportService
                 sp.gia_von AS GiaVon
             FROM san_pham sp
             LEFT JOIN don_vi_tinh dvt ON dvt.id = sp.don_vi_tinh_id;
-            """)).AsList();
+            """,
+            transaction: transaction)).AsList();
 
         foreach (var row in rows)
         {
@@ -1858,6 +1861,7 @@ public sealed class HoaDonImportService
 
         await using var connection = await _db.OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync(ct);
+        var giaiDoan = "Tải danh mục hàng hóa trong transaction";
 
         try
         {
@@ -1869,7 +1873,7 @@ public sealed class HoaDonImportService
 
             // Đọc lại danh mục trong transaction: hàng hóa có thể đã bị xóa
             // hoặc sửa sau khi người dùng xem bước xem trước.
-            var sanPham = await TaiSanPhamAsync(connection, ct);
+            var sanPham = await TaiSanPhamAsync(connection, ct, transaction);
             var khongGhiDuoc = new List<HoaDonImportRow>();
 
             foreach (var hoaDon in canGhi)
@@ -1908,8 +1912,10 @@ public sealed class HoaDonImportService
 
             if (capNhatHoaDon.Count > 0 && xuLyTrung == XuLyHoaDonTrung.CapNhat)
             {
+                giaiDoan = "Kiểm tra phiếu trả hàng liên kết";
                 var soHoaDonLienPhieuTra = await DemHoaDonLienPhieuTraHangAsync(
                     connection,
+                    transaction,
                     capNhatHoaDon,
                     ct);
 
@@ -1922,7 +1928,14 @@ public sealed class HoaDonImportService
                 }
             }
 
-            var idKhachHang = await GanIdKhachHangAsync(connection, canGhi, taoKhachHangMoi, result, ct);
+            giaiDoan = "Đối chiếu và tạo khách hàng";
+            var idKhachHang = await GanIdKhachHangAsync(
+                connection,
+                transaction,
+                canGhi,
+                taoKhachHangMoi,
+                result,
+                ct);
             canGhi.RemoveAll(h => !idKhachHang.ContainsKey(h.MaHoaDon));
 
             if (canGhi.Count == 0)
@@ -1933,8 +1946,9 @@ public sealed class HoaDonImportService
                 return result;
             }
 
-            var soDuCongNo = new SoDuCongNo(await TaiSoDuCongNoAsync(connection, ct));
-            var congNoCu = await TaiCongNoCuAsync(connection, capNhatHoaDon, ct);
+            giaiDoan = "Tải số dư công nợ";
+            var soDuCongNo = new SoDuCongNo(await TaiSoDuCongNoAsync(connection, transaction, ct));
+            var congNoCu = await TaiCongNoCuAsync(connection, transaction, capNhatHoaDon, ct);
 
             var batchIndex = 0;
 
@@ -1945,6 +1959,7 @@ public sealed class HoaDonImportService
 
                 var savepoint = $"sp_nhap_hd_{batchIndex}";
                 var soDuTruoc = soDuCongNo.SaoLuu();
+                giaiDoan = $"Ghi hóa đơn đợt {batchIndex}";
 
                 await connection.ExecuteAsync($"SAVEPOINT {savepoint};", transaction: transaction);
 
@@ -1966,6 +1981,10 @@ public sealed class HoaDonImportService
                 catch (OperationCanceledException)
                 {
                     await connection.ExecuteAsync($"ROLLBACK TO SAVEPOINT {savepoint};", transaction: transaction);
+                    throw;
+                }
+                catch (Exception ex) when (LaLoiTransactionKhongHopLe(ex))
+                {
                     throw;
                 }
                 catch (Exception)
@@ -2023,10 +2042,14 @@ public sealed class HoaDonImportService
             result.SoThemMoi = 0;
             result.SoCapNhat = 0;
             result.SoHoaDonTongHopDaGhi = 0;
+            _db.GhiLog(
+                $"LỖI HỆ THỐNG import file {result.TenFile}, giai đoạn: {giaiDoan}; "
+                + $"đã yêu cầu rollback transaction.{Environment.NewLine}{SafeLog.Redact(ex.ToString())}",
+                "nhap-hoa-don");
             result.DanhSachLoi.Add(new HoaDonImportError(
-                0,
                 null,
-                "Lỗi nghiêm trọng, đã rollback toàn bộ lượt nhập: "
+                null,
+                $"Lỗi hệ thống tại giai đoạn \"{giaiDoan}\"; đã rollback toàn bộ lượt nhập. "
                 + DatabaseService.MoTaLoiNhap(ex)));
         }
         finally
@@ -2257,6 +2280,10 @@ public sealed class HoaDonImportService
                 soDuCongNo.KhoiPhuc(truoc);
                 throw;
             }
+            catch (Exception ex) when (LaLoiTransactionKhongHopLe(ex))
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 await connection.ExecuteAsync($"ROLLBACK TO SAVEPOINT {savepoint};", transaction: transaction);
@@ -2269,6 +2296,20 @@ public sealed class HoaDonImportService
                     DatabaseService.MoTaLoiNhap(ex)));
             }
         }
+    }
+
+    private static bool LaLoiTransactionKhongHopLe(Exception exception)
+    {
+        const string thongBao =
+            "transaction associated with this command is not the connection's active transaction";
+
+        for (Exception? loi = exception; loi is not null; loi = loi.InnerException)
+        {
+            if (loi.Message.Contains(thongBao, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     private static DongHeader TaoDongHeader(HoaDonImportRow hd, uint branchId, uint? userId) =>
@@ -2487,6 +2528,7 @@ public sealed class HoaDonImportService
 
     private static async Task<Dictionary<uint, decimal>> TaiSoDuCongNoAsync(
         MySqlConnection connection,
+        MySqlTransaction transaction,
         CancellationToken ct)
     {
         var ketQua = new Dictionary<uint, decimal>();
@@ -2496,7 +2538,8 @@ public sealed class HoaDonImportService
              SELECT khach_hang_id AS Id, COALESCE(SUM(ghi_no - ghi_co), 0) AS SoDu
              FROM {BangCongNo}
              GROUP BY khach_hang_id;
-             """)).AsList();
+             """,
+            transaction: transaction)).AsList();
 
         foreach (var row in rows)
         {
@@ -2512,6 +2555,7 @@ public sealed class HoaDonImportService
 
     private static async Task<Dictionary<string, CongNoCu>> TaiCongNoCuAsync(
         MySqlConnection connection,
+        MySqlTransaction transaction,
         IReadOnlyList<string> maHoaDon,
         CancellationToken ct)
     {
@@ -2529,7 +2573,7 @@ public sealed class HoaDonImportService
                  WHERE ma_hoa_don IN ({dieuKien});
                  """,
                 parameters,
-                transaction: null)).AsList();
+                 transaction)).AsList();
 
             foreach (var row in rows)
                 ketQua[row.Ma.Trim()] = new CongNoCu(row.KhachHangId, row.ConNo);
@@ -2544,6 +2588,7 @@ public sealed class HoaDonImportService
     /// </summary>
     private static async Task<int> DemHoaDonLienPhieuTraHangAsync(
         MySqlConnection connection,
+        MySqlTransaction transaction,
         IReadOnlyList<string> maHoaDon,
         CancellationToken ct)
     {
@@ -2562,7 +2607,8 @@ public sealed class HoaDonImportService
                  INNER JOIN chi_tiet_phieu_tra_hang t ON t.chi_tiet_hoa_don_id = c.id
                  WHERE h.ma_hoa_don IN ({dieuKien});
                  """,
-                parameters);
+                parameters,
+                transaction);
         }
 
         return tong;
@@ -2655,6 +2701,7 @@ public sealed class HoaDonImportService
     /// </summary>
     private static async Task<Dictionary<string, uint?>> GanIdKhachHangAsync(
         MySqlConnection connection,
+        MySqlTransaction transaction,
         IReadOnlyList<HoaDonImportRow> canGhi,
         bool taoKhachHangMoi,
         HoaDonImportResult result,
@@ -2694,14 +2741,14 @@ public sealed class HoaDonImportService
             }
 
             // Khách đã có sẵn nhưng lúc đọc danh mục chưa thấy: tra lại một lần.
-            uint? idKhach = await TraIdKhachHangTheoMaAsync(connection, ma, ct);
+            uint? idKhach = await TraIdKhachHangTheoMaAsync(connection, transaction, ma, ct);
 
             if (!idKhach.HasValue && daTao.TryGetValue(ma, out var idDaTao))
                 idKhach = idDaTao;
 
             if (!idKhach.HasValue)
             {
-                if (!await ThemKhachHangAsync(connection, ma, ten, hoaDon.SoDienThoai, ct))
+                if (!await ThemKhachHangAsync(connection, transaction, ma, ten, hoaDon.SoDienThoai, ct))
                 {
                     result.SoLoi++;
                     result.DanhSachLoi.Add(new HoaDonImportError(
@@ -2711,7 +2758,7 @@ public sealed class HoaDonImportService
                     continue;
                 }
 
-                idKhach = await TraIdKhachHangTheoMaAsync(connection, ma, ct);
+                idKhach = await TraIdKhachHangTheoMaAsync(connection, transaction, ma, ct);
                 result.SoKhachHangTaoMoi++;
             }
 
@@ -2736,6 +2783,7 @@ public sealed class HoaDonImportService
 
     private static async Task<uint?> TraIdKhachHangTheoMaAsync(
         MySqlConnection connection,
+        MySqlTransaction transaction,
         string maKhachHang,
         CancellationToken ct)
     {
@@ -2743,7 +2791,8 @@ public sealed class HoaDonImportService
 
         return await connection.ExecuteScalarAsync<uint?>(
             "SELECT id FROM khach_hang WHERE ma_khach_hang = @MaKhachHang LIMIT 1;",
-            new { MaKhachHang = maKhachHang });
+            new { MaKhachHang = maKhachHang },
+            transaction);
     }
 
     /// <summary>
@@ -2753,6 +2802,7 @@ public sealed class HoaDonImportService
     /// </summary>
     private static async Task<bool> ThemKhachHangAsync(
         MySqlConnection connection,
+        MySqlTransaction transaction,
         string maKhachHang,
         string tenKhachHang,
         string? soDienThoai,
@@ -2776,7 +2826,8 @@ public sealed class HoaDonImportService
                         : maKhachHang,
                     TenKhachHang = tenKhachHang.Length > 150 ? tenKhachHang[..150] : tenKhachHang,
                     SoDienThoai = string.IsNullOrWhiteSpace(soDienThoai) ? null : soDienThoai.Trim()
-                });
+                },
+                transaction);
 
             return true;
         }
@@ -2822,7 +2873,10 @@ public sealed class HoaDonImportService
 
         for (var i = 0; i < loi.Count; i++)
         {
-            sheet.Cell(i + 2, 1).Value = loi[i].SoDongExcel;
+            var soDongExcel = loi[i].SoDongExcel;
+            sheet.Cell(i + 2, 1).Value = soDongExcel.HasValue
+                ? soDongExcel.Value
+                : "Không áp dụng";
             sheet.Cell(i + 2, 2).Value = loi[i].MaHoaDon ?? "";
             sheet.Cell(i + 2, 3).Value = loi[i].LyDo;
             sheet.Cell(i + 2, 3).Style.Alignment.WrapText = true;
@@ -2898,7 +2952,8 @@ public sealed class HoaDonImportService
         foreach (var loi in result.DanhSachLoi.Take(500))
         {
             _db.GhiLog(
-                $"LỖI {result.TenFile}: dòng {loi.SoDongExcel} "
+                $"LỖI {result.TenFile}: "
+                + (loi.SoDongExcel.HasValue ? $"dòng {loi.SoDongExcel.Value} " : "lỗi hệ thống ")
                 + $"[{loi.MaHoaDon ?? "(trống)"}] {loi.LyDo}",
                 "nhap-hoa-don");
         }

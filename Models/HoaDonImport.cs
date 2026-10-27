@@ -544,7 +544,7 @@ public sealed class HoaDonImportRow
 }
 
 /// <summary>Một hóa đơn bị loại khỏi lượt import, kèm lý do cụ thể.</summary>
-public sealed record HoaDonImportError(int SoDongExcel, string? MaHoaDon, string LyDo);
+public sealed record HoaDonImportError(int? SoDongExcel, string? MaHoaDon, string LyDo);
 
 /// <summary>
 /// Ảnh chụp tiến trình import để hiển thị lên giao diện.

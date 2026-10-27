@@ -1030,6 +1030,142 @@ public partial class MainWindowViewModel : ObservableObject
         return !string.IsNullOrWhiteSpace(phone) && existingKeys.Contains("dt:" + phone);
     }
 
+    [RelayCommand]
+    private async Task XuatFileKhachHangAsync()
+    {
+        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersExport, "Bạn không có quyền export khách hàng."))
+            return;
+
+        if (OwnerWindow is null)
+            return;
+
+        var tenFileMacDinh = $"DanhSachKhachHang_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+        var file = await OwnerWindow.StorageProvider.SaveFilePickerAsync(
+            new FilePickerSaveOptions
+            {
+                Title = "Xuất danh sách khách hàng",
+                SuggestedFileName = tenFileMacDinh,
+                DefaultExtension = "xlsx",
+                ShowOverwritePrompt = true,
+                FileTypeChoices =
+                [
+                    new FilePickerFileType("Excel")
+                    {
+                        Patterns = ["*.xlsx"]
+                    }
+                ]
+            });
+
+        if (file is null)
+        {
+            StatusMessage = "Bạn đã hủy xuất file.";
+            return;
+        }
+
+        try
+        {
+            StatusMessage = "Đang xuất danh sách khách hàng...";
+
+            var (danhSach, _) = await _db.GetKhachHangPagedAsync(
+                CustomerSearch,
+                1,
+                int.MaxValue,
+                false,
+                SelectedCustomerNhom?.Id ?? 0,
+                CustomerCongNoFilter);
+
+            if (danhSach.Count == 0)
+            {
+                await ShowMessageAsync(
+                    "Xuất file thất bại",
+                    "Không có khách hàng nào khớp điều kiện đang xem\n" +
+                    "nên không thể xuất file.");
+                StatusMessage = "Không có dữ liệu để xuất.";
+                return;
+            }
+
+            await using var stream = await file.OpenWriteAsync();
+            await Task.Run(() =>
+            {
+                using var workbook = new XLWorkbook();
+                GhiSheetKhachHang(workbook, danhSach);
+                workbook.SaveAs(stream);
+            });
+
+            StatusMessage = $"Đã xuất {danhSach.Count:N0} khách hàng ra file {tenFileMacDinh}.";
+            await ShowMessageAsync(
+                "Xuất file thành công",
+                $"Đã xuất {danhSach.Count:N0} khách hàng.\n\nFile:\n{file.Name}");
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Xuất file thất bại: " + ex.Message;
+            await ShowMessageAsync(
+                "Xuất file thất bại",
+                $"Không thể xuất danh sách khách hàng.\n\nChi tiết lỗi:\n{ex.Message}");
+        }
+    }
+
+    private static void GhiSheetKhachHang(
+        XLWorkbook workbook,
+        IReadOnlyList<KhachHang> danhSach)
+    {
+        var sheet = workbook.Worksheets.Add("Khách hàng");
+        var tieuDeCot = new (string Ten, double DoRong)[]
+        {
+            ("Mã khách hàng", 18),
+            ("Tên khách hàng", 32),
+            ("Điện thoại", 16),
+            ("Email", 28),
+            ("Địa chỉ", 36),
+            ("Nhóm khách hàng", 22),
+            ("Nợ hiện tại", 18),
+            ("Tổng bán", 18),
+            ("Tổng bán trừ trả hàng", 24),
+            ("Ngày tạo", 20)
+        };
+
+        for (var cot = 0; cot < tieuDeCot.Length; cot++)
+        {
+            var cell = sheet.Cell(1, cot + 1);
+            cell.Value = tieuDeCot[cot].Ten;
+            cell.Style.Font.Bold = true;
+            cell.Style.Font.FontColor = XLColor.White;
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#164B40");
+            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        }
+
+        sheet.SheetView.FreezeRows(1);
+        sheet.Row(1).Height = 22;
+        sheet.Range(1, 1, danhSach.Count + 1, tieuDeCot.Length).SetAutoFilter();
+
+        for (var i = 0; i < danhSach.Count; i++)
+        {
+            var khachHang = danhSach[i];
+            var dong = i + 2;
+            sheet.Cell(dong, 1).Value = khachHang.MaKhachHang;
+            sheet.Cell(dong, 2).Value = khachHang.TenKhachHang;
+            sheet.Cell(dong, 3).Value = khachHang.SoDienThoai ?? "";
+            sheet.Cell(dong, 4).Value = khachHang.Email ?? "";
+            sheet.Cell(dong, 5).Value = khachHang.DiaChi ?? "";
+            sheet.Cell(dong, 6).Value = khachHang.NhomKhachHang ?? "";
+            sheet.Cell(dong, 7).Value = khachHang.NoHienTai;
+            sheet.Cell(dong, 8).Value = khachHang.TongBan;
+            sheet.Cell(dong, 9).Value = khachHang.TongBanTruTraHang;
+            if (khachHang.NgayTao.HasValue)
+                sheet.Cell(dong, 10).Value = khachHang.NgayTao.Value;
+        }
+
+        for (var cot = 0; cot < tieuDeCot.Length; cot++)
+            sheet.Column(cot + 1).Width = tieuDeCot[cot].DoRong;
+
+        sheet.Range(2, 7, danhSach.Count + 1, 9).Style.NumberFormat.Format = "#,##0";
+        sheet.Range(2, 7, danhSach.Count + 1, 9).Style.Alignment.Horizontal =
+            XLAlignmentHorizontalValues.Right;
+        sheet.Column(10).Style.DateFormat.Format = "dd/MM/yyyy";
+    }
+
     /// <summary>
     /// Nút "Chỉnh sửa" ở cuối vùng chi tiết: mở form sửa khách hàng đang chọn.
     /// Sau khi lưu chỉ refresh lại đúng dòng đó, không tải lại cả ứng dụng.
