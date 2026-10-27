@@ -6,6 +6,10 @@ publish/
 # Visual Studio / VS Code
 .vs/
 .vscode/
+!.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
 
 # User files
 *.user
