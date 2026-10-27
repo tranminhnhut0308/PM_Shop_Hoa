@@ -79,12 +79,12 @@ public sealed partial class MainWindowViewModel
     /// <summary>Ngày bắt đầu, chỉ dùng khi khoảng thời gian = "Tùy chỉnh".</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SoQuyLocTuyChinh))]
-    private DateTime? soQuyLocTuNgay = DateTime.Today;
+    private DateTimeOffset? soQuyLocTuNgay = DateTimeOffset.Now.Date;
 
     /// <summary>Ngày kết thúc (bao gồm cả ngày này), chỉ dùng khi tùy chỉnh.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SoQuyLocTuyChinh))]
-    private DateTime? soQuyLocDenNgay = DateTime.Today;
+    private DateTimeOffset? soQuyLocDenNgay = DateTimeOffset.Now.Date;
 
     /// <summary>0 = cả thu và chi, 1 = chỉ phiếu thu, 2 = chỉ phiếu chi.</summary>
     [ObservableProperty]
@@ -444,9 +444,9 @@ public sealed partial class MainWindowViewModel
 
     partial void OnSoQuyLocKhoangThoiGianChanged(SoQuyLuaChon? value) => BaoLocSoQuyThayDoi();
 
-    partial void OnSoQuyLocTuNgayChanged(DateTime? value) => BaoLocSoQuyThayDoi();
+    partial void OnSoQuyLocTuNgayChanged(DateTimeOffset? value) => BaoLocSoQuyThayDoi();
 
-    partial void OnSoQuyLocDenNgayChanged(DateTime? value) => BaoLocSoQuyThayDoi();
+    partial void OnSoQuyLocDenNgayChanged(DateTimeOffset? value) => BaoLocSoQuyThayDoi();
 
     partial void OnSoQuyLocLoaiChungTuChanged(int value) => BaoLocSoQuyThayDoi();
 
@@ -498,8 +498,8 @@ public sealed partial class MainWindowViewModel
         SoQuySearchText = "";
         SoQuyLocQuy = SoQuyQuyOptions.FirstOrDefault();
         SoQuyLocKhoangThoiGian = SoQuyKhoangThoiGianOptions.First();
-        SoQuyLocTuNgay = DateTime.Today;
-        SoQuyLocDenNgay = DateTime.Today;
+        SoQuyLocTuNgay = DateTimeOffset.Now.Date;
+        SoQuyLocDenNgay = DateTimeOffset.Now.Date;
         SoQuyLocLoaiChungTu = SoQuyBoLoc.TatCaLoaiChungTu;
         SoQuyLocTienTuText = "";
         SoQuyLocTienDenText = "";
