@@ -29,6 +29,8 @@ public partial class ChiTietPhieuNhapHang : ObservableObject
     [ObservableProperty]
     private decimal giamGia;
 
+    public string? GhiChu { get; set; }
+
     /// <summary>
     /// Cho phép chọn ĐVT trực tiếp trên dòng phiếu nhập khi hàng hóa ban đầu chưa có ĐVT.
     /// Giữ nguyên hiển thị ComboBox trong suốt quá trình lập phiếu để người dùng có thể đổi lại trước khi lưu.

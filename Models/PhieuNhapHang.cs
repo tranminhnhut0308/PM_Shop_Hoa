@@ -31,6 +31,8 @@ public sealed partial class PhieuNhapHang : ObservableObject
 
     public decimal TongTienHang { get; set; }
 
+    public decimal GiamGia { get; set; }
+
     public decimal ChiPhiKhac { get; set; }
 
     public decimal TongTienNhap { get; set; }

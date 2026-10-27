@@ -3997,6 +3997,105 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    private async Task ImportBaoCaoPhieuNhapAsync()
+    {
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.PurchasesImport,
+                "Bạn không có quyền import phiếu nhập hàng."))
+            return;
+
+        if (OwnerWindow is null)
+            return;
+
+        try
+        {
+            var files = await OwnerWindow.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Chọn file chi tiết phiếu nhập hàng KiotViet",
+                AllowMultiple = false,
+                FileTypeFilter =
+                [
+                    new FilePickerFileType("Excel (.xlsx)") { Patterns = ["*.xlsx"] }
+                ]
+            });
+            if (files.Count == 0)
+                return;
+
+            var preview = await new PhieuNhapImportService().DocFileAsync(files[0].Path.LocalPath);
+            if (preview.PhieuNhap.Count == 0)
+            {
+                var details = string.Join(
+                    "\n",
+                    preview.Loi.Take(8).Select(issue => $"{issue.MaPhieuNhap}: {issue.LyDo}"));
+                await ShowMessageAsync(
+                    "Không có phiếu hợp lệ để import",
+                    $"Đã đọc {preview.Loi.Select(issue => issue.MaPhieuNhap).Distinct().Count()} mã phiếu, " +
+                    $"không có phiếu nào đủ điều kiện.\n\n{details}");
+                return;
+            }
+
+            var warning = preview.Loi.Count == 0
+                ? ""
+                : $"\n\n{preview.Loi.Select(issue => issue.MaPhieuNhap).Distinct().Count()} phiếu có lỗi sẽ không được import. " +
+                  string.Join("\n", preview.Loi.Take(5).Select(issue => $"{issue.MaPhieuNhap}: {issue.LyDo}"));
+            var confirmation =
+                $"File: {preview.TenFile}\n" +
+                $"Phiếu đủ điều kiện: {preview.PhieuNhap.Count}\n" +
+                $"Phiếu có lỗi: {preview.Loi.Select(issue => issue.MaPhieuNhap).Distinct().Count()}\n\n" +
+                "Hệ thống sẽ cập nhật tồn kho và công nợ nhà cung cấp. Khoản đã trả chỉ được ghi vào công nợ; " +
+                "không tạo phiếu chi hoặc giao dịch quỹ. Mã phiếu đã tồn tại sẽ được bỏ qua." +
+                warning +
+                "\n\nBạn xác nhận tiếp tục?";
+            if (!await ShowConfirmationAsync("Xác nhận import phiếu nhập", confirmation, "Import", "Hủy"))
+                return;
+
+            var imported = 0;
+            var duplicated = 0;
+            var failures = new List<string>();
+            for (var index = 0; index < preview.PhieuNhap.Count; index++)
+            {
+                var receipt = preview.PhieuNhap[index];
+                try
+                {
+                    if (await _db.ImportPhieuNhapHangAsync(receipt))
+                        imported++;
+                    else
+                        duplicated++;
+                }
+                catch (Exception ex)
+                {
+                    failures.Add($"{receipt.MaPhieuNhap}: {ex.Message}");
+                }
+
+                if ((index + 1) % 25 == 0)
+                {
+                    StatusMessage = $"Đang import phiếu nhập: {index + 1}/{preview.PhieuNhap.Count}";
+                    await Task.Yield();
+                }
+            }
+
+            await LoadBaoCaoPhieuNhapAsync();
+            var result =
+                $"Import xong {preview.TenFile}.\n" +
+                $"Đã nhập: {imported}\n" +
+                $"Bỏ qua do trùng mã: {duplicated}\n" +
+                $"Không nhập được: {preview.Loi.Select(issue => issue.MaPhieuNhap).Distinct().Count() + failures.Count}";
+            var failedDetails = preview.Loi.Take(5)
+                .Select(issue => $"{issue.MaPhieuNhap}: {issue.LyDo}")
+                .Concat(failures.Take(5));
+            if (failedDetails.Any())
+                result += "\n\nLỗi mẫu:\n" + string.Join("\n", failedDetails);
+            await ShowMessageAsync("Kết quả import phiếu nhập", result);
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageAsync(
+                "Không import được phiếu nhập",
+                "Không thể đọc hoặc import file. " + ex.Message);
+        }
+    }
+
     /// <summary>
     /// Tìm kiếm khi người dùng gõ: chống debounce để không gọi database liên tục.
     /// </summary>
@@ -6030,4 +6129,3 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
 }
-

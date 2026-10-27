@@ -6758,6 +6758,7 @@ ORDER BY hd.thoi_gian_ban DESC
             nd.ho_ten AS TenNhanVien,
             p.thoi_gian_nhap AS ThoiGianNhap,
             p.tong_tien_hang AS TongTienHang,
+            p.giam_gia AS GiamGia,
             p.chi_phi_khac AS ChiPhiKhac,
             p.tong_tien_nhap AS TongTienNhap,
             p.da_thanh_toan AS DaThanhToan,
@@ -7661,6 +7662,7 @@ ORDER BY hd.thoi_gian_ban DESC
             nd.ho_ten AS TenNhanVien,
             p.thoi_gian_nhap AS ThoiGianNhap,
             p.tong_tien_hang AS TongTienHang,
+            p.giam_gia AS GiamGia,
             p.chi_phi_khac AS ChiPhiKhac,
             p.tong_tien_nhap AS TongTienNhap,
             p.da_thanh_toan AS DaThanhToan,
@@ -7756,6 +7758,7 @@ ORDER BY hd.thoi_gian_ban DESC
         nd.ho_ten AS TenNhanVien,
         p.thoi_gian_nhap AS ThoiGianNhap,
         p.tong_tien_hang AS TongTienHang,
+        p.giam_gia AS GiamGia,
         p.chi_phi_khac AS ChiPhiKhac,
         p.tong_tien_nhap AS TongTienNhap,
         p.da_thanh_toan AS DaThanhToan,
@@ -7879,9 +7882,252 @@ ORDER BY hd.thoi_gian_ban DESC
     }
 
     /// <summary>
-    /// Hoàn thành phiếu nhập: lưu header, toàn bộ dòng chi tiết, cộng tồn kho,
-    /// ghi lịch sử nhập xuất kho và cập nhật lại giá vốn bình quân — tất cả trong
-    /// một transaction, hoặc rollback trọn vẹn nếu có bước nào lỗi.
+    /// Import một phiếu nhập lịch sử theo dữ liệu nguồn. Header, chi tiết, tồn kho
+    /// và công nợ được ghi nguyên tử; khác luồng nhập thủ công, không tạo phiếu chi.
+    /// </summary>
+    public async Task<bool> ImportPhieuNhapHangAsync(PhieuNhapImportReceipt receipt)
+    {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.PurchasesImport, "Bạn không có quyền import phiếu nhập hàng.");
+        ArgumentNullException.ThrowIfNull(receipt);
+
+        var code = receipt.MaPhieuNhap.Trim();
+        if (code.Length == 0 || receipt.Items.Count == 0)
+            throw new InvalidOperationException("Phiếu nhập thiếu mã phiếu hoặc chi tiết hàng hóa.");
+        if (receipt.ThoiGianNhap == default
+            || string.IsNullOrWhiteSpace(receipt.MaNhaCungCap)
+            || receipt.TongTienHang < 0
+            || receipt.GiamGia < 0
+            || receipt.GiamGia > receipt.TongTienHang
+            || receipt.ChiPhiNhapTraNcc < 0
+            || receipt.ChiPhiNhapKhac < 0
+            || receipt.CanTraNcc < 0
+            || receipt.Items.Any(item =>
+                string.IsNullOrWhiteSpace(item.MaSanPham)
+                || item.SoLuong <= 0
+                || item.DonGiaNhap < 0
+                || item.GiamGia < 0
+                || item.ThanhTien < 0))
+            throw new InvalidOperationException($"Dữ liệu bắt buộc của phiếu {code} không hợp lệ.");
+
+        var totalFromLines = receipt.Items.Sum(item => item.ThanhTien);
+        var expectedPayable = receipt.TongTienHang - receipt.GiamGia
+            + receipt.ChiPhiNhapTraNcc + receipt.ChiPhiNhapKhac;
+        if (Math.Abs(totalFromLines - receipt.TongTienHang) > 0.01m
+            || Math.Abs(expectedPayable - receipt.CanTraNcc) > 0.01m
+            || receipt.DaTraNcc < 0
+            || receipt.DaTraNcc > receipt.CanTraNcc)
+            throw new InvalidOperationException($"Dữ liệu tiền của phiếu {code} không nhất quán.");
+
+        var currentBranchId = Session.CurrentUser?.ChiNhanhId ?? 1;
+        var branchId = currentBranchId;
+        var supplierId = 0u;
+        var supplierName = "";
+        var productsByCode = new Dictionary<string, SanPham>(StringComparer.OrdinalIgnoreCase);
+        var productCodes = receipt.Items.Select(item => item.MaSanPham.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        await using var connection = await OpenAsync();
+
+        if (!string.IsNullOrWhiteSpace(receipt.TenChiNhanh))
+        {
+            var branchIds = (await connection.QueryAsync<uint>(
+                """
+                SELECT id
+                FROM chi_nhanh
+                WHERE TRIM(ten_chi_nhanh) = TRIM(@TenChiNhanh);
+                """,
+                new { receipt.TenChiNhanh })).AsList();
+            if (branchIds.Count != 1)
+                throw new InvalidOperationException(
+                    $"Không tìm thấy duy nhất chi nhánh \"{receipt.TenChiNhanh}\" trong phần mềm.");
+            if (branchIds[0] != currentBranchId)
+                throw new InvalidOperationException(
+                    $"File thuộc chi nhánh \"{receipt.TenChiNhanh}\" nhưng tài khoản hiện tại đang dùng chi nhánh khác.");
+            branchId = branchIds[0];
+        }
+
+        var suppliers = (await connection.QueryAsync<NhaCungCap>(
+            """
+            SELECT id AS Id, ten_nha_cung_cap AS TenNhaCungCap
+            FROM nha_cung_cap
+            WHERE ma_nha_cung_cap = @MaNhaCungCap
+            LIMIT 2;
+            """,
+            new { MaNhaCungCap = receipt.MaNhaCungCap.Trim() })).AsList();
+        if (suppliers.Count != 1)
+            throw new InvalidOperationException(
+                $"Không tìm thấy duy nhất nhà cung cấp có mã {receipt.MaNhaCungCap}.");
+        supplierId = suppliers[0].Id;
+        supplierName = suppliers[0].TenNhaCungCap;
+
+        var products = await connection.QueryAsync<SanPham>(
+            """
+            SELECT id AS Id, ma_san_pham AS MaSanPham,
+                   COALESCE(NULLIF(TRIM(ten_san_pham), ''), ma_san_pham) AS TenSanPham
+            FROM san_pham
+            WHERE ma_san_pham IN @Codes;
+            """,
+            new { Codes = productCodes });
+        foreach (var product in products)
+            productsByCode[product.MaSanPham] = product;
+
+        var items = new List<ChiTietPhieuNhapHang>(receipt.Items.Count);
+        foreach (var line in receipt.Items)
+        {
+            if (!productsByCode.TryGetValue(line.MaSanPham.Trim(), out var product))
+                throw new InvalidOperationException(
+                    $"Không tìm thấy hàng hóa mã {line.MaSanPham} (dòng Excel {line.SoDongExcel}).");
+            items.Add(new ChiTietPhieuNhapHang(product)
+            {
+                SoLuong = line.SoLuong,
+                DonGiaNhap = line.DonGiaNhap,
+                GiamGia = line.GiamGia,
+                GhiChu = line.GhiChu
+            });
+        }
+
+        var hasExtraColumns = await HasPhieuNhapExtraColumnsAsync();
+        var extraColumns = hasExtraColumns ? ", so_hoa_don_dau_vao, ma_dat_hang_nhap" : "";
+        var extraValues = hasExtraColumns ? ", @SoHoaDonDauVao, NULL" : "";
+        var branchUserId = Session.CurrentUser?.Id;
+        var totalCosts = receipt.ChiPhiNhapTraNcc + receipt.ChiPhiNhapKhac;
+        var noteParts = new[]
+        {
+            $"Import KiotViet (không tạo phiếu chi; phí trả NCC {receipt.ChiPhiNhapTraNcc:N0}; " +
+            $"chi phí khác {receipt.ChiPhiNhapKhac:N0})",
+            receipt.GhiChu?.Trim()
+        }.Where(value => !string.IsNullOrWhiteSpace(value));
+        var note = string.Join(" | ", noteParts);
+
+        var phieu = new PhieuNhapHang
+        {
+            MaPhieuNhap = code,
+            ChiNhanhId = branchId,
+            NhaCungCapId = supplierId,
+            TenNhaCungCap = supplierName,
+            NguoiNhapId = branchUserId,
+            ThoiGianNhap = receipt.ThoiGianNhap,
+            TongTienHang = receipt.TongTienHang,
+            GiamGia = receipt.GiamGia,
+            ChiPhiKhac = totalCosts,
+            TongTienNhap = receipt.CanTraNcc,
+            DaThanhToan = receipt.DaTraNcc,
+            ConNo = receipt.CanTraNcc - receipt.DaTraNcc,
+            TrangThai = "DA_NHAP_HANG",
+            GhiChu = note,
+            SoHoaDonDauVao = receipt.SoHoaDonDauVao
+        };
+
+        await using var transaction = await connection.BeginTransactionAsync();
+        try
+        {
+            var existingId = await connection.ExecuteScalarAsync<uint?>(
+                """
+                SELECT id
+                FROM phieu_nhap_hang
+                WHERE ma_phieu_nhap = @MaPhieuNhap
+                FOR UPDATE;
+                """,
+                new { phieu.MaPhieuNhap },
+                transaction);
+            if (existingId.HasValue)
+            {
+                await transaction.CommitAsync();
+                return false;
+            }
+
+            var insertSql = $"""
+            INSERT INTO phieu_nhap_hang
+            (
+                ma_phieu_nhap, chi_nhanh_id, nha_cung_cap_id, nguoi_nhap_id,
+                thoi_gian_nhap, tong_tien_hang, giam_gia, chi_phi_khac, tong_tien_nhap,
+                da_thanh_toan, con_no, trang_thai, ghi_chu{extraColumns},
+                ngay_tao, ngay_cap_nhat
+            )
+            VALUES
+            (
+                @MaPhieuNhap, @ChiNhanhId, @NhaCungCapId, @NguoiNhapId,
+                @ThoiGianNhap, @TongTienHang, @GiamGia, @ChiPhiKhac, @TongTienNhap,
+                @DaThanhToan, @ConNo, @TrangThai, @GhiChu{extraValues},
+                NOW(), NOW()
+            );
+            SELECT LAST_INSERT_ID();
+            """;
+
+            phieu.Id = await connection.ExecuteScalarAsync<uint>(
+                insertSql,
+                new
+                {
+                    phieu.MaPhieuNhap,
+                    phieu.ChiNhanhId,
+                    phieu.NhaCungCapId,
+                    phieu.NguoiNhapId,
+                    phieu.ThoiGianNhap,
+                    phieu.TongTienHang,
+                    phieu.GiamGia,
+                    phieu.ChiPhiKhac,
+                    phieu.TongTienNhap,
+                    phieu.DaThanhToan,
+                    phieu.ConNo,
+                    phieu.TrangThai,
+                    phieu.GhiChu,
+                    SoHoaDonDauVao = string.IsNullOrWhiteSpace(phieu.SoHoaDonDauVao)
+                        ? null
+                        : phieu.SoHoaDonDauVao.Trim()
+                },
+                transaction);
+
+            const string insertDetailSql = """
+            INSERT INTO chi_tiet_phieu_nhap_hang
+            (
+                phieu_nhap_id, san_pham_id, ma_san_pham, ten_san_pham,
+                so_luong, don_gia_nhap, giam_gia, thanh_tien, ghi_chu
+            )
+            VALUES
+            (
+                @PhieuNhapId, @SanPhamId, @MaSanPham, @TenSanPham,
+                @SoLuong, @DonGiaNhap, @GiamGia, @ThanhTien, @GhiChu
+            );
+            """;
+            foreach (var item in items)
+            {
+                await connection.ExecuteAsync(
+                    insertDetailSql,
+                    new
+                    {
+                        PhieuNhapId = phieu.Id,
+                        SanPhamId = item.SanPham.Id,
+                        item.SanPham.MaSanPham,
+                        item.SanPham.TenSanPham,
+                        item.SoLuong,
+                        item.DonGiaNhap,
+                        item.GiamGia,
+                        item.ThanhTien,
+                        item.GhiChu
+                    },
+                    transaction);
+            }
+
+            await CapNhatTonKhoPhieuNhapAsync(connection, transaction, phieu, items);
+            await GhiCongNoNhaCungCapPhieuNhapAsync(
+                connection,
+                transaction,
+                phieu,
+                branchId,
+                xoaLichSuCu: false);
+            await transaction.CommitAsync();
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Hoàn thành phiếu nhập thủ công: lưu header, chi tiết, tồn kho, công nợ và
+    /// khoản chi thanh toán trong cùng transaction.
     /// </summary>
     public async Task<uint> LuuPhieuNhapHangAsync(
         PhieuNhapHang phieu,
@@ -8163,17 +8409,21 @@ ORDER BY hd.thoi_gian_ban DESC
         MySqlConnection connection,
         MySqlTransaction transaction,
         PhieuNhapHang phieu,
-        uint branchId)
+        uint branchId,
+        bool xoaLichSuCu = true)
     {
         if (phieu.NhaCungCapId is not uint nccId || nccId == 0)
             return;
 
         // Chống ghi trùng khi một phiếu được sửa rồi hoàn thành lại:
         // xoá các dòng cũ của chính mã phiếu này trước khi ghi lại.
-        await connection.ExecuteAsync(
-            "DELETE FROM lich_su_cong_no_nha_cung_cap WHERE ma_chung_tu = @MaChungTu;",
-            new { phieu.MaPhieuNhap },
-            transaction);
+        if (xoaLichSuCu)
+        {
+            await connection.ExecuteAsync(
+                "DELETE FROM lich_su_cong_no_nha_cung_cap WHERE ma_chung_tu = @MaChungTu;",
+                new { phieu.MaPhieuNhap },
+                transaction);
+        }
 
         // Khoản mua làm tăng nợ phải trả, nên ghi nợ.
         if (phieu.TongTienNhap > 0)
