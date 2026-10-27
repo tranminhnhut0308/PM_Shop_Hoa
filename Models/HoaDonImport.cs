@@ -45,10 +45,12 @@ public enum TruongHoaDon
 {
     MaHoaDon,
     ThoiGian,
+    MaTraHang,
     MaKhachHang,
     TenKhachHang,
     SoDienThoai,
     TongTien,
+    TongSauGiamGia,
     GiamGia,
     DaThanhToan,
     ConNo,
@@ -86,10 +88,12 @@ public static class TenTruongHoaDon
     [
         TruongHoaDon.MaHoaDon,
         TruongHoaDon.ThoiGian,
+        TruongHoaDon.MaTraHang,
         TruongHoaDon.MaKhachHang,
         TruongHoaDon.TenKhachHang,
         TruongHoaDon.SoDienThoai,
         TruongHoaDon.TongTien,
+        TruongHoaDon.TongSauGiamGia,
         TruongHoaDon.GiamGia,
         TruongHoaDon.DaThanhToan,
         TruongHoaDon.ConNo,
@@ -112,10 +116,12 @@ public static class TenTruongHoaDon
     {
         TruongHoaDon.MaHoaDon => "Mã hóa đơn",
         TruongHoaDon.ThoiGian => "Thời gian bán",
+        TruongHoaDon.MaTraHang => "Mã trả hàng",
         TruongHoaDon.MaKhachHang => "Mã khách hàng",
         TruongHoaDon.TenKhachHang => "Tên khách hàng",
         TruongHoaDon.SoDienThoai => "Số điện thoại",
         TruongHoaDon.TongTien => "Tổng tiền hàng",
+        TruongHoaDon.TongSauGiamGia => "Tổng sau giảm giá",
         TruongHoaDon.GiamGia => "Giảm giá",
         TruongHoaDon.DaThanhToan => "Khách đã thanh toán",
         TruongHoaDon.ConNo => "Còn nợ",
@@ -138,6 +144,7 @@ public static class TenTruongHoaDon
         TruongHoaDon.TenKhachHang => "Cả mã lẫn tên đều trống thì coi là bán lẻ",
         TruongHoaDon.SoDienThoai => "Dùng khi không có mã khách hàng",
         TruongHoaDon.TongTien => "Bỏ trống thì tính từ tổng dòng chi tiết",
+        TruongHoaDon.TongSauGiamGia => "Dùng đối chiếu tổng tiền hàng trừ giảm giá",
         TruongHoaDon.GiamGia => "Giảm trên cả hóa đơn",
         TruongHoaDon.DaThanhToan => "Bỏ trống thì coi như đã trả đủ",
         TruongHoaDon.ConNo => "Chỉ để đối chiếu, phần mềm tự tính lại",
@@ -282,14 +289,27 @@ public sealed class MappingHoaDon
     public bool DaKhopDayDu => SheetsDung.Any() && !CoTruongChuaGan().Any();
 
     /// <summary>
-    /// Các trường bắt buộc mà chưa được gán cột. Mã hóa đơn luôn bắt buộc,
-    /// các trường dòng hàng hóa chỉ bắt buộc với sheet có dòng hàng hóa.
+    /// Các trường bắt buộc mà chưa được gán cột. Sheet danh sách hóa đơn
+    /// không kèm sheet hàng hóa cần đủ trường tiền/thời gian để nhập dạng
+    /// tổng hợp; các trường dòng hàng hóa chỉ bắt buộc với sheet có hàng hóa.
     /// </summary>
     public IEnumerable<TruongHoaDon> CoTruongChuaGan()
     {
         foreach (var sheet in SheetsDung)
         {
-            foreach (var truong in LayTruongBatBuoc(sheet.Loai))
+            var truongBatBuoc = sheet.Loai == LoaiSheetHoaDon.HoaDon && !CoSheetChiTiet
+                ? new[]
+                {
+                    TruongHoaDon.MaHoaDon,
+                    TruongHoaDon.ThoiGian,
+                    TruongHoaDon.TongTien,
+                    TruongHoaDon.GiamGia,
+                    TruongHoaDon.TongSauGiamGia,
+                    TruongHoaDon.DaThanhToan
+                }
+                : LayTruongBatBuoc(sheet.Loai);
+
+            foreach (var truong in truongBatBuoc)
             {
                 if (!sheet.Map.ContainsKey(truong))
                     yield return truong;
@@ -399,6 +419,8 @@ public sealed class HoaDonImportRow
     /// <summary>Thời gian bán trong file, null nghĩa là file không có cột này.</summary>
     public DateTime? ThoiGianRaw { get; init; }
 
+    public string? MaTraHangRaw { get; init; }
+
     /// <summary>
     /// Thời điểm bắt đầu lượt import, dùng làm thời gian bán cho những hóa đơn
     /// mà file không có cột ngày. Chốt một lần cho cả lượt nên không bị lệch
@@ -419,7 +441,12 @@ public sealed class HoaDonImportRow
     /// <summary>Tổng tiền hàng trong file, null nghĩa là không có cột này.</summary>
     public decimal? TongTienRaw { get; init; }
 
+    /// <summary>Tổng sau giảm giá trong file, dùng để kiểm tra phép tính tiền.</summary>
+    public decimal? TongSauGiamGiaRaw { get; init; }
+
     public decimal GiamGia { get; init; }
+
+    public bool CoGiamGiaTrongFile { get; init; }
 
     /// <summary>Số tiền khách đã trả trong file, null nghĩa là không có cột này.</summary>
     public decimal? KhachDaThanhToanRaw { get; init; }
@@ -439,6 +466,9 @@ public sealed class HoaDonImportRow
 
     /// <summary>Mã hóa đơn đã có sẵn trong database.</summary>
     public bool LaHoaDonTrung { get; set; }
+
+    /// <summary>Không có dòng hàng trong file; chỉ lưu header và số liệu đối chiếu.</summary>
+    public bool LaHoaDonTongHop { get; set; }
 
     public TrangThaiKhachHangHoaDon TrangThaiKhachHang { get; set; } = TrangThaiKhachHangHoaDon.KhachLe;
 
@@ -475,11 +505,14 @@ public sealed class HoaDonImportRow
     /// Số tiền khách đã trả: không có cột thì coi như trả đủ, có cột thì
     /// không được vượt quá số tiền cần trả (phần vượt ghi vào thu khác).
     /// </summary>
-    public decimal DaThanhToanChuan =>
-        Math.Clamp(KhachDaThanhToanRaw ?? KhachCanTra, 0m, KhachCanTra);
+    public decimal DaThanhToanChuan => LaHoaDonTongHop
+        ? KhachDaThanhToanRaw ?? 0m
+        : Math.Clamp(KhachDaThanhToanRaw ?? KhachCanTra, 0m, KhachCanTra);
 
     /// <summary>Phần tiền khách trả vượt, ghi vào cột thu_khac giống lúc bán hàng.</summary>
-    public decimal ThuKhacChuan => Math.Max(0m, (KhachDaThanhToanRaw ?? 0m) - KhachCanTra);
+    public decimal ThuKhacChuan => LaHoaDonTongHop
+        ? 0m
+        : Math.Max(0m, (KhachDaThanhToanRaw ?? 0m) - KhachCanTra);
 
     /// <summary>
     /// Công nợ luôn được tính lại từ tiền trong file thay vì tin cột "Còn nợ",
@@ -556,6 +589,9 @@ public sealed class HoaDonImportPreview
     /// <summary>Số hóa đơn đọc được sau khi gộp các dòng cùng mã.</summary>
     public int TongSoHoaDon { get; init; }
 
+    /// <summary>Số hóa đơn chỉ có dữ liệu tổng hợp, không có dòng hàng hóa.</summary>
+    public int SoHoaDonTongHop { get; init; }
+
     /// <summary>Tổng số dòng chi tiết hàng hóa đọc được từ file.</summary>
     public int TongSoDongChiTiet { get; init; }
 
@@ -618,6 +654,9 @@ public sealed class HoaDonImportResult
 
     public int TongSoHoaDon { get; init; }
 
+    /// <summary>Số hóa đơn tổng hợp đã được ghi thành công.</summary>
+    public int SoHoaDonTongHopDaGhi { get; set; }
+
     public int TongSoDongChiTiet { get; init; }
 
     /// <summary>Số hóa đơn bị lỗi ngay khi đọc và kiểm tra file.</summary>
@@ -666,6 +705,9 @@ public sealed class HoaDonImportResult
                 $"Bỏ qua: {SoBoQua:N0}",
                 $"Dữ liệu lỗi: {SoLoi:N0}"
             };
+
+            if (SoHoaDonTongHopDaGhi > 0)
+                dong.Add($"Hóa đơn tổng hợp đã ghi: {SoHoaDonTongHopDaGhi:N0} (không có chi tiết hàng hóa)");
 
             if (SoKhachHangTaoMoi > 0)
                 dong.Add($"Khách hàng đã tạo mới: {SoKhachHangTaoMoi:N0}");

@@ -6,6 +6,7 @@ public sealed class HoaDonBanHangReceipt
     public uint HoaDonId { get; set; }
 
     public string MaHoaDon { get; set; } = "";
+    public bool LaHoaDonTongHop { get; set; }
     public DateTime ThoiGianBan { get; set; }
     public string TenKhachHang { get; set; } = "Khách lẻ";
     public string TenNhanVien { get; set; } = "";

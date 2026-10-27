@@ -84,6 +84,14 @@ public partial class HoaDonImportPreviewWindow : Window
                 + $"(mới {preview.SoHoaDonMoi:N0}, trùng mã {preview.SoHoaDonTrung:N0})"
         };
 
+        if (preview.SoHoaDonTongHop > 0)
+        {
+            dong.Add(
+                $"Chế độ tổng hợp: {preview.SoHoaDonTongHop:N0} hóa đơn không có chi tiết hàng hóa. "
+                + "Chúng được đánh dấu riêng, không tạo dòng hàng, không trừ tồn kho "
+                + "và không tạo phiếu thu/giao dịch quỹ.");
+        }
+
         if (preview.SoHoaDonHuy > 0)
             dong.Add($"Bị hủy ngay trong file nên không nhập: {preview.SoHoaDonHuy:N0}");
 

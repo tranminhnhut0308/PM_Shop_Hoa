@@ -4303,11 +4303,14 @@ public sealed class DatabaseService
     public async Task<IReadOnlyList<HoaDon>> GetHoaDonAsync(
      string? search = null,
      string? trangThaiLoc = null,
-     DateTime? ngayLoc = null)
+     DateTime? ngayLoc = null,
+     int? limit = 500)
     {
         await using var connection = await OpenAsync();
 
-        const string sql = """
+        var limitClause = limit.HasValue ? $"LIMIT {limit.Value}" : "";
+
+        var sql = $"""
 SELECT
     hd.id AS Id,
     hd.ma_hoa_don AS MaHoaDon,
@@ -4323,6 +4326,7 @@ SELECT
     hd.khach_da_thanh_toan AS KhachDaThanhToan,
     hd.con_no AS ConNo,
     hd.trang_thai_thanh_toan AS TrangThaiThanhToan,
+    hd.trang_thai_hoa_don AS TrangThaiHoaDon,
     hd.ghi_chu AS GhiChu
 
 FROM hoa_don_ban_hang hd
@@ -4347,7 +4351,7 @@ AND (
 )
 
 ORDER BY hd.thoi_gian_ban DESC
-LIMIT 500;
+{limitClause};
 """;
 
         return (
@@ -4454,6 +4458,7 @@ LIMIT 500;
             hd.khach_can_tra            AS KhachCanTra,
             hd.khach_da_thanh_toan      AS KhachDaThanhToan,
             hd.con_no                   AS ConNo,
+            hd.trang_thai_hoa_don       AS TrangThaiHoaDon,
             hd.ghi_chu                  AS GhiChu,
             {contactCols}
         FROM hoa_don_ban_hang hd
@@ -4499,6 +4504,10 @@ LIMIT 500;
         {
             HoaDonId = (uint)header.HoaDonId,
             MaHoaDon = header.MaHoaDon ?? maCanTim,
+            LaHoaDonTongHop = string.Equals(
+                header.TrangThaiHoaDon?.ToString(),
+                "TONG_HOP",
+                StringComparison.OrdinalIgnoreCase),
             ThoiGianBan = header.ThoiGianBan,
             TenKhachHang = header.TenKhachHang ?? "Khách lẻ",
             TenNhanVien = header.TenNhanVien ?? "",
@@ -11127,4 +11136,3 @@ LIMIT 500;
     #endregion
 
 }
-

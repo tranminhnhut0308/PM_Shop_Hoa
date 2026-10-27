@@ -101,6 +101,13 @@
         FontWeight="Bold" Foreground="#163F38" />
       <TextBlock Text="{Binding MaHoaDon, StringFormat=Mã hóa đơn: {0}}"
         HorizontalAlignment="Center" Foreground="#61736E" />
+      <Border IsVisible="{Binding LaHoaDonTongHop}"
+        Background="#FFF7E8" BorderBrush="#F0D9AE" BorderThickness="1"
+        CornerRadius="6" Padding="10,8" Margin="0,6,0,0">
+        <TextBlock Text="HÓA ĐƠN TỔNG HỢP — file nguồn không có chi tiết hàng hóa. Không thể kiểm tra/in danh sách sản phẩm."
+          TextWrapping="Wrap" TextAlignment="Center" FontSize="12"
+          FontWeight="SemiBold" Foreground="#7A5210" />
+      </Border>
       <TextBlock Text="{Binding ThoiGianBan, StringFormat=Ngày bán: {0:dd/MM/yyyy HH:mm}}"
         HorizontalAlignment="Center" Foreground="#61736E" />
       <TextBlock Text="{Binding MaPhieuThu, StringFormat=Phiếu thu: {0}}"
@@ -287,7 +294,7 @@
           Classes="btn-pay-debt" IsVisible="False"
           Click="ThanhToanCongNoButton_OnClick"
           ToolTip.Tip="Thu công nợ cho hóa đơn này" />
-        <Button Content="🖨 In hóa đơn" Classes="btn-print"
+        <Button x:Name="PrintButton" Content="🖨 In hóa đơn" Classes="btn-print"
           Click="PrintButton_OnClick" />
         <Button Content="Đóng" Classes="btn-close"
           Click="CloseButton_OnClick" />

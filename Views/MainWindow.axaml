@@ -3056,6 +3056,12 @@
                   IsVisible="{Binding CanImportInvoice}" />
 
                 <Button Classes="toolbar-action"
+                  Content="📤 Xuất file"
+                  Command="{Binding XuatFileHoaDonCommand}"
+                  ToolTip.Tip="Xuất danh sách hóa đơn đang xem ra file Excel"
+                  IsVisible="{Binding CanExportInvoice}" />
+
+                <Button Classes="toolbar-action"
                   Content="↻ Làm mới"
                   Command="{Binding ClearInvoiceSearchCommand}" />
               </StackPanel>
@@ -3237,6 +3243,12 @@
                                 Command="{Binding ElementName=RootWindow, Path=DataContext.XemHoaDonCommand}"
                                 CommandParameter="{Binding}" />
                             </StackPanel>
+                            <TextBlock Text="HÓA ĐƠN TỔNG HỢP — KHÔNG CÓ CHI TIẾT"
+                              IsVisible="{Binding LaHoaDonTongHop}"
+                              FontSize="10"
+                              FontWeight="SemiBold"
+                              Foreground="#8A5A00"
+                              Margin="17,0,0,0" />
                             <TextBlock Text="{Binding GhiChu}"
                               IsVisible="{Binding CoGhiChu}"
                               FontSize="11"

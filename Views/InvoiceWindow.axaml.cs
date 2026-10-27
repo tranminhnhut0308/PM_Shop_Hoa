@@ -35,6 +35,7 @@ public partial class InvoiceWindow : Window
         _thuCongNo = thuCongNo;
         DataContext = receipt;
         CapNhatNutThanhToan(receipt);
+        PrintButton.IsVisible = !receipt.LaHoaDonTongHop;
     }
 
     public InvoiceWindow(

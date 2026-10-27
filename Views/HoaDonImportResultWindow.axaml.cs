@@ -68,6 +68,9 @@ public partial class HoaDonImportResultWindow : Window
         dong.Add($"Thêm mới: {ketQua.SoThemMoi:N0} hóa đơn");
         dong.Add($"Cập nhật hóa đơn trùng mã: {ketQua.SoCapNhat:N0} hóa đơn");
 
+        if (ketQua.SoHoaDonTongHopDaGhi > 0)
+            dong.Add($"Đã ghi dạng tổng hợp (không có chi tiết hàng hóa): {ketQua.SoHoaDonTongHopDaGhi:N0}");
+
         if (ketQua.SoBoQua > 0)
             dong.Add($"Bỏ qua theo lựa chọn của bạn: {ketQua.SoBoQua:N0} hóa đơn");
 

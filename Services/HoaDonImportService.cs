@@ -53,6 +53,7 @@ public sealed class HoaDonImportService
 
     private const string DaThanhToan = "DA_THANH_TOAN";
     private const string HoanThanh = "HOAN_THANH";
+    private const string HoaDonTongHop = "TONG_HOP";
 
     private readonly DatabaseService _db = new();
 
@@ -80,6 +81,8 @@ public sealed class HoaDonImportService
             "thoigian", "thoigianban", "thoigianbanhang", "ngay", "ngayban", "ngaylap",
             "ngayhoadon", "ngaytao", "ngayxuat", "ngayhd", "ngaygd", "date", "datetime",
             "thoidiem", "ngayvao")),
+        (TruongHoaDon.MaTraHang, TaoKhoa(
+            "matrahang", "sophieutrahang", "mabaohanhtra", "returncode")),
         (TruongHoaDon.MaKhachHang, TaoKhoa(
             "makhachhang", "makh", "mkh", "mach", "customercode", "mkhach",
             "codekhachhang", "makkh", "makhachhangcu", "codekh")),
@@ -93,6 +96,9 @@ public sealed class HoaDonImportService
             "tongtien", "tongtienhang", "tongtiendonhang", "tongtienthanhtoan",
             "tonggiatri", "tongtienhd", "total", "subtotal", "tongtienban", "tong",
             "tongtienthanhtoanhd", "amounttotal", "tongthanhtoanhd")),
+        (TruongHoaDon.TongSauGiamGia, TaoKhoa(
+            "tongsausiamgia", "tongtiensausiamgia", "thanhtoansaugiamgia",
+            "totalafterdiscount", "nettotal")),
         (TruongHoaDon.GiamGia, TaoKhoa(
             "giamgia", "giamgiahd", "giamgiatong", "discount", "chietkhau",
             "chietkhauhd", "giam", "giamgiadong", "giamgiahang")),
@@ -418,6 +424,7 @@ public sealed class HoaDonImportService
                                     || Map.ContainsKey(TruongHoaDon.DonGia);
 
         public bool CoCotTien => Map.ContainsKey(TruongHoaDon.TongTien)
+                                 || Map.ContainsKey(TruongHoaDon.TongSauGiamGia)
                                  || Map.ContainsKey(TruongHoaDon.DaThanhToan)
                                  || Map.ContainsKey(TruongHoaDon.ConNo)
                                  || Map.ContainsKey(TruongHoaDon.TrangThai);
@@ -1022,6 +1029,16 @@ public sealed class HoaDonImportService
         var danhSach = new List<HoaDonImportRow>(duLieu.Nhom.Count);
         var maKhachCoTheTao = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        if (duLieu.TongSoDongChiTiet == 0 && duLieu.Nhom.Count > 0)
+        {
+            ThemCanhBao(
+                canhBao,
+                "File không có dòng hàng hóa. Các hóa đơn hợp lệ sẽ được lưu ở chế độ TỔNG HỢP: "
+                + "không tạo dòng sản phẩm, không trừ tồn kho, không tạo phiếu thu/giao dịch quỹ. "
+                + "Số đã trả được lưu trên hóa đơn; công nợ còn lại được ghi theo quy tắc hiện tại của phần mềm. "
+                + "Loại này không được tính vào báo cáo doanh thu chỉ lấy hóa đơn hoàn thành.");
+        }
+
         var soHoaDonMoi = 0;
         var soHoaDonTrung = 0;
         var soKhachHangThieu = 0;
@@ -1032,10 +1049,11 @@ public sealed class HoaDonImportService
 
         var khachHang = await TaiKhachHangAsync(connection, ct);
         var sanPham = await TaiSanPhamAsync(connection, ct);
-        var maHoaDonTonTai = await TaiMaHoaDonTonTaiAsync(
+        var hoaDonTonTai = await TaiHoaDonTonTaiAsync(
             connection,
             duLieu.Nhom.Select(h => h.MaHoaDon).ToList(),
             ct);
+        var maHoaDonTonTai = hoaDonTonTai.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var index = 0;
 
@@ -1089,41 +1107,75 @@ public sealed class HoaDonImportService
 
             hoaDon.LaHoaDonTrung = maHoaDonTonTai.Contains(group.MaHoaDon);
 
-            if (hoaDon.LaHoaDonTrung)
-                soHoaDonTrung++;
-            else
-                soHoaDonMoi++;
-
             if (hoaDon.DaHuyTrongFile)
                 soHoaDonHuy++;
 
             if (group.ChiTiet.Count == 0)
             {
+                if (duLieu.TongSoDongChiTiet > 0)
+                {
+                    loi.Add(new HoaDonImportError(
+                        group.SoDongDau,
+                        group.MaHoaDon,
+                        "Không có dòng chi tiết hàng hóa nào khớp mã hóa đơn này. "
+                        + "Hãy kiểm tra sheet chi tiết có các cột Mã hóa đơn, Mã hàng hóa, Số lượng và Đơn giá, "
+                        + "đồng thời mã hóa đơn phải khớp. Phần mềm đọc nhiều sheet trong cùng workbook; "
+                        + "nếu chi tiết ở file khác, hãy cung cấp dữ liệu đó thành một sheet của workbook. "
+                        + "Hóa đơn này không được nhập dạng tổng hợp vì file đang có dữ liệu chi tiết."));
+                    continue;
+                }
+
+                hoaDon.LaHoaDonTongHop = true;
+                var loiTongHop = KiemTraHoaDonTongHop(
+                    hoaDon,
+                    hoaDonTonTai.TryGetValue(group.MaHoaDon, out var trangThaiCu) ? trangThaiCu : null);
+
+                if (loiTongHop.Count > 0)
+                {
+                    foreach (var lyDo in loiTongHop)
+                        loi.Add(new HoaDonImportError(group.SoDongDau, group.MaHoaDon, lyDo));
+
+                    continue;
+                }
+            }
+            else
+            {
+                var ketQuaChiTiet = DocChiTiet(group, sanPham, ct);
+
+                if (ketQuaChiTiet.Loi.Count > 0)
+                {
+                    if (ketQuaChiTiet.CoThieuSanPham)
+                        soSanPhamThieu++;
+
+                    // Giữ lại toàn bộ lỗi từng dòng để file xuất lỗi có đủ số liệu,
+                    // không cắt bớt ở đây.
+                    loi.AddRange(ketQuaChiTiet.Loi);
+
+                    continue;
+                }
+
+                hoaDon.ChiTiet.AddRange(ketQuaChiTiet.ChiTiet);
+                CanhBaoTienLlech(hoaDon, canhBao);
+            }
+
+            hoaDon.TrangThaiKhachHang = ResolveKhachHang(hoaDon, khachHang);
+
+            if (hoaDon.LaHoaDonTongHop
+                && hoaDon.ConNoChuan > 0m
+                && hoaDon.TrangThaiKhachHang == TrangThaiKhachHangHoaDon.KhachLe)
+            {
                 loi.Add(new HoaDonImportError(
                     group.SoDongDau,
                     group.MaHoaDon,
-                    "Không có dòng chi tiết hàng hóa nào khớp mã hóa đơn này."));
+                    "Hóa đơn tổng hợp còn nợ nhưng được xác định là khách lẻ; cần mã/tên khách hàng hợp lệ "
+                    + "để ghi nhận công nợ theo quy tắc của phần mềm."));
                 continue;
             }
 
-            var ketQuaChiTiet = DocChiTiet(group, sanPham, ct);
-
-            if (ketQuaChiTiet.Loi.Count > 0)
-            {
-                if (ketQuaChiTiet.CoThieuSanPham)
-                    soSanPhamThieu++;
-
-                // Giữ lại toàn bộ lỗi từng dòng để file xuất lỗi có đủ số liệu,
-                // không cắt bớt ở đây.
-                loi.AddRange(ketQuaChiTiet.Loi);
-
-                continue;
-            }
-
-            hoaDon.ChiTiet.AddRange(ketQuaChiTiet.ChiTiet);
-            CanhBaoTienLlech(hoaDon, canhBao);
-
-            hoaDon.TrangThaiKhachHang = ResolveKhachHang(hoaDon, khachHang);
+            if (hoaDon.LaHoaDonTrung)
+                soHoaDonTrung++;
+            else
+                soHoaDonMoi++;
 
             if (hoaDon.TrangThaiKhachHang == TrangThaiKhachHangHoaDon.ChuaCoTrongDatabase)
             {
@@ -1157,6 +1209,7 @@ public sealed class HoaDonImportService
             TenFile = Path.GetFileName(filePath),
             TongSoHoaDon = duLieu.Nhom.Count,
             TongSoDongChiTiet = duLieu.TongSoDongChiTiet,
+            SoHoaDonTongHop = danhSach.Count(h => h.LaHoaDonTongHop),
             SoHoaDonMoi = soHoaDonMoi,
             SoHoaDonTrung = soHoaDonTrung,
             SoHoaDonHopLe = danhSach.Count,
@@ -1170,6 +1223,66 @@ public sealed class HoaDonImportService
             DanhSachLoi = loi,
             CanhBao = canhBao
         };
+    }
+
+    private static List<string> KiemTraHoaDonTongHop(
+        HoaDonImportRow hoaDon,
+        string? trangThaiHoaDonCu)
+    {
+        var loi = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(hoaDon.MaTraHangRaw))
+            loi.Add(
+                $"Có mã trả hàng \"{hoaDon.MaTraHangRaw}\" nhưng file tổng hợp không chứa dữ liệu điều chỉnh/trả hàng. "
+                + "Hãy import dữ liệu trả hàng tương ứng trước khi nhập hóa đơn này.");
+
+        if (hoaDon.ThoiGianRaw is null)
+            loi.Add("Hóa đơn tổng hợp thiếu thời gian bán; không thể gán ngày hiện tại cho dữ liệu lịch sử.");
+
+        if (hoaDon.TongTienRaw is null)
+            loi.Add("Hóa đơn tổng hợp thiếu cột \"Tổng tiền hàng\".");
+
+        if (!hoaDon.CoGiamGiaTrongFile)
+            loi.Add("Hóa đơn tổng hợp thiếu cột \"Giảm giá\"; không thể xác định chính xác số tiền cần trả.");
+
+        if (hoaDon.TongTienRaw is { } tongTien && hoaDon.GiamGia > tongTien)
+            loi.Add("Giảm giá lớn hơn tổng tiền hàng.");
+
+        if (hoaDon.TongSauGiamGiaRaw is null)
+            loi.Add("Hóa đơn tổng hợp thiếu cột \"Tổng sau giảm giá\" để đối chiếu tổng tiền.");
+
+        if (hoaDon.KhachDaThanhToanRaw is null)
+            loi.Add("Hóa đơn tổng hợp thiếu cột \"Khách đã trả\"; phần mềm không tự giả định đã thanh toán đủ.");
+        else if (hoaDon.KhachDaThanhToanRaw > hoaDon.KhachCanTra)
+            loi.Add(
+                $"Khách đã trả ({hoaDon.KhachDaThanhToanRaw:N2}) lớn hơn tổng sau giảm giá "
+                + $"({hoaDon.KhachCanTra:N2}); không thể suy đoán phần chênh lệch là tiền thối.");
+
+        if (hoaDon.TongSauGiamGiaRaw is { } tongSauGiamGia
+            && Math.Abs(tongSauGiamGia - hoaDon.KhachCanTra) > 0.01m)
+        {
+            loi.Add(
+                $"Tổng sau giảm giá ({tongSauGiamGia:N2}) không khớp tổng tiền hàng trừ giảm giá "
+                + $"({hoaDon.KhachCanTra:N2}).");
+        }
+
+        if (hoaDon.ConNoRaw is { } conNo
+            && Math.Abs(conNo - hoaDon.ConNoChuan) > 0.01m)
+        {
+            loi.Add(
+                $"Còn nợ trong file ({conNo:N2}) không khớp số tiền cần trả trừ số đã trả "
+                + $"({hoaDon.ConNoChuan:N2}) theo quy tắc thanh toán của phần mềm.");
+        }
+
+        if (hoaDon.LaHoaDonTrung
+            && !string.Equals(trangThaiHoaDonCu, HoaDonTongHop, StringComparison.OrdinalIgnoreCase))
+        {
+            loi.Add(
+                "Mã hóa đơn đã tồn tại dưới dạng hóa đơn có chi tiết; không thể ghi đè bằng file tổng hợp "
+                + "vì sẽ làm mất dữ liệu hàng hóa.");
+        }
+
+        return loi;
     }
 
     /// <summary>Độ dài tối đa của cột ma_khach_hang trong database.</summary>
@@ -1248,6 +1361,21 @@ public sealed class HoaDonImportService
             ThemCanhBao(canhBao, "File không có cột tổng tiền, tổng tiền sẽ tính từ các dòng chi tiết.");
         }
 
+        var rawTongSauGiamGia = header is null
+            ? null
+            : LayGiaTri(header, TruongHoaDon.TongSauGiamGia);
+        decimal? tongSauGiamGia = null;
+
+        if (!string.IsNullOrWhiteSpace(rawTongSauGiamGia))
+        {
+            tongSauGiamGia = DatabaseService.ParseSoTien(rawTongSauGiamGia);
+
+            if (tongSauGiamGia is null)
+                loi.Add($"Tổng sau giảm giá không phải là số hợp lệ: \"{rawTongSauGiamGia}\".");
+            else if (tongSauGiamGia < 0m)
+                loi.Add($"Tổng sau giảm giá bị âm: \"{rawTongSauGiamGia}\".");
+        }
+
         var rawDaTra = header is null ? null : LayGiaTri(header, TruongHoaDon.DaThanhToan);
         decimal? daThanhToan = null;
 
@@ -1299,12 +1427,15 @@ public sealed class HoaDonImportService
             SoDongExcel = group.SoDongDau,
             MaHoaDon = group.MaHoaDon,
             ThoiGianRaw = thoiGian,
+            MaTraHangRaw = header is null ? null : LayGiaTri(header, TruongHoaDon.MaTraHang),
             ThoiGianMacDinh = thoiGianMacDinh,
             MaKhachHang = header is null ? null : LayGiaTri(header, TruongHoaDon.MaKhachHang),
             TenKhachHang = header is null ? null : LayGiaTri(header, TruongHoaDon.TenKhachHang),
             SoDienThoai = header is null ? null : LayGiaTri(header, TruongHoaDon.SoDienThoai),
             TongTienRaw = tongTien,
+            TongSauGiamGiaRaw = tongSauGiamGia,
             GiamGia = giamGia,
+            CoGiamGiaTrongFile = rawGiamGia is not null,
             KhachDaThanhToanRaw = daThanhToan,
             ConNoRaw = conNo,
             TrangThaiRaw = rawTrangThai,
@@ -1559,12 +1690,12 @@ public sealed class HoaDonImportService
     /// Lấy danh sách mã hóa đơn đã có trong database. Chỉ hỏi đúng những mã có
     /// trong file, không tải cả bảng hóa đơn.
     /// </summary>
-    private static async Task<HashSet<string>> TaiMaHoaDonTonTaiAsync(
+    private static async Task<Dictionary<string, string>> TaiHoaDonTonTaiAsync(
         MySqlConnection connection,
         List<string> maTrongFile,
         CancellationToken ct)
     {
-        var ketQua = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ketQua = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         if (maTrongFile.Count == 0)
             return ketQua;
@@ -1583,14 +1714,17 @@ public sealed class HoaDonImportService
             }
 
             var sql = $"""
-                SELECT ma_hoa_don FROM {BangHoaDon}
+                SELECT ma_hoa_don AS MaHoaDon, trang_thai_hoa_don AS TrangThaiHoaDon
+                FROM {BangHoaDon}
                 WHERE ma_hoa_don IN ({string.Join(", ", dieuKien)});
                 """;
 
-            foreach (var ma in await connection.QueryAsync<string>(sql, parameters))
+            foreach (var row in await connection.QueryAsync<(string MaHoaDon, string TrangThaiHoaDon)>(
+                         sql,
+                         parameters))
             {
-                if (!string.IsNullOrWhiteSpace(ma))
-                    ketQua.Add(ma.Trim());
+                if (!string.IsNullOrWhiteSpace(row.MaHoaDon))
+                    ketQua[row.MaHoaDon.Trim()] = row.TrangThaiHoaDon;
             }
         }
 
@@ -1878,6 +2012,7 @@ public sealed class HoaDonImportService
             result.DaHuy = true;
             result.SoThemMoi = 0;
             result.SoCapNhat = 0;
+            result.SoHoaDonTongHopDaGhi = 0;
         }
         catch (Exception ex)
         {
@@ -1886,6 +2021,7 @@ public sealed class HoaDonImportService
             result.DaRollback = true;
             result.SoThemMoi = 0;
             result.SoCapNhat = 0;
+            result.SoHoaDonTongHopDaGhi = 0;
             result.DanhSachLoi.Add(new HoaDonImportError(
                 0,
                 null,
@@ -1916,6 +2052,51 @@ public sealed class HoaDonImportService
     // ============================================================
     // GHI THEO BÁT
     // ============================================================
+
+    private static async Task KiemTraHoaDonTongHopCapNhatAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        IReadOnlyList<string> maHoaDon,
+        CancellationToken ct)
+    {
+        foreach (var chunk in Chunk(maHoaDon, 500))
+        {
+            ct.ThrowIfCancellationRequested();
+            var (parameters, dieuKien) = TaoDieuKienMa(chunk);
+            parameters.Add("LoaiTongHop", HoaDonTongHop, DbType.String);
+
+            var khongAnToan = (await connection.QueryAsync<string>(
+                $"""
+                 SELECT h.ma_hoa_don
+                 FROM {BangHoaDon} h
+                 WHERE h.ma_hoa_don IN ({dieuKien})
+                   AND (
+                       h.trang_thai_hoa_don <> @LoaiTongHop
+                       OR EXISTS (
+                           SELECT 1
+                           FROM {BangChiTiet} c
+                           WHERE c.hoa_don_id = h.id
+                       )
+                       OR EXISTS (
+                           SELECT 1
+                           FROM thanh_toan t
+                           WHERE t.hoa_don_id = h.id
+                       )
+                   );
+                 """,
+                parameters,
+                transaction)).AsList();
+
+            if (khongAnToan.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "Không cập nhật hóa đơn tổng hợp vì mã đã có trạng thái khác, chi tiết hàng hóa "
+                    + "hoặc giao dịch thanh toán: "
+                    + string.Join(", ", khongAnToan.Take(10))
+                    + ". Dữ liệu hiện có được giữ nguyên.");
+            }
+        }
+    }
 
     /// <summary>
     /// Ghi một bát hóa đơn bằng vài câu lệnh: một lệnh ghi header, một lệnh
@@ -1949,10 +2130,20 @@ public sealed class HoaDonImportService
 
         if (capNhat.Count > 0)
         {
+            await KiemTraHoaDonTongHopCapNhatAsync(
+                connection,
+                transaction,
+                capNhat.Where(h => h.LaHoaDonTongHop).Select(h => h.MaHoaDon).ToList(),
+                ct);
+
             await CapNhatHeaderAsync(connection, transaction, capNhat, branchId, userId, ct);
 
-            // Xóa chi tiết và công nợ cũ trước, cùng một transaction.
-            await XoaChiTietCuAsync(connection, transaction, capNhat.Select(h => h.MaHoaDon), ct);
+            // Chỉ hóa đơn nhập đầy đủ mới thay thế chi tiết; import tổng hợp không xóa dữ liệu hàng cũ.
+            await XoaChiTietCuAsync(
+                connection,
+                transaction,
+                capNhat.Where(h => !h.LaHoaDonTongHop).Select(h => h.MaHoaDon),
+                ct);
             await XoaCongNoCuAsync(connection, transaction, capNhat.Select(h => h.MaHoaDon), ct);
         }
 
@@ -2016,6 +2207,7 @@ public sealed class HoaDonImportService
 
         result.SoThemMoi += moi.Count;
         result.SoCapNhat += capNhat.Count;
+        result.SoHoaDonTongHopDaGhi += batch.Count(h => h.LaHoaDonTongHop);
     }
 
     /// <summary>
@@ -2084,7 +2276,7 @@ public sealed class HoaDonImportService
             MaHoaDon = hd.MaHoaDon,
             ChiNhanhId = branchId,
             KhachHangId = hd.IdKhachHang,
-            NguoiBanId = userId,
+            NguoiBanId = hd.LaHoaDonTongHop ? null : userId,
             ThoiGianBan = hd.ThoiGianBan,
             TongTienHang = Tien(hd.TongTienHieuDung),
             GiamGia = Tien(hd.GiamGia),
@@ -2093,7 +2285,7 @@ public sealed class HoaDonImportService
             KhachDaThanhToan = Tien(hd.DaThanhToanChuan),
             ConNo = Tien(hd.ConNoChuan),
             TrangThaiThanhToan = hd.TrangThaiThanhToanChuan,
-            TrangThaiHoaDon = HoanThanh,
+            TrangThaiHoaDon = hd.LaHoaDonTongHop ? HoaDonTongHop : HoanThanh,
             GhiChu = hd.GhiChu
         };
 

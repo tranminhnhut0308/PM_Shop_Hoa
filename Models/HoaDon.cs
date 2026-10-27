@@ -28,6 +28,13 @@ public sealed class HoaDon
 
     public string TrangThaiThanhToan { get; set; } = "";
 
+    public string TrangThaiHoaDon { get; set; } = "";
+
+    public bool LaHoaDonTongHop => string.Equals(
+        TrangThaiHoaDon,
+        "TONG_HOP",
+        StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Ghi chú riêng của hóa đơn (yêu cầu riêng của khách...).</summary>
     public string? GhiChu { get; set; }
 

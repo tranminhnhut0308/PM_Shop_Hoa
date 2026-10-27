@@ -342,4 +342,99 @@ public sealed partial class MainWindowViewModel
         return $"✅ Đã nhập {ketQua.SoThemMoi:N0}, cập nhật {ketQua.SoCapNhat:N0} hóa đơn "
             + $"từ file \"{ketQua.TenFile}\". {ketQua.ThongBaoTatCa}";
     }
+
+    /// <summary>
+    /// Xuất toàn bộ danh sách hóa đơn khớp bộ lọc và từ khóa hiện tại ra file Excel (.xlsx).
+    /// </summary>
+    [RelayCommand]
+    private async Task XuatFileHoaDonAsync()
+    {
+        if (!await KiemTraQuyenAsync(PermissionKeys.InvoicesExport, "Bạn không có quyền export hóa đơn."))
+        {
+            return;
+        }
+
+        if (OwnerWindow is null)
+            return;
+
+        var tenFileMacDinh = $"DanhSachHoaDon_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+
+        var file = await OwnerWindow.StorageProvider.SaveFilePickerAsync(
+            new FilePickerSaveOptions
+            {
+                Title = "Xuất danh sách hóa đơn",
+                SuggestedFileName = tenFileMacDinh,
+                DefaultExtension = "xlsx",
+                ShowOverwritePrompt = true,
+                FileTypeChoices =
+                [
+                    new FilePickerFileType("Excel (*.xlsx)")
+                    {
+                        Patterns = ["*.xlsx"]
+                    }
+                ]
+            });
+
+        if (file is null)
+        {
+            StatusMessage = "Bạn đã hủy xuất file.";
+            return;
+        }
+
+        try
+        {
+            StatusMessage = "Đang xuất danh sách hóa đơn...";
+
+            // Lấy toàn bộ hóa đơn theo đúng điều kiện tìm kiếm và ngày/trạng thái đang lọc (không giới hạn 500 dòng)
+            var danhSach = await _db.GetHoaDonAsync(
+                InvoiceSearch,
+                LocHoaDonHienTai,
+                InvoiceFilterDate?.Date,
+                limit: null);
+
+            if (danhSach.Count == 0)
+            {
+                await ShowMessageAsync(
+                    "Xuất file thất bại",
+                    "Không có hóa đơn nào khớp điều kiện đang xem nên không thể xuất file.");
+
+                StatusMessage = "Không có dữ liệu để xuất.";
+                return;
+            }
+
+            var moTaLoc = new List<string>();
+            if (InvoiceFilterDate.HasValue)
+                moTaLoc.Add($"Ngày: {InvoiceFilterDate.Value:dd/MM/yyyy}");
+            if (IsInvoiceFilterPaid)
+                moTaLoc.Add("Đã thanh toán");
+            else if (IsInvoiceFilterDebt)
+                moTaLoc.Add("Còn nợ");
+            if (!string.IsNullOrWhiteSpace(InvoiceSearch))
+                moTaLoc.Add($"Từ khóa: \"{InvoiceSearch.Trim()}\"");
+
+            var ghiChuLoc = moTaLoc.Count > 0 ? string.Join(", ", moTaLoc) : null;
+
+            await using var stream = await file.OpenWriteAsync();
+
+            await Task.Run(() =>
+            {
+                using var workbook = HoaDonExcel.TaoWorkbook(danhSach, DateTime.Now, ghiChuLoc);
+                workbook.SaveAs(stream);
+            });
+
+            StatusMessage = $"✅ Đã xuất {danhSach.Count:N0} hóa đơn ra file {file.Name}.";
+
+            await ShowMessageAsync(
+                "Xuất file thành công",
+                $"Đã xuất {danhSach.Count:N0} hóa đơn.\n\nFile:\n{file.Name}");
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Xuất file thất bại: " + ex.Message;
+
+            await ShowMessageAsync(
+                "Xuất file thất bại",
+                $"Không thể xuất danh sách hóa đơn.\n\nChi tiết lỗi:\n{ex.Message}");
+        }
+    }
 }
