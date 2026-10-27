@@ -7,6 +7,30 @@ namespace ShopHoa.Services;
 
 public sealed class PhieuNhapImportService
 {
+    private static readonly IReadOnlyDictionary<string, string> TenCotThayThe =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["manhaphang"] = "maphieunhap",
+            ["chiphipnhaptncc"] = "chiphinaptranncc",
+            ["chiphinaptncc"] = "chiphinaptranncc",
+            ["chiphinaptranhacungcap"] = "chiphinaptranncc",
+            ["chiphiphitranncc"] = "chiphinaptranncc",
+            ["cantranhancc"] = "cantranncc",
+            ["cantranhacungcap"] = "cantranncc",
+            ["tiencantra"] = "cantranncc",
+            ["sotiencantra"] = "cantranncc",
+            ["tongtiencantra"] = "cantranncc",
+            ["tongtienphaitra"] = "cantranncc",
+            ["phaithanhtoan"] = "cantranncc",
+            ["tiendatrancc"] = "tiendatranncc",
+            ["tiendatran"] = "tiendatranncc",
+            ["dathanhtoanncc"] = "tiendatranncc",
+            ["dathanhtoan"] = "tiendatranncc",
+            ["thanhtoanncc"] = "tiendatranncc",
+            ["tienthanhtoan"] = "tiendatranncc",
+            ["sotienthanhtoan"] = "tiendatranncc"
+        };
+
     private static readonly string[] CotBatBuoc =
     [
         "maphieunhap", "thoigian", "manhacungcap", "tongtienhang",
@@ -33,17 +57,18 @@ public sealed class PhieuNhapImportService
         var headers = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var cell in headerRow.CellsUsed())
         {
-            var key = KhoaCot(cell.GetString()) switch
-            {
-                "manhaphang" => "maphieunhap",
-                _ => KhoaCot(cell.GetString())
-            };
+            var rawHeader = KhoaCot(cell.GetString());
+            var key = TenCotThayThe.TryGetValue(rawHeader, out var canonical)
+                ? canonical
+                : rawHeader;
             headers.TryAdd(key, cell.Address.ColumnNumber);
         }
         var missing = CotBatBuoc.Where(column => !headers.ContainsKey(column)).ToArray();
         if (missing.Length > 0)
             throw new InvalidDataException(
-                "Không nhận diện được mẫu file phiếu nhập. Thiếu cột: " + string.Join(", ", missing));
+                "Không nhận diện được mẫu file phiếu nhập. Thiếu cột: " + string.Join(", ", missing)
+                + ". Các cột đã đọc được: "
+                + string.Join(", ", headerRow.CellsUsed().Select(cell => cell.GetString().Trim()).Where(name => name.Length > 0)));
         if (!headers.ContainsKey("gianhap") && !headers.ContainsKey("dongia"))
             throw new InvalidDataException("Không nhận diện được mẫu file phiếu nhập. Thiếu cột Giá nhập hoặc Đơn giá.");
 
