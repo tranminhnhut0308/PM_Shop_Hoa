@@ -97,7 +97,8 @@ public sealed class HoaDonImportService
             "tonggiatri", "tongtienhd", "total", "subtotal", "tongtienban", "tong",
             "tongtienthanhtoanhd", "amounttotal", "tongthanhtoanhd")),
         (TruongHoaDon.TongSauGiamGia, TaoKhoa(
-            "tongsausiamgia", "tongtiensausiamgia", "thanhtoansaugiamgia",
+            "tongsaugiamgia", "tongtiensaugiamgia", "tongsausiamgia", "tongtiensausiamgia",
+            "thanhtoansaugiamgia",
             "totalafterdiscount", "nettotal")),
         (TruongHoaDon.GiamGia, TaoKhoa(
             "giamgia", "giamgiahd", "giamgiatong", "discount", "chietkhau",
