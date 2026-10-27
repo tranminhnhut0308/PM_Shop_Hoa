@@ -334,8 +334,8 @@ public sealed class DatabaseService
                 sp.thuong_hieu_id AS ThuongHieuId,
                 sp.gia_ban AS GiaBan,
                 sp.gia_von AS GiaVon,
-                COALESCE(tk.so_luong_ton, 0) AS TonKho,
-                COALESCE(sp.ton_kho_excel, COALESCE(tk.so_luong_ton, 0)) AS TonKhoExcel,
+                COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) AS TonKho,
+                COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) AS TonKhoExcel,
                 sp.ton_toi_thieu AS TonToiThieu,
                 sp.ton_toi_da AS TonToiDa,
                 COALESCE(sp.khach_dat, 0) AS KhachDat,
@@ -352,7 +352,11 @@ public sealed class DatabaseService
                 sp.ghi_chu AS GhiChu,
                 sp.hinh_anh AS HinhAnh
             FROM san_pham sp
-            LEFT JOIN ton_kho tk ON tk.san_pham_id = sp.id
+            LEFT JOIN (
+                SELECT san_pham_id, SUM(so_luong_ton) AS so_luong_ton
+                FROM ton_kho
+                GROUP BY san_pham_id
+            ) tk ON tk.san_pham_id = sp.id
             LEFT JOIN don_vi_tinh dvt ON dvt.id = sp.don_vi_tinh_id
             LEFT JOIN nhom_san_pham nsp ON nsp.id = sp.nhom_san_pham_id
             {whereSql}
@@ -405,8 +409,8 @@ public sealed class DatabaseService
                 sp.thuong_hieu_id AS ThuongHieuId,
                 sp.gia_ban AS GiaBan,
                 sp.gia_von AS GiaVon,
-                COALESCE(tk.so_luong_ton, 0) AS TonKho,
-                COALESCE(sp.ton_kho_excel, COALESCE(tk.so_luong_ton, 0)) AS TonKhoExcel,
+                COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) AS TonKho,
+                COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) AS TonKhoExcel,
                 sp.ton_toi_thieu AS TonToiThieu,
                 sp.ton_toi_da AS TonToiDa,
                 COALESCE(sp.khach_dat, 0) AS KhachDat,
@@ -423,7 +427,11 @@ public sealed class DatabaseService
                 sp.ghi_chu AS GhiChu,
                 sp.hinh_anh AS HinhAnh
             FROM san_pham sp
-            LEFT JOIN ton_kho tk ON tk.san_pham_id = sp.id
+            LEFT JOIN (
+                SELECT san_pham_id, SUM(so_luong_ton) AS so_luong_ton
+                FROM ton_kho
+                GROUP BY san_pham_id
+            ) tk ON tk.san_pham_id = sp.id
             LEFT JOIN don_vi_tinh dvt ON dvt.id = sp.don_vi_tinh_id
             LEFT JOIN nhom_san_pham nsp ON nsp.id = sp.nhom_san_pham_id
             WHERE sp.id = @Id
@@ -1112,10 +1120,15 @@ public sealed class DatabaseService
             }
             else
             {
-                giaVon = await connection.ExecuteScalarAsync<decimal>(
-                    "SELECT COALESCE(gia_von, 0) FROM san_pham WHERE id = @Id;",
+                var spRow = await connection.QueryFirstOrDefaultAsync(
+                    "SELECT COALESCE(ton_kho_excel, 0) AS TonKho, COALESCE(gia_von, 0) AS GiaVon FROM san_pham WHERE id = @Id LIMIT 1;",
                     new { Id = productId },
                     transaction);
+                if (spRow != null)
+                {
+                    tonTruoc = ToDecimal(spRow.TonKho);
+                    giaVon = ToDecimal(spRow.GiaVon);
+                }
             }
 
             const string upsertTonSql = """
@@ -6143,6 +6156,19 @@ ORDER BY hd.thoi_gian_ban DESC
             tonTruoc = ToDecimal(row.TryGetValue("so_luong_ton", out var soLuong) ? soLuong : null);
             giaVonCu = ToDecimal(row.TryGetValue("gia_von_binh_quan", out var giaVon) ? giaVon : null);
         }
+        else
+        {
+            var spRow = await connection.QueryFirstOrDefaultAsync(
+                "SELECT COALESCE(ton_kho_excel, 0) AS TonKho, COALESCE(gia_von, 0) AS GiaVon FROM san_pham WHERE id = @Id LIMIT 1;",
+                new { Id = item.SanPham.Id },
+                transaction);
+            if (spRow != null)
+            {
+                tonTruoc = ToDecimal(spRow.TonKho);
+                giaVonCu = ToDecimal(spRow.GiaVon);
+                coBanGhiTon = true;
+            }
+        }
 
         var tonSau = tonTruoc - item.SoLuong;
 
@@ -6161,6 +6187,20 @@ ORDER BY hd.thoi_gian_ban DESC
                 SanPhamId = item.SanPham.Id,
                 SoLuongTon = tonSau,
                 GiaVonBinhQuan = giaVonCu > 0 ? giaVonCu : item.SanPham.GiaVon
+            },
+            transaction);
+
+        await connection.ExecuteAsync(
+            """
+            UPDATE san_pham
+            SET ton_kho_excel = @SoLuongTon,
+                ngay_cap_nhat = NOW()
+            WHERE id = @SanPhamId;
+            """,
+            new
+            {
+                SanPhamId = item.SanPham.Id,
+                SoLuongTon = tonSau
             },
             transaction);
 
@@ -8401,6 +8441,7 @@ ORDER BY hd.thoi_gian_ban DESC
         const string updateGiaVonSql = """
         UPDATE san_pham
         SET gia_von        = @GiaVon,
+            ton_kho_excel  = @SoLuongTon,
             don_vi_tinh_id = COALESCE(@DonViTinhIdMoi, don_vi_tinh_id),
             ngay_cap_nhat  = NOW()
         WHERE id = @SanPhamId;
@@ -8458,6 +8499,18 @@ ORDER BY hd.thoi_gian_ban DESC
                 tonTruoc = ToDecimal(row.TryGetValue("so_luong_ton", out var soLuong) ? soLuong : null);
                 giaVonCu = ToDecimal(row.TryGetValue("gia_von_binh_quan", out var giaVon) ? giaVon : null);
             }
+            else
+            {
+                var spRow = await connection.QueryFirstOrDefaultAsync(
+                    "SELECT COALESCE(ton_kho_excel, 0) AS TonKho, COALESCE(gia_von, 0) AS GiaVon FROM san_pham WHERE id = @Id LIMIT 1;",
+                    new { Id = item.SanPham.Id },
+                    transaction);
+                if (spRow != null)
+                {
+                    tonTruoc = ToDecimal(spRow.TonKho);
+                    giaVonCu = ToDecimal(spRow.GiaVon);
+                }
+            }
 
             var tonSau = tonTruoc + item.SoLuong;
 
@@ -8483,7 +8536,8 @@ ORDER BY hd.thoi_gian_ban DESC
                 {
                     GiaVon = item.DonGiaNhap,
                     DonViTinhIdMoi = item.DonViTinhIdMoi,
-                    SanPhamId = item.SanPham.Id
+                    SanPhamId = item.SanPham.Id,
+                    SoLuongTon = tonSau
                 },
                 transaction);
 

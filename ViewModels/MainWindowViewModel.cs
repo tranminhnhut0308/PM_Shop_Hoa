@@ -5154,6 +5154,12 @@ public partial class MainWindowViewModel : ObservableObject
         // 5. Lưu thành công mới dọn đơn cũ, không làm mất dữ liệu đơn vừa bán
         var maHoaDon = receipt.MaHoaDon;
 
+        foreach (var cartItem in cartSnapshot)
+        {
+            var tonMoi = Math.Max(0, cartItem.SanPham.TonKho - cartItem.SoLuong);
+            DongBoTonKho(cartItem.SanPham.Id, tonMoi);
+        }
+
         ResetDonHangVeMacDinh();
 
         _invoicesLoaded = false;
