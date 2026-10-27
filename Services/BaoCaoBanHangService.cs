@@ -267,14 +267,14 @@ ORDER BY DoanhThu DESC;
 
     private async Task<List<BaoCaoBanHangPhuongThucRow>> TaiPhuongThucThanhToanAsync(MySqlConnection conn, DateTime tu, DateTime denKeTiep, CancellationToken token)
     {
-        string sql = @"
+        var sql = $@"
 SELECT 
   UPPER(TRIM(pc.phuong_thuc)) AS PhuongThuc,
   COUNT(*) AS SoGiaoDich,
   COALESCE(SUM(pc.so_tien), 0) AS SoTien
 FROM phieu_chi pc
 WHERE pc.trang_thai = 'HOAN_THANH'
-  AND pc.ma_phieu_chi LIKE 'PT%'
+  AND {PhieuQuySql.LaThu}
   AND pc.thoi_gian_chi >= @TuNgay AND pc.thoi_gian_chi < @DenKeTiep
 GROUP BY UPPER(TRIM(pc.phuong_thuc))
 ORDER BY SoTien DESC;

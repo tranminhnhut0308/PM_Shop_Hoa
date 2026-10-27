@@ -45,17 +45,17 @@ public sealed class ReportController : ControllerBase
         var sales = await conn.QueryFirstOrDefaultAsync<dynamic>(salesSql, new { Start = start, End = end });
 
         // 2. Dòng tiền thực tế trong ngày (Phiếu thu & Phiếu chi từ sổ quỹ)
-        const string cashFlowSql = """
+        var cashFlowSql = $"""
             SELECT
-                COALESCE(SUM(CASE WHEN ma_phieu_chi LIKE 'PT%' AND phuong_thuc = 'TIEN_MAT' THEN so_tien ELSE 0 END), 0) AS ThuTienMat,
-                COALESCE(SUM(CASE WHEN ma_phieu_chi LIKE 'PT%' AND phuong_thuc <> 'TIEN_MAT' THEN so_tien ELSE 0 END), 0) AS ThuChuyenKhoan,
-                COALESCE(SUM(CASE WHEN ma_phieu_chi LIKE 'PT%' THEN so_tien ELSE 0 END), 0) AS TongThu,
-                COALESCE(SUM(CASE WHEN ma_phieu_chi LIKE 'PC%' AND phuong_thuc = 'TIEN_MAT' THEN so_tien ELSE 0 END), 0) AS ChiTienMat,
-                COALESCE(SUM(CASE WHEN ma_phieu_chi LIKE 'PC%' AND phuong_thuc <> 'TIEN_MAT' THEN so_tien ELSE 0 END), 0) AS ChiChuyenKhoan,
-                COALESCE(SUM(CASE WHEN ma_phieu_chi LIKE 'PC%' THEN so_tien ELSE 0 END), 0) AS TongChi
-            FROM phieu_chi
-            WHERE trang_thai = 'HOAN_THANH'
-              AND thoi_gian_chi >= @Start AND thoi_gian_chi <= @End;
+                COALESCE(SUM(CASE WHEN {PhieuQuySql.LaThu} AND pc.phuong_thuc = 'TIEN_MAT' THEN pc.so_tien ELSE 0 END), 0) AS ThuTienMat,
+                COALESCE(SUM(CASE WHEN {PhieuQuySql.LaThu} AND pc.phuong_thuc <> 'TIEN_MAT' THEN pc.so_tien ELSE 0 END), 0) AS ThuChuyenKhoan,
+                COALESCE(SUM(CASE WHEN {PhieuQuySql.LaThu} THEN pc.so_tien ELSE 0 END), 0) AS TongThu,
+                COALESCE(SUM(CASE WHEN {PhieuQuySql.LaChi} AND pc.phuong_thuc = 'TIEN_MAT' THEN pc.so_tien ELSE 0 END), 0) AS ChiTienMat,
+                COALESCE(SUM(CASE WHEN {PhieuQuySql.LaChi} AND pc.phuong_thuc <> 'TIEN_MAT' THEN pc.so_tien ELSE 0 END), 0) AS ChiChuyenKhoan,
+                COALESCE(SUM(CASE WHEN {PhieuQuySql.LaChi} THEN pc.so_tien ELSE 0 END), 0) AS TongChi
+            FROM phieu_chi pc
+            WHERE pc.trang_thai = 'HOAN_THANH'
+              AND pc.thoi_gian_chi >= @Start AND pc.thoi_gian_chi <= @End;
             """;
 
         var flow = await conn.QueryFirstOrDefaultAsync<dynamic>(cashFlowSql, new { Start = start, End = end });
@@ -151,15 +151,15 @@ public sealed class ReportController : ControllerBase
 
         await using var conn = await _db.CreateConnectionAsync();
 
-        const string sql = """
+        var sql = $"""
             SELECT
                 pc.id AS Id,
                 pc.ma_phieu_chi AS MaPhieu,
                 pc.thoi_gian_chi AS ThoiGian,
-                CASE WHEN pc.ma_phieu_chi LIKE 'PT%' THEN 'THU' ELSE 'CHI' END AS Loai,
+                CASE WHEN {PhieuQuySql.LaThu} THEN 'THU' ELSE 'CHI' END AS Loai,
                 pc.so_tien AS SoTien,
                 pc.phuong_thuc AS PhuongThuc,
-                pc.nguoi_nhan_nop AS NguoiNhanNop,
+                pc.nguoi_nop_nhan AS NguoiNhanNop,
                 pc.ghi_chu AS GhiChu
             FROM phieu_chi pc
             WHERE pc.trang_thai = 'HOAN_THANH'

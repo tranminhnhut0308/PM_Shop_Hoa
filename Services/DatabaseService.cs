@@ -30,6 +30,8 @@ public sealed class DatabaseService
     private bool? _hasPhieuQuyExtraColumns;
     private bool? _hasPhieuQuyHoaDonColumns;
     private bool? _hasPhieuQuyPhieuNhapColumns;
+    private bool? _hasPhieuQuyLoaiPhieuColumn;
+    private readonly SemaphoreSlim _khoaEnsureLoaiPhieu = new(1, 1);
     private bool? _hasBangTraHang;
     private bool? _coCotDuLieuKiotViet;
     private bool? _cotNgayTaoSanPhamChoPhepNull;
@@ -49,6 +51,8 @@ public sealed class DatabaseService
     /// </summary>
     public async Task<MySqlConnection> TaoKetNoiAsync()
     {
+        await EnsurePhieuQuyLoaiPhieuColumnAsync();
+
         var connection = new MySqlConnection(GetConnectionString());
 
         await connection.OpenAsync();
@@ -72,6 +76,8 @@ public sealed class DatabaseService
 
     public async Task<MySqlConnection> OpenAsync()
     {
+        await EnsurePhieuQuyLoaiPhieuColumnAsync();
+
         var connection = new MySqlConnection(GetConnectionString());
 
         await connection.OpenAsync();
@@ -8701,6 +8707,69 @@ LIMIT 500;
     }
 
     /// <summary>
+    /// Bảo đảm <c>phieu_chi</c> có cột <c>loai_phieu</c> để lưu loại thu/chi của
+    /// phiếu nhập từ file. Mã phiếu gốc được giữ nguyên nên không thể suy ra loại
+    /// chỉ từ tiền tố PT/PC; cột này là nguồn dữ liệu chuẩn cho bộ lọc và báo cáo.
+    /// <para>
+    /// Nếu không tạo được cột (thiếu quyền ALTER hoặc mất kết nối) thì trả về false.
+    /// Khi đó các truy vấn dùng cột sẽ báo lỗi rõ ràng; cần chạy migration thủ công
+    /// thay vì âm thầm phân loại sai các phiếu có mã TT/CTM.
+    /// </para>
+    /// </summary>
+    private async Task<bool> EnsurePhieuQuyLoaiPhieuColumnAsync()
+    {
+        if (_hasPhieuQuyLoaiPhieuColumn.HasValue)
+            return _hasPhieuQuyLoaiPhieuColumn.Value;
+
+        await _khoaEnsureLoaiPhieu.WaitAsync();
+
+        try
+        {
+            if (_hasPhieuQuyLoaiPhieuColumn.HasValue)
+                return _hasPhieuQuyLoaiPhieuColumn.Value;
+
+            // Dùng connection riêng thay vì OpenAsync để tránh đệ quy vì OpenAsync
+            // cũng gọi chính hàm bảo đảm này trước khi trả kết nối.
+            await using var connection = new MySqlConnection(GetConnectionString());
+            await connection.OpenAsync();
+
+            const string kiemTraSql = """
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'phieu_chi'
+              AND COLUMN_NAME = 'loai_phieu';
+            """;
+
+            var count = await connection.ExecuteScalarAsync<long>(kiemTraSql);
+
+            if (count == 0)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE phieu_chi ADD COLUMN loai_phieu varchar(10) DEFAULT NULL AFTER ma_phieu_chi;");
+            }
+
+            _hasPhieuQuyLoaiPhieuColumn = true;
+        }
+        catch (MySqlException ex) when (ex.Number == 1060)
+        {
+            // Hai tiến trình cùng ALTER: cột đã được tiến trình kia thêm trước.
+            _hasPhieuQuyLoaiPhieuColumn = true;
+        }
+        catch
+        {
+            // Không có quyền ALTER hoặc mất kết nối: code tự lùi về quy tắc PT/PC.
+            _hasPhieuQuyLoaiPhieuColumn = false;
+        }
+        finally
+        {
+            _khoaEnsureLoaiPhieu.Release();
+        }
+
+        return _hasPhieuQuyLoaiPhieuColumn.Value;
+    }
+
+    /// <summary>
     /// Bảo đảm <c>phieu_chi</c> có 2 cột liên kết hóa đơn bán hàng:
     /// <c>hoa_don_ban_hang_id</c> (UNIQUE) và <c>ma_hoa_don</c>.
     /// Phiếu thu sinh ra khi bán hàng sẽ gắn vào đây nên mỗi hóa đơn chỉ có
@@ -8833,7 +8902,7 @@ LIMIT 500;
                     UPDATE phieu_chi pc
                     SET pc.nhom_chi_phi_id = @IdNhom
                     WHERE pc.nhom_chi_phi_id IS NULL
-                      AND pc.ma_phieu_chi LIKE 'PT%'
+                      AND {PhieuQuySql.LaThu}
                       AND {nhanDienKhachHang};
                     """,
                     new { IdNhom = idThu });
@@ -8852,7 +8921,7 @@ LIMIT 500;
                     UPDATE phieu_chi pc
                     SET pc.nhom_chi_phi_id = @IdNhom
                     WHERE pc.nhom_chi_phi_id IS NULL
-                      AND pc.ma_phieu_chi LIKE 'PC%'
+                      AND {PhieuQuySql.LaChi}
                       AND {nhanDienNhaCungCap};
                     """,
                     new { IdNhom = idChi });
@@ -9017,6 +9086,7 @@ LIMIT 500;
     /// </summary>
     private const string SoQuyCotChonDayDu = """
             pc.ma_phieu_chi AS MaPhieu,
+            COALESCE(pc.loai_phieu, '') AS LoaiPhieu,
             pc.so_tien AS SoTien,
             COALESCE(pc.noi_dung, '') AS NoiDung,
             COALESCE(pc.nguoi_nop_nhan, '') AS NguoiNopNhan,
@@ -9031,6 +9101,7 @@ LIMIT 500;
 
     private const string SoQuyCotChonRutGon = """
             pc.ma_phieu_chi AS MaPhieu,
+            COALESCE(pc.loai_phieu, '') AS LoaiPhieu,
             pc.so_tien AS SoTien,
             COALESCE(pc.noi_dung, '') AS NoiDung,
             '' AS NguoiNopNhan,
@@ -9091,10 +9162,11 @@ LIMIT 500;
             dieuKien.Add(timKiem.ToString());
 
             // Loại chứng từ: 0 = cả hai, 1 = chỉ phiếu thu, 2 = chỉ phiếu chi.
+            // Dùng loai_phieu đã lưu để phiếu nhập có mã TT/CTM... vẫn đúng loại.
             dieuKien.Add(
                 "(@LoaiChungTu = 0"
-                + " OR (@LoaiChungTu = 1 AND pc.ma_phieu_chi LIKE 'PT%')"
-                + " OR (@LoaiChungTu = 2 AND pc.ma_phieu_chi LIKE 'PC%'))");
+                + $" OR (@LoaiChungTu = 1 AND {PhieuQuySql.LaThu})"
+                + $" OR (@LoaiChungTu = 2 AND {PhieuQuySql.LaChi}))");
         }
 
         // Quỹ: so khớp đúng mã phương thức đang có trong bảng phieu_chi.
@@ -9200,6 +9272,23 @@ LIMIT 500;
     }
 
     /// <summary>
+    /// Xác định một phiếu là thu hay chi. Ưu tiên cột <c>loai_phieu</c> đã lưu,
+    /// sau đó mới lùi về quy tắc cũ dựa trên tiền tố mã phiếu.
+    /// </summary>
+    private static bool LaPhieuThu(string? loaiPhieu, string? maPhieu)
+    {
+        var loai = (loaiPhieu ?? "").Trim();
+
+        if (loai.Equals("THU", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (loai.Equals("CHI", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return (maPhieu ?? "").Trim().StartsWith("PT", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Chuyển dòng kết quả SQL thành đối tượng hiển thị.
     /// Dùng chung cho danh sách phân trang và xuất Excel nên hai nơi không thể lệch nhau.
     /// </summary>
@@ -9214,9 +9303,9 @@ LIMIT 500;
             items.Add(new SoQuyGiaoDich
             {
                 MaPhieu = maPhieu,
-                // Phiếu thu và phiếu chi cùng nằm trong bảng phieu_chi nên loại
-                // phiếu được suy ra từ tiền tố mã (PTxxxx / PCxxxx).
-                LaThu = maPhieu.StartsWith("PT", StringComparison.OrdinalIgnoreCase),
+                // Cột loai_phieu giữ đúng loại của phiếu nhập từ file (TT, CTM...).
+                // Dữ liệu cũ chưa có cột này thì lùi về tiền tố PT/PC như trước.
+                LaThu = LaPhieuThu(row.LoaiPhieu, maPhieu),
                 // Người nộp/nhận là thông tin riêng của phiếu (cột nguoi_nop_nhan),
                 // còn người tạo là nhân viên thao tác (FK nguoi_thuc_hien_id).
                 NguoiNopNhan = row.NguoiNopNhan ?? "",
@@ -9267,7 +9356,7 @@ LIMIT 500;
         return new SoQuyChiTiet
         {
             MaPhieu = ma,
-            LaThu = ma.StartsWith("PT", StringComparison.OrdinalIgnoreCase),
+            LaThu = LaPhieuThu(row.LoaiPhieu, ma),
             ThoiGian = row.ThoiGian,
             NguoiNopNhan = row.NguoiNopNhan ?? "",
             SoTien = ToDecimal(row.SoTien),
@@ -9452,7 +9541,7 @@ LIMIT 500;
             SELECT
                 (
                     SELECT COALESCE(
-                        SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PT%' THEN pc.so_tien ELSE -pc.so_tien END),
+                        SUM(CASE WHEN {PhieuQuySql.LaThu} THEN pc.so_tien ELSE -pc.so_tien END),
                         0)
                     {SoQuyFrom}
                     WHERE {dieuKienDauKy}
@@ -9460,8 +9549,8 @@ LIMIT 500;
                       AND pc.thoi_gian_chi < @TuNgay
                       AND pc.trang_thai = @TrangThaiHoanThanh
                 ) AS QuyDauKy,
-                COALESCE(SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PT%' THEN pc.so_tien ELSE 0 END), 0) AS TongThu,
-                COALESCE(SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PC%' THEN pc.so_tien ELSE 0 END), 0) AS TongChi
+                COALESCE(SUM(CASE WHEN {PhieuQuySql.LaThu} THEN pc.so_tien ELSE 0 END), 0) AS TongThu,
+                COALESCE(SUM(CASE WHEN {PhieuQuySql.LaChi} THEN pc.so_tien ELSE 0 END), 0) AS TongChi
             {SoQuyFrom}
             WHERE {dieuKienKy}
               AND pc.trang_thai = @TrangThaiHoanThanh;
@@ -9686,6 +9775,7 @@ LIMIT 500;
     private sealed class SoQuyPhieuRow
     {
         public string MaPhieu { get; set; } = "";
+        public string LoaiPhieu { get; set; } = "";
         public decimal SoTien { get; set; }
         public string NoiDung { get; set; } = "";
         public string NguoiNopNhan { get; set; } = "";
@@ -9710,6 +9800,7 @@ LIMIT 500;
     private sealed class SoQuyChuanHoaRow
     {
         public uint Id { get; set; }
+        public string Ma { get; set; } = "";
         public string Ten { get; set; } = "";
     }
 
@@ -9738,68 +9829,63 @@ LIMIT 500;
     {
         var danhMuc = new SoQuyImportDanhMuc();
 
-        try
-        {
-            await using var connection = await OpenAsync();
+        await using var connection = await OpenAsync();
 
-            const string sqlLoai = """
-            SELECT id, ten_nhom AS Ten
+        const string sqlLoai = """
+            SELECT id, ma_nhom AS Ma, ten_nhom AS Ten
             FROM nhom_chi_phi
             WHERE trang_thai = 1
             ORDER BY ten_nhom;
             """;
 
-            foreach (var row in await connection.QueryAsync<SoQuyChuanHoaRow>(sqlLoai))
-            {
-                danhMuc.LoaiThuChiTheoId[row.Id] = row.Ten;
-                danhMuc.LoaiThuChiTheoTen[ChuanHoaChuoi(row.Ten)] = row.Id;
-            }
-
-            const string sqlNguoi = """
-            SELECT id, ho_ten AS Ten
-            FROM nguoi_dung
-            WHERE trang_thai = 1
-            ORDER BY ho_ten;
-            """;
-
-            foreach (var row in await connection.QueryAsync<SoQuyChuanHoaRow>(sqlNguoi))
-            {
-                danhMuc.NguoiDungTheoId[row.Id] = row.Ten;
-                danhMuc.NguoiDungTheoTen[ChuanHoaChuoi(row.Ten)] = row.Id;
-            }
-
-            // Quỹ lấy từ chính dữ liệu đang có, không tự thêm mã mới.
-            const string sqlQuy = """
-            SELECT phuong_thuc AS Ten
-            FROM phieu_chi
-            WHERE phuong_thuc IS NOT NULL AND phuong_thuc <> ''
-            GROUP BY phuong_thuc
-            ORDER BY phuong_thuc;
-            """;
-
-            foreach (var ma in await connection.QueryAsync<string>(sqlQuy))
-            {
-                if (string.IsNullOrWhiteSpace(ma))
-                    continue;
-
-                var maChuanHoa = ma.Trim();
-                danhMuc.QuyTheoMa[maChuanHoa] = TenHienThiPhuongThuc(maChuanHoa);
-                danhMuc.QuyTheoTen[ChuanHoaChuoi(maChuanHoa)] = maChuanHoa;
-                danhMuc.QuyTheoTen[ChuanHoaChuoi(TenHienThiPhuongThuc(maChuanHoa))] = maChuanHoa;
-            }
-
-            // Nếu database còn chưa có phiếu nào thì vẫn cho phép dùng giá trị mặc định
-            // của cột phuong_thuc, vẫn là dữ liệu thật của database chứ không phải bịa thêm.
-            if (danhMuc.QuyTheoMa.Count == 0)
-            {
-                danhMuc.QuyTheoMa[danhMuc.PhuongThucMacDinh] = TenHienThiPhuongThuc(danhMuc.PhuongThucMacDinh);
-                danhMuc.QuyTheoTen[ChuanHoaChuoi(danhMuc.PhuongThucMacDinh)] = danhMuc.PhuongThucMacDinh;
-            }
-        }
-        catch
+        foreach (var row in await connection.QueryAsync<SoQuyChuanHoaRow>(sqlLoai))
         {
-            // Để danh mục rỗng: mọi dòng cần tra cứu sẽ báo lỗi ở bước validate,
-            // người dùng thấy ngay trong bước xem trước thay vì ghi sai dữ liệu.
+            danhMuc.LoaiThuChiTheoId[row.Id] = row.Ten;
+            danhMuc.LoaiThuChiTheoTen[ChuanHoaChuoi(row.Ten)] = row.Id;
+
+            if (!string.IsNullOrWhiteSpace(row.Ma))
+                danhMuc.LoaiThuChiTheoMa[ChuanHoaChuoi(row.Ma)] = row.Id;
+        }
+
+        const string sqlNguoi = """
+        SELECT id, ho_ten AS Ten
+        FROM nguoi_dung
+        WHERE trang_thai = 1
+        ORDER BY ho_ten;
+        """;
+
+        foreach (var row in await connection.QueryAsync<SoQuyChuanHoaRow>(sqlNguoi))
+        {
+            danhMuc.NguoiDungTheoId[row.Id] = row.Ten;
+            danhMuc.NguoiDungTheoTen[ChuanHoaChuoi(row.Ten)] = row.Id;
+        }
+
+        // Quỹ lấy từ chính dữ liệu đang có, không tự thêm mã mới.
+        const string sqlQuy = """
+        SELECT phuong_thuc AS Ten
+        FROM phieu_chi
+        WHERE phuong_thuc IS NOT NULL AND phuong_thuc <> ''
+        GROUP BY phuong_thuc
+        ORDER BY phuong_thuc;
+        """;
+
+        foreach (var ma in await connection.QueryAsync<string>(sqlQuy))
+        {
+            if (string.IsNullOrWhiteSpace(ma))
+                continue;
+
+            var maChuanHoa = ma.Trim();
+            danhMuc.QuyTheoMa[maChuanHoa] = TenHienThiPhuongThuc(maChuanHoa);
+            danhMuc.QuyTheoTen[ChuanHoaChuoi(maChuanHoa)] = maChuanHoa;
+            danhMuc.QuyTheoTen[ChuanHoaChuoi(TenHienThiPhuongThuc(maChuanHoa))] = maChuanHoa;
+        }
+
+        // Nếu database còn chưa có phiếu nào thì vẫn cho phép dùng giá trị mặc định
+        // của cột phuong_thuc, vẫn là dữ liệu thật của database chứ không phải bịa thêm.
+        if (danhMuc.QuyTheoMa.Count == 0)
+        {
+            danhMuc.QuyTheoMa[danhMuc.PhuongThucMacDinh] = TenHienThiPhuongThuc(danhMuc.PhuongThucMacDinh);
+            danhMuc.QuyTheoTen[ChuanHoaChuoi(danhMuc.PhuongThucMacDinh)] = danhMuc.PhuongThucMacDinh;
         }
 
         return danhMuc;
@@ -9891,16 +9977,16 @@ LIMIT 500;
 
                 const string sqlThem = """
                 INSERT INTO phieu_chi
-                    (ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc, noi_dung, thoi_gian_chi, nguoi_thuc_hien_id, trang_thai)
+                    (ma_phieu_chi, loai_phieu, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc, noi_dung, thoi_gian_chi, nguoi_thuc_hien_id, trang_thai)
                 VALUES
-                    (@MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc, @NoiDung, @ThoiGian, @NguoiTaoId, @TrangThai);
+                    (@MaPhieu, @LoaiPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc, @NoiDung, @ThoiGian, @NguoiTaoId, @TrangThai);
                 """;
 
                 const string sqlThemDayDu = """
                 INSERT INTO phieu_chi
-                    (ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc, noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi, nguoi_thuc_hien_id, trang_thai)
+                    (ma_phieu_chi, loai_phieu, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc, noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi, nguoi_thuc_hien_id, trang_thai)
                 VALUES
-                    (@MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc, @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian, @NguoiTaoId, @TrangThai);
+                    (@MaPhieu, @LoaiPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc, @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian, @NguoiTaoId, @TrangThai);
                 """;
 
                 if (dong.MaPhieuDaTonTai && xuLyTrung == XuLyPhieuTrung.ThayThe)
@@ -9911,7 +9997,8 @@ LIMIT 500;
 
                     var sqlCapNhat = $"""
                     UPDATE phieu_chi
-                    SET nhom_chi_phi_id = @NhomChiPhiId,
+                    SET loai_phieu = @LoaiPhieu,
+                        nhom_chi_phi_id = @NhomChiPhiId,
                         so_tien = @SoTien,
                         phuong_thuc = COALESCE(@PhuongThuc, phuong_thuc),
                         noi_dung = @NoiDung{capNhatCotMoi},
@@ -9960,13 +10047,16 @@ LIMIT 500;
 
                 dongDaXuLy++;
 
-                if (baoTienDo is not null)
+                if (baoTienDo is not null
+                    && (dongDaXuLy % 100 == 0 || dongDaXuLy == tongSoDong))
+                {
                     await baoTienDo(new SoQuyImportProgress
                     {
                         GiaiDoan = "Đang ghi phiếu",
                         DaXuLy = dongDaXuLy,
                         TongSo = tongSoDong
                     });
+                }
             }
 
             await transaction.CommitAsync();
@@ -10001,10 +10091,13 @@ LIMIT 500;
         return new
         {
             MaPhieu = maPhieu,
+            LoaiPhieu = dong.LaThu ? "THU" : "CHI",
             ChiNhanhId = chiNhanhId,
             NhomChiPhiId = dong.NhomChiPhiId,
             SoTien = dong.SoTien,
-            PhuongThuc = string.IsNullOrWhiteSpace(phuongThuc) ? null : phuongThuc.Trim().ToUpperInvariant(),
+            PhuongThuc = string.IsNullOrWhiteSpace(phuongThuc)
+                ? "TIEN_MAT"
+                : phuongThuc.Trim().ToUpperInvariant(),
             NoiDung = string.IsNullOrWhiteSpace(dong.NoiDung) ? null : dong.NoiDung.Trim(),
             NguoiNopNhan = Truncate150(dong.NguoiNopNhan),
             GhiChu = string.IsNullOrWhiteSpace(dong.GhiChu) ? null : dong.GhiChu.Trim(),
@@ -10112,12 +10205,6 @@ LIMIT 500;
         if (string.IsNullOrWhiteSpace(maPhieu))
             throw new InvalidOperationException("Thiếu mã phiếu khi lưu sổ quỹ.");
 
-        var laPhieuThu = maPhieu.StartsWith("PT", StringComparison.OrdinalIgnoreCase);
-        Quyen.RequirePermission(
-            Session.CurrentUser,
-            laPhieuThu ? PermissionKeys.CashBookCreateReceipt : PermissionKeys.CashBookCreatePayment,
-            laPhieuThu ? "Bạn không có quyền tạo phiếu thu." : "Bạn không có quyền tạo phiếu chi.");
-
         if (soTien <= 0)
             throw new InvalidOperationException("Số tiền phải lớn hơn 0.");
 
@@ -10125,10 +10212,23 @@ LIMIT 500;
 
         await using var connection = await OpenAsync();
 
+        // Phiếu nhập từ file có thể mang mã TT/CTM... nên phải đọc loại đã lưu,
+        // không được suy loại chỉ từ tiền tố PT/PC.
+        var loaiPhieu = await connection.ExecuteScalarAsync<string?>(
+            "SELECT loai_phieu FROM phieu_chi WHERE ma_phieu_chi = @MaPhieu LIMIT 1;",
+            new { MaPhieu = maPhieu.Trim() });
+
+        var laPhieuThu = LaPhieuThu(loaiPhieu, maPhieu);
+
+        Quyen.RequirePermission(
+            Session.CurrentUser,
+            laPhieuThu ? PermissionKeys.CashBookCreateReceipt : PermissionKeys.CashBookCreatePayment,
+            laPhieuThu ? "Bạn không có quyền tạo phiếu thu." : "Bạn không có quyền tạo phiếu chi.");
+
         // Cột tùy chọn được ghép vào danh sách hàng/cột; mọi giá trị vẫn đi qua tham số
         // nên không có chuyện dán chuỗi của người dùng vào SQL.
-        var danhSachCot = "(ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc, noi_dung";
-        var danhSachGiaTri = "(@MaPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc, @NoiDung";
+        var danhSachCot = "(ma_phieu_chi, loai_phieu, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc, noi_dung";
+        var danhSachGiaTri = "(@MaPhieu, @LoaiPhieu, @ChiNhanhId, @NhomChiPhiId, @SoTien, @PhuongThuc, @NoiDung";
 
         if (coCotMoi)
         {
@@ -10144,6 +10244,7 @@ LIMIT 500;
         await connection.ExecuteAsync(sql, new
         {
             MaPhieu = maPhieu.Trim(),
+            LoaiPhieu = laPhieuThu ? "THU" : "CHI",
             ChiNhanhId = Session.CurrentUser?.ChiNhanhId ?? 1,
             NhomChiPhiId = nhomChiPhiId,
             SoTien = soTien,
@@ -10204,6 +10305,14 @@ LIMIT 500;
 
         await using var connection = await OpenAsync();
 
+        // Phiếu nhập từ file có thể mang mã TT/CTM... nên phải đọc loại đã lưu,
+        // không được suy loại chỉ từ tiền tố PT/PC.
+        var loaiPhieu = await connection.ExecuteScalarAsync<string?>(
+            "SELECT loai_phieu FROM phieu_chi WHERE ma_phieu_chi = @MaPhieu LIMIT 1;",
+            new { MaPhieu = maPhieu.Trim() });
+
+        var laPhieuThu = LaPhieuThu(loaiPhieu, maPhieu);
+
         // Hai cột mới chỉ xuất hiện trong câu UPDATE khi migration đã chạy, tránh lỗi
         // "Unknown column" với database cũ. Giá trị vẫn đi qua tham số.
         var capNhatCotMoi = coCotMoi ? ", nguoi_nop_nhan = @NguoiNopNhan, ghi_chu = @GhiChu" : "";
@@ -10235,7 +10344,7 @@ LIMIT 500;
 
         if (affected > 0)
         {
-            var laThu = maPhieu.StartsWith("PT", StringComparison.OrdinalIgnoreCase);
+            var laThu = laPhieuThu;
             _ = LogSubAccountActivityAsync(
                 "Sửa sổ quỹ",
                 "SO_QUY",

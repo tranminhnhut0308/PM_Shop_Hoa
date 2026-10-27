@@ -24,8 +24,8 @@ public sealed class SoQuyImportService
     private readonly DatabaseService _db = new();
 
     /// <summary>
-    /// Tên cột được chấp nhận cho từng trường, đã bỏ dấu và bỏ ký tự phân tách
-    /// đúng kiểu khóa mà <c>DatabaseService.NormalizeHeaderKey</c> tạo ra.
+    /// Tên cột được chấp nhận cho từng trường, đã bỏ dấu và bỏ dấu phân cách
+    /// (xem <see cref="KhoaCot"/>) để "Mã phiếu", "MaPhieu" và "Ma Phieu" cùng khớp.
     /// Nhờ vậy "Mã phiếu", "MaPhieu" hay "Ma Phieu" đều khớp cùng một trường.
     /// Thứ tự trong bảng quyết định trường nào được ưu tiên khi một cột khớp
     /// nhiều trường cùng lúc.
@@ -85,9 +85,21 @@ public sealed class SoQuyImportService
     {
         KiemTraDuongDan(filePath);
 
+        if (baoTienDo is not null)
+        {
+            await baoTienDo(new SoQuyImportProgress
+            {
+                GiaiDoan = "Đang đọc file",
+                DaXuLy = 0,
+                TongSo = 0
+            });
+        }
+
         var danhMuc = await _db.GetSoQuyImportDanhMucAsync();
 
-        var noiDungFile = DocNoiDungFile(filePath, ct);
+        // Đọc và dựng dữ liệu là việc CPU-bound, chạy nền để cửa sổ không bị đứng
+        // với file hàng chục nghìn dòng.
+        var noiDungFile = await Task.Run(() => DocNoiDungFile(filePath, ct), ct);
 
         var preview = new SoQuyImportPreview
         {
@@ -128,10 +140,15 @@ public sealed class SoQuyImportService
 
             var maPhieu = (dongFile.GiaTri.GetValueOrDefault(TruongSoQuy.MaPhieu) ?? "").Trim();
 
-            // Loại phiếu: ưu tiên cột "Loại phiếu", thiếu thì suy ra từ tiền tố mã.
-            var laThu = DocLoaiPhieu(dongFile, maPhieu, ketQua);
+            // Loại thu/chi và quỹ tra theo tên vì file của người dùng không có id.
+            var tenLoai = (dongFile.GiaTri.GetValueOrDefault(TruongSoQuy.LoaiThuChi) ?? "").Trim();
 
-            // Số tiền: bắt buộc, phải là số dương.
+            // Loại phiếu: ưu tiên cột "Loại phiếu", sau đó tới mô tả "Loại thu chi",
+            // cuối cùng mới suy ra từ tiền tố mã. File từ phần mềm cũ thường chỉ có
+            // mô tả "Phiếu thu Tiền khách trả" và mã TT.../CTM... chứ không có cột Loại phiếu.
+            var laThu = DocLoaiPhieu(dongFile, maPhieu, tenLoai, ketQua);
+
+            // Số tiền: bắt buộc, khác 0. Phiếu chi trong file có thể ghi số âm.
             var soTien = DocSoTien(dongFile, ketQua);
 
             // Ngày giờ: thiếu thì lấy thời điểm hiện tại chứ không chặn dòng.
@@ -143,16 +160,13 @@ public sealed class SoQuyImportService
 
             var ghiChu = (dongFile.GiaTri.GetValueOrDefault(TruongSoQuy.GhiChu) ?? "").Trim();
 
-            // Loại thu/chi và quỹ tra theo tên vì file của người dùng không có id.
-            var tenLoai = (dongFile.GiaTri.GetValueOrDefault(TruongSoQuy.LoaiThuChi) ?? "").Trim();
-
             uint? nhomChiPhiId = null;
 
             if (tenLoai.Length > 0)
             {
-                if (danhMuc.LoaiThuChiTheoTen.TryGetValue(DatabaseService.ChuanHoaChuoi(tenLoai), out var idLoai))
-                    nhomChiPhiId = idLoai;
-                else
+                nhomChiPhiId = TimNhomChiPhiTheoMoTa(danhMuc, tenLoai);
+
+                if (nhomChiPhiId is null)
                     ketQua.Loi.Add($"Loại thu/chi \"{tenLoai}\" không có trong danh mục");
             }
 
@@ -167,6 +181,10 @@ public sealed class SoQuyImportService
                 else
                     ketQua.Loi.Add($"Quỹ \"{tenQuy}\" không có trong danh sách quỹ của hệ thống");
             }
+
+            // File không có cột Quỹ: dùng đúng giá trị mặc định của cột phuong_thuc
+            // thay vì gửi NULL vào một cột NOT NULL.
+            phuongThuc ??= danhMuc.PhuongThucMacDinh;
 
             // Người tạo: lấy theo tên; không có cột này thì hệ thống dùng người đang đăng nhập.
             var tenNguoiTao = (dongFile.GiaTri.GetValueOrDefault(TruongSoQuy.NguoiTao) ?? "").Trim();
@@ -260,6 +278,9 @@ public sealed class SoQuyImportService
                     DaXuLy = dong.Count,
                     TongSo = noiDungFile.Dong.Count
                 });
+
+                // Nhường lượt cho UI vẽ thanh tiến độ trước khi kiểm tra lô tiếp theo.
+                await Task.Yield();
             }
         }
 
@@ -309,17 +330,14 @@ public sealed class SoQuyImportService
 
         var dongTrong = dongCanGhi.Where(dong => dong.KetQua == KetQuaDongSoQuy.TrungMa).ToList();
 
-        // Dòng trùng mà người dùng chọn giữ dữ liệu cũ thì không ghi,
-        // nhưng vẫn báo là đã bỏ qua chứ không âm thầm mất.
-        if (xuLyTrung == XuLyPhieuTrung.GiuDuLieuCu && dongTrong.Count > 0)
+        // Dòng trùng mà người dùng chọn giữ dữ liệu cũ hoặc bỏ qua thì không ghi,
+        // nhưng vẫn đếm riêng là bỏ qua chứ không âm thầm mất.
+        if (xuLyTrung is XuLyPhieuTrung.GiuDuLieuCu or XuLyPhieuTrung.BoQua)
         {
             dongCanGhi = dongCanGhi.Where(dong => dong.KetQua != KetQuaDongSoQuy.TrungMa).ToList();
         }
 
-        if (xuLyTrung == XuLyPhieuTrung.BoQua)
-        {
-            dongCanGhi = dongCanGhi.Where(dong => dong.KetQua != KetQuaDongSoQuy.TrungMa).ToList();
-        }
+        var soTrungBiBoQua = xuLyTrung == XuLyPhieuTrung.ThayThe ? 0 : dongTrong.Count;
 
         if (dongCanGhi.Count == 0)
         {
@@ -327,18 +345,15 @@ public sealed class SoQuyImportService
             {
                 TenFile = preview.TenFile,
                 TongSoDong = preview.TongSoDong,
-                SoLoi = preview.DanhSachLoi.Count,
-                SoBoQua = preview.SoDongLoi + preview.SoDongTrungTrongFile + dongTrong.Count,
+                SoLoi = preview.SoDongLoi,
+                SoBoQua = preview.SoDongTrungTrongFile + soTrungBiBoQua,
                 XuLyTrung = xuLyTrung,
                 CanhBao = [.. preview.CanhBao]
             };
         }
 
-        var dongGhi = dongCanGhi.Where(dong =>
-        {
-            ct.ThrowIfCancellationRequested();
-            return true;
-        }).ToList();
+        ct.ThrowIfCancellationRequested();
+        var dongGhi = dongCanGhi.ToList();
 
         var ketQua = await _db.NhapPhieuQuyAsync(
             dongGhi,
@@ -352,17 +367,18 @@ public sealed class SoQuyImportService
             });
 
         // Ghi những lỗi đã biết từ bước kiểm tra vào cùng kết quả để người
-        // dùng xem một chỗ, không phải mở lại màn hình xem trước.
+        // dùng xem một chỗ, không phải mở lại màn hình xem trước. Danh sách chỉ
+        // giữ tối đa SoLoiToiDaGiu dòng, còn tổng lỗi luôn lấy theo số thật.
         foreach (var loi in preview.DanhSachLoi)
         {
             if (ketQua.DanhSachLoi.Count >= SoLoiToiDaGiu)
                 break;
 
             ketQua.DanhSachLoi.Add(loi);
-            ketQua.SoLoi++;
         }
 
-        ketQua.SoBoQua += preview.SoDongLoi + preview.SoDongTrungTrongFile;
+        ketQua.SoLoi += preview.SoDongLoi;
+        ketQua.SoBoQua += preview.SoDongTrungTrongFile + soTrungBiBoQua;
         ketQua.TenFile = preview.TenFile;
         ketQua.TongSoDong = preview.TongSoDong;
         ketQua.CanhBao.AddRange(preview.CanhBao);
@@ -442,9 +458,12 @@ public sealed class SoQuyImportService
             canhBao.Add("File không có cột \"Ngày giờ\": hệ thống sẽ dùng thời điểm hiện tại.");
 
         if (!map.ContainsKey(TruongSoQuy.LoaiPhieu))
-            canhBao.Add("File không có cột \"Loại phiếu\": hệ thống sẽ suy ra từ tiền tố mã phiếu (PT là thu, PC là chi).");
+            canhBao.Add(
+                "File không có cột \"Loại phiếu\": hệ thống sẽ đọc từ cột \"Loại thu chi\", "
+                + "sau đó mới suy ra từ tiền tố mã phiếu (PT/TT là thu; PC/PCPN/CTM là chi).");
 
         var dong = new List<DongFile>();
+        var soDongTongKet = 0;
 
         for (var i = 0; i < raw.NoiDung.Count; i++)
         {
@@ -461,8 +480,19 @@ public sealed class SoQuyImportService
             foreach (var (truong, viTriCot) in map)
                 giaTri[truong] = viTriCot < oDong.Length ? (oDong[viTriCot] ?? "") : "";
 
+            // Các dòng tổng kết cuối file (Tổng thu, Tổng chi, Tồn quỹ...) không
+            // phải giao dịch. Bỏ qua có báo trước để không tính nhầm thành lỗi.
+            if (LaDongTongKet(giaTri))
+            {
+                soDongTongKet++;
+                continue;
+            }
+
             dong.Add(new DongFile { SoDong = soDongExcel, GiaTri = giaTri });
         }
+
+        if (soDongTongKet > 0)
+            canhBao.Add($"Đã bỏ qua {soDongTongKet:N0} dòng tổng kết cuối file (Tổng thu, Tổng chi, Tồn quỹ...).");
 
         return new NoiDungFile
         {
@@ -471,6 +501,25 @@ public sealed class SoQuyImportService
             Loi = loi,
             CanhBao = canhBao
         };
+    }
+
+    /// <summary>
+    /// Nhận diện dòng tổng kết cuối file: không có mã phiếu/ngày/loại thu chi và
+    /// cột người nộp/nhận chứa nhãn tổng kết quen thuộc.
+    /// </summary>
+    private static bool LaDongTongKet(Dictionary<TruongSoQuy, string> giaTri)
+    {
+        var maPhieu = (giaTri.GetValueOrDefault(TruongSoQuy.MaPhieu) ?? "").Trim();
+        var ngayGio = (giaTri.GetValueOrDefault(TruongSoQuy.NgayGio) ?? "").Trim();
+        var loaiThuChi = (giaTri.GetValueOrDefault(TruongSoQuy.LoaiThuChi) ?? "").Trim();
+
+        if (maPhieu.Length > 0 || ngayGio.Length > 0 || loaiThuChi.Length > 0)
+            return false;
+
+        var nhan = KhoaCot(giaTri.GetValueOrDefault(TruongSoQuy.NguoiNopNhan));
+
+        return nhan is "quydauky" or "tongthu" or "tongchi" or "tonquy"
+            or "tongcong" or "tongket" or "sodudauky" or "soducuoiky";
     }
 
     private sealed class NoiDungFile
@@ -516,13 +565,13 @@ public sealed class SoQuyImportService
             var dong = new string[cotCuoi];
 
             for (var c = 1; c <= cotCuoi; c++)
-                dong[c - 1] = sheet.Cell(r, c).GetFormattedString();
+                dong[c - 1] = DocGiaTriO(sheet.Cell(r, c));
 
             var soKhop = DemSoCotKhop(dong);
 
             // Cột "Số tiền" là dấu hiệu mạnh nhất cho thấy đây đúng là bảng sổ quỹ,
             // nên dòng nào có cột này được ưu tiên làm tiêu đề.
-            var coSoTien = dong.Any(o => KhopTrenSoTien.Contains(DatabaseService.NormalizeHeaderKey(o)));
+            var coSoTien = dong.Any(o => KhopTrenSoTien.Contains(KhoaCot(o)));
 
             if (soKhop == 0)
                 continue;
@@ -548,7 +597,7 @@ public sealed class SoQuyImportService
             var dong = new string[cotCuoi];
 
             for (var c = 1; c <= cotCuoi; c++)
-                dong[c - 1] = sheet.Cell(r, c).GetFormattedString();
+                dong[c - 1] = DocGiaTriO(sheet.Cell(r, c));
 
             noiDung.Add(dong);
         }
@@ -556,13 +605,38 @@ public sealed class SoQuyImportService
         return (tieuDe, noiDung, dongTieuDe);
     }
 
+    /// <summary>
+    /// Đọc một ô Excel theo kiểu dữ liệu gốc thay vì chuỗi đã định dạng theo locale.
+    /// Nhờ vậy ngày giờ và số tiền không phụ thuộc cài đặt vùng miền của máy đang mở file.
+    /// </summary>
+    private static string DocGiaTriO(IXLCell o)
+    {
+        if (o.IsEmpty())
+            return "";
+
+        return o.DataType switch
+        {
+            XLDataType.DateTime => o.GetDateTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+            XLDataType.Number => o.GetDouble().ToString("R", CultureInfo.InvariantCulture),
+            XLDataType.Boolean => o.GetBoolean() ? "TRUE" : "FALSE",
+            _ => o.GetFormattedString()
+        };
+    }
+
     /// <summary>Đếm số cột trong dòng khớp một trường nào đó của sổ quỹ.</summary>
     private static int DemSoCotKhop(string[] dong) => dong.Count(o =>
     {
-        var khoa = DatabaseService.NormalizeHeaderKey(o);
+        var khoa = KhoaCot(o);
 
         return khoa.Length > 0 && BangDoanCot.Any(cap => cap.Khoa.Contains(khoa));
     });
+
+    /// <summary>
+    /// Khóa so khớp tên cột: bỏ dấu và bỏ luôn dấu phân cách để "Mã phiếu",
+    /// "MaPhieu" và "Ma Phieu" đều thành "maphieu".
+    /// </summary>
+    private static string KhoaCot(string? value)
+        => DatabaseService.NormalizeHeaderKey(value).Replace("_", string.Empty, StringComparison.Ordinal);
 
     /// <summary>Tên cột của "Số tiền" đã chuẩn hóa, dùng để nhận diện bảng sổ quỹ.</summary>
     private static readonly HashSet<string> KhopTrenSoTien = new(StringComparer.Ordinal)
@@ -659,7 +733,7 @@ public sealed class SoQuyImportService
         {
             for (var i = 0; i < tieuDe.Length; i++)
             {
-                var khoaCot = DatabaseService.NormalizeHeaderKey(tieuDe[i]);
+                var khoaCot = KhoaCot(tieuDe[i]);
 
                 if (khoaCot.Length > 0 && khoa.Contains(khoaCot))
                 {
@@ -677,42 +751,147 @@ public sealed class SoQuyImportService
     // ============================================================
 
     /// <summary>
-    /// Loại phiếu: ưu tiên cột riêng, không có thì suy ra từ tiền tố mã.
-    /// Mã bắt đầu bằng "PT" là thu, bắt đầu bằng "PC" là chi.
+    /// Loại phiếu: ưu tiên cột "Loại phiếu", sau đó tới mô tả "Loại thu chi",
+    /// cuối cùng mới suy ra từ tiền tố mã. Mã từ phần mềm cũ có thể là TT/TTHD
+    /// (thu) hoặc PC/PCPN/CTM (chi), không chỉ PT/PC.
     /// </summary>
-    private static bool DocLoaiPhieu(DongFile dong, string maPhieu, KetQuaDongSoQuyKhoiTao ketQua)
+    private static bool DocLoaiPhieu(
+        DongFile dong,
+        string maPhieu,
+        string tenLoai,
+        KetQuaDongSoQuyKhoiTao ketQua)
     {
         var giaTri = (dong.GiaTri.GetValueOrDefault(TruongSoQuy.LoaiPhieu) ?? "").Trim();
 
-        if (giaTri.Length == 0)
+        if (giaTri.Length > 0)
+            return DocLoaiTuMoTa(giaTri, ketQua, "Loại phiếu");
+
+        if (tenLoai.Length > 0)
         {
-            if (maPhieu.StartsWith("PC", StringComparison.OrdinalIgnoreCase))
-                return false;
+            var tuMoTa = ThuDocLoaiTuMoTa(tenLoai);
 
-            if (maPhieu.StartsWith("PT", StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            ketQua.Loi.Add("Không xác định được thu hay chi: thiếu cột \"Loại phiếu\" và mã phiếu không bắt đầu bằng PT/PC");
-
-            return false;
+            if (tuMoTa.HasValue)
+                return tuMoTa.Value;
         }
 
-        var chuanHoa = DatabaseService.ChuanHoaChuoi(giaTri);
+        var tuMa = ThuDocLoaiTuMa(maPhieu);
 
-        if (DatabaseService.ChuanHoaChuoi("thu") == chuanHoa || chuanHoa.Contains("thu"))
-            return true;
+        if (tuMa.HasValue)
+            return tuMa.Value;
 
-        if (DatabaseService.ChuanHoaChuoi("chi") == chuanHoa || chuanHoa.Contains("chi"))
-            return false;
-
-        ketQua.Loi.Add($"Loại phiếu \"{giaTri}\" không hợp lệ, chỉ nhận Thu hoặc Chi");
+        ketQua.Loi.Add(
+            "Không xác định được thu hay chi: thiếu cột \"Loại phiếu\", "
+            + "cột \"Loại thu chi\" không mô tả thu/chi và mã phiếu không có tiền tố đã biết "
+            + "(PT/TT là thu; PC/PCPN/CTM là chi)");
 
         return false;
     }
 
+    private static bool DocLoaiTuMoTa(
+        string giaTri,
+        KetQuaDongSoQuyKhoiTao ketQua,
+        string tenCot)
+    {
+        var chuanHoa = DatabaseService.ChuanHoaChuoi(giaTri);
+
+        if (chuanHoa == "thu" || chuanHoa.StartsWith("thu ", StringComparison.Ordinal)
+            || chuanHoa.Contains(" thu", StringComparison.Ordinal))
+            return true;
+
+        if (chuanHoa == "chi" || chuanHoa.StartsWith("chi ", StringComparison.Ordinal)
+            || chuanHoa.Contains(" chi", StringComparison.Ordinal))
+            return false;
+
+        ketQua.Loi.Add($"{tenCot} \"{giaTri}\" không hợp lệ, chỉ nhận Thu hoặc Chi");
+
+        return false;
+    }
+
+    private static bool? ThuDocLoaiTuMoTa(string moTa)
+    {
+        var chuanHoa = DatabaseService.ChuanHoaChuoi(moTa);
+
+        if (chuanHoa.StartsWith("phieu thu", StringComparison.Ordinal)
+            || chuanHoa.StartsWith("thu ", StringComparison.Ordinal)
+            || chuanHoa.Contains(" thu ", StringComparison.Ordinal))
+            return true;
+
+        if (chuanHoa.StartsWith("phieu chi", StringComparison.Ordinal)
+            || chuanHoa.StartsWith("chi ", StringComparison.Ordinal)
+            || chuanHoa.Contains(" chi ", StringComparison.Ordinal))
+            return false;
+
+        return null;
+    }
+
+    private static bool? ThuDocLoaiTuMa(string maPhieu)
+    {
+        var ma = (maPhieu ?? "").Trim().ToUpperInvariant();
+
+        if (ma.StartsWith("PT", StringComparison.Ordinal)
+            || ma.StartsWith("TT", StringComparison.Ordinal))
+            return true;
+
+        if (ma.StartsWith("PC", StringComparison.Ordinal)
+            || ma.StartsWith("CTM", StringComparison.Ordinal))
+            return false;
+
+        return null;
+    }
+
+    /// <summary>
+    /// Tìm loại thu/chi phù hợp với mô tả trong file. Ưu tiên khớp chính xác tên
+    /// trong danh mục, sau đó nhận diện các cụm nghiệp vụ thường gặp của phần mềm
+    /// cũ, cuối cùng mới so khớp một phần tên loại. Không tự tạo loại mới.
+    /// </summary>
+    private static uint? TimNhomChiPhiTheoMoTa(SoQuyImportDanhMuc danhMuc, string moTa)
+    {
+        var chuanHoa = DatabaseService.ChuanHoaChuoi(moTa);
+
+        if (chuanHoa.Length == 0)
+            return null;
+
+        if (danhMuc.LoaiThuChiTheoTen.TryGetValue(chuanHoa, out var idChinhXac))
+            return idChinhXac;
+
+        if (danhMuc.LoaiThuChiTheoMa.TryGetValue(chuanHoa, out var idTheoMa))
+            return idTheoMa;
+
+        if (chuanHoa.Contains("khach hang", StringComparison.Ordinal)
+            || chuanHoa.Contains("tien khach", StringComparison.Ordinal)
+            || chuanHoa.Contains("khach tra", StringComparison.Ordinal)
+            || chuanHoa.Contains("ban hang", StringComparison.Ordinal))
+            return TimTheoMaNhom(danhMuc, "thu_khach_hang");
+
+        if (chuanHoa.Contains("nha cung cap", StringComparison.Ordinal)
+            || chuanHoa.Contains("tra ncc", StringComparison.Ordinal)
+            || chuanHoa.Contains("tien tra ncc", StringComparison.Ordinal))
+            return TimTheoMaNhom(danhMuc, "chi_nha_cung_cap");
+
+        if (chuanHoa.Contains("van chuyen", StringComparison.Ordinal)
+            || chuanHoa.Contains("giao hang", StringComparison.Ordinal)
+            || chuanHoa.Contains("cuoc phi", StringComparison.Ordinal))
+            return TimTheoMaNhom(danhMuc, "van_chuyen");
+
+        foreach (var (ten, id) in danhMuc.LoaiThuChiTheoTen)
+        {
+            if (ten.Length >= 3
+                && (chuanHoa.Contains(ten, StringComparison.Ordinal)
+                    || ten.Contains(chuanHoa, StringComparison.Ordinal)))
+                return id;
+        }
+
+        return null;
+    }
+
+    private static uint? TimTheoMaNhom(SoQuyImportDanhMuc danhMuc, string maNhom)
+        => danhMuc.LoaiThuChiTheoMa.TryGetValue(maNhom, out var id) ? id : null;
+
     /// <summary>
     /// Số tiền: chấp nhận cả "12345", "12345.67", "12.345,67" và "12 345".
-    /// Cột so_tien là DECIMAL(15,2) nên phần thập phân được làm tròn về 2 chữ số.
+    /// File xuất từ phần mềm cũ có thể ghi phiếu chi bằng số âm; cột <c>so_tien</c>
+    /// của hệ thống luôn lưu số dương và loại phiếu nằm ở <c>loai_phieu</c>.
+    /// Cột DECIMAL(15,2) nên phần thập phân được làm tròn về 2 chữ số.
     /// </summary>
     private static decimal DocSoTien(DongFile dong, KetQuaDongSoQuyKhoiTao ketQua)
     {
@@ -732,11 +911,11 @@ public sealed class SoQuyImportService
             return 0m;
         }
 
-        soTien = Math.Round(soTien, 2, MidpointRounding.ToEven);
+        soTien = Math.Abs(Math.Round(soTien, 2, MidpointRounding.ToEven));
 
-        if (soTien <= 0m)
+        if (soTien == 0m)
         {
-            ketQua.Loi.Add("Số tiền phải lớn hơn 0");
+            ketQua.Loi.Add("Số tiền phải khác 0");
 
             return 0m;
         }
@@ -763,12 +942,26 @@ public sealed class SoQuyImportService
         if (giaTri.Length == 0)
             return null;
 
-        var dinhDang = new[] { "dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy", "dd.MM.yyyy" };
+        var dinhDang = new[]
+        {
+            "dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy", "dd.MM.yyyy",
+            "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd",
+            "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.fff"
+        };
 
-        if (DateTime.TryParseExact(giaTri, dinhDang, CultureInfo.InvariantCulture, DateTimeStyles.None, out var ngay))
+        if (DateTime.TryParseExact(
+                giaTri,
+                dinhDang,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces,
+                out var ngay))
             return ngay;
 
-        if (DateTime.TryParse(giaViChuoi(giaTri), CultureInfo.GetCultureInfo("vi-VN"), DateTimeStyles.None, out ngay))
+        if (DateTime.TryParse(
+                giaViChuoi(giaTri),
+                CultureInfo.GetCultureInfo("vi-VN"),
+                DateTimeStyles.AllowWhiteSpaces,
+                out ngay))
             return ngay;
 
         if (double.TryParse(giaTri, NumberStyles.Any, CultureInfo.InvariantCulture, out var serial)

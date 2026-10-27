@@ -71,9 +71,10 @@ public partial class SoQuyImportPreviewWindow : Window
         CanhBaoBorder.IsVisible = _preview.CanhBao.Count > 0;
 
         LoiItems.ItemsSource = _preview.DanhSachLoi.Select(l => (object)$"• {l.MoTa}").ToList();
-        LoiBorder.IsVisible = _preview.DanhSachLoi.Count > 0;
-        LoiTieudeTextBlock.Text =
-            $"Danh sách lỗi ({_preview.DanhSachLoi.Count:N0} dòng), sửa file gốc rồi nhập lại:";
+        LoiBorder.IsVisible = _preview.SoDongLoi > 0;
+        LoiTieudeTextBlock.Text = _preview.DanhSachLoi.Count < _preview.SoDongLoi
+            ? $"Danh sách lỗi ({_preview.DanhSachLoi.Count:N0}/{_preview.SoDongLoi:N0} dòng, chỉ hiện lỗi đầu tiên), sửa file gốc rồi nhập lại:"
+            : $"Danh sách lỗi ({_preview.SoDongLoi:N0} dòng), sửa file gốc rồi nhập lại:";
 
         var soHienThi = Math.Min(_preview.DanhSachDong.Count, SoDongToiDaHienThi);
 

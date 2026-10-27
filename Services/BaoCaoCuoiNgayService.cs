@@ -258,7 +258,7 @@ public sealed class BaoCaoCuoiNgayService
     {
         await using var connection = await _taoKetNoi();
 
-        const string sql = """
+        var sql = $"""
         SELECT
             CASE
                 WHEN pc.phuong_thuc IS NULL OR TRIM(pc.phuong_thuc) = '' THEN 'KHONG_ROI'
@@ -270,7 +270,7 @@ public sealed class BaoCaoCuoiNgayService
                 CASE WHEN pc.hoa_don_ban_hang_id IS NOT NULL THEN pc.so_tien ELSE 0 END
             ), 0)                  AS SoTienTuBanHang
         FROM phieu_chi pc
-        WHERE pc.ma_phieu_chi LIKE 'PT%'
+        WHERE {PhieuQuySql.LaThu}
           AND pc.trang_thai = 'HOAN_THANH'
           AND pc.thoi_gian_chi >= @DauNgay
           AND pc.thoi_gian_chi < @NgayKeTiep
@@ -587,12 +587,12 @@ public sealed class BaoCaoCuoiNgayService
     {
         await using var connection = await _taoKetNoi();
 
-        const string sqlTongHop = """
+        var sqlTongHop = $"""
         SELECT
-            COALESCE(SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PT%' THEN pc.so_tien ELSE 0 END), 0) AS TongThu,
-            COALESCE(SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PC%' THEN pc.so_tien ELSE 0 END), 0) AS TongChi,
-            COALESCE(SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PT%' THEN 1 ELSE 0 END), 0)         AS SoPhieuThu,
-            COALESCE(SUM(CASE WHEN pc.ma_phieu_chi LIKE 'PC%' THEN 1 ELSE 0 END), 0)         AS SoPhieuChi
+            COALESCE(SUM(CASE WHEN {PhieuQuySql.LaThu} THEN pc.so_tien ELSE 0 END), 0) AS TongThu,
+            COALESCE(SUM(CASE WHEN {PhieuQuySql.LaChi} THEN pc.so_tien ELSE 0 END), 0) AS TongChi,
+            COALESCE(SUM(CASE WHEN {PhieuQuySql.LaThu} THEN 1 ELSE 0 END), 0)         AS SoPhieuThu,
+            COALESCE(SUM(CASE WHEN {PhieuQuySql.LaChi} THEN 1 ELSE 0 END), 0)         AS SoPhieuChi
         FROM phieu_chi pc
         WHERE pc.trang_thai = 'HOAN_THANH'
           AND pc.thoi_gian_chi >= @DauNgay
@@ -604,15 +604,15 @@ public sealed class BaoCaoCuoiNgayService
         var tongHopRow = await connection.QueryFirstOrDefaultAsync<SoQuyTongHopRow>(
             new CommandDefinition(sqlTongHop, thamSo, cancellationToken: token));
 
-        const string sqlRows = """
+        var sqlRows = $"""
         SELECT
             pc.thoi_gian_chi AS ThoiGian,
-            CASE WHEN pc.ma_phieu_chi LIKE 'PT%' THEN 'THU' ELSE 'CHI' END AS Loai,
+            CASE WHEN {PhieuQuySql.LaThu} THEN 'THU' ELSE 'CHI' END AS Loai,
             COALESCE(
                 NULLIF(TRIM(pc.noi_dung), ''),
                 CASE
                     WHEN pc.hoa_don_ban_hang_id IS NOT NULL THEN 'Thu tiền bán hàng'
-                    WHEN pc.ma_phieu_chi LIKE 'PT%' THEN 'Ghi nhận thu'
+                    WHEN {PhieuQuySql.LaThu} THEN 'Ghi nhận thu'
                     ELSE 'Ghi nhận chi'
                 END
             ) AS NoiDung,

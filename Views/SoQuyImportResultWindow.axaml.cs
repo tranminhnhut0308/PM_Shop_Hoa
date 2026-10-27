@@ -73,9 +73,10 @@ public partial class SoQuyImportResultWindow : Window
         CanhBaoBorder.IsVisible = _ketQua.CanhBao.Count > 0;
 
         LoiItems.ItemsSource = _ketQua.DanhSachLoi.Select(l => (object)$"• {l.MoTa}").ToList();
-        LoiBorder.IsVisible = _ketQua.DanhSachLoi.Count > 0;
-        LoiTieudeTextBlock.Text =
-            $"Danh sách lỗi ({_ketQua.DanhSachLoi.Count:N0} dòng), sửa file gốc rồi nhập lại:";
+        LoiBorder.IsVisible = _ketQua.SoLoi > 0;
+        LoiTieudeTextBlock.Text = _ketQua.DanhSachLoi.Count < _ketQua.SoLoi
+            ? $"Danh sách lỗi ({_ketQua.DanhSachLoi.Count:N0}/{_ketQua.SoLoi:N0} dòng, chỉ hiện lỗi đầu tiên), sửa file gốc rồi nhập lại:"
+            : $"Danh sách lỗi ({_ketQua.SoLoi:N0} dòng), sửa file gốc rồi nhập lại:";
 
         XuatLoiButton.IsVisible = _ketQua.DanhSachLoi.Count > 0;
     }

@@ -330,6 +330,9 @@ public sealed class SoQuyImportDanhMuc
     /// <summary>Tên loại thu/chi đã chuẩn hóa -> id, dùng khi file chỉ có tên loại.</summary>
     public Dictionary<string, uint> LoaiThuChiTheoTen { get; init; } = new(StringComparer.Ordinal);
 
+    /// <summary>Mã loại thu/chi (ma_nhom) đã chuẩn hóa -> id, dùng để nhận diện các loại chuẩn.</summary>
+    public Dictionary<string, uint> LoaiThuChiTheoMa { get; init; } = new(StringComparer.Ordinal);
+
     /// <summary>id nguoi_dung -> họ tên.</summary>
     public Dictionary<uint, string> NguoiDungTheoId { get; init; } = [];
 

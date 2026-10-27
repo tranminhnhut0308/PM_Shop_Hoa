@@ -495,7 +495,7 @@ public sealed class DashboardService
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """);
 
-            const string sql = """
+            var sql = $"""
             SELECT * FROM (
                 -- 1. Nhật ký hoạt động chi tiết từ bảng nhat_ky_hoat_dong
                 SELECT
@@ -579,7 +579,7 @@ public sealed class DashboardService
                     CASE 
                         WHEN pc.trang_thai = 'HUY' THEN 'Hủy sổ quỹ'
                         WHEN pc.hoa_don_ban_hang_id IS NOT NULL THEN 'Thu tiền'
-                        WHEN pc.so_tien >= 0 THEN 'Thu tiền'
+                        WHEN {PhieuQuySql.LaThu} THEN 'Thu tiền'
                         ELSE 'Chi tiền'
                     END AS HanhDong,
                     'SO_QUY' AS DoiTuong,

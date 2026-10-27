@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using ClosedXML.Excel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -1451,9 +1452,14 @@ public sealed partial class MainWindowViewModel
                     + "Hãy sửa file rồi thử lại, hoặc tải file mẫu để xem định dạng.");
 
                 if (preview.DanhSachLoi.Count > 0)
-                    await ShowMessageAsync(
-                        "Chi tiết lỗi",
-                        string.Join("\n", preview.DanhSachLoi.Take(15).Select(l => "• " + l.MoTa)));
+                {
+                    var chiTietLoi = string.Join("\n", preview.DanhSachLoi.Take(15).Select(l => "• " + l.MoTa));
+
+                    if (preview.SoDongLoi > 15)
+                        chiTietLoi += $"\n… và {preview.SoDongLoi - 15:N0} lỗi khác (xem đầy đủ ở file xuất lỗi).";
+
+                    await ShowMessageAsync("Chi tiết lỗi", chiTietLoi);
+                }
 
                 return;
             }
@@ -1511,13 +1517,16 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-    /// <summary>Cập nhật thanh tiến độ nhập; chạy trên luồng đọc file nên phải bọc lại.</summary>
-    private Task BaoTienDoNhapSoQuy(SoQuyImportProgress tienDo)
+    /// <summary>Cập nhật thanh tiến độ nhập trên UI thread vì bước đọc file chạy nền.</summary>
+    private async Task BaoTienDoNhapSoQuy(SoQuyImportProgress tienDo)
     {
-        SoQuyTienDoNhap = $"{tienDo.GiaiDoan}: {tienDo.DaXuLy:N0}/{tienDo.TongSo:N0} dòng";
-        SoQuyPhanTramNhap = tienDo.PhanTram;
-
-        return Task.CompletedTask;
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            SoQuyTienDoNhap = tienDo.TongSo > 0
+                ? $"{tienDo.GiaiDoan}: {tienDo.DaXuLy:N0}/{tienDo.TongSo:N0} dòng"
+                : tienDo.GiaiDoan;
+            SoQuyPhanTramNhap = tienDo.PhanTram;
+        });
     }
 
     /// <summary>

@@ -482,6 +482,7 @@ INSERT INTO `nhom_san_pham` (`id`, `ma_nhom`, `ten_nhom`, `nhom_cha_id`, `ghi_ch
 CREATE TABLE `phieu_chi` (
   `id` int(10) UNSIGNED NOT NULL,
   `ma_phieu_chi` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `loai_phieu` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `chi_nhanh_id` int(10) UNSIGNED NOT NULL,
   `nhom_chi_phi_id` int(10) UNSIGNED DEFAULT NULL,
   `so_tien` decimal(15,2) NOT NULL DEFAULT '0.00',
@@ -1385,13 +1386,13 @@ EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 --
--- Sổ quỹ: hai cột `nguoi_nop_nhan` và `ghi_chu` cho bảng `phieu_chi`.
+-- Sổ quỹ: các cột bổ sung cho bảng `phieu_chi`.
 --
--- Trước đây bảng này chỉ có `noi_dung` (text) nên phần "người nộp / nhận" và
--- "ghi chú" phải nhồi chung vào một ô, không tách được trên danh sách, không xuất
--- được ra Excel và không nhập lại từ file. Hai cột mới tách riêng từng thông tin:
 --   nguoi_nop_nhan : người nộp (phiếu thu) hoặc người nhận (phiếu chi)
 --   ghi_chu        : ghi chú tự do của phiếu
+--   loai_phieu     : THU/CHI của phiếu, cần cho phiếu nhập từ file có mã TT/CTM...
+--                    vì mã phiếu gốc được giữ nguyên, không thể chỉ dựa vào PT/PC.
+--
 -- `nguoi_thuc_hien_id` giữ đúng nghĩa FK là người tạo chứng từ.
 --
 -- Chạy lại đoạn dưới nhiều lần vẫn an toàn (đã có cột thì bỏ qua).
@@ -1402,12 +1403,19 @@ SET @co_nop_nhan = IFNULL((SELECT `information_schema`.`COLUMN_NAME` FROM `infor
 
 SET @co_ghi_chu_sq = IFNULL((SELECT `information_schema`.`COLUMN_NAME` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'phieu_chi' AND `COLUMN_NAME` = 'ghi_chu' LIMIT 1), '');
 
+SET @co_loai_phieu_sq = IFNULL((SELECT `information_schema`.`COLUMN_NAME` FROM `information_schema`.`COLUMNS` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = 'phieu_chi' AND `COLUMN_NAME` = 'loai_phieu' LIMIT 1), '');
+
 SET @sql = IF(@co_so_dat_sq = '' OR @co_nop_nhan <> '', 'SELECT 1', 'ALTER TABLE `phieu_chi` ADD COLUMN `nguoi_nop_nhan` varchar(150) DEFAULT NULL AFTER `noi_dung`');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 SET @sql = IF(@co_so_dat_sq = '' OR @co_ghi_chu_sq <> '', 'SELECT 1', 'ALTER TABLE `phieu_chi` ADD COLUMN `ghi_chu` text DEFAULT NULL AFTER `nguoi_nop_nhan`');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(@co_so_dat_sq = '' OR @co_loai_phieu_sq <> '', 'SELECT 1', 'ALTER TABLE `phieu_chi` ADD COLUMN `loai_phieu` varchar(10) DEFAULT NULL AFTER `ma_phieu_chi`');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
