@@ -129,7 +129,7 @@ public sealed class TongQuanDiemDoanhThu
 
     public bool CoDuLieu => SoHoaDon > 0 || DoanhThu > 0;
 
-    public string MauCot => !CoDuLieu
+    public string MauCot => DoanhThu <= 0
         ? "#E2ECE8"
         : (LaDiemCaoNhat ? "#047857" : "#0D9488");
 

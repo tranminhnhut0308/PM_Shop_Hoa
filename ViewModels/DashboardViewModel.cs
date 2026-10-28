@@ -207,16 +207,24 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CoDuLieu))]
+    [NotifyPropertyChangedFor(nameof(HienThiTrangThaiBieuDo))]
     private bool dangTai;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CoDuLieu))]
     [NotifyPropertyChangedFor(nameof(CoLoi))]
+    [NotifyPropertyChangedFor(nameof(HienThiTrangThaiBieuDo))]
     private string thongBaoLoi = "";
 
     public bool CoLoi => !string.IsNullOrWhiteSpace(ThongBaoLoi);
 
-    public bool CoDuLieu => !CoLoi && !DangTai;
+    public bool CoDuLieu => !CoLoi && !DangTai && BieuDoDoanhThu.Any(d => d.DoanhThu > 0);
+
+    public bool HienThiTrangThaiBieuDo => !CoLoi && !DangTai && !CoDuLieu;
+
+    public string TrangThaiBieuDo => BieuDoDoanhThu.Any(d => d.SoHoaDon > 0)
+        ? "Có hóa đơn trong kỳ nhưng chưa có doanh thu được ghi nhận. Kiểm tra tùy chọn cập nhật Tổng bán khi import."
+        : "Chưa có phát sinh trong khoảng đã chọn. Hãy thử chọn khoảng thời gian khác.";
 
     /// <summary>Nội dung mô tả khoảng đang xem, hiển thị trên đầu thẻ doanh thu.</summary>
     [ObservableProperty]
@@ -493,6 +501,9 @@ public sealed partial class DashboardViewModel : ObservableObject
         PhuDeMatDoChieu = duLieu.PhuDeMatDoChieu;
 
         DoDanhSachMoi(BieuDoDoanhThu, duLieu.BieuDoDoanhThu);
+        OnPropertyChanged(nameof(CoDuLieu));
+        OnPropertyChanged(nameof(HienThiTrangThaiBieuDo));
+        OnPropertyChanged(nameof(TrangThaiBieuDo));
         DoDanhSachMoi(TopHangBanChay, duLieu.TopHangBanChay);
         DoDanhSachMoi(TopKhachHang, duLieu.TopKhachHang);
 

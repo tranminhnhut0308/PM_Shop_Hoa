@@ -666,14 +666,12 @@
             </ScrollViewer>
           </Grid>
 
-          <Border Grid.Row="3" IsVisible="{Binding !CoDuLieu}" Background="#F7FAF9"
+          <Border Grid.Row="3" IsVisible="{Binding HienThiTrangThaiBieuDo}" Background="#F7FAF9"
               BorderBrush="#E2ECE8" BorderThickness="1" CornerRadius="10"
-              Padding="18" HorizontalAlignment="Stretch">
+              Padding="12" HorizontalAlignment="Stretch">
               <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
-                <TextBlock Text="Chưa có dữ liệu doanh thu" FontWeight="SemiBold"
+                <TextBlock Text="{Binding TrangThaiBieuDo}" FontWeight="SemiBold"
                   Foreground="#4B5D57" HorizontalAlignment="Center" />
-                <TextBlock Text="Hãy chọn khoảng thời gian khác để xem biểu đồ."
-                  Classes="tqMuted" HorizontalAlignment="Center" />
               </StackPanel>
             </Border>
         </Grid>
