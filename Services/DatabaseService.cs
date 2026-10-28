@@ -7918,12 +7918,14 @@ ORDER BY hd.thoi_gian_ban DESC
     /// </summary>
     public async Task<bool> ImportPhieuNhapHangAsync(
         PhieuNhapImportReceipt receipt,
-        bool updateSupplierDebt = true)
+        bool updateSupplierDebt = true,
+        IProgress<string>? progress = null)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.PurchasesImport, "Bạn không có quyền import phiếu nhập hàng.");
         ArgumentNullException.ThrowIfNull(receipt);
 
         var code = receipt.MaPhieuNhap.Trim();
+        progress?.Report($"Đang kiểm tra phiếu nhập {code}...");
         if (code.Length == 0 || receipt.Items.Count == 0)
             throw new InvalidOperationException("Phiếu nhập thiếu mã phiếu hoặc chi tiết hàng hóa.");
         if (receipt.ThoiGianNhap == default
@@ -8053,6 +8055,7 @@ ORDER BY hd.thoi_gian_ban DESC
             SoHoaDonDauVao = receipt.SoHoaDonDauVao
         };
 
+        progress?.Report($"Đang lưu phiếu nhập {code}...");
         await using var transaction = await connection.BeginTransactionAsync();
         try
         {
@@ -8067,6 +8070,7 @@ ORDER BY hd.thoi_gian_ban DESC
                 transaction);
             if (existingId.HasValue)
             {
+                progress?.Report($"Phiếu nhập {code} đã tồn tại, đang bỏ qua...");
                 await transaction.CommitAsync();
                 return false;
             }
@@ -8176,6 +8180,7 @@ ORDER BY hd.thoi_gian_ban DESC
                     $"Tổng thành tiền chi tiết của phiếu {code} là {savedDetailTotal:N2}, " +
                     $"không khớp tổng phiếu {phieu.TongTienHang:N2}.");
 
+            progress?.Report($"Đang cập nhật tồn kho và công nợ cho phiếu {code}...");
             await CapNhatTonKhoPhieuNhapAsync(connection, transaction, phieu, items);
             if (updateSupplierDebt)
             {
@@ -8187,6 +8192,7 @@ ORDER BY hd.thoi_gian_ban DESC
                     xoaLichSuCu: false);
             }
             await transaction.CommitAsync();
+            progress?.Report($"Đã commit phiếu nhập {code}.");
             return true;
         }
         catch

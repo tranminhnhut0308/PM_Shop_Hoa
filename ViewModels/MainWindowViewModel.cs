@@ -134,6 +134,10 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private bool isImporting;
     [ObservableProperty]
     private string importStatus = "";
+    [ObservableProperty] private string importTitle = "Đang nhập dữ liệu";
+    [ObservableProperty] private string importFileName = "";
+    [ObservableProperty] private string importCountsText = "";
+    [ObservableProperty] private bool importHasCounts;
 
     /// <summary>
     /// Thanh tiến độ xác định 0-100 cho các luồng import biết trước tổng số
@@ -4185,6 +4189,9 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task ImportBaoCaoPhieuNhapAsync()
     {
+        if (IsImporting)
+            return;
+
         if (!await KiemTraQuyenAsync(
                 PermissionKeys.PurchasesImport,
                 "Bạn không có quyền import phiếu nhập hàng."))
@@ -4207,7 +4214,15 @@ public partial class MainWindowViewModel : ObservableObject
             if (files.Count == 0)
                 return;
 
+            IsImporting = true;
+            ImportTitle = "Đang đọc file phiếu nhập hàng";
+            ImportFileName = files[0].Name;
+            ImportHasProgress = false;
+            ImportHasCounts = false;
+            ImportStatus = "Đang đọc file Excel...";
             var preview = await new PhieuNhapImportService().DocFileAsync(files[0].Path.LocalPath);
+            ImportTitle = "Đang kiểm tra dữ liệu phiếu nhập";
+            ImportStatus = $"Đã đọc {preview.PhieuNhap.Count:N0} phiếu hợp lệ; đang chờ xác nhận import.";
             if (preview.PhieuNhap.Count == 0)
             {
                 var details = string.Join(
@@ -4230,18 +4245,55 @@ public partial class MainWindowViewModel : ObservableObject
             if (!updateSupplierDebt.HasValue)
                 return;
 
+            ImportTitle = "Đang import phiếu nhập hàng";
+            ImportFileName = preview.TenFile;
+            ImportHasProgress = true;
+            ImportProgress = 0;
+            ImportStatus = "Đang lưu phiếu nhập...";
+
             var imported = 0;
             var duplicated = 0;
             var importedDetailRows = 0;
             var duplicatedDetailRows = 0;
+            var invalidReceiptCount = preview.Loi
+                .Select(issue => issue.MaPhieuNhap)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            var failedReceiptCount = invalidReceiptCount;
             var failedDetailRows = preview.SoDongChiTietCuaPhieuLoi;
             var failures = new List<string>();
+            var totalReceiptCount = preview.PhieuNhap.Count + invalidReceiptCount;
+            var processedReceiptCount = invalidReceiptCount;
+            CapNhatTienDoImportPhieuNhap(
+                processedReceiptCount,
+                totalReceiptCount,
+                imported,
+                duplicated,
+                failedReceiptCount);
+            var stageProgress = new Progress<string>(stage =>
+            {
+                var status = $"{stage} Đã xử lý {processedReceiptCount:N0}/{totalReceiptCount:N0} phiếu nhập.";
+                ImportStatus = status;
+                StatusMessage = status;
+            });
+
             for (var index = 0; index < preview.PhieuNhap.Count; index++)
             {
                 var receipt = preview.PhieuNhap[index];
+                CapNhatTienDoImportPhieuNhap(
+                    processedReceiptCount,
+                    totalReceiptCount,
+                    imported,
+                    duplicated,
+                    failedReceiptCount,
+                    receipt.MaPhieuNhap,
+                    dangXuLy: true);
                 try
                 {
-                    if (await _db.ImportPhieuNhapHangAsync(receipt, updateSupplierDebt.Value))
+                    if (await _db.ImportPhieuNhapHangAsync(
+                            receipt,
+                            updateSupplierDebt.Value,
+                            stageProgress))
                     {
                         imported++;
                         importedDetailRows += receipt.Items.Count;
@@ -4256,15 +4308,27 @@ public partial class MainWindowViewModel : ObservableObject
                 {
                     failures.Add($"{receipt.MaPhieuNhap}: {ex.Message}");
                     failedDetailRows += receipt.Items.Count;
+                    failedReceiptCount++;
                 }
 
-                if ((index + 1) % 25 == 0)
-                {
-                    StatusMessage = $"Đang import phiếu nhập: {index + 1}/{preview.PhieuNhap.Count}";
-                    await Task.Yield();
-                }
+                processedReceiptCount++;
+                CapNhatTienDoImportPhieuNhap(
+                    processedReceiptCount,
+                    totalReceiptCount,
+                    imported,
+                    duplicated,
+                    failedReceiptCount,
+                    receipt.MaPhieuNhap,
+                    failures.LastOrDefault()?.StartsWith(
+                        receipt.MaPhieuNhap + ":",
+                        StringComparison.OrdinalIgnoreCase) == true
+                        ? failures[^1]
+                        : null);
+                await Task.Yield();
             }
 
+            ImportStatus = "Đang hoàn tất và tải lại danh sách phiếu nhập...";
+            StatusMessage = ImportStatus;
             _baoCaoPhieuNhapSearchCts?.Cancel();
             _baoCaoPhieuNhapSearchCts?.Dispose();
             _baoCaoPhieuNhapSearchCts = null;
@@ -4282,11 +4346,6 @@ public partial class MainWindowViewModel : ObservableObject
             _baoCaoPhieuNhapLoaded = true;
             await LoadBaoCaoPhieuNhapAsync();
 
-            var invalidReceiptCount = preview.Loi
-                .Select(issue => issue.MaPhieuNhap)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Count();
-            var failedReceiptCount = invalidReceiptCount + failures.Count;
             var totalDetailRowsHandled =
                 importedDetailRows + duplicatedDetailRows + failedDetailRows;
             var summary = imported > 0
@@ -4315,6 +4374,40 @@ public partial class MainWindowViewModel : ObservableObject
                 "Không import được phiếu nhập",
                 "Không thể đọc hoặc import file. " + ex.Message);
         }
+        finally
+        {
+            IsImporting = false;
+            ImportTitle = "Đang nhập dữ liệu";
+            ImportFileName = "";
+            ImportCountsText = "";
+            ImportHasCounts = false;
+            ImportHasProgress = false;
+            ImportProgress = 0;
+        }
+    }
+
+    private void CapNhatTienDoImportPhieuNhap(
+        int daXuLy,
+        int tongSo,
+        int thanhCong,
+        int boQua,
+        int loi,
+        string? maPhieuNhap = null,
+        string? loiChiTiet = null,
+        bool dangXuLy = false)
+    {
+        ImportProgress = tongSo <= 0
+            ? 0
+            : Math.Clamp(daXuLy * 100d / tongSo, 0d, 100d);
+        ImportCountsText = $"Thành công: {thanhCong:N0}  |  Bỏ qua: {boQua:N0}  |  Lỗi: {loi:N0}";
+        ImportHasCounts = true;
+        ImportStatus = !string.IsNullOrWhiteSpace(loiChiTiet)
+            ? loiChiTiet
+            : string.IsNullOrWhiteSpace(maPhieuNhap)
+                ? $"Đã xử lý {daXuLy:N0}/{tongSo:N0} phiếu nhập"
+                : $"{(dangXuLy ? "Đang lưu" : "Đã xử lý")} {maPhieuNhap} — " +
+                  $"{(dangXuLy ? "đã xử lý" : "tổng số đã xử lý")} {daXuLy:N0}/{tongSo:N0} phiếu nhập";
+        StatusMessage = ImportStatus;
     }
 
     private async Task<bool?> HoiCapNhatCongNoNhaCungCapAsync(
