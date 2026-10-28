@@ -6410,13 +6410,20 @@ public partial class MainWindowViewModel : ObservableObject
     // =========================================================
 
     private DateTimeOffset? _invoiceFilterDate;
+    [ObservableProperty] private bool isInvoiceCalendarOpen;
+
+    public string InvoiceFilterDateText =>
+        InvoiceFilterDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "Chọn ngày";
+
     public DateTimeOffset? InvoiceFilterDate
     {
         get => _invoiceFilterDate;
         set
         {
+            IsInvoiceCalendarOpen = false;
             if (SetProperty(ref _invoiceFilterDate, value?.Date))
             {
+                OnPropertyChanged(nameof(InvoiceFilterDateText));
                 OnPropertyChanged(nameof(IsInvoiceDateToday));
                 OnPropertyChanged(nameof(IsInvoiceDateYesterday));
                 OnPropertyChanged(nameof(IsInvoiceDateAll));
@@ -6455,25 +6462,9 @@ public partial class MainWindowViewModel : ObservableObject
         InvoiceFilterDate = null;
     }
 
-    /// <summary>Quay về ngày trước đó (◀) — dùng để lướt xem lại từng ngày.</summary>
     [RelayCommand]
-    private void InvoiceDatePrevDay()
-    {
-        var hienTai = InvoiceFilterDate?.Date ?? DateTime.Today;
-        InvoiceFilterDate = new DateTimeOffset(hienTai.AddDays(-1));
-    }
-
-    /// <summary>Chuyển đến ngày kế tiếp (▶), tối đa là hôm nay.</summary>
-    [RelayCommand]
-    private void InvoiceDateNextDay()
-    {
-        var hienTai = InvoiceFilterDate?.Date ?? DateTime.Today;
-        var moi = hienTai.AddDays(1);
-        if (moi > DateTime.Today)
-            moi = DateTime.Today;
-
-        InvoiceFilterDate = new DateTimeOffset(moi);
-    }
+    private void ToggleInvoiceCalendar() =>
+        IsInvoiceCalendarOpen = !IsInvoiceCalendarOpen;
 
     // =========================================================
     // BỘ LỌC NGÀY — MÀN BÁO CÁO PHIẾU NHẬP HÀNG
