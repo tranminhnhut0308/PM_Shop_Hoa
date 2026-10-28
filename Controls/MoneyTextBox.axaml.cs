@@ -25,6 +25,8 @@ public partial class MoneyTextBox : UserControl
         set => SetValue(ValueProperty, value);
     }
 
+    public event EventHandler? ValueChanged;
+
     /// <summary>Nội dung TextBox. Người dùng không cần bind trực tiếp.</summary>
     public string Text { get; set; } = "0";
 
@@ -36,7 +38,11 @@ public partial class MoneyTextBox : UserControl
         InitializeComponent();
 
         ValueProperty.Changed.AddClassHandler<MoneyTextBox>(
-            static (control, args) => control.SyncFromValue());
+            static (control, args) =>
+            {
+                control.SyncFromValue();
+                control.ValueChanged?.Invoke(control, EventArgs.Empty);
+            });
 
         Input.GotFocus += OnInputGotFocus;
         Input.LostFocus += OnInputLostFocus;

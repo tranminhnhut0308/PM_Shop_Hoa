@@ -57,8 +57,13 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        var dialog = new ThuNoKhachHangWindow(row.TenKhachHang, conNo);
-        var ketQua = await dialog.ShowDialog<ThuNoHoaDonKetQua?>(OwnerWindow);
+        var nguoiThuOptions = await _db.GetSoQuyNguoiTaoOptionsAsync();
+        var dialog = new ThuNoKhachHangWindow(
+            row.TenKhachHang,
+            conNo,
+            nguoiThuOptions,
+            Session.CurrentUser?.Id);
+        var ketQua = await dialog.ShowDialog<ThuNoKhachHangYeuCau?>(OwnerWindow);
 
         if (ketQua is null)
         {
@@ -72,7 +77,9 @@ public sealed partial class MainWindowViewModel
                 khachHangId,
                 ketQua.SoTien,
                 ketQua.PhuongThuc,
-                ketQua.GhiChu);
+                ketQua.GhiChu,
+                ketQua.ThoiGian,
+                ketQua.NguoiThucHienId);
 
             // Nạp lại danh sách để số nợ/tổng bán của dòng khớp database.
             await LoadCustomersAsync();
@@ -88,12 +95,12 @@ public sealed partial class MainWindowViewModel
                     refreshedRow.Detail.SelectedTab = "congno";
             }
 
+            await Task.WhenAll(LoadInvoicesAsync(), TaiLaiSoQuyAsync());
             _ = LamMoiTongQuanNeuDangMoAsync();
 
             var thongBaoPhieu = ketQuaThu.MaPhieuThus.Count == 0
                 ? ""
-                : $" Đã ghi {ketQuaThu.MaPhieuThus.Count:N0} phiếu thu "
-                  + $"({string.Join(", ", ketQuaThu.MaPhieuThus)}) vào sổ quỹ.";
+                : $" Đã ghi phiếu thu {string.Join(", ", ketQuaThu.MaPhieuThus)} vào sổ quỹ.";
 
             StatusMessage =
                 $"Đã thu {ketQuaThu.TongDaThu:N0} đ của {ketQuaThu.TenKhachHang}. "

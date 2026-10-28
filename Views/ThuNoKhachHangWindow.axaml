@@ -1,13 +1,14 @@
 <Window xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:ShopHoa.Controls"
+    xmlns:models="using:ShopHoa.Models"
     x:Class="ShopHoa.Views.ThuNoKhachHangWindow"
     Title="Thu công nợ khách hàng"
-    Width="500"
-    Height="560"
-    MinWidth="440"
-    MinHeight="500"
-    CanResize="False"
+    Width="560"
+    Height="720"
+    MinWidth="500"
+    MinHeight="640"
+    CanResize="True"
     WindowStartupLocation="CenterOwner"
     Background="#F4F7F6">
 
@@ -40,8 +41,8 @@
         BorderThickness="1"
         Margin="12"
         Padding="24">
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*"
-            RowSpacing="12">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*"
+            RowSpacing="10">
 
             <!-- TIÊU ĐỀ -->
             <StackPanel Orientation="Horizontal" Spacing="12">
@@ -52,7 +53,7 @@
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="Thanh toán công nợ" FontSize="18" FontWeight="Bold"
                         Foreground="#163F38" />
-                    <TextBlock Text="Trừ dần vào các hóa đơn còn nợ (cũ nhất trước)"
+                    <TextBlock Text="Phân bổ tự động vào các hóa đơn cũ trước"
                         FontSize="12" Foreground="#61736E" />
                 </StackPanel>
             </StackPanel>
@@ -72,16 +73,21 @@
                     </Grid>
                     <Border Height="1" Background="#E8F0ED" />
                     <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Text="Công nợ hiện tại" Foreground="#61736E" FontSize="13" />
+                        <TextBlock Text="Tổng công nợ hiện tại" Foreground="#61736E" FontSize="13" />
                         <TextBlock x:Name="TxtConNo" Grid.Column="1" FontWeight="Bold"
                             Foreground="#D64545" FontSize="14" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Công nợ còn lại sau thanh toán" Foreground="#61736E" FontSize="13" />
+                        <TextBlock x:Name="TxtConNoSauThu" Grid.Column="1" FontWeight="Bold"
+                            Foreground="#087F6E" FontSize="14" />
                     </Grid>
                 </StackPanel>
             </Border>
 
             <!-- SỐ TIỀN THU -->
             <StackPanel Grid.Row="2" Spacing="4">
-                <TextBlock Text="Số tiền khách trả" FontWeight="SemiBold" Foreground="#163F38"
+                <TextBlock Text="Số tiền thanh toán" FontWeight="SemiBold" Foreground="#163F38"
                     FontSize="13" />
                 <controls:MoneyTextBox x:Name="TienThuBox" />
             </StackPanel>
@@ -93,20 +99,43 @@
                 <ComboBox x:Name="CboPhuongThuc" HorizontalAlignment="Stretch" Height="38" />
             </StackPanel>
 
-            <!-- GHI CHÚ -->
             <StackPanel Grid.Row="4" Spacing="4">
+                <TextBlock Text="Thời gian thanh toán" FontWeight="SemiBold"
+                    Foreground="#163F38" FontSize="13" />
+                <Grid ColumnDefinitions="*,140" ColumnSpacing="8">
+                    <DatePicker x:Name="NgayThanhToanPicker" />
+                    <TextBox x:Name="GioThanhToanBox" Grid.Column="1"
+                        Height="38" VerticalContentAlignment="Center"
+                        Watermark="HH:mm" />
+                </Grid>
+            </StackPanel>
+
+            <StackPanel Grid.Row="5" Spacing="4">
+                <TextBlock Text="Người thu" FontWeight="SemiBold"
+                    Foreground="#163F38" FontSize="13" />
+                <ComboBox x:Name="CboNguoiThu" HorizontalAlignment="Stretch" Height="38">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="models:SoQuyLuaChonItem">
+                            <TextBlock Text="{Binding HienThi}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
+            <!-- GHI CHÚ -->
+            <StackPanel Grid.Row="6" Spacing="4">
                 <TextBlock Text="Ghi chú" FontWeight="SemiBold" Foreground="#163F38"
                     FontSize="13" />
                 <TextBox x:Name="TxtGhiChu" AcceptsReturn="True" TextWrapping="Wrap"
-                    MinHeight="60" MaxHeight="90" Watermark="Ghi chú lần thu nợ (không bắt buộc)..." />
+                    MinHeight="48" MaxHeight="72" Watermark="Ghi chú lần thu nợ (không bắt buộc)..." />
             </StackPanel>
 
             <!-- LỖI -->
-            <TextBlock Grid.Row="5" x:Name="TxtLoi" Foreground="#D92D20" FontWeight="SemiBold"
+            <TextBlock Grid.Row="7" x:Name="TxtLoi" Foreground="#D92D20" FontWeight="SemiBold"
                 FontSize="12" TextWrapping="Wrap" IsVisible="False" />
 
             <!-- NÚT -->
-            <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right"
+            <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right"
                 VerticalAlignment="Bottom" Spacing="10">
                 <Button Content="Hủy" Classes="cancelButton" Width="100" Height="40"
                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"

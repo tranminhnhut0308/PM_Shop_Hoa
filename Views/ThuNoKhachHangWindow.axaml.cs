@@ -17,17 +17,27 @@ public partial class ThuNoKhachHangWindow : Window
     };
 
     private readonly decimal _conNo;
+    private readonly uint? _nguoiThucHienIdMacDinh;
 
-    public ThuNoKhachHangWindow() : this("Khách hàng", 0m)
+    public ThuNoKhachHangWindow() : this("Khách hàng", 0m, Array.Empty<SoQuyLuaChonItem>(), null)
     {
     }
 
-    public ThuNoKhachHangWindow(string tenKhachHang, decimal conNo)
+    public ThuNoKhachHangWindow(
+        string tenKhachHang,
+        decimal conNo,
+        IReadOnlyList<SoQuyLuaChonItem>? nguoiThuOptions = null,
+        uint? nguoiThucHienIdMacDinh = null)
     {
         InitializeComponent();
 
         CboPhuongThuc.ItemsSource = DanhSachPhuongThuc;
         CboPhuongThuc.SelectedIndex = 0;
+        CboNguoiThu.ItemsSource = nguoiThuOptions ?? Array.Empty<SoQuyLuaChonItem>();
+        _nguoiThucHienIdMacDinh = nguoiThucHienIdMacDinh;
+        CboNguoiThu.SelectedItem = (nguoiThuOptions ?? Array.Empty<SoQuyLuaChonItem>())
+            .FirstOrDefault(option => uint.TryParse(option.GiaTri, out var id)
+                && id == nguoiThucHienIdMacDinh);
 
         _conNo = conNo;
 
@@ -38,6 +48,10 @@ public partial class ThuNoKhachHangWindow : Window
 
         // Mặc định thu hết phần còn nợ cho tiện.
         TienThuBox.Value = conNo;
+        TienThuBox.ValueChanged += (_, _) => CapNhatConNoSauThu();
+        NgayThanhToanPicker.SelectedDate = DateTimeOffset.Now.Date;
+        GioThanhToanBox.Text = DateTime.Now.ToString("HH:mm", CultureInfo.InvariantCulture);
+        CapNhatConNoSauThu();
     }
 
     private void OnConfirmClick(object? sender, RoutedEventArgs e)
@@ -57,11 +71,29 @@ public partial class ThuNoKhachHangWindow : Window
             return;
         }
 
-        var ketQua = new ThuNoHoaDonKetQua
+        if (NgayThanhToanPicker.SelectedDate is not { } ngay ||
+            !TimeSpan.TryParseExact(
+                GioThanhToanBox.Text?.Trim(),
+                @"hh\:mm",
+                CultureInfo.InvariantCulture,
+                out var gio))
+        {
+            HienLoi("Vui lòng chọn ngày và nhập giờ thanh toán hợp lệ theo định dạng HH:mm.");
+            return;
+        }
+
+        var nguoiThucHienId = CboNguoiThu.SelectedItem is SoQuyLuaChonItem nguoiThu
+            && uint.TryParse(nguoiThu.GiaTri, out var selectedId)
+                ? selectedId
+                : _nguoiThucHienIdMacDinh;
+
+        var ketQua = new ThuNoKhachHangYeuCau
         {
             SoTien = soTien,
             PhuongThuc = (CboPhuongThuc.SelectedItem as PhuongThucOption)?.Ma ?? "TIEN_MAT",
-            GhiChu = string.IsNullOrWhiteSpace(TxtGhiChu.Text) ? null : TxtGhiChu.Text.Trim()
+            GhiChu = string.IsNullOrWhiteSpace(TxtGhiChu.Text) ? null : TxtGhiChu.Text.Trim(),
+            ThoiGian = ngay.Date.Add(gio),
+            NguoiThucHienId = nguoiThucHienId
         };
 
         Close(ketQua);
@@ -70,6 +102,15 @@ public partial class ThuNoKhachHangWindow : Window
     private void OnCancelClick(object? sender, RoutedEventArgs e)
     {
         Close(null);
+    }
+
+    private void CapNhatConNoSauThu()
+    {
+        var conNoSauThu = _conNo - TienThuBox.Value;
+        TxtConNoSauThu.Text = $"{conNoSauThu:N0} đ";
+        TxtConNoSauThu.Foreground = conNoSauThu < 0
+            ? Avalonia.Media.Brush.Parse("#D64545")
+            : Avalonia.Media.Brush.Parse("#087F6E");
     }
 
     private void HienLoi(string thongDiep)
