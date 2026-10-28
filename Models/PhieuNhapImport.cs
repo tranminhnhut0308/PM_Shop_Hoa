@@ -35,6 +35,8 @@ public sealed record PhieuNhapImportIssue(string MaPhieuNhap, string LyDo);
 public sealed class PhieuNhapImportPreview
 {
     public string TenFile { get; set; } = "";
+    public int TongSoDongChiTiet { get; set; }
+    public int SoDongChiTietCuaPhieuLoi { get; set; }
     public List<PhieuNhapImportReceipt> PhieuNhap { get; set; } = [];
     public List<PhieuNhapImportIssue> Loi { get; set; } = [];
 }

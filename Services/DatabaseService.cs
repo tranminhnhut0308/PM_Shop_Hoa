@@ -8076,6 +8076,9 @@ ORDER BY hd.thoi_gian_ban DESC
                         : phieu.SoHoaDonDauVao.Trim()
                 },
                 transaction);
+            if (phieu.Id == 0)
+                throw new InvalidOperationException(
+                    $"Không tạo được bản ghi đầu phiếu nhập {code} trong database.");
 
             const string insertDetailSql = """
             INSERT INTO chi_tiet_phieu_nhap_hang
@@ -8089,9 +8092,11 @@ ORDER BY hd.thoi_gian_ban DESC
                 @SoLuong, @DonGiaNhap, @GiamGia, @ThanhTien, @GhiChu
             );
             """;
-            foreach (var item in items)
+            for (var index = 0; index < items.Count; index++)
             {
-                await connection.ExecuteAsync(
+                var item = items[index];
+                var sourceLine = receipt.Items[index];
+                var affectedRows = await connection.ExecuteAsync(
                     insertDetailSql,
                     new
                     {
@@ -8102,11 +8107,38 @@ ORDER BY hd.thoi_gian_ban DESC
                         item.SoLuong,
                         item.DonGiaNhap,
                         item.GiamGia,
-                        item.ThanhTien,
+                        ThanhTien = sourceLine.ThanhTien,
                         item.GhiChu
                     },
                     transaction);
+                if (affectedRows != 1)
+                    throw new InvalidOperationException(
+                        $"Không ghi được dòng chi tiết phiếu nhập {code} (hàng {item.SanPham.MaSanPham}).");
             }
+
+            var savedDetailCount = await connection.ExecuteScalarAsync<int>(
+                """
+                SELECT COUNT(*)
+                FROM chi_tiet_phieu_nhap_hang
+                WHERE phieu_nhap_id = @PhieuNhapId;
+                """,
+                new { PhieuNhapId = phieu.Id },
+                transaction);
+            if (savedDetailCount != items.Count)
+                throw new InvalidOperationException(
+                    $"Phiếu nhập {code} có {savedDetailCount:N0}/{items.Count:N0} dòng chi tiết trong database.");
+            var savedDetailTotal = await connection.ExecuteScalarAsync<decimal>(
+                """
+                SELECT COALESCE(SUM(thanh_tien), 0)
+                FROM chi_tiet_phieu_nhap_hang
+                WHERE phieu_nhap_id = @PhieuNhapId;
+                """,
+                new { PhieuNhapId = phieu.Id },
+                transaction);
+            if (Math.Abs(savedDetailTotal - phieu.TongTienHang) > 0.01m)
+                throw new InvalidOperationException(
+                    $"Tổng thành tiền chi tiết của phiếu {code} là {savedDetailTotal:N2}, " +
+                    $"không khớp tổng phiếu {phieu.TongTienHang:N2}.");
 
             await CapNhatTonKhoPhieuNhapAsync(connection, transaction, phieu, items);
             await GhiCongNoNhaCungCapPhieuNhapAsync(

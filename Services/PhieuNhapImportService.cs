@@ -83,6 +83,7 @@ public sealed class PhieuNhapImportService
         var rows = new Dictionary<string, PhieuNhapImportReceipt>(StringComparer.OrdinalIgnoreCase);
         var preview = new PhieuNhapImportPreview { TenFile = Path.GetFileName(filePath) };
         var issues = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var soDongChiTietTheoPhieu = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var currentInvoiceCode = "";
 
         foreach (var row in worksheet.RowsUsed().Where(row => row.RowNumber() > headerRow.RowNumber()))
@@ -90,9 +91,13 @@ public sealed class PhieuNhapImportService
             ct.ThrowIfCancellationRequested();
             var code = Text(row, headers, "maphieunhap");
             var productCode = Text(row, headers, "mahang");
+            var coMaHang = !string.IsNullOrWhiteSpace(productCode);
+            if (coMaHang)
+                preview.TongSoDongChiTiet++;
+
             if (string.IsNullOrWhiteSpace(code))
             {
-                if (string.IsNullOrWhiteSpace(productCode))
+                if (!coMaHang)
                 {
                     currentInvoiceCode = "";
                     continue;
@@ -100,6 +105,7 @@ public sealed class PhieuNhapImportService
 
                 if (currentInvoiceCode.Length == 0)
                 {
+                    preview.SoDongChiTietCuaPhieuLoi++;
                     AddIssue(issues, $"Dòng {row.RowNumber()}", "Dòng chi tiết thiếu Mã nhập hàng.");
                     continue;
                 }
@@ -109,6 +115,12 @@ public sealed class PhieuNhapImportService
             else
             {
                 currentInvoiceCode = code;
+            }
+
+            if (coMaHang)
+            {
+                soDongChiTietTheoPhieu.TryGetValue(code, out var soDong);
+                soDongChiTietTheoPhieu[code] = soDong + 1;
             }
 
             try
@@ -220,6 +232,10 @@ public sealed class PhieuNhapImportService
             if (receipt.ThoiGianNhap == default)
                 AddIssue(issues, receipt.MaPhieuNhap, "Thiếu hoặc sai định dạng Thời gian.");
         }
+
+        preview.SoDongChiTietCuaPhieuLoi += rows.Values
+            .Where(receipt => issues.ContainsKey(receipt.MaPhieuNhap))
+            .Sum(receipt => soDongChiTietTheoPhieu.GetValueOrDefault(receipt.MaPhieuNhap));
 
         preview.Loi = issues
             .SelectMany(pair => pair.Value.Select(reason => new PhieuNhapImportIssue(pair.Key, reason)))

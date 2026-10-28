@@ -3805,6 +3805,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private int baoCaoPhieuNhapTotalCount;
     [ObservableProperty] private bool isLoadingBaoCaoPhieuNhap;
     [ObservableProperty] private string baoCaoPhieuNhapLocThanhToan = "TAT_CA";
+    private bool _suppressBaoCaoPhieuNhapFilterReload;
 
     public bool IsBaoCaoPhieuNhapLocTatCa => BaoCaoPhieuNhapLocThanhToan == "TAT_CA";
     public bool IsBaoCaoPhieuNhapLocDaThanhToan => BaoCaoPhieuNhapLocThanhToan == "DA_THANH_TOAN";
@@ -4013,9 +4014,6 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadBaoCaoPhieuNhapAsync()
     {
-        if (IsLoadingBaoCaoPhieuNhap)
-            return;
-
         IsLoadingBaoCaoPhieuNhap = true;
 
         // Version guard: bỏ qua kết quả của lần tải cũ nếu người dùng đã tìm/chuyển trang mới
@@ -4167,7 +4165,9 @@ public partial class MainWindowViewModel : ObservableObject
                 await ShowMessageAsync(
                     "Không có phiếu hợp lệ để import",
                     $"Đã đọc {preview.Loi.Select(issue => issue.MaPhieuNhap).Distinct().Count()} mã phiếu, " +
-                    $"không có phiếu nào đủ điều kiện.\n\n{details}");
+                    $"không có phiếu nào đủ điều kiện.\n" +
+                    $"Dòng chi tiết đọc được: {preview.TongSoDongChiTiet:N0}; " +
+                    $"dòng thuộc phiếu lỗi: {preview.SoDongChiTietCuaPhieuLoi:N0}.\n\n{details}");
                 return;
             }
 
@@ -4188,6 +4188,9 @@ public partial class MainWindowViewModel : ObservableObject
 
             var imported = 0;
             var duplicated = 0;
+            var importedDetailRows = 0;
+            var duplicatedDetailRows = 0;
+            var failedDetailRows = preview.SoDongChiTietCuaPhieuLoi;
             var failures = new List<string>();
             for (var index = 0; index < preview.PhieuNhap.Count; index++)
             {
@@ -4195,13 +4198,20 @@ public partial class MainWindowViewModel : ObservableObject
                 try
                 {
                     if (await _db.ImportPhieuNhapHangAsync(receipt))
+                    {
                         imported++;
+                        importedDetailRows += receipt.Items.Count;
+                    }
                     else
+                    {
                         duplicated++;
+                        duplicatedDetailRows += receipt.Items.Count;
+                    }
                 }
                 catch (Exception ex)
                 {
                     failures.Add($"{receipt.MaPhieuNhap}: {ex.Message}");
+                    failedDetailRows += receipt.Items.Count;
                 }
 
                 if ((index + 1) % 25 == 0)
@@ -4211,12 +4221,48 @@ public partial class MainWindowViewModel : ObservableObject
                 }
             }
 
+            _baoCaoPhieuNhapSearchCts?.Cancel();
+            _baoCaoPhieuNhapSearchCts?.Dispose();
+            _baoCaoPhieuNhapSearchCts = null;
+            _suppressBaoCaoPhieuNhapFilterReload = true;
+            try
+            {
+                BaoCaoPhieuNhapPage = 1;
+                BaoCaoPhieuNhapSearch = "";
+                BaoCaoPhieuNhapLocThanhToan = "TAT_CA";
+                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocTatCa));
+                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocDaThanhToan));
+                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocChuaThanhToan));
+                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocThanhToanMotPhan));
+                BaoCaoPhieuNhapFilterDate = null;
+            }
+            finally
+            {
+                _suppressBaoCaoPhieuNhapFilterReload = false;
+            }
+
+            _baoCaoPhieuNhapLoaded = true;
             await LoadBaoCaoPhieuNhapAsync();
+
+            var invalidReceiptCount = preview.Loi
+                .Select(issue => issue.MaPhieuNhap)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            var failedReceiptCount = invalidReceiptCount + failures.Count;
+            var totalDetailRowsHandled =
+                importedDetailRows + duplicatedDetailRows + failedDetailRows;
+            var summary = imported > 0
+                ? "Import hoàn tất."
+                : failedReceiptCount == 0 && duplicated > 0
+                    ? "Không có phiếu mới được thêm; các mã phiếu hợp lệ đều đã tồn tại."
+                    : "Không import được phiếu nào.";
             var result =
-                $"Import xong {preview.TenFile}.\n" +
-                $"Đã nhập: {imported}\n" +
-                $"Bỏ qua do trùng mã: {duplicated}\n" +
-                $"Không nhập được: {preview.Loi.Select(issue => issue.MaPhieuNhap).Distinct().Count() + failures.Count}";
+                $"{summary}\nFile: {preview.TenFile}\n" +
+                $"Thêm mới: {imported}; cập nhật: 0 (phiếu trùng mã được bỏ qua).\n" +
+                $"Bỏ qua do trùng mã: {duplicated} phiếu, {duplicatedDetailRows:N0} dòng chi tiết.\n" +
+                $"Lỗi: {failedReceiptCount} phiếu, {failedDetailRows:N0} dòng chi tiết.\n" +
+                $"Dòng chi tiết trong file: {preview.TongSoDongChiTiet:N0}; " +
+                $"đã ghi: {importedDetailRows:N0}; đã xử lý: {totalDetailRowsHandled:N0}.";
             var failedDetails = preview.Loi.Take(5)
                 .Select(issue => $"{issue.MaPhieuNhap}: {issue.LyDo}")
                 .Concat(failures.Take(5));
@@ -6200,7 +6246,7 @@ public partial class MainWindowViewModel : ObservableObject
     // BỘ LỌC NGÀY — MÀN BÁO CÁO PHIẾU NHẬP HÀNG
     // =========================================================
 
-    private DateTimeOffset? _baoCaoPhieuNhapFilterDate = DateTimeOffset.Now.Date;
+    private DateTimeOffset? _baoCaoPhieuNhapFilterDate;
     public DateTimeOffset? BaoCaoPhieuNhapFilterDate
     {
         get => _baoCaoPhieuNhapFilterDate;
@@ -6212,7 +6258,8 @@ public partial class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateYesterday));
                 OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateAll));
                 BaoCaoPhieuNhapPage = 1;
-                _ = LoadBaoCaoPhieuNhapAsync();
+                if (!_suppressBaoCaoPhieuNhapFilterReload)
+                    _ = LoadBaoCaoPhieuNhapAsync();
             }
         }
     }
