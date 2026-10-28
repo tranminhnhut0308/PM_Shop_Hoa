@@ -179,6 +179,13 @@ public sealed partial class MainWindowViewModel
 
         try
         {
+            var capNhatCongNoKhachHang = await HoiCapNhatCongNoKhachHangAsync();
+            if (!capNhatCongNoKhachHang.HasValue)
+            {
+                StatusMessage = "Đã hủy import hóa đơn. Không có dữ liệu nào được thay đổi.";
+                return;
+            }
+
             IsImporting = true;
             ImportHasProgress = false;
             ImportProgress = 0;
@@ -278,6 +285,7 @@ public sealed partial class MainWindowViewModel
                 preview,
                 quyetDinh.XuLyTrung,
                 quyetDinh.TaoKhachHangMoi,
+                capNhatCongNoKhachHang.Value,
                 progress);
 
             // Danh sách hóa đơn trên màn hình đã cũ, nạp lại để thấy dữ liệu mới.
@@ -316,6 +324,101 @@ public sealed partial class MainWindowViewModel
             ImportHasProgress = false;
             ImportProgress = 0;
         }
+    }
+
+    private async Task<bool?> HoiCapNhatCongNoKhachHangAsync()
+    {
+        if (OwnerWindow is null)
+            return null;
+
+        var dialog = new Window
+        {
+            Title = "Xác nhận cập nhật công nợ khách hàng",
+            Width = 620,
+            SizeToContent = Avalonia.Controls.SizeToContent.Height,
+            MinHeight = 330,
+            CanResize = false,
+            WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.CenterOwner,
+            Background = Avalonia.Media.Brushes.White
+        };
+
+        var content = new Avalonia.Controls.StackPanel
+        {
+            Margin = new Avalonia.Thickness(24),
+            Spacing = 14
+        };
+
+        content.Children.Add(new Avalonia.Controls.TextBlock
+        {
+            Text = "Xác nhận cập nhật công nợ khách hàng",
+            FontSize = 20,
+            FontWeight = Avalonia.Media.FontWeight.Bold,
+            Foreground = Avalonia.Media.Brush.Parse("#173F38"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        content.Children.Add(new Avalonia.Controls.TextBlock
+        {
+            Text = "Bạn có muốn cập nhật công nợ khách hàng từ các hóa đơn được import không?",
+            FontSize = 15,
+            Foreground = Avalonia.Media.Brush.Parse("#263B35"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        content.Children.Add(new Avalonia.Controls.TextBlock
+        {
+            Text = "Cập nhật công nợ khách hàng: phần mềm ghi nhận công nợ theo nghiệp vụ hiện tại. "
+                   + "Không cập nhật công nợ khách hàng: chỉ lưu hóa đơn và chi tiết, không tạo, xóa "
+                   + "hoặc thay đổi giao dịch công nợ hiện có.",
+            FontSize = 13,
+            Foreground = Avalonia.Media.Brush.Parse("#52645F"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        content.Children.Add(new Avalonia.Controls.TextBlock
+        {
+            Text = "Nếu công nợ đã được cập nhật trước đó, hãy chọn “Không cập nhật công nợ khách hàng” để tránh cộng trùng.",
+            FontSize = 13,
+            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            Foreground = Avalonia.Media.Brush.Parse("#8A5510"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        var buttons = new Avalonia.Controls.StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Spacing = 10,
+            Margin = new Avalonia.Thickness(0, 8, 0, 0)
+        };
+
+        var updateButton = new Avalonia.Controls.Button
+        {
+            Content = "Cập nhật công nợ khách hàng",
+            Padding = new Avalonia.Thickness(16, 10),
+            Background = Avalonia.Media.Brush.Parse("#087F6E"),
+            Foreground = Avalonia.Media.Brushes.White,
+            FontWeight = Avalonia.Media.FontWeight.SemiBold
+        };
+        updateButton.Click += (_, _) => dialog.Close(true);
+
+        var keepButton = new Avalonia.Controls.Button
+        {
+            Content = "Không cập nhật công nợ khách hàng",
+            Padding = new Avalonia.Thickness(16, 10),
+            Background = Avalonia.Media.Brush.Parse("#FFFFFF"),
+            Foreground = Avalonia.Media.Brush.Parse("#263B35"),
+            BorderBrush = Avalonia.Media.Brush.Parse("#C9DCD6"),
+            BorderThickness = new Avalonia.Thickness(1)
+        };
+        keepButton.Click += (_, _) => dialog.Close(false);
+
+        buttons.Children.Add(updateButton);
+        buttons.Children.Add(keepButton);
+        content.Children.Add(buttons);
+        dialog.Content = content;
+
+        return await dialog.ShowDialog<bool?>(OwnerWindow);
     }
 
     /// <summary>

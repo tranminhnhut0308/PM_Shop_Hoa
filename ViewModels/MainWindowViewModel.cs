@@ -3805,12 +3805,52 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private int baoCaoPhieuNhapTotalCount;
     [ObservableProperty] private bool isLoadingBaoCaoPhieuNhap;
     [ObservableProperty] private string baoCaoPhieuNhapLocThanhToan = "TAT_CA";
-    private bool _suppressBaoCaoPhieuNhapFilterReload;
+
+    public IReadOnlyList<int> BaoCaoPhieuNhapPageSizeOptions { get; } = [10, 20, 50, 100];
+
+    private DateTimeOffset? _baoCaoPhieuNhapTuNgay;
+    private DateTimeOffset? _baoCaoPhieuNhapDenNgay;
+    private string _baoCaoPhieuNhapKieuNgay = "ALL";
 
     public bool IsBaoCaoPhieuNhapLocTatCa => BaoCaoPhieuNhapLocThanhToan == "TAT_CA";
     public bool IsBaoCaoPhieuNhapLocDaThanhToan => BaoCaoPhieuNhapLocThanhToan == "DA_THANH_TOAN";
     public bool IsBaoCaoPhieuNhapLocChuaThanhToan => BaoCaoPhieuNhapLocThanhToan == "CHUA_THANH_TOAN";
     public bool IsBaoCaoPhieuNhapLocThanhToanMotPhan => BaoCaoPhieuNhapLocThanhToan == "MOT_PHAN";
+    public bool IsBaoCaoPhieuNhapDateToday => _baoCaoPhieuNhapKieuNgay == "TODAY";
+    public bool IsBaoCaoPhieuNhapDateYesterday => _baoCaoPhieuNhapKieuNgay == "YESTERDAY";
+    public bool IsBaoCaoPhieuNhapDateLast7Days => _baoCaoPhieuNhapKieuNgay == "LAST_7_DAYS";
+    public bool IsBaoCaoPhieuNhapDateThisMonth => _baoCaoPhieuNhapKieuNgay == "THIS_MONTH";
+    public bool IsBaoCaoPhieuNhapDateCustom => _baoCaoPhieuNhapKieuNgay == "CUSTOM";
+    public bool IsBaoCaoPhieuNhapDateAll => _baoCaoPhieuNhapKieuNgay == "ALL";
+    public DateTimeOffset? BaoCaoPhieuNhapTuNgay
+    {
+        get => _baoCaoPhieuNhapTuNgay;
+        set
+        {
+            if (SetProperty(ref _baoCaoPhieuNhapTuNgay, value?.Date))
+                OnPropertyChanged(nameof(CoKhoangNgayBaoCaoPhieuNhap));
+        }
+    }
+
+    public DateTimeOffset? BaoCaoPhieuNhapDenNgay
+    {
+        get => _baoCaoPhieuNhapDenNgay;
+        set
+        {
+            if (SetProperty(ref _baoCaoPhieuNhapDenNgay, value?.Date))
+                OnPropertyChanged(nameof(CoKhoangNgayBaoCaoPhieuNhap));
+        }
+    }
+
+    public bool CoKhoangNgayBaoCaoPhieuNhap =>
+        BaoCaoPhieuNhapTuNgay.HasValue
+        && BaoCaoPhieuNhapDenNgay.HasValue
+        && BaoCaoPhieuNhapTuNgay.Value.Date <= BaoCaoPhieuNhapDenNgay.Value.Date;
+
+    public bool CanBaoCaoPhieuNhapTrangDau =>
+        BaoCaoPhieuNhapTotalPages > 0 && BaoCaoPhieuNhapPage > 1;
+    public bool CanBaoCaoPhieuNhapTrangCuoi =>
+        BaoCaoPhieuNhapTotalPages > 0 && BaoCaoPhieuNhapPage < BaoCaoPhieuNhapTotalPages;
 
     [RelayCommand]
     private async Task LocBaoCaoPhieuNhapThanhToanAsync(string? loai)
@@ -3834,7 +3874,7 @@ public partial class MainWindowViewModel : ObservableObject
             ? 0
             : (int)Math.Ceiling(BaoCaoPhieuNhapTotalCount / (double)BaoCaoPhieuNhapPageSize);
 
-    /// <summary>Ví dụ: "1 - 15 trong 367 giao dịch"</summary>
+    /// <summary>Khoảng bản ghi đang hiển thị và tổng số phiếu.</summary>
     public string BaoCaoPhieuNhapRangeText
     {
         get
@@ -3845,7 +3885,7 @@ public partial class MainWindowViewModel : ObservableObject
             var from = (BaoCaoPhieuNhapPage - 1) * BaoCaoPhieuNhapPageSize + 1;
             var to = Math.Min(from + BaoCaoPhieuNhapPageSize - 1, BaoCaoPhieuNhapTotalCount);
 
-            return $"{from} - {to} trong {BaoCaoPhieuNhapTotalCount} giao dịch";
+            return $"Hiển thị {from}–{to} trên tổng {BaoCaoPhieuNhapTotalCount} phiếu";
         }
     }
 
@@ -3853,7 +3893,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool IsBaoCaoPhieuNhapEmpty => BaoCaoPhieuNhaps.Count == 0;
 
-    public bool CanBaoCaoPhieuNhapTrangTruoc => BaoCaoPhieuNhapPage > 1;
+    public bool CanBaoCaoPhieuNhapTrangTruoc =>
+        BaoCaoPhieuNhapTotalPages > 0 && BaoCaoPhieuNhapPage > 1;
 
     public bool CanBaoCaoPhieuNhapTrangSau => BaoCaoPhieuNhapPage < BaoCaoPhieuNhapTotalPages;
 
@@ -3888,6 +3929,8 @@ public partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(BaoCaoPhieuNhapTotalPages));
         OnPropertyChanged(nameof(BaoCaoPhieuNhapRangeText));
+        OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangDau));
+        OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangCuoi));
         OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangTruoc));
         OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangSau));
     }
@@ -3913,6 +3956,10 @@ public partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(BaoCaoPhieuNhapTotalPages));
         OnPropertyChanged(nameof(BaoCaoPhieuNhapRangeText));
+        OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangDau));
+        OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangCuoi));
+        OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangTruoc));
+        OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangSau));
     }
 
     partial void OnSelectedReportKeyChanged(string value)
@@ -4027,7 +4074,8 @@ public partial class MainWindowViewModel : ObservableObject
                 page,
                 BaoCaoPhieuNhapPageSize,
                 BaoCaoPhieuNhapLocThanhToan,
-                BaoCaoPhieuNhapFilterDate?.Date);
+                ngayBatDau: BaoCaoPhieuNhapTuNgay?.Date,
+                ngayKetThuc: BaoCaoPhieuNhapDenNgay?.Date);
 
             if (version != _baoCaoPhieuNhapLoadVersion)
                 return;
@@ -4057,6 +4105,8 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(BaoCaoPhieuNhapRangeText));
             OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangTruoc));
             OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangSau));
+            OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangDau));
+            OnPropertyChanged(nameof(CanBaoCaoPhieuNhapTrangCuoi));
 
             StatusMessage = BaoCaoPhieuNhaps.Count == 0
                 ? "Không có dữ liệu phiếu nhập phù hợp"
@@ -4105,7 +4155,8 @@ public partial class MainWindowViewModel : ObservableObject
                 1,
                 soDong,
                 BaoCaoPhieuNhapLocThanhToan,
-                BaoCaoPhieuNhapFilterDate?.Date);
+                ngayBatDau: BaoCaoPhieuNhapTuNgay?.Date,
+                ngayKetThuc: BaoCaoPhieuNhapDenNgay?.Date);
 
             using var wb = BaoCaoPhieuNhapExcel.TaoWorkbook(items, DateTime.Now);
 
@@ -4224,22 +4275,16 @@ public partial class MainWindowViewModel : ObservableObject
             _baoCaoPhieuNhapSearchCts?.Cancel();
             _baoCaoPhieuNhapSearchCts?.Dispose();
             _baoCaoPhieuNhapSearchCts = null;
-            _suppressBaoCaoPhieuNhapFilterReload = true;
-            try
-            {
-                BaoCaoPhieuNhapPage = 1;
-                BaoCaoPhieuNhapSearch = "";
-                BaoCaoPhieuNhapLocThanhToan = "TAT_CA";
-                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocTatCa));
-                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocDaThanhToan));
-                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocChuaThanhToan));
-                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocThanhToanMotPhan));
-                BaoCaoPhieuNhapFilterDate = null;
-            }
-            finally
-            {
-                _suppressBaoCaoPhieuNhapFilterReload = false;
-            }
+            BaoCaoPhieuNhapPage = 1;
+            BaoCaoPhieuNhapSearch = "";
+            BaoCaoPhieuNhapLocThanhToan = "TAT_CA";
+            OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocTatCa));
+            OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocDaThanhToan));
+            OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocChuaThanhToan));
+            OnPropertyChanged(nameof(IsBaoCaoPhieuNhapLocThanhToanMotPhan));
+            BaoCaoPhieuNhapTuNgay = null;
+            BaoCaoPhieuNhapDenNgay = null;
+            DoiKieuNgayBaoCaoPhieuNhap("ALL");
 
             _baoCaoPhieuNhapLoaded = true;
             await LoadBaoCaoPhieuNhapAsync();
@@ -6246,70 +6291,151 @@ public partial class MainWindowViewModel : ObservableObject
     // BỘ LỌC NGÀY — MÀN BÁO CÁO PHIẾU NHẬP HÀNG
     // =========================================================
 
-    private DateTimeOffset? _baoCaoPhieuNhapFilterDate;
-    public DateTimeOffset? BaoCaoPhieuNhapFilterDate
+    [RelayCommand]
+    private async Task SetBaoCaoPhieuNhapDateTodayAsync()
     {
-        get => _baoCaoPhieuNhapFilterDate;
-        set
+        var today = DateTime.Today;
+        await ApDungKhoangNgayBaoCaoPhieuNhapAsync("TODAY", today, today);
+    }
+
+    [RelayCommand]
+    private async Task SetBaoCaoPhieuNhapDateYesterdayAsync()
+    {
+        var yesterday = DateTime.Today.AddDays(-1);
+        await ApDungKhoangNgayBaoCaoPhieuNhapAsync("YESTERDAY", yesterday, yesterday);
+    }
+
+    [RelayCommand]
+    private async Task SetBaoCaoPhieuNhapDateLast7DaysAsync()
+    {
+        var today = DateTime.Today;
+        await ApDungKhoangNgayBaoCaoPhieuNhapAsync("LAST_7_DAYS", today.AddDays(-6), today);
+    }
+
+    [RelayCommand]
+    private async Task SetBaoCaoPhieuNhapDateThisMonthAsync()
+    {
+        var today = DateTime.Today;
+        await ApDungKhoangNgayBaoCaoPhieuNhapAsync("THIS_MONTH", new DateTime(today.Year, today.Month, 1), today);
+    }
+
+    [RelayCommand]
+    private async Task SetBaoCaoPhieuNhapDateAllAsync()
+    {
+        await ApDungKhoangNgayBaoCaoPhieuNhapAsync("ALL", null, null);
+    }
+
+    [RelayCommand]
+    private async Task ApDungKhoangNgayBaoCaoPhieuNhapAsync()
+    {
+        if (!CoKhoangNgayBaoCaoPhieuNhap)
+            return;
+
+        await ApDungKhoangNgayBaoCaoPhieuNhapAsync(
+            "CUSTOM",
+            BaoCaoPhieuNhapTuNgay!.Value.Date,
+            BaoCaoPhieuNhapDenNgay!.Value.Date);
+    }
+
+    [RelayCommand]
+    private async Task BaoCaoPhieuNhapDatePrevDayAsync()
+    {
+        var start = BaoCaoPhieuNhapTuNgay?.Date;
+        var end = BaoCaoPhieuNhapDenNgay?.Date;
+
+        if (!start.HasValue || !end.HasValue)
         {
-            if (SetProperty(ref _baoCaoPhieuNhapFilterDate, value?.Date))
-            {
-                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateToday));
-                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateYesterday));
-                OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateAll));
-                BaoCaoPhieuNhapPage = 1;
-                if (!_suppressBaoCaoPhieuNhapFilterReload)
-                    _ = LoadBaoCaoPhieuNhapAsync();
-            }
+            end = DateTime.Today.AddDays(-1);
+            start = end;
         }
-    }
+        else
+        {
+            start = start.Value.AddDays(-1);
+            end = end.Value.AddDays(-1);
+        }
 
-    public bool IsBaoCaoPhieuNhapDateToday =>
-        BaoCaoPhieuNhapFilterDate?.Date == DateTime.Today;
-
-    public bool IsBaoCaoPhieuNhapDateYesterday =>
-        BaoCaoPhieuNhapFilterDate?.Date == DateTime.Today.AddDays(-1);
-
-    /// <summary>Đang xem tất cả các ngày (không lọc theo ngày).</summary>
-    public bool IsBaoCaoPhieuNhapDateAll =>
-        BaoCaoPhieuNhapFilterDate is null;
-
-    [RelayCommand]
-    private void SetBaoCaoPhieuNhapDateToday()
-    {
-        BaoCaoPhieuNhapFilterDate = DateTimeOffset.Now.Date;
+        await ApDungKhoangNgayBaoCaoPhieuNhapAsync(
+            KieuNgayBaoCaoPhieuNhap(start, end),
+            start,
+            end);
     }
 
     [RelayCommand]
-    private void SetBaoCaoPhieuNhapDateYesterday()
+    private async Task BaoCaoPhieuNhapDateNextDayAsync()
     {
-        BaoCaoPhieuNhapFilterDate = new DateTimeOffset(DateTime.Today.AddDays(-1));
+        var start = BaoCaoPhieuNhapTuNgay?.Date;
+        var end = BaoCaoPhieuNhapDenNgay?.Date;
+        var today = DateTime.Today;
+
+        if (!start.HasValue || !end.HasValue)
+        {
+            start = today;
+            end = today;
+        }
+        else if (end.Value < today)
+        {
+            start = start.Value.AddDays(1);
+            end = end.Value.AddDays(1);
+        }
+
+        if (end > today)
+        {
+            var duration = end.Value.Subtract(start!.Value).Days;
+            end = today;
+            start = today.AddDays(-duration);
+        }
+
+        await ApDungKhoangNgayBaoCaoPhieuNhapAsync(
+            KieuNgayBaoCaoPhieuNhap(start, end),
+            start,
+            end);
     }
 
-    [RelayCommand]
-    private void SetBaoCaoPhieuNhapDateAll()
+    private async Task ApDungKhoangNgayBaoCaoPhieuNhapAsync(
+        string kieuNgay,
+        DateTime? tuNgay,
+        DateTime? denNgay)
     {
-        BaoCaoPhieuNhapFilterDate = null;
+        if (tuNgay.HasValue && denNgay.HasValue && tuNgay.Value.Date > denNgay.Value.Date)
+            return;
+
+        BaoCaoPhieuNhapTuNgay = tuNgay;
+        BaoCaoPhieuNhapDenNgay = denNgay;
+        DoiKieuNgayBaoCaoPhieuNhap(kieuNgay);
+        BaoCaoPhieuNhapPage = 1;
+        await LoadBaoCaoPhieuNhapAsync();
     }
 
-    /// <summary>Quay về ngày trước đó (◀) — dùng để lướt xem lại từng ngày.</summary>
-    [RelayCommand]
-    private void BaoCaoPhieuNhapDatePrevDay()
+    private void DoiKieuNgayBaoCaoPhieuNhap(string kieuNgay)
     {
-        var hienTai = BaoCaoPhieuNhapFilterDate?.Date ?? DateTime.Today;
-        BaoCaoPhieuNhapFilterDate = new DateTimeOffset(hienTai.AddDays(-1));
+        if (_baoCaoPhieuNhapKieuNgay == kieuNgay)
+            return;
+
+        _baoCaoPhieuNhapKieuNgay = kieuNgay;
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateToday));
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateYesterday));
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateLast7Days));
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateThisMonth));
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateCustom));
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateAll));
     }
 
-    /// <summary>Chuyển đến ngày kế tiếp (▶), tối đa là hôm nay.</summary>
-    [RelayCommand]
-    private void BaoCaoPhieuNhapDateNextDay()
+    private static string KieuNgayBaoCaoPhieuNhap(DateTime? tuNgay, DateTime? denNgay)
     {
-        var hienTai = BaoCaoPhieuNhapFilterDate?.Date ?? DateTime.Today;
-        var moi = hienTai.AddDays(1);
-        if (moi > DateTime.Today)
-            moi = DateTime.Today;
+        if (!tuNgay.HasValue || !denNgay.HasValue)
+            return "ALL";
 
-        BaoCaoPhieuNhapFilterDate = new DateTimeOffset(moi);
+        var today = DateTime.Today;
+        if (tuNgay.Value == today && denNgay.Value == today)
+            return "TODAY";
+        if (tuNgay.Value == today.AddDays(-1) && denNgay.Value == today.AddDays(-1))
+            return "YESTERDAY";
+        if (tuNgay.Value == today.AddDays(-6) && denNgay.Value == today)
+            return "LAST_7_DAYS";
+        if (tuNgay.Value == new DateTime(today.Year, today.Month, 1) && denNgay.Value == today)
+            return "THIS_MONTH";
+
+        return "CUSTOM";
     }
 
 }

@@ -652,6 +652,8 @@ public sealed class HoaDonImportResult
 {
     public string TenFile { get; init; } = "";
 
+    public bool CapNhatCongNoKhachHang { get; init; }
+
     public int TongSoHoaDon { get; init; }
 
     /// <summary>Số hóa đơn tổng hợp đã được ghi thành công.</summary>
@@ -702,6 +704,9 @@ public sealed class HoaDonImportResult
                 $"Dòng chi tiết hàng hóa: {TongSoDongChiTiet:N0}",
                 $"Import thành công: {TongSoGhiThanhCong:N0}"
                     + $" (thêm mới {SoThemMoi:N0}, cập nhật {SoCapNhat:N0})",
+                CapNhatCongNoKhachHang
+                    ? "Công nợ khách hàng: đã cập nhật theo nghiệp vụ hiện tại."
+                    : "Công nợ khách hàng: không thay đổi.",
                 $"Bỏ qua: {SoBoQua:N0}",
                 $"Dữ liệu lỗi: {SoLoi:N0}"
             };

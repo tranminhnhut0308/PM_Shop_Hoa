@@ -1789,6 +1789,7 @@ public sealed class HoaDonImportService
         HoaDonImportPreview preview,
         XuLyHoaDonTrung xuLyTrung,
         bool taoKhachHangMoi,
+        bool updateCustomerDebt,
         IProgress<HoaDonImportProgress>? progress = null,
         CancellationToken ct = default)
     {
@@ -1797,6 +1798,7 @@ public sealed class HoaDonImportService
         var result = new HoaDonImportResult
         {
             TenFile = preview.TenFile,
+            CapNhatCongNoKhachHang = updateCustomerDebt,
             TongSoHoaDon = preview.TongSoHoaDon,
             TongSoDongChiTiet = preview.TongSoDongChiTiet,
             SoLoi = preview.SoLoi
@@ -1947,8 +1949,12 @@ public sealed class HoaDonImportService
             }
 
             giaiDoan = "Tải số dư công nợ";
-            var soDuCongNo = new SoDuCongNo(await TaiSoDuCongNoAsync(connection, transaction, ct));
-            var congNoCu = await TaiCongNoCuAsync(connection, transaction, capNhatHoaDon, ct);
+            var soDuCongNo = updateCustomerDebt
+                ? new SoDuCongNo(await TaiSoDuCongNoAsync(connection, transaction, ct))
+                : new SoDuCongNo(new Dictionary<uint, decimal>());
+            var congNoCu = updateCustomerDebt
+                ? await TaiCongNoCuAsync(connection, transaction, capNhatHoaDon, ct)
+                : new Dictionary<string, CongNoCu>(StringComparer.OrdinalIgnoreCase);
 
             var batchIndex = 0;
 
@@ -1973,6 +1979,7 @@ public sealed class HoaDonImportService
                         congNoCu,
                         branchId,
                         userId,
+                        updateCustomerDebt,
                         result,
                         ct);
 
@@ -2002,6 +2009,7 @@ public sealed class HoaDonImportService
                         congNoCu,
                         branchId,
                         userId,
+                        updateCustomerDebt,
                         result,
                         ct);
 
@@ -2135,6 +2143,7 @@ public sealed class HoaDonImportService
         IReadOnlyDictionary<string, CongNoCu> congNoCu,
         uint branchId,
         uint? userId,
+        bool updateCustomerDebt,
         HoaDonImportResult result,
         CancellationToken ct)
     {
@@ -2168,7 +2177,8 @@ public sealed class HoaDonImportService
                 transaction,
                 capNhat.Where(h => !h.LaHoaDonTongHop).Select(h => h.MaHoaDon),
                 ct);
-            await XoaCongNoCuAsync(connection, transaction, capNhat.Select(h => h.MaHoaDon), ct);
+            if (updateCustomerDebt)
+                await XoaCongNoCuAsync(connection, transaction, capNhat.Select(h => h.MaHoaDon), ct);
         }
 
         if (moi.Count > 0)
@@ -2218,16 +2228,19 @@ public sealed class HoaDonImportService
         foreach (var chunk in Chunk(chiTiet, SoDongChiTietTrenCauLenh))
             await connection.ExecuteAsync(SqlInsertChiTiet(), chunk, transaction);
 
-        await GhiCongNoAsync(
-            connection,
-            transaction,
-            batch,
-            idHoaDon,
-            soDuCongNo,
-            congNoCu,
-            branchId,
-            userId,
-            ct);
+        if (updateCustomerDebt)
+        {
+            await GhiCongNoAsync(
+                connection,
+                transaction,
+                batch,
+                idHoaDon,
+                soDuCongNo,
+                congNoCu,
+                branchId,
+                userId,
+                ct);
+        }
 
         result.SoThemMoi += moi.Count;
         result.SoCapNhat += capNhat.Count;
@@ -2246,6 +2259,7 @@ public sealed class HoaDonImportService
         IReadOnlyDictionary<string, CongNoCu> congNoCu,
         uint branchId,
         uint? userId,
+        bool updateCustomerDebt,
         HoaDonImportResult result,
         CancellationToken ct)
     {
@@ -2269,6 +2283,7 @@ public sealed class HoaDonImportService
                     congNoCu,
                     branchId,
                     userId,
+                    updateCustomerDebt,
                     result,
                     ct);
 

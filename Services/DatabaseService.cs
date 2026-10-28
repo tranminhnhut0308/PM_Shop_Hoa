@@ -7696,7 +7696,7 @@ ORDER BY hd.thoi_gian_ban DESC
     /// <summary>
     /// Lấy danh sách phiếu nhập theo trang cho báo cáo.
     /// Hỗ trợ tìm kiếm theo mã phiếu, mã NCC, tên NCC, lọc theo tình trạng thanh toán
-    /// và lọc theo một ngày nhập cụ thể (mặc định null = không lọc ngày).
+    /// và lọc theo khoảng ngày nhập (mặc định null = không lọc ngày).
     /// Chỉ đọc dữ liệu của trang hiện tại (LIMIT/OFFSET) kèm tổng số bản ghi.
     /// </summary>
     public async Task<(IReadOnlyList<PhieuNhapHang> Items, int TongSoBanGhi)> GetPhieuNhapHangPagedAsync(
@@ -7704,7 +7704,9 @@ ORDER BY hd.thoi_gian_ban DESC
         int page,
         int pageSize,
         string? tinhTrangThanhToan = null,
-        DateTime? ngayLoc = null)
+        DateTime? ngayLoc = null,
+        DateTime? ngayBatDau = null,
+        DateTime? ngayKetThuc = null)
     {
         if (page < 1)
             page = 1;
@@ -7727,10 +7729,14 @@ ORDER BY hd.thoi_gian_ban DESC
             _ => ""
         };
 
-        // Lọc đúng 1 ngày (bỏ phần giờ). Null = không lọc ngày.
+        // ngayLoc giữ tương thích với các caller cũ; báo cáo dùng khoảng ngày.
         var dateCondition = ngayLoc.HasValue
             ? "AND DATE(p.thoi_gian_nhap) = DATE(@Ngay)"
             : "";
+        var dateRangeCondition = """
+            AND (@NgayBatDau IS NULL OR DATE(p.thoi_gian_nhap) >= DATE(@NgayBatDau))
+            AND (@NgayKetThuc IS NULL OR DATE(p.thoi_gian_nhap) <= DATE(@NgayKetThuc))
+            """;
 
         var searchCondition = @"(@Search = ''
         OR p.ma_phieu_nhap LIKE CONCAT('%', @Search, '%')
@@ -7744,7 +7750,8 @@ ORDER BY hd.thoi_gian_ban DESC
         ON ncc.id = p.nha_cung_cap_id
     WHERE {searchCondition}
       {paymentCondition}
-      {dateCondition};
+      {dateCondition}
+      {dateRangeCondition};
     """;
 
         var pageSql = $"""
@@ -7773,6 +7780,7 @@ ORDER BY hd.thoi_gian_ban DESC
     WHERE {searchCondition}
       {paymentCondition}
       {dateCondition}
+      {dateRangeCondition}
     ORDER BY p.thoi_gian_nhap DESC, p.id DESC
     LIMIT @PageSize OFFSET @Offset;
     """;
@@ -7784,7 +7792,9 @@ ORDER BY hd.thoi_gian_ban DESC
             Search = keyword,
             PageSize = pageSize,
             Offset = offset,
-            Ngay = ngayLoc?.Date
+            Ngay = ngayLoc?.Date,
+            NgayBatDau = ngayBatDau?.Date,
+            NgayKetThuc = ngayKetThuc?.Date
         };
 
         var tongSoBanGhi = Convert.ToInt32(
