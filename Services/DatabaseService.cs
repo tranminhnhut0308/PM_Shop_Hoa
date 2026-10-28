@@ -3285,6 +3285,8 @@ public sealed class DatabaseService
     public async Task<uint> ThemKhachHangAsync(KhachHang customer)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CustomersCreate, "Bạn không có quyền thêm khách hàng.");
+        ChuanHoaSoDienThoaiKhachHang(customer);
+        ChuanHoaDiaChiKhachHang(customer);
         await using var connection = await OpenAsync();
 
         if (string.IsNullOrWhiteSpace(customer.MaKhachHang))
@@ -3393,6 +3395,8 @@ public sealed class DatabaseService
     public async Task CapNhatKhachHangAsync(KhachHang customer)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CustomersEdit, "Bạn không có quyền sửa khách hàng.");
+        ChuanHoaSoDienThoaiKhachHang(customer);
+        ChuanHoaDiaChiKhachHang(customer);
         await using var connection = await OpenAsync();
 
         const string sql = """
@@ -3423,6 +3427,21 @@ public sealed class DatabaseService
             throw new InvalidOperationException("Khách hàng không tồn tại hoặc đã bị xóa.");
 
         _ = LogSubAccountActivityAsync("Cập nhật khách hàng", "KHACH_HANG", customer.Id, customer.MaKhachHang, $"Cập nhật khách hàng: {customer.TenKhachHang} ({customer.SoDienThoai})");
+    }
+
+    private static void ChuanHoaSoDienThoaiKhachHang(KhachHang customer)
+    {
+        customer.SoDienThoai = string.IsNullOrWhiteSpace(customer.SoDienThoai)
+            ? null
+            : customer.SoDienThoai.Trim();
+    }
+
+    private static void ChuanHoaDiaChiKhachHang(KhachHang customer)
+    {
+        customer.DiaChi = string.IsNullOrWhiteSpace(customer.DiaChi) ? null : customer.DiaChi.Trim();
+        customer.PhuongXa = string.IsNullOrWhiteSpace(customer.PhuongXa) ? null : customer.PhuongXa.Trim();
+        customer.QuanHuyen = string.IsNullOrWhiteSpace(customer.QuanHuyen) ? null : customer.QuanHuyen.Trim();
+        customer.TinhThanh = string.IsNullOrWhiteSpace(customer.TinhThanh) ? null : customer.TinhThanh.Trim();
     }
 
     /// <summary>Tên bảng khách hàng, dùng để sinh câu lệnh SQL.</summary>

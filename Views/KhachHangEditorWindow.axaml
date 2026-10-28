@@ -132,7 +132,7 @@
 <!-- ===== SỐ ĐIỆN THOẠI (ÁP DỤNG ĐẦY ĐỦ CHO TẤT CẢ CÁC Ô) ===== -->
 <StackPanel>
     <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Classes="label" Text="Số điện thoại liên hệ" VerticalAlignment="Center"/>
+        <TextBlock Classes="label" Text="Số điện thoại liên hệ (không bắt buộc)" VerticalAlignment="Center"/>
         <Button Grid.Column="1" 
                 Classes="secondary" 
                 Content="+ Thêm số" 
@@ -286,7 +286,7 @@
                     <!-- ===== ĐỊA CHỈ ===== -->
                     <Border Background="White" BorderBrush="#D8E5E0" BorderThickness="1" CornerRadius="10" Padding="14">
                         <StackPanel Spacing="10">
-                            <TextBlock Text="Địa chỉ" FontWeight="SemiBold" Foreground="#163F38"/>
+                            <TextBlock Text="Địa chỉ (không bắt buộc)" FontWeight="SemiBold" Foreground="#163F38"/>
 
                             <!-- Chọn loại địa chỉ -->
                             <StackPanel Orientation="Horizontal" Spacing="16">
@@ -315,7 +315,7 @@
                                     <TextBox Classes="input" Text="{Binding Customer.PhuongXa, Mode=TwoWay}" Watermark="Phường / Xã"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1">
-                                    <TextBlock Classes="label" Text="Tỉnh / Thành phố *"/>
+                                    <TextBlock Classes="label" Text="Tỉnh / Thành phố"/>
                                     <TextBox Classes="input" Text="{Binding Customer.TinhThanh, Mode=TwoWay}" Watermark="Tỉnh / Thành phố"/>
                                 </StackPanel>
                             </Grid>
