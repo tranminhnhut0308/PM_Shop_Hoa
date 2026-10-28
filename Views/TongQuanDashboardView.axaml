@@ -51,7 +51,7 @@
       <Setter Property="Maximum" Value="100" />
     </Style>
 
-    <Style Selector="ProgressBar.tqBar /template/ ProgressBar#PART_Indicator">
+    <Style Selector="ProgressBar.tqBar /template/ Border#PART_Indicator">
       <Setter Property="Background" Value="#087F6E" />
       <Setter Property="CornerRadius" Value="4" />
     </Style>
@@ -726,7 +726,8 @@
                         <Grid ColumnDefinitions="28,*">
                           <ProgressBar Grid.Column="1" Classes="tqBar"
                             Minimum="0" Maximum="100"
-                            Value="{Binding TyLePhanTram}" />
+                            Value="{Binding TyLeBeRong}"
+                            ClipToBounds="True" />
                         </Grid>
                       </StackPanel>
                     </Border>
@@ -785,7 +786,7 @@
                 </ItemsControl>
               </ScrollViewer>
 
-              <TextBlock Text="Chưa có khách hàng nào phát sinh giao dịch"
+              <TextBlock Text="Chưa có doanh thu được ghi nhận cho khách hàng trong khoảng này"
                 Classes="tqMuted" HorizontalAlignment="Center" Margin="0,10,0,0"
                 IsVisible="{Binding !CoKhachHang}" />
             </StackPanel>

@@ -703,6 +703,7 @@ public sealed class DashboardService
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+          AND hd.doanh_so_da_ghi_nhan = 1
           AND hd.thoi_gian_ban >= @TuNgay
           AND hd.thoi_gian_ban <= @DenNgay
         GROUP BY kh.id, Ten, TenPhu
