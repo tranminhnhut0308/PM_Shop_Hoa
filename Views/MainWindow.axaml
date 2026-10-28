@@ -800,6 +800,51 @@
       <Setter Property="Foreground" Value="#52645E" />
       <Setter Property="BorderThickness" Value="1" />
     </Style>
+    <Style Selector="Button.purchaseFilter:pointerover">
+      <Setter Property="Background" Value="#F1F8F6" />
+      <Setter Property="BorderBrush" Value="#A7C9BE" />
+      <Setter Property="Foreground" Value="#263B35" />
+    </Style>
+    <Style Selector="Button.purchaseFilter.active">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.purchaseFilter.active:pointerover">
+      <Setter Property="Background" Value="#06695A" />
+      <Setter Property="BorderBrush" Value="#06695A" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.purchaseFilter /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#52645E" />
+    </Style>
+    <Style Selector="Button.purchaseFilter:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#263B35" />
+    </Style>
+    <Style Selector="Button.purchaseFilter.active /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.purchaseFilter.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.purchaseFilter:disabled">
+      <Setter Property="Background" Value="#EDF1F0" />
+      <Setter Property="BorderBrush" Value="#D8E0DD" />
+      <Setter Property="Foreground" Value="#98A2A0" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Button.purchaseFilter:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#98A2A0" />
+    </Style>
+    <Style Selector="Button.purchaseFilter.active:disabled">
+      <Setter Property="Background" Value="#EDF1F0" />
+      <Setter Property="BorderBrush" Value="#D8E0DD" />
+      <Setter Property="Foreground" Value="#98A2A0" />
+    </Style>
+    <Style Selector="Button.purchaseFilter.active:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#98A2A0" />
+    </Style>
     <Style Selector="Button.purchasePageButton">
       <Setter Property="Width" Value="36" />
       <Setter Property="Height" Value="34" />
@@ -808,12 +853,28 @@
       <Setter Property="CornerRadius" Value="6" />
       <Setter Property="Background" Value="#FFFFFF" />
       <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="Foreground" Value="#52645E" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
+    <Style Selector="Button.purchasePageButton:pointerover">
+      <Setter Property="Background" Value="#F1F8F6" />
+      <Setter Property="BorderBrush" Value="#A7C9BE" />
+      <Setter Property="Foreground" Value="#263B35" />
+    </Style>
+    <Style Selector="Button.purchasePageButton:pressed">
+      <Setter Property="Background" Value="#DDF0EA" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+    </Style>
     <Style Selector="Button.purchasePageButton:disabled">
-      <Setter Property="Opacity" Value="0.42" />
+      <Setter Property="Background" Value="#EDF1F0" />
+      <Setter Property="BorderBrush" Value="#D8E0DD" />
+      <Setter Property="Foreground" Value="#98A2A0" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Button.purchasePageButton:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#98A2A0" />
     </Style>
 
     <Style Selector="Button.toolbar-primary:pointerover">

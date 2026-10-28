@@ -767,7 +767,7 @@
                         <Grid ColumnDefinitions="28,*">
                           <ProgressBar Grid.Column="1" Classes="tqBar"
                             Minimum="0" Maximum="100"
-                            Value="{Binding TyLeSoLuongAnToan}"
+                            Value="{Binding TyLeBeRong}"
                             ClipToBounds="True" />
                         </Grid>
                       </StackPanel>
@@ -804,23 +804,32 @@
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="models:TongQuanHangTop">
                       <Border Classes="tqRow">
-                        <Grid ColumnDefinitions="28,*,Auto" ColumnSpacing="8">
-                          <Border Width="22" Height="22" CornerRadius="11"
-                            Background="#EEF2FF" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding ThuTu}" FontSize="11"
-                              Foreground="#4B5D57" FontWeight="SemiBold"
-                              HorizontalAlignment="Center" VerticalAlignment="Center" />
-                          </Border>
+                        <StackPanel Spacing="5">
+                          <Grid ColumnDefinitions="28,*,Auto" ColumnSpacing="8">
+                            <Border Width="22" Height="22" CornerRadius="11"
+                              Background="#EAF9F5" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding ThuTu}" FontSize="11"
+                                Foreground="#087F6E" FontWeight="SemiBold"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
 
-                          <TextBlock Grid.Column="1" Text="{Binding Ten}"
-                            FontWeight="SemiBold" Foreground="#263B35"
-                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="1" Text="{Binding Ten}"
+                              FontWeight="SemiBold" Foreground="#263B35"
+                              VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
 
-                          <TextBlock Grid.Column="2" Text="{Binding DoanhThuHienThi}"
-                            FontWeight="SemiBold" Foreground="#087F6E"
-                            VerticalAlignment="Center" MinWidth="96"
-                            HorizontalAlignment="Right" />
-                        </Grid>
+                            <TextBlock Grid.Column="2" Text="{Binding DoanhThuHienThi}"
+                              FontWeight="SemiBold" Foreground="#087F6E"
+                              VerticalAlignment="Center" MinWidth="96"
+                              HorizontalAlignment="Right" />
+                          </Grid>
+
+                          <Grid ColumnDefinitions="28,*">
+                            <ProgressBar Grid.Column="1" Classes="tqBar"
+                              Minimum="0" Maximum="100"
+                              Value="{Binding TyLeBeRong}"
+                              ClipToBounds="True" />
+                          </Grid>
+                        </StackPanel>
                       </Border>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>

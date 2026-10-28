@@ -103,7 +103,7 @@
   </UserControl.Styles>
 
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Margin="18" Spacing="14">
+    <StackPanel Margin="18" Spacing="10">
 
       <!-- ============ THANH TIÊU ĐỀ + BỘ LỌC NGÀY ============ -->
       <Border Classes="bcCard" Padding="16,13">
