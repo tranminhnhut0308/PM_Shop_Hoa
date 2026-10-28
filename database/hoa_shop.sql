@@ -217,6 +217,7 @@ CREATE TABLE `hoa_don_ban_hang` (
   `khach_da_thanh_toan` decimal(15,2) NOT NULL DEFAULT '0.00',
   `con_no` decimal(15,2) NOT NULL DEFAULT '0.00',
   `cong_no_da_ghi_nhan` tinyint(1) NOT NULL DEFAULT '1',
+  `doanh_so_da_ghi_nhan` tinyint(1) NOT NULL DEFAULT '1',
   `trang_thai_thanh_toan` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'DA_THANH_TOAN',
   `trang_thai_hoa_don` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'HOAN_THANH',
   `ghi_chu` text COLLATE utf8mb4_unicode_ci,
@@ -515,6 +516,8 @@ CREATE TABLE `phieu_nhap_hang` (
   `tong_tien_nhap` decimal(15,2) NOT NULL DEFAULT '0.00',
   `da_thanh_toan` decimal(15,2) NOT NULL DEFAULT '0.00',
   `con_no` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `cong_no_da_ghi_nhan` tinyint(1) NOT NULL DEFAULT '1',
+  `tong_mua_da_ghi_nhan` tinyint(1) NOT NULL DEFAULT '1',
   `trang_thai` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'DA_NHAP_HANG',
   `ghi_chu` text COLLATE utf8mb4_unicode_ci,
   `ngay_tao` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -762,7 +765,7 @@ CREATE ALGORITHM=UNDEFINED DEFINER=`admin_Nhut`@`%` SQL SECURITY DEFINER VIEW `v
 --
 DROP TABLE IF EXISTS `vw_doanh_thu_ngay`;
 
-CREATE ALGORITHM=UNDEFINED DEFINER=`admin_Nhut`@`%` SQL SECURITY DEFINER VIEW `vw_doanh_thu_ngay`  AS  select cast(`hoa_don_ban_hang`.`thoi_gian_ban` as date) AS `ngay`,count(0) AS `so_hoa_don`,sum(`hoa_don_ban_hang`.`khach_can_tra`) AS `doanh_thu`,sum(`hoa_don_ban_hang`.`khach_da_thanh_toan`) AS `da_thu`,sum(case when (`hoa_don_ban_hang`.`cong_no_da_ghi_nhan` = 1) then `hoa_don_ban_hang`.`con_no` else 0 end) AS `con_no` from `hoa_don_ban_hang` where (`hoa_don_ban_hang`.`trang_thai_hoa_don` = 'HOAN_THANH') group by cast(`hoa_don_ban_hang`.`thoi_gian_ban` as date) ;
+CREATE ALGORITHM=UNDEFINED DEFINER=`admin_Nhut`@`%` SQL SECURITY DEFINER VIEW `vw_doanh_thu_ngay`  AS  select cast(`hoa_don_ban_hang`.`thoi_gian_ban` as date) AS `ngay`,count(0) AS `so_hoa_don`,sum(case when (`hoa_don_ban_hang`.`doanh_so_da_ghi_nhan` = 1) then `hoa_don_ban_hang`.`khach_can_tra` else 0 end) AS `doanh_thu`,sum(case when (`hoa_don_ban_hang`.`doanh_so_da_ghi_nhan` = 1) then `hoa_don_ban_hang`.`khach_da_thanh_toan` else 0 end) AS `da_thu`,sum(case when (`hoa_don_ban_hang`.`cong_no_da_ghi_nhan` = 1) then `hoa_don_ban_hang`.`con_no` else 0 end) AS `con_no` from `hoa_don_ban_hang` where (`hoa_don_ban_hang`.`trang_thai_hoa_don` = 'HOAN_THANH') group by cast(`hoa_don_ban_hang`.`thoi_gian_ban` as date) ;
 
 -- --------------------------------------------------------
 

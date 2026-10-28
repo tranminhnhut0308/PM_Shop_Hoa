@@ -32,11 +32,11 @@ public sealed class ReportController : ControllerBase
         // 1. Tổng quan doanh số bán hàng trong ngày
         const string salesSql = """
             SELECT
-                COALESCE(SUM(khach_can_tra), 0) AS TongDoanhThu,
+                COALESCE(SUM(CASE WHEN doanh_so_da_ghi_nhan = 1 THEN khach_can_tra ELSE 0 END), 0) AS TongDoanhThu,
                 COUNT(*) AS SoHoaDon,
-                COALESCE(SUM(khach_da_thanh_toan), 0) AS DaThu,
+                COALESCE(SUM(CASE WHEN doanh_so_da_ghi_nhan = 1 THEN khach_da_thanh_toan ELSE 0 END), 0) AS DaThu,
                 COALESCE(SUM(CASE WHEN cong_no_da_ghi_nhan = 1 THEN con_no ELSE 0 END), 0) AS ConNo,
-                COALESCE(SUM(giam_gia), 0) AS TongGiamGia
+                COALESCE(SUM(CASE WHEN doanh_so_da_ghi_nhan = 1 THEN giam_gia ELSE 0 END), 0) AS TongGiamGia
             FROM hoa_don_ban_hang
             WHERE trang_thai_hoa_don = 'HOAN_THANH'
               AND thoi_gian_ban >= @Start AND thoi_gian_ban <= @End;

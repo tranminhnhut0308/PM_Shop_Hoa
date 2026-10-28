@@ -32,11 +32,15 @@ public sealed class BaoCaoNhaCungCapService
     public const string KhoaMacDinh = "GiaTriNhapHang";
 
     private readonly Func<Task<MySqlConnection>> _taoKetNoi;
+    private readonly Func<Task>? _damBaoCotTheoDoiPhieuNhap;
     private bool? _coCotDuLieuKiotViet;
 
-    public BaoCaoNhaCungCapService(Func<Task<MySqlConnection>> taoKetNoi)
+    public BaoCaoNhaCungCapService(
+        Func<Task<MySqlConnection>> taoKetNoi,
+        Func<Task>? damBaoCotTheoDoiPhieuNhap = null)
     {
         _taoKetNoi = taoKetNoi;
+        _damBaoCotTheoDoiPhieuNhap = damBaoCotTheoDoiPhieuNhap;
     }
 
     public static (DateTime TuNgay, DateTime DenNgay) TinhKhoang(DateTime tuNgay, DateTime denNgay)
@@ -85,6 +89,9 @@ public sealed class BaoCaoNhaCungCapService
         CancellationToken token = default)
     {
         var (tu, denKeTiep) = TinhKhoang(tuNgay, denNgay);
+
+        if (_damBaoCotTheoDoiPhieuNhap is not null)
+            await _damBaoCotTheoDoiPhieuNhap();
 
         await using var conn = await _taoKetNoi();
         var coCotKiotViet = await KiemTraCotKiotVietAsync(conn);
@@ -197,7 +204,8 @@ public sealed class BaoCaoNhaCungCapService
             SELECT SUM(p_cn.con_no)
             FROM phieu_nhap_hang p_cn
             WHERE p_cn.nha_cung_cap_id = ncc.id
-              AND p_cn.trang_thai != 'HUY'
+              AND p_cn.trang_thai NOT IN ('LUU_TAM', 'HUY')
+              AND p_cn.cong_no_da_ghi_nhan = 1
         ), 0))";
 
         if (dk.CoCotKiotViet)
@@ -244,7 +252,7 @@ public sealed class BaoCaoNhaCungCapService
         SELECT
             COUNT(DISTINCT ncc.id) AS TongNhaCungCap,
             COUNT(p.id) AS SoPhieuNhap,
-            COALESCE(SUM(p.tong_tien_nhap), 0) AS TongTienNhap,
+            COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) AS TongTienNhap,
             COALESCE(SUM({tienTraHangExpr}), 0) AS TienTraHang,
             COALESCE(SUM(p.da_thanh_toan), 0) AS DaThanhToan,
             COALESCE(SUM({congNoExpr}), 0) AS CongNo
@@ -346,9 +354,9 @@ public sealed class BaoCaoNhaCungCapService
             COALESCE(ncc.ten_nha_cung_cap, '') AS TenNhaCungCap,
             COALESCE(ncc.so_dien_thoai, '') AS SoDienThoai,
             COUNT(p.id) AS SoPhieuNhap,
-            COALESCE(SUM(p.tong_tien_nhap), 0) AS TongTienNhap,
+            COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) AS TongTienNhap,
             {tienTraHangExpr} AS TienTraHang,
-            (COALESCE(SUM(p.tong_tien_nhap), 0) - {tienTraHangExpr}) AS GiaTriNhapHang,
+            (COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) - {tienTraHangExpr}) AS GiaTriNhapHang,
             COALESCE(SUM(p.da_thanh_toan), 0) AS DaThanhToan,
             {congNoExpr} AS CongNo
         FROM phieu_nhap_hang p
@@ -417,9 +425,9 @@ public sealed class BaoCaoNhaCungCapService
             COALESCE(ncc.ten_nha_cung_cap, '') AS TenNhaCungCap,
             COALESCE(ncc.so_dien_thoai, '') AS SoDienThoai,
             COUNT(p.id) AS SoPhieuNhap,
-            COALESCE(SUM(p.tong_tien_nhap), 0) AS TongTienNhap,
+            COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) AS TongTienNhap,
             {tienTraHangExpr} AS TienTraHang,
-            (COALESCE(SUM(p.tong_tien_nhap), 0) - {tienTraHangExpr}) AS GiaTriNhapHang,
+            (COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) - {tienTraHangExpr}) AS GiaTriNhapHang,
             COALESCE(SUM(p.da_thanh_toan), 0) AS DaThanhToan,
             {congNoExpr} AS CongNo
         FROM phieu_nhap_hang p
@@ -459,7 +467,7 @@ public sealed class BaoCaoNhaCungCapService
                COALESCE(SUM(SoPhieuNhap), 0) AS SoPhieuNhap
         FROM (
             SELECT DATE_FORMAT(p.thoi_gian_nhap, '{format}') AS ThoiGianStr,
-                   COALESCE(SUM(p.tong_tien_nhap), 0) AS TienNhap,
+                   COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) AS TienNhap,
                    0 AS TienTraHang,
                    COUNT(*) AS SoPhieuNhap
             FROM phieu_nhap_hang p

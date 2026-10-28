@@ -12,6 +12,9 @@ public sealed class ThongKeTaiChinhNhaCungCap
     /// <summary>Tổng tiền hàng + chi phí khác của các phiếu nhập.</summary>
     public decimal TongTienNhap { get; set; }
 
+    /// <summary>Tổng tiền các phiếu nhập được tính vào chỉ số Tổng mua nhà cung cấp.</summary>
+    public decimal TongMuaDaGhiNhan { get; set; }
+
     /// <summary>Tổng tiền đã thanh toán trên các phiếu nhập.</summary>
     public decimal TongDaThanhToan { get; set; }
 
@@ -66,7 +69,7 @@ public sealed class ThongKeTaiChinhNhaCungCap
     /// </summary>
     public decimal TongMua =>
         (CoDuLieuKiotViet && TongMuaExcel.HasValue ? TongMuaExcel.Value : 0m)
-        + TongTienNhap;
+        + TongMuaDaGhiNhan;
 
     /// <summary>
     /// Tổng tiền đã mua trừ trả hàng: bao gồm tổng mua trừ trả hàng từ file (nếu có)
@@ -76,7 +79,7 @@ public sealed class ThongKeTaiChinhNhaCungCap
         (CoDuLieuKiotViet && TongMuaTruTraHangExcel.HasValue
             ? TongMuaTruTraHangExcel.Value
             : (CoDuLieuKiotViet && TongMuaExcel.HasValue ? TongMuaExcel.Value : 0m))
-        + TongTienNhap;
+        + TongMuaDaGhiNhan;
 
     /// <summary>
     /// Tổng tiền đã thanh toán: bao gồm phần đã thanh toán trước khi import (nếu có)

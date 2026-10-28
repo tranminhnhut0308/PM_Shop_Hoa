@@ -120,12 +120,12 @@ public sealed class BaoCaoCuoiNgayService
         const string sql = """
         SELECT
             COUNT(*)                                          AS SoHoaDon,
-            COALESCE(SUM(hd.tong_tien_hang), 0)               AS TongTienHang,
-            COALESCE(SUM(hd.giam_gia), 0)                     AS GiamGia,
-            COALESCE(SUM(hd.khach_can_tra), 0)                AS DoanhThu,
-            COALESCE(SUM(hd.khach_da_thanh_toan), 0)          AS DaThu,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang ELSE 0 END), 0) AS TongTienHang,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.giam_gia ELSE 0 END), 0)      AS GiamGia,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThu,
             COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS ConNo,
-            COALESCE(SUM(hd.thu_khac), 0)                     AS TienThua,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.thu_khac ELSE 0 END), 0)     AS TienThua,
             COALESCE(SUM(hd.trang_thai_thanh_toan = 'DA_THANH_TOAN'), 0) AS SoHoaDonDaThanhToan,
             COALESCE(SUM(hd.cong_no_da_ghi_nhan = 1 AND hd.trang_thai_thanh_toan <> 'DA_THANH_TOAN'), 0) AS SoHoaDonConCongNo
         FROM hoa_don_ban_hang hd
@@ -184,7 +184,7 @@ public sealed class BaoCaoCuoiNgayService
         const string sql = """
         SELECT
             HOUR(hd.thoi_gian_ban)       AS Gio,
-            COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu,
             COUNT(*)                     AS SoHoaDon
         FROM hoa_don_ban_hang hd
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
@@ -318,7 +318,7 @@ public sealed class BaoCaoCuoiNgayService
             COALESCE(NULLIF(TRIM(ct.ten_san_pham), ''), 'Sản phẩm đã xoá') AS Ten,
             COALESCE(NULLIF(TRIM(ct.ma_san_pham), ''), '-')                  AS MaSanPham,
             COALESCE(SUM(ct.so_luong), 0)                                     AS SoLuong,
-            COALESCE(SUM(ct.thanh_tien), 0)                                   AS DoanhThu
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu
         FROM chi_tiet_hoa_don_ban_hang ct
         INNER JOIN hoa_don_ban_hang hd
             ON hd.id = ct.hoa_don_id
@@ -390,7 +390,7 @@ public sealed class BaoCaoCuoiNgayService
         FROM (
             SELECT
                 hd.khach_hang_id,
-                COALESCE(SUM(hd.khach_can_tra), 0) AS TongGiaTriMua,
+                COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS TongGiaTriMua,
                 (
                     SELECT COUNT(*)
                     FROM hoa_don_ban_hang truoc
@@ -417,8 +417,8 @@ public sealed class BaoCaoCuoiNgayService
             COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS Ten,
             COALESCE(NULLIF(TRIM(kh.ma_khach_hang), ''), '')          AS MaKhachHang,
             COUNT(*)                        AS SoHoaDon,
-            COALESCE(SUM(hd.khach_can_tra), 0)         AS TongMua,
-            COALESCE(SUM(hd.khach_da_thanh_toan), 0)   AS DaThanhToan,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS TongMua,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThanhToan,
             COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS ConNo
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id

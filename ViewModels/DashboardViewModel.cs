@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShopHoa.Helpers;
@@ -34,6 +35,12 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(KhoangThoiGianHienThi))]
+    [NotifyPropertyChangedFor(nameof(IsKhoangHomNay))]
+    [NotifyPropertyChangedFor(nameof(IsKhoangBayNgay))]
+    [NotifyPropertyChangedFor(nameof(IsKhoangThangNay))]
+    [NotifyPropertyChangedFor(nameof(IsKhoangThangTruoc))]
+    [NotifyPropertyChangedFor(nameof(IsKhoangNamNay))]
+    [NotifyPropertyChangedFor(nameof(IsKhoangTuDien))]
     [NotifyPropertyChangedFor(nameof(TieuDeTheDoanhThu))]
     [NotifyPropertyChangedFor(nameof(PhuDeTheDoanhThu))]
     [NotifyPropertyChangedFor(nameof(PhuDeTheSoHoaDon))]
@@ -44,6 +51,9 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ChieuDoanhThuHienThi))]
+    [NotifyPropertyChangedFor(nameof(IsChieuTheoNgay))]
+    [NotifyPropertyChangedFor(nameof(IsChieuTheoGio))]
+    [NotifyPropertyChangedFor(nameof(IsChieuTheoThu))]
     [NotifyPropertyChangedFor(nameof(TieuDeBieuDo))]
     [NotifyPropertyChangedFor(nameof(MoTaChieuDoanhThu))]
     private string chieuDoanhThu = TongQuanChieuDoanhThu.TheoNgay;
@@ -62,11 +72,45 @@ public sealed partial class DashboardViewModel : ObservableObject
     [ObservableProperty]
     private DateTimeOffset? denNgayTuChon = DateTimeOffset.Now.Date;
 
+    [ObservableProperty] private bool isLichTuNgayMo;
+    [ObservableProperty] private bool isLichDenNgayMo;
+
     public string KhoangThoiGianHienThi => TongQuanKhoangThoiGian.TenHienThi(KhoangThoiGian);
 
     public string ChieuDoanhThuHienThi => TongQuanChieuDoanhThu.TenHienThi(ChieuDoanhThu);
 
     public string XepHangTopHangHienThi => TongQuanXepHang.TenHienThi(XepHangTopHang);
+    public bool IsKhoangHomNay => KhoangThoiGian == TongQuanKhoangThoiGian.HomNay;
+    public bool IsKhoangBayNgay => KhoangThoiGian == TongQuanKhoangThoiGian.BayNgay;
+    public bool IsKhoangThangNay => KhoangThoiGian == TongQuanKhoangThoiGian.ThangNay;
+    public bool IsKhoangThangTruoc => KhoangThoiGian == TongQuanKhoangThoiGian.ThangTruoc;
+    public bool IsKhoangNamNay => KhoangThoiGian == TongQuanKhoangThoiGian.NamNay;
+    public bool IsKhoangTuDien => KhoangThoiGian == TongQuanKhoangThoiGian.TuDien;
+    public bool IsChieuTheoNgay => ChieuDoanhThu == TongQuanChieuDoanhThu.TheoNgay;
+    public bool IsChieuTheoGio => ChieuDoanhThu == TongQuanChieuDoanhThu.TheoGio;
+    public bool IsChieuTheoThu => ChieuDoanhThu == TongQuanChieuDoanhThu.TheoThu;
+    public string TuNgayTuChonText =>
+        TuNgayTuChon?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "Chọn ngày";
+    public string DenNgayTuChonText =>
+        DenNgayTuChon?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "Chọn ngày";
+
+    [RelayCommand]
+    private void ToggleLichTuNgay() => IsLichTuNgayMo = !IsLichTuNgayMo;
+
+    [RelayCommand]
+    private void ToggleLichDenNgay() => IsLichDenNgayMo = !IsLichDenNgayMo;
+
+    partial void OnTuNgayTuChonChanged(DateTimeOffset? value)
+    {
+        OnPropertyChanged(nameof(TuNgayTuChonText));
+        IsLichTuNgayMo = false;
+    }
+
+    partial void OnDenNgayTuChonChanged(DateTimeOffset? value)
+    {
+        OnPropertyChanged(nameof(DenNgayTuChonText));
+        IsLichDenNgayMo = false;
+    }
 
     public string TieuDeTheDoanhThu => KhoangThoiGian switch
     {

@@ -179,13 +179,6 @@ public sealed partial class MainWindowViewModel
 
         try
         {
-            var capNhatCongNoKhachHang = await HoiCapNhatCongNoKhachHangAsync();
-            if (!capNhatCongNoKhachHang.HasValue)
-            {
-                StatusMessage = "Đã hủy import hóa đơn. Không có dữ liệu nào được thay đổi.";
-                return;
-            }
-
             IsImporting = true;
             ImportHasProgress = false;
             ImportProgress = 0;
@@ -275,6 +268,13 @@ public sealed partial class MainWindowViewModel
                 return;
             }
 
+            var tuyChonImport = await HoiTuyChonImportHoaDonAsync();
+            if (!tuyChonImport.HasValue)
+            {
+                StatusMessage = "Đã hủy import hóa đơn. Không có dữ liệu nào được thay đổi.";
+                return;
+            }
+
             IsImporting = true;
             ImportHasProgress = false;
             ImportProgress = 0;
@@ -285,7 +285,8 @@ public sealed partial class MainWindowViewModel
                 preview,
                 quyetDinh.XuLyTrung,
                 quyetDinh.TaoKhachHangMoi,
-                capNhatCongNoKhachHang.Value,
+                tuyChonImport.Value.UpdateCustomerDebt,
+                tuyChonImport.Value.UpdateSalesTotal,
                 progress);
 
             // Danh sách hóa đơn trên màn hình đã cũ, nạp lại để thấy dữ liệu mới.
@@ -326,17 +327,17 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-    private async Task<bool?> HoiCapNhatCongNoKhachHangAsync()
+    private async Task<(bool UpdateCustomerDebt, bool UpdateSalesTotal)?> HoiTuyChonImportHoaDonAsync()
     {
         if (OwnerWindow is null)
             return null;
 
         var dialog = new Window
         {
-            Title = "Xác nhận cập nhật công nợ khách hàng",
-            Width = 620,
+            Title = "Xác nhận import hóa đơn",
+            Width = 700,
             SizeToContent = Avalonia.Controls.SizeToContent.Height,
-            MinHeight = 330,
+            MinHeight = 500,
             CanResize = false,
             WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.CenterOwner,
             Background = Avalonia.Media.Brushes.White
@@ -350,7 +351,7 @@ public sealed partial class MainWindowViewModel
 
         content.Children.Add(new Avalonia.Controls.TextBlock
         {
-            Text = "Xác nhận cập nhật công nợ khách hàng",
+            Text = "Xác nhận cập nhật dữ liệu khi import",
             FontSize = 20,
             FontWeight = Avalonia.Media.FontWeight.Bold,
             Foreground = Avalonia.Media.Brush.Parse("#173F38"),
@@ -359,28 +360,69 @@ public sealed partial class MainWindowViewModel
 
         content.Children.Add(new Avalonia.Controls.TextBlock
         {
-            Text = "Bạn có muốn cập nhật công nợ khách hàng từ các hóa đơn được import không?",
-            FontSize = 15,
+            Text = "Hai tùy chọn dưới đây độc lập. Chọn riêng cách xử lý công nợ và doanh số cho các hóa đơn trong file.",
+            FontSize = 14,
             Foreground = Avalonia.Media.Brush.Parse("#263B35"),
             TextWrapping = Avalonia.Media.TextWrapping.Wrap
         });
 
         content.Children.Add(new Avalonia.Controls.TextBlock
         {
-            Text = "Cập nhật công nợ khách hàng: phần mềm ghi nhận công nợ theo nghiệp vụ hiện tại. "
-                   + "Không cập nhật công nợ khách hàng: chỉ lưu hóa đơn và chi tiết, không tạo, xóa "
-                   + "hoặc thay đổi giao dịch công nợ hiện có.",
-            FontSize = 13,
+            Text = "1. Cập nhật công nợ khách hàng",
+            FontSize = 15,
+            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            Foreground = Avalonia.Media.Brush.Parse("#173F38")
+        });
+
+        var updateDebt = new Avalonia.Controls.RadioButton
+        {
+            Content = "Có cập nhật công nợ khách hàng",
+            GroupName = "CustomerDebt",
+            IsChecked = true
+        };
+        var skipDebt = new Avalonia.Controls.RadioButton
+        {
+            Content = "Không cập nhật công nợ khách hàng",
+            GroupName = "CustomerDebt"
+        };
+        content.Children.Add(updateDebt);
+        content.Children.Add(skipDebt);
+        content.Children.Add(new Avalonia.Controls.TextBlock
+        {
+            Text = "Khi không cập nhật, hóa đơn vẫn được lưu nhưng không tạo hoặc thay đổi giao dịch công nợ hiện có.",
+            FontSize = 12,
             Foreground = Avalonia.Media.Brush.Parse("#52645F"),
             TextWrapping = Avalonia.Media.TextWrapping.Wrap
         });
 
         content.Children.Add(new Avalonia.Controls.TextBlock
         {
-            Text = "Nếu công nợ đã được cập nhật trước đó, hãy chọn “Không cập nhật công nợ khách hàng” để tránh cộng trùng.",
-            FontSize = 13,
+            Text = "2. Cập nhật Tổng bán",
+            FontSize = 15,
             FontWeight = Avalonia.Media.FontWeight.SemiBold,
-            Foreground = Avalonia.Media.Brush.Parse("#8A5510"),
+            Foreground = Avalonia.Media.Brush.Parse("#173F38"),
+            Margin = new Avalonia.Thickness(0, 6, 0, 0)
+        });
+
+        var updateSales = new Avalonia.Controls.RadioButton
+        {
+            Content = "Có cập nhật Tổng bán",
+            GroupName = "SalesTotal",
+            IsChecked = true
+        };
+        var skipSales = new Avalonia.Controls.RadioButton
+        {
+            Content = "Không cập nhật Tổng bán",
+            GroupName = "SalesTotal"
+        };
+        content.Children.Add(updateSales);
+        content.Children.Add(skipSales);
+        content.Children.Add(new Avalonia.Controls.TextBlock
+        {
+            Text = "Bạn có muốn tính doanh số từ các hóa đơn được import vào Tổng bán và các báo cáo doanh thu không?\n\n"
+                   + "Nếu hóa đơn lịch sử đã được tính vào doanh số trước đó, hãy chọn Không cập nhật Tổng bán để tránh cộng trùng.",
+            FontSize = 12,
+            Foreground = Avalonia.Media.Brush.Parse("#52645F"),
             TextWrapping = Avalonia.Media.TextWrapping.Wrap
         });
 
@@ -392,33 +434,35 @@ public sealed partial class MainWindowViewModel
             Margin = new Avalonia.Thickness(0, 8, 0, 0)
         };
 
-        var updateButton = new Avalonia.Controls.Button
+        var continueButton = new Avalonia.Controls.Button
         {
-            Content = "Cập nhật công nợ khách hàng",
+            Content = "Tiếp tục import",
             Padding = new Avalonia.Thickness(16, 10),
             Background = Avalonia.Media.Brush.Parse("#087F6E"),
             Foreground = Avalonia.Media.Brushes.White,
             FontWeight = Avalonia.Media.FontWeight.SemiBold
         };
-        updateButton.Click += (_, _) => dialog.Close(true);
+        continueButton.Click += (_, _) => dialog.Close((
+            updateDebt.IsChecked == true,
+            updateSales.IsChecked == true));
 
-        var keepButton = new Avalonia.Controls.Button
+        var cancelButton = new Avalonia.Controls.Button
         {
-            Content = "Không cập nhật công nợ khách hàng",
+            Content = "Hủy",
             Padding = new Avalonia.Thickness(16, 10),
             Background = Avalonia.Media.Brush.Parse("#FFFFFF"),
             Foreground = Avalonia.Media.Brush.Parse("#263B35"),
             BorderBrush = Avalonia.Media.Brush.Parse("#C9DCD6"),
             BorderThickness = new Avalonia.Thickness(1)
         };
-        keepButton.Click += (_, _) => dialog.Close(false);
+        cancelButton.Click += (_, _) => dialog.Close(null);
 
-        buttons.Children.Add(updateButton);
-        buttons.Children.Add(keepButton);
+        buttons.Children.Add(continueButton);
+        buttons.Children.Add(cancelButton);
         content.Children.Add(buttons);
         dialog.Content = content;
 
-        return await dialog.ShowDialog<bool?>(OwnerWindow);
+        return await dialog.ShowDialog<(bool UpdateCustomerDebt, bool UpdateSalesTotal)?>(OwnerWindow);
     }
 
     /// <summary>

@@ -1790,6 +1790,7 @@ public sealed class HoaDonImportService
         XuLyHoaDonTrung xuLyTrung,
         bool taoKhachHangMoi,
         bool updateCustomerDebt,
+        bool updateSalesTotal,
         IProgress<HoaDonImportProgress>? progress = null,
         CancellationToken ct = default)
     {
@@ -1799,6 +1800,7 @@ public sealed class HoaDonImportService
         {
             TenFile = preview.TenFile,
             CapNhatCongNoKhachHang = updateCustomerDebt,
+            CapNhatTongBan = updateSalesTotal,
             TongSoHoaDon = preview.TongSoHoaDon,
             TongSoDongChiTiet = preview.TongSoDongChiTiet,
             SoLoi = preview.SoLoi
@@ -1980,6 +1982,7 @@ public sealed class HoaDonImportService
                         branchId,
                         userId,
                         updateCustomerDebt,
+                        updateSalesTotal,
                         result,
                         ct);
 
@@ -2010,6 +2013,7 @@ public sealed class HoaDonImportService
                         branchId,
                         userId,
                         updateCustomerDebt,
+                        updateSalesTotal,
                         result,
                         ct);
 
@@ -2144,6 +2148,7 @@ public sealed class HoaDonImportService
         uint branchId,
         uint? userId,
         bool updateCustomerDebt,
+        bool updateSalesTotal,
         HoaDonImportResult result,
         CancellationToken ct)
     {
@@ -2170,7 +2175,8 @@ public sealed class HoaDonImportService
                 ct);
 
             await CapNhatHeaderAsync(
-                connection, transaction, capNhat, branchId, userId, updateCustomerDebt, ct);
+                connection, transaction, capNhat, branchId, userId,
+                updateCustomerDebt, updateSalesTotal, ct);
 
             // Chỉ hóa đơn nhập đầy đủ mới thay thế chi tiết; import tổng hợp không xóa dữ liệu hàng cũ.
             await XoaChiTietCuAsync(
@@ -2188,7 +2194,8 @@ public sealed class HoaDonImportService
             {
                 await connection.ExecuteAsync(
                     SqlInsertHeader(),
-                    chunk.Select(hd => TaoDongHeader(hd, branchId, userId, updateCustomerDebt)).ToList(),
+                    chunk.Select(hd => TaoDongHeader(
+                        hd, branchId, userId, updateCustomerDebt, updateSalesTotal)).ToList(),
                     transaction);
             }
         }
@@ -2261,6 +2268,7 @@ public sealed class HoaDonImportService
         uint branchId,
         uint? userId,
         bool updateCustomerDebt,
+        bool updateSalesTotal,
         HoaDonImportResult result,
         CancellationToken ct)
     {
@@ -2285,6 +2293,7 @@ public sealed class HoaDonImportService
                     branchId,
                     userId,
                     updateCustomerDebt,
+                    updateSalesTotal,
                     result,
                     ct);
 
@@ -2332,7 +2341,8 @@ public sealed class HoaDonImportService
         HoaDonImportRow hd,
         uint branchId,
         uint? userId,
-        bool updateCustomerDebt) =>
+        bool updateCustomerDebt,
+        bool updateSalesTotal) =>
         new()
         {
             MaHoaDon = hd.MaHoaDon,
@@ -2347,6 +2357,7 @@ public sealed class HoaDonImportService
             KhachDaThanhToan = Tien(hd.DaThanhToanChuan),
             ConNo = Tien(hd.ConNoChuan),
             CongNoDaGhiNhan = updateCustomerDebt,
+            DoanhSoDaGhiNhan = updateSalesTotal,
             TrangThaiThanhToan = hd.TrangThaiThanhToanChuan,
             TrangThaiHoaDon = hd.LaHoaDonTongHop ? HoaDonTongHop : HoanThanh,
             GhiChu = hd.GhiChu
@@ -2358,14 +2369,16 @@ public sealed class HoaDonImportService
          (
              ma_hoa_don, chi_nhanh_id, khach_hang_id, nguoi_ban_id, thoi_gian_ban,
              tong_tien_hang, giam_gia, thu_khac, khach_can_tra, khach_da_thanh_toan,
-             con_no, cong_no_da_ghi_nhan, trang_thai_thanh_toan, trang_thai_hoa_don, ghi_chu,
+             con_no, cong_no_da_ghi_nhan, doanh_so_da_ghi_nhan,
+             trang_thai_thanh_toan, trang_thai_hoa_don, ghi_chu,
              ngay_tao, ngay_cap_nhat
          )
          VALUES
          (
              @MaHoaDon, @ChiNhanhId, @KhachHangId, @NguoiBanId, @ThoiGianBan,
              @TongTienHang, @GiamGia, @ThuKhac, @KhachCanTra, @KhachDaThanhToan,
-             @ConNo, @CongNoDaGhiNhan, @TrangThaiThanhToan, @TrangThaiHoaDon, @GhiChu,
+             @ConNo, @CongNoDaGhiNhan, @DoanhSoDaGhiNhan,
+             @TrangThaiThanhToan, @TrangThaiHoaDon, @GhiChu,
              @ThoiGianBan, @ThoiGianBan
          );
          """;
@@ -2396,6 +2409,7 @@ public sealed class HoaDonImportService
         uint branchId,
         uint? userId,
         bool updateCustomerDebt,
+        bool updateSalesTotal,
         CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -2411,7 +2425,8 @@ public sealed class HoaDonImportService
             var dong = new List<DongHeader>(chunk.Count);
 
             foreach (var hd in chunk)
-                dong.Add(TaoDongHeader(hd, branchId, userId, updateCustomerDebt));
+                dong.Add(TaoDongHeader(
+                    hd, branchId, userId, updateCustomerDebt, updateSalesTotal));
 
             await connection.ExecuteAsync(SqlInsertHeader(), dong, transaction);
         }
@@ -2434,12 +2449,20 @@ public sealed class HoaDonImportService
                      WHEN @UpdateCustomerDebt = 1 THEN 1
                      ELSE h.cong_no_da_ghi_nhan
                  END,
+                 h.doanh_so_da_ghi_nhan = CASE
+                     WHEN @UpdateSalesTotal = 1 THEN 1
+                     ELSE h.doanh_so_da_ghi_nhan
+                 END,
                  h.trang_thai_thanh_toan = t.trang_thai_thanh_toan,
                  h.trang_thai_hoa_don = t.trang_thai_hoa_don,
                  h.ghi_chu = t.ghi_chu,
                  h.ngay_cap_nhat = NOW();
              """,
-            new { UpdateCustomerDebt = updateCustomerDebt },
+            new
+            {
+                UpdateCustomerDebt = updateCustomerDebt,
+                UpdateSalesTotal = updateSalesTotal
+            },
             transaction);
     }
 
@@ -3005,6 +3028,7 @@ public sealed class HoaDonImportService
         public decimal KhachDaThanhToan { get; init; }
         public decimal ConNo { get; init; }
         public bool CongNoDaGhiNhan { get; init; }
+        public bool DoanhSoDaGhiNhan { get; init; }
         public string TrangThaiThanhToan { get; init; } = DaThanhToan;
         public string TrangThaiHoaDon { get; init; } = HoanThanh;
         public string? GhiChu { get; init; }

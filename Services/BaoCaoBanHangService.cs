@@ -96,11 +96,11 @@ ORDER BY hd.thoi_gian_ban ASC, hd.id ASC;
         string sql = @"
 SELECT
   COUNT(*) AS SoHoaDon,
-  COALESCE(SUM(hd.tong_tien_hang), 0) AS TongTienHang,
-  COALESCE(SUM(hd.giam_gia), 0) AS GiamGia,
-  COALESCE(SUM(hd.thu_khac), 0) AS ThuKhac,
-  COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu,
-  COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThu,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang ELSE 0 END), 0) AS TongTienHang,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.giam_gia ELSE 0 END), 0) AS GiamGia,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.thu_khac ELSE 0 END), 0) AS ThuKhac,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThu,
   COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo
 FROM hoa_don_ban_hang hd
 WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
@@ -124,9 +124,9 @@ WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
         string sql = @"
 SELECT
   " + bucket + @" AS ThoiGianStr,
-  COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu,
   COUNT(*) AS SoHoaDon,
-  COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThu,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThu,
   COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo
 FROM hoa_don_ban_hang hd
 WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
@@ -187,7 +187,7 @@ ORDER BY ThoiGianStr ASC;
 
     private async Task<List<BaoCaoBanHangBangRow>> TaiBangDuLieuAsync(MySqlConnection conn, DateTime tu, DateTime denKeTiep, CancellationToken token)
     {
-        string sql = @"SELECT DATE(hd.thoi_gian_ban) AS ThoiGian, COUNT(*) AS SoHoaDon, COALESCE(SUM(hd.tong_tien_hang), 0) AS TongTienHang, COALESCE(SUM(hd.giam_gia), 0) AS GiamGia, COALESCE(SUM(hd.thu_khac), 0) AS ThuKhac, COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu, COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThu, COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo FROM hoa_don_ban_hang hd WHERE hd.trang_thai_hoa_don = 'HOAN_THANH' AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep GROUP BY DATE(hd.thoi_gian_ban) ORDER BY ThoiGian ASC;";
+        string sql = @"SELECT DATE(hd.thoi_gian_ban) AS ThoiGian, COUNT(*) AS SoHoaDon, COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang ELSE 0 END), 0) AS TongTienHang, COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.giam_gia ELSE 0 END), 0) AS GiamGia, COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.thu_khac ELSE 0 END), 0) AS ThuKhac, COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu, COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThu, COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo FROM hoa_don_ban_hang hd WHERE hd.trang_thai_hoa_don = 'HOAN_THANH' AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep GROUP BY DATE(hd.thoi_gian_ban) ORDER BY ThoiGian ASC;";
         var rs = await conn.QueryAsync<BaoCaoBanHangBangRow>(new CommandDefinition(sql, new { TuNgay = tu, DenKeTiep = denKeTiep }, cancellationToken: token));
         var list = rs.AsList();
         foreach (var x in list) x.ThoiGianHienThi = x.ThoiGian.ToString("dd/MM/yyyy");
@@ -200,7 +200,7 @@ ORDER BY ThoiGianStr ASC;
 SELECT 
   ct.ten_san_pham AS SanPham,
   COALESCE(SUM(ct.so_luong), 0) AS SoLuongBan,
-  COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu
 FROM chi_tiet_hoa_don_ban_hang ct
 INNER JOIN hoa_don_ban_hang hd ON hd.id = ct.hoa_don_id
 WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
@@ -220,8 +220,8 @@ LIMIT 10;
 SELECT 
   COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS KhachHang,
   COUNT(*) AS SoHoaDon,
-  COALESCE(SUM(hd.khach_can_tra), 0) AS TongMua,
-  COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThanhToan,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS TongMua,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThanhToan,
   COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo
 FROM hoa_don_ban_hang hd
 LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
@@ -242,7 +242,7 @@ LIMIT 10;
 SELECT
   COALESCE(nh.ten_nhom, 'Chưa phân nhóm') AS NhomHang,
   COALESCE(SUM(ct.so_luong), 0) AS SoLuongBan,
-  COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu
 FROM chi_tiet_hoa_don_ban_hang ct
 INNER JOIN hoa_don_ban_hang hd ON hd.id = ct.hoa_don_id
 LEFT JOIN san_pham sp ON sp.id = ct.san_pham_id

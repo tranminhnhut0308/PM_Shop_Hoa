@@ -62,9 +62,9 @@ public sealed class DashboardController : ControllerBase
         // 1. Thống kê tổng hợp
         const string summarySql = """
             SELECT
-                COALESCE(SUM(khach_can_tra), 0) AS TongDoanhThu,
+                COALESCE(SUM(CASE WHEN doanh_so_da_ghi_nhan = 1 THEN khach_can_tra ELSE 0 END), 0) AS TongDoanhThu,
                 COUNT(*) AS SoHoaDon,
-                COALESCE(SUM(khach_da_thanh_toan), 0) AS DaThu,
+                COALESCE(SUM(CASE WHEN doanh_so_da_ghi_nhan = 1 THEN khach_da_thanh_toan ELSE 0 END), 0) AS DaThu,
                 COALESCE(SUM(CASE WHEN cong_no_da_ghi_nhan = 1 THEN con_no ELSE 0 END), 0) AS ConNo
             FROM hoa_don_ban_hang
             WHERE trang_thai_hoa_don = 'HOAN_THANH'
@@ -81,7 +81,7 @@ public sealed class DashboardController : ControllerBase
             const string hourlySql = """
                 SELECT
                     HOUR(thoi_gian_ban) AS Label,
-                    COALESCE(SUM(khach_can_tra), 0) AS DoanhThu,
+                    COALESCE(SUM(CASE WHEN doanh_so_da_ghi_nhan = 1 THEN khach_can_tra ELSE 0 END), 0) AS DoanhThu,
                     COUNT(*) AS SoDon
                 FROM hoa_don_ban_hang
                 WHERE trang_thai_hoa_don = 'HOAN_THANH'
@@ -114,7 +114,7 @@ public sealed class DashboardController : ControllerBase
             const string dailySql = """
                 SELECT
                     DATE_FORMAT(thoi_gian_ban, '%d/%m') AS Label,
-                    COALESCE(SUM(khach_can_tra), 0) AS DoanhThu,
+                    COALESCE(SUM(CASE WHEN doanh_so_da_ghi_nhan = 1 THEN khach_can_tra ELSE 0 END), 0) AS DoanhThu,
                     COUNT(*) AS SoDon
                 FROM hoa_don_ban_hang
                 WHERE trang_thai_hoa_don = 'HOAN_THANH'
@@ -132,7 +132,7 @@ public sealed class DashboardController : ControllerBase
             SELECT
                 ct.ten_san_pham AS TenSanPham,
                 COALESCE(SUM(ct.so_luong), 0) AS SoLuong,
-                COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu
+                COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu
             FROM chi_tiet_hoa_don_ban_hang ct
             INNER JOIN hoa_don_ban_hang hd ON hd.id = ct.hoa_don_id
             WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'

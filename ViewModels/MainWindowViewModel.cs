@@ -4245,6 +4245,11 @@ public partial class MainWindowViewModel : ObservableObject
             if (!updateSupplierDebt.HasValue)
                 return;
 
+            var includeInSupplierPurchaseTotal =
+                await HoiGhiNhanTongMuaNhaCungCapAsync(preview);
+            if (!includeInSupplierPurchaseTotal.HasValue)
+                return;
+
             ImportTitle = "Đang import phiếu nhập hàng";
             ImportFileName = preview.TenFile;
             ImportHasProgress = true;
@@ -4293,7 +4298,8 @@ public partial class MainWindowViewModel : ObservableObject
                     if (await _db.ImportPhieuNhapHangAsync(
                             receipt,
                             updateSupplierDebt.Value,
-                            stageProgress))
+                            stageProgress,
+                            includeInSupplierPurchaseTotal.Value))
                     {
                         imported++;
                         importedDetailRows += receipt.Items.Count;
@@ -4356,6 +4362,7 @@ public partial class MainWindowViewModel : ObservableObject
             var result =
                 $"{summary}\nFile: {preview.TenFile}\n" +
                 $"Công nợ nhà cung cấp: {(updateSupplierDebt.Value ? "đã cập nhật" : "không thay đổi")}.\n" +
+                $"Tổng mua nhà cung cấp: {(includeInSupplierPurchaseTotal.Value ? "đã ghi nhận" : "không thay đổi")}.\n" +
                 $"Thêm mới: {imported}; cập nhật: 0 (phiếu trùng mã được bỏ qua).\n" +
                 $"Bỏ qua do trùng mã: {duplicated} phiếu, {duplicatedDetailRows:N0} dòng chi tiết.\n" +
                 $"Lỗi: {failedReceiptCount} phiếu, {failedDetailRows:N0} dòng chi tiết.\n" +
@@ -4505,6 +4512,96 @@ public partial class MainWindowViewModel : ObservableObject
 
         buttons.Children.Add(updateButton);
         buttons.Children.Add(keepButton);
+        content.Children.Add(buttons);
+        dialog.Content = content;
+
+        return await dialog.ShowDialog<bool?>(OwnerWindow);
+    }
+
+    private async Task<bool?> HoiGhiNhanTongMuaNhaCungCapAsync(
+        PhieuNhapImportPreview preview)
+    {
+        if (OwnerWindow is null)
+            return null;
+
+        var dialog = new Window
+        {
+            Title = "Xác nhận ghi nhận Tổng mua nhà cung cấp",
+            Width = 620,
+            SizeToContent = SizeToContent.Height,
+            MinHeight = 330,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = Brushes.White
+        };
+
+        var content = new StackPanel
+        {
+            Margin = new Avalonia.Thickness(24),
+            Spacing = 14
+        };
+
+        content.Children.Add(new TextBlock
+        {
+            Text = "Ghi nhận giá trị vào Tổng mua nhà cung cấp?",
+            FontSize = 20,
+            FontWeight = FontWeight.Bold,
+            Foreground = Brush.Parse("#173F38"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        content.Children.Add(new TextBlock
+        {
+            Text = "Lựa chọn này độc lập với việc cập nhật công nợ. Nếu các phiếu trong file là lịch sử "
+                   + "và giá trị mua đã được tính trong Tổng mua trước đây, hãy chọn không ghi nhận để tránh cộng trùng. "
+                   + "Nếu đây là giá trị mua mới chưa từng được tính, hãy chọn ghi nhận.",
+            FontSize = 14,
+            Foreground = Brush.Parse("#263B35"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        content.Children.Add(new TextBlock
+        {
+            Text = $"File: {preview.TenFile}\nPhiếu đủ điều kiện: {preview.PhieuNhap.Count:N0}\n\n"
+                   + "Dù chọn cách nào, phiếu và chi tiết vẫn được lưu để tra cứu. "
+                   + "Các phiếu vẫn xuất hiện trong danh sách và báo cáo chi tiết; lựa chọn này chỉ điều khiển "
+                   + "việc cộng giá trị vào các chỉ số Tổng mua.",
+            FontSize = 12,
+            Foreground = Brush.Parse("#52645F"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        var buttons = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Spacing = 10,
+            Margin = new Avalonia.Thickness(0, 8, 0, 0)
+        };
+
+        var includeButton = new Button
+        {
+            Content = "Ghi nhận vào Tổng mua",
+            Padding = new Avalonia.Thickness(16, 10),
+            Background = Brush.Parse("#087F6E"),
+            Foreground = Brushes.White,
+            FontWeight = FontWeight.SemiBold
+        };
+        includeButton.Click += (_, _) => dialog.Close(true);
+
+        var excludeButton = new Button
+        {
+            Content = "Không ghi nhận Tổng mua",
+            Padding = new Avalonia.Thickness(16, 10),
+            Background = Brushes.White,
+            Foreground = Brush.Parse("#263B35"),
+            BorderBrush = Brush.Parse("#C9DCD6"),
+            BorderThickness = new Avalonia.Thickness(1)
+        };
+        excludeButton.Click += (_, _) => dialog.Close(false);
+
+        buttons.Children.Add(includeButton);
+        buttons.Children.Add(excludeButton);
         content.Children.Add(buttons);
         dialog.Content = content;
 

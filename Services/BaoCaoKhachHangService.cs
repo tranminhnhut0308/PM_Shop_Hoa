@@ -140,10 +140,10 @@ INNER JOIN khach_hang kh ON kh.id = hd.khach_hang_id";
     /// <summary>Các cột tổng hợp dùng chung cho bảng chi tiết và top biểu đồ.</summary>
     private const string TongHopCot = @"
   COUNT(*) AS SoDonHang,
-  COALESCE(SUM(hd.tong_tien_hang), 0) AS TongTienHang,
-  COALESCE(SUM(hd.giam_gia), 0) AS GiamGia,
-  COALESCE(SUM(hd.tong_tien_hang - hd.giam_gia), 0) AS GiaTriMuaHang,
-  COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThanhToan,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang ELSE 0 END), 0) AS TongTienHang,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.giam_gia ELSE 0 END), 0) AS GiamGia,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang - hd.giam_gia ELSE 0 END), 0) AS GiaTriMuaHang,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThanhToan,
   COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo";
 
     private const string NhomKhach = @"kh.id, kh.ma_khach_hang, kh.ten_khach_hang, kh.so_dien_thoai";
@@ -156,10 +156,10 @@ INNER JOIN khach_hang kh ON kh.id = hd.khach_hang_id";
 SELECT
   COUNT(DISTINCT kh.id) AS TongKhachHang,
   COUNT(*) AS SoDonHang,
-  COALESCE(SUM(hd.tong_tien_hang), 0) AS TongTienHang,
-  COALESCE(SUM(hd.giam_gia), 0) AS GiamGia,
-  COALESCE(SUM(hd.tong_tien_hang - hd.giam_gia), 0) AS GiaTriMuaHang,
-  COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThanhToan,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang ELSE 0 END), 0) AS TongTienHang,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.giam_gia ELSE 0 END), 0) AS GiamGia,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang - hd.giam_gia ELSE 0 END), 0) AS GiaTriMuaHang,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThanhToan,
   COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo
 " + DieuKien.From + @"
 WHERE " + dk.Where + @";

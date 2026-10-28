@@ -654,6 +654,8 @@ public sealed class HoaDonImportResult
 
     public bool CapNhatCongNoKhachHang { get; init; }
 
+    public bool CapNhatTongBan { get; init; }
+
     public int TongSoHoaDon { get; init; }
 
     /// <summary>Số hóa đơn tổng hợp đã được ghi thành công.</summary>
@@ -707,6 +709,9 @@ public sealed class HoaDonImportResult
                 CapNhatCongNoKhachHang
                     ? "Công nợ khách hàng: đã cập nhật theo nghiệp vụ hiện tại."
                     : "Công nợ khách hàng: không thay đổi.",
+                CapNhatTongBan
+                    ? "Tổng bán: đã ghi nhận trong các báo cáo doanh thu."
+                    : "Tổng bán: không thay đổi; hóa đơn vẫn được lưu để tra cứu.",
                 $"Bỏ qua: {SoBoQua:N0}",
                 $"Dữ liệu lỗi: {SoLoi:N0}"
             };

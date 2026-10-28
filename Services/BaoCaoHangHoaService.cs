@@ -174,8 +174,8 @@ SELECT
 FROM (
   SELECT
     COALESCE(SUM(ct.so_luong), 0) AS SoLuongBan,
-    COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu,
-    COALESCE(SUM(ct.gia_von * ct.so_luong), 0) AS GiaVon
+    COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu,
+    COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.gia_von * ct.so_luong ELSE 0 END), 0) AS GiaVon
   " + DieuKien.From + @"
   WHERE " + dk.Where + @"
   GROUP BY " + nhomGroup + @"
@@ -195,7 +195,7 @@ SELECT
   " + chonMa + @",
   " + chonTen + @",
   COALESCE(SUM(ct.so_luong), 0) AS SoLuongBan,
-  COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu
 " + DieuKien.From + @"
 WHERE " + dk.Where + @"
 GROUP BY " + nhomGroup + @"
@@ -215,7 +215,7 @@ SELECT
   COALESCE(NULLIF(TRIM(n.ten_nhom), ''), 'Chưa phân nhóm') AS TenNhom,
   " + demMa + @" AS SoMaHang,
   COALESCE(SUM(ct.so_luong), 0) AS SoLuongBan,
-  COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu
 " + DieuKien.From + @"
 LEFT JOIN nhom_san_pham n ON n.id = sp.nhom_san_pham_id
 WHERE " + dk.Where + @"
@@ -237,8 +237,8 @@ SELECT
   " + chonTen + @",
   COALESCE(NULLIF(TRIM(n.ten_nhom), ''), 'Chưa phân nhóm') AS NhomHang,
   COALESCE(SUM(ct.so_luong), 0) AS SoLuongBan,
-  COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu,
-  COALESCE(SUM(ct.gia_von * ct.so_luong), 0) AS GiaVon
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.gia_von * ct.so_luong ELSE 0 END), 0) AS GiaVon
 " + DieuKien.From + @"
 LEFT JOIN nhom_san_pham n ON n.id = sp.nhom_san_pham_id
 WHERE " + dk.Where + @"

@@ -27,7 +27,9 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
 
     public BaoCaoNhaCungCapViewModel(DatabaseService db)
     {
-        _service = new BaoCaoNhaCungCapService(db.TaoKetNoiAsync);
+        _service = new BaoCaoNhaCungCapService(
+            db.TaoKetNoiAsync,
+            db.EnsurePhieuNhapTrackingColumnsAsync);
 
         SapXepKho = BaoCaoNhaCungCapService.KhoaMacDinh;
         SapXepTang = false;

@@ -60,6 +60,83 @@
       <Setter Property="CornerRadius" Value="3" />
     </Style>
 
+    <Style Selector="Button.tqSegment">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#4B5D57" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.tqSegment:pointerover">
+      <Setter Property="Background" Value="#E9F1EE" />
+    </Style>
+
+    <Style Selector="Button.tqSegment.active">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+
+    <Style Selector="Button.tqSegment.active:pointerover">
+      <Setter Property="Background" Value="#06695A" />
+    </Style>
+
+    <Style Selector="Button.tqViewSegment">
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="MinWidth" Value="112" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#4B5D57" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.tqViewSegment:pointerover">
+      <Setter Property="Background" Value="#F1F8F6" />
+      <Setter Property="BorderBrush" Value="#A7C9BE" />
+    </Style>
+
+    <Style Selector="Button.tqViewSegment.active">
+      <Setter Property="Background" Value="#EAF9F5" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="Foreground" Value="#087F6E" />
+    </Style>
+
+    <Style Selector="Button.tqDateButton">
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="BorderBrush" Value="#D5E3DF" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="Foreground" Value="#263B35" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.tqDateButton:pointerover">
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="Background" Value="#F8FCFB" />
+    </Style>
+
     <Style Selector="RadioButton.tqChip">
       <Setter Property="Background" Value="#FFFFFF" />
       <Setter Property="BorderBrush" Value="#D8E5E0" />
@@ -199,110 +276,139 @@
 
       <!-- BỘ LỌC -->
       <Border Classes="tqCard" Padding="14">
-        <StackPanel Spacing="10">
-          <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-            <TextBlock Text="Khoảng thời gian:" Classes="tqSectionSub"
-              VerticalAlignment="Center" Margin="0,0,2,0" />
+        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto"
+          ColumnSpacing="18" RowSpacing="10">
+          <StackPanel Spacing="7">
+            <TextBlock Text="Khoảng thời gian" Classes="tqSectionSub" FontWeight="SemiBold" />
+            <Border Background="#EEF4F2" CornerRadius="9" Padding="3">
+              <WrapPanel Orientation="Horizontal" ItemSpacing="2" LineSpacing="2">
+                <Button Classes="tqSegment" Classes.active="{Binding IsKhoangHomNay}"
+                  Content="Hôm nay" Command="{Binding ChonKhoangThoiGianCommand}"
+                  CommandParameter="HOM_NAY" />
+                <Button Classes="tqSegment" Classes.active="{Binding IsKhoangBayNgay}"
+                  Content="7 ngày" Command="{Binding ChonKhoangThoiGianCommand}"
+                  CommandParameter="7_NGAY" />
+                <Button Classes="tqSegment" Classes.active="{Binding IsKhoangThangNay}"
+                  Content="Tháng này" Command="{Binding ChonKhoangThoiGianCommand}"
+                  CommandParameter="THANG_NAY" />
+                <Button Classes="tqSegment" Classes.active="{Binding IsKhoangThangTruoc}"
+                  Content="Tháng trước" Command="{Binding ChonKhoangThoiGianCommand}"
+                  CommandParameter="THANG_TRUOC" />
+                <Button Classes="tqSegment" Classes.active="{Binding IsKhoangNamNay}"
+                  Content="Năm nay" Command="{Binding ChonKhoangThoiGianCommand}"
+                  CommandParameter="NAM_NAY" />
+                <Button Classes="tqSegment" Classes.active="{Binding IsKhoangTuDien}"
+                  Content="Tùy chọn" Command="{Binding ChonKhoangThoiGianCommand}"
+                  CommandParameter="TU_DIEN" />
+              </WrapPanel>
+            </Border>
+          </StackPanel>
 
-            <RadioButton GroupName="tqKhoang" Classes="tqChip"
-              Content="Hôm nay"
-              IsChecked="{Binding KhoangThoiGian, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=HOM_NAY}"
-              Command="{Binding ChonKhoangThoiGianCommand}"
-              CommandParameter="HOM_NAY" />
-            <RadioButton GroupName="tqKhoang" Classes="tqChip"
-              Content="7 ngày"
-              IsChecked="{Binding KhoangThoiGian, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=7_NGAY}"
-              Command="{Binding ChonKhoangThoiGianCommand}"
-              CommandParameter="7_NGAY" />
-            <RadioButton GroupName="tqKhoang" Classes="tqChip"
-              Content="Tháng này"
-              IsChecked="{Binding KhoangThoiGian, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=THANG_NAY}"
-              Command="{Binding ChonKhoangThoiGianCommand}"
-              CommandParameter="THANG_NAY" />
-            <RadioButton GroupName="tqKhoang" Classes="tqChip"
-              Content="Tháng trước"
-              IsChecked="{Binding KhoangThoiGian, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=THANG_TRUOC}"
-              Command="{Binding ChonKhoangThoiGianCommand}"
-              CommandParameter="THANG_TRUOC" />
-            <RadioButton GroupName="tqKhoang" Classes="tqChip"
-              Content="Năm nay"
-              IsChecked="{Binding KhoangThoiGian, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=NAM_NAY}"
-              Command="{Binding ChonKhoangThoiGianCommand}"
-              CommandParameter="NAM_NAY" />
-            <RadioButton GroupName="tqKhoang" Classes="tqChip"
-              Content="Tùy chọn"
-              IsChecked="{Binding KhoangThoiGian, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=TU_DIEN}"
-              Command="{Binding ChonKhoangThoiGianCommand}"
-              CommandParameter="TU_DIEN" />
-          </WrapPanel>
+          <StackPanel Grid.Column="1" Spacing="7">
+            <TextBlock Text="Góc nhìn" Classes="tqSectionSub" FontWeight="SemiBold" />
+            <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6"
+              HorizontalAlignment="Right">
+              <Button Classes="tqViewSegment" Classes.active="{Binding IsChieuTheoNgay}"
+                Command="{Binding ChonChieuDoanhThuCommand}" CommandParameter="NGAY">
+                <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
+                  <TextBlock Text="▦" FontSize="14" Foreground="#087F6E" />
+                  <TextBlock Text="Theo ngày" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Classes="tqViewSegment" Classes.active="{Binding IsChieuTheoGio}"
+                Command="{Binding ChonChieuDoanhThuCommand}" CommandParameter="GIO">
+                <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
+                  <TextBlock Text="◷" FontSize="14" Foreground="#087F6E" />
+                  <TextBlock Text="Theo giờ" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Classes="tqViewSegment" Classes.active="{Binding IsChieuTheoThu}"
+                Command="{Binding ChonChieuDoanhThuCommand}" CommandParameter="THU">
+                <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
+                  <TextBlock Text="▤" FontSize="14" Foreground="#087F6E" />
+                  <TextBlock Text="Theo thứ" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </WrapPanel>
+          </StackPanel>
 
           <!-- TÙY CHỌN KHOẢNG NGÀY -->
-          <Border Background="#F7FAF9"
+          <Border Grid.Row="1" Grid.ColumnSpan="2"
+            Background="#F7FAF9"
             BorderBrush="#D8E5E0"
             BorderThickness="1"
             CornerRadius="8"
             Padding="12,8"
             IsVisible="{Binding CoTheDungNgayTuChon}">
             <WrapPanel Orientation="Horizontal" ItemSpacing="10" LineSpacing="8">
-              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <TextBlock Text="Từ ngày:" Classes="tqMetricLabel" VerticalAlignment="Center" />
-                <DatePicker SelectedDate="{Binding TuNgayTuChon, Mode=TwoWay}"
-                  Height="34"
-                  VerticalAlignment="Center" />
+              <StackPanel Spacing="4" Width="190">
+                <TextBlock Text="Từ ngày" Classes="tqMetricLabel" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                  <Button Name="DashboardFromDateButton" Classes="tqDateButton"
+                    Command="{Binding ToggleLichTuNgayCommand}">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="{Binding TuNgayTuChonText}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="📅" Foreground="#087F6E" />
+                    </Grid>
+                  </Button>
+                  <Popup PlacementTarget="DashboardFromDateButton"
+                    Placement="Bottom" IsLightDismissEnabled="True"
+                    IsOpen="{Binding IsLichTuNgayMo, Mode=TwoWay}">
+                    <Border Background="White" BorderBrush="#D8E5E0" BorderThickness="1"
+                      CornerRadius="8" Padding="4">
+                      <Calendar SelectedDate="{Binding TuNgayTuChon, Mode=TwoWay}"
+                        Background="Transparent" BorderThickness="0" />
+                    </Border>
+                  </Popup>
+                </Grid>
               </StackPanel>
 
-              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <TextBlock Text="Đến ngày:" Classes="tqMetricLabel" VerticalAlignment="Center" />
-                <DatePicker SelectedDate="{Binding DenNgayTuChon, Mode=TwoWay}"
-                  Height="34"
-                  VerticalAlignment="Center" />
+              <StackPanel Spacing="4" Width="190">
+                <TextBlock Text="Đến ngày" Classes="tqMetricLabel" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                  <Button Name="DashboardToDateButton" Classes="tqDateButton"
+                    Command="{Binding ToggleLichDenNgayCommand}">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="{Binding DenNgayTuChonText}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="📅" Foreground="#087F6E" />
+                    </Grid>
+                  </Button>
+                  <Popup PlacementTarget="DashboardToDateButton"
+                    Placement="Bottom" IsLightDismissEnabled="True"
+                    IsOpen="{Binding IsLichDenNgayMo, Mode=TwoWay}">
+                    <Border Background="White" BorderBrush="#D8E5E0" BorderThickness="1"
+                      CornerRadius="8" Padding="4">
+                      <Calendar SelectedDate="{Binding DenNgayTuChon, Mode=TwoWay}"
+                        Background="Transparent" BorderThickness="0" />
+                    </Border>
+                  </Popup>
+                </Grid>
               </StackPanel>
 
               <Button Classes="toolbar-primary" Content="Áp dụng"
                 Command="{Binding ApDungKhoangTuDienCommand}"
-                Height="34"
-                VerticalAlignment="Center" />
+                Height="34" VerticalAlignment="Bottom" />
             </WrapPanel>
           </Border>
 
-          <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
-            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-              <TextBlock Text="Góc nhìn:" Classes="tqSectionSub"
-                VerticalAlignment="Center" Margin="0,0,2,0" />
-              <RadioButton GroupName="tqChieu" Classes="tqChip"
-                Content="Theo ngày"
-                IsChecked="{Binding ChieuDoanhThu, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=NGAY}"
-                Command="{Binding ChonChieuDoanhThuCommand}"
-                CommandParameter="NGAY" />
-              <RadioButton GroupName="tqChieu" Classes="tqChip"
-                Content="Theo giờ"
-                IsChecked="{Binding ChieuDoanhThu, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=GIO}"
-                Command="{Binding ChonChieuDoanhThuCommand}"
-                CommandParameter="GIO" />
-              <RadioButton GroupName="tqChieu" Classes="tqChip"
-                Content="Theo thứ"
-                IsChecked="{Binding ChieuDoanhThu, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=THU}"
-                Command="{Binding ChonChieuDoanhThuCommand}"
-                CommandParameter="THU" />
-            </WrapPanel>
+          <WrapPanel Grid.Row="2" Grid.ColumnSpan="2"
+            Orientation="Horizontal" ItemSpacing="8" LineSpacing="8"
+            HorizontalAlignment="Right">
+            <TextBlock Text="Top hàng:" Classes="tqSectionSub"
+              VerticalAlignment="Center" Margin="0,0,2,0" />
+            <RadioButton GroupName="tqXep" Classes="tqChip"
+              Content="Theo doanh thu"
+              IsChecked="{Binding XepHangTopHang, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=DOANH_THU}"
+              Command="{Binding ChonXepHangTopCommand}"
+              CommandParameter="DOANH_THU" />
+            <RadioButton GroupName="tqXep" Classes="tqChip"
+              Content="Theo số lượng"
+              IsChecked="{Binding XepHangTopHang, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=SO_LUONG}"
+              Command="{Binding ChonXepHangTopCommand}"
+              CommandParameter="SO_LUONG" />
+          </WrapPanel>
 
-            <WrapPanel Grid.Column="1" Orientation="Horizontal" ItemSpacing="8"
-              LineSpacing="8" HorizontalAlignment="Right">
-              <TextBlock Text="Top hàng:" Classes="tqSectionSub"
-                VerticalAlignment="Center" Margin="0,0,2,0" />
-              <RadioButton GroupName="tqXep" Classes="tqChip"
-                Content="Theo doanh thu"
-                IsChecked="{Binding XepHangTopHang, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=DOANH_THU}"
-                Command="{Binding ChonXepHangTopCommand}"
-                CommandParameter="DOANH_THU" />
-              <RadioButton GroupName="tqXep" Classes="tqChip"
-                Content="Theo số lượng"
-                IsChecked="{Binding XepHangTopHang, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=SO_LUONG}"
-                Command="{Binding ChonXepHangTopCommand}"
-                CommandParameter="SO_LUONG" />
-            </WrapPanel>
-          </Grid>
-        </StackPanel>
+        </Grid>
       </Border>
 
       <!-- 5 THẺ KẾT QUẢ BÁN HÀNG THEO KỲ ĐANG CHỌN -->

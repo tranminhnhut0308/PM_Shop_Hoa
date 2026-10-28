@@ -26,10 +26,10 @@ public sealed class DatabaseService
 {
     private readonly DatabaseConfigService _configService;
     private bool? _hasPhieuNhapExtraColumns;
-    private bool? _hasPhieuNhapDebtTrackingColumn;
-    private readonly SemaphoreSlim _ensurePhieuNhapDebtTrackingColumn = new(1, 1);
-    private bool? _hasHoaDonDebtTrackingColumn;
-    private readonly SemaphoreSlim _ensureHoaDonDebtTrackingColumn = new(1, 1);
+    private bool? _hasPhieuNhapTrackingColumns;
+    private readonly SemaphoreSlim _ensurePhieuNhapTrackingColumns = new(1, 1);
+    private bool? _hasHoaDonTrackingColumns;
+    private readonly SemaphoreSlim _ensureHoaDonTrackingColumns = new(1, 1);
     private bool? _hasPhieuNhapPhuongThucColumn;
     private bool? _hasPhieuQuyExtraColumns;
     private bool? _hasPhieuQuyHoaDonColumns;
@@ -56,7 +56,7 @@ public sealed class DatabaseService
     public async Task<MySqlConnection> TaoKetNoiAsync()
     {
         await EnsurePhieuQuyLoaiPhieuColumnAsync();
-        await EnsureHoaDonDebtTrackingColumnAsync();
+        await EnsureHoaDonTrackingColumnsAsync();
 
         var connection = new MySqlConnection(GetConnectionString());
 
@@ -82,7 +82,7 @@ public sealed class DatabaseService
     public async Task<MySqlConnection> OpenAsync()
     {
         await EnsurePhieuQuyLoaiPhieuColumnAsync();
-        await EnsureHoaDonDebtTrackingColumnAsync();
+        await EnsureHoaDonTrackingColumnsAsync();
 
         var connection = new MySqlConnection(GetConnectionString());
 
@@ -2679,6 +2679,7 @@ public sealed class DatabaseService
                     FROM hoa_don_ban_hang hb
                     WHERE hb.khach_hang_id = {idExpression}
                       AND hb.trang_thai_hoa_don = 'HOAN_THANH'
+                      AND hb.doanh_so_da_ghi_nhan = 1
                 ),
                 0
             )
@@ -2879,6 +2880,7 @@ public sealed class DatabaseService
                     FROM phieu_nhap_hang p
                     WHERE p.nha_cung_cap_id = {idExpression}
                       AND p.trang_thai NOT IN ('LUU_TAM', 'HUY')
+                      AND p.tong_mua_da_ghi_nhan = 1
                 ),
                 0
             )
@@ -2915,7 +2917,7 @@ public sealed class DatabaseService
         uint nhomKhachHangId = 0,
         string? congNoFilter = null)
     {
-        await EnsureHoaDonDebtTrackingColumnAsync();
+        await EnsureHoaDonTrackingColumnsAsync();
         var safePage = page < 1 ? 1 : page;
         var safePageSize = pageSize < 1 ? 20 : pageSize;
         var offset = (safePage - 1) * safePageSize;
@@ -3102,7 +3104,7 @@ public sealed class DatabaseService
     public async Task<(int TongSoKhachHang, int SoKhachMoi, decimal TongNoHienTai, decimal TongBan)>
         GetThongKeDanhSachKhachHangAsync(int soNgay = SoNgayKhachMoiMacDinh)
     {
-        await EnsureHoaDonDebtTrackingColumnAsync();
+        await EnsureHoaDonTrackingColumnsAsync();
         var coBangTraHang = await HasBangTraHangAsync();
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
         var tien = TaoBieuThucTienKhachHang(coBangTraHang, "kh.id", coCotKiotViet);
@@ -3212,7 +3214,7 @@ public sealed class DatabaseService
     /// </summary>
     public async Task<ThongKeMuaHangKhachHang> GetThongKeMuaHangCuaKhachHangAsync(uint customerId)
     {
-        await EnsureHoaDonDebtTrackingColumnAsync();
+        await EnsureHoaDonTrackingColumnsAsync();
         var coBangTraHang = await HasBangTraHangAsync();
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
         var tien = TaoBieuThucTienKhachHang(coBangTraHang, "kh.id", coCotKiotViet);
@@ -3230,12 +3232,14 @@ public sealed class DatabaseService
                 FROM hoa_don_ban_hang
                 WHERE khach_hang_id = @Id
                   AND trang_thai_hoa_don = 'HOAN_THANH'
+                  AND doanh_so_da_ghi_nhan = 1
             ) AS TongTienDaMuaHoaDon,
             (
                 SELECT COALESCE(SUM(khach_da_thanh_toan), 0)
                 FROM hoa_don_ban_hang
                 WHERE khach_hang_id = @Id
                   AND trang_thai_hoa_don = 'HOAN_THANH'
+                  AND doanh_so_da_ghi_nhan = 1
             ) AS TongDaThanhToan,
             (
                 SELECT COALESCE(SUM(con_no), 0)
@@ -6416,6 +6420,7 @@ ORDER BY hd.thoi_gian_ban DESC
     public async Task<IReadOnlyList<NhaCungCap>> GetNhaCungCapAsync(
         string? search = null)
     {
+        await EnsurePhieuNhapTrackingColumnsAsync();
         await using var connection = await OpenAsync();
 
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
@@ -6601,7 +6606,7 @@ ORDER BY hd.thoi_gian_ban DESC
         int pageSize)
     {
         loc ??= new BoLocNhaCungCap();
-        await EnsurePhieuNhapDebtTrackingColumnAsync();
+        await EnsurePhieuNhapTrackingColumnsAsync();
 
         var safePage = page < 1 ? 1 : page;
         var safePageSize = pageSize < 1 ? 20 : pageSize;
@@ -6655,7 +6660,7 @@ ORDER BY hd.thoi_gian_ban DESC
         BoLocNhaCungCap loc)
     {
         loc ??= new BoLocNhaCungCap();
-        await EnsurePhieuNhapDebtTrackingColumnAsync();
+        await EnsurePhieuNhapTrackingColumnsAsync();
 
         await using var connection = await OpenAsync();
 
@@ -6685,7 +6690,7 @@ ORDER BY hd.thoi_gian_ban DESC
         BoLocNhaCungCap loc)
     {
         loc ??= new BoLocNhaCungCap();
-        await EnsurePhieuNhapDebtTrackingColumnAsync();
+        await EnsurePhieuNhapTrackingColumnsAsync();
 
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
         var tien = TaoBieuThucTienNhaCungCap("ncc.id", coCotKiotViet);
@@ -6730,6 +6735,7 @@ ORDER BY hd.thoi_gian_ban DESC
     /// <summary>Lấy đầy đủ thông tin một nhà cung cấp để mở vùng chi tiết / form sửa.</summary>
     public async Task<NhaCungCap?> GetNhaCungCapByIdAsync(uint supplierId)
     {
+        await EnsurePhieuNhapTrackingColumnsAsync();
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
 
         var sql = $"""
@@ -6844,6 +6850,7 @@ ORDER BY hd.thoi_gian_ban DESC
         SELECT
             COUNT(*) AS SoPhieuNhap,
             COALESCE(SUM(p.tong_tien_nhap), 0) AS TongTienNhap,
+            COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) AS TongMuaDaGhiNhan,
             COALESCE(SUM(p.da_thanh_toan), 0) AS TongDaThanhToan,
             COALESCE(SUM(p.con_no), 0) AS TongConNoPhieuNhap,
             COALESCE(
@@ -6864,7 +6871,7 @@ ORDER BY hd.thoi_gian_ban DESC
         WHERE ls.nha_cung_cap_id = @Id;
         """;
 
-        await EnsurePhieuNhapDebtTrackingColumnAsync();
+        await EnsurePhieuNhapTrackingColumnsAsync();
         await using var connection = await OpenAsync();
 
         var thamSo = new { Id = supplierId };
@@ -6883,6 +6890,7 @@ ORDER BY hd.thoi_gian_ban DESC
         {
             SoPhieuNhap = phieu.SoPhieuNhap,
             TongTienNhap = phieu.TongTienNhap,
+            TongMuaDaGhiNhan = phieu.TongMuaDaGhiNhan,
             TongDaThanhToan = phieu.TongDaThanhToan,
             TongConNoPhieuNhap = phieu.TongConNoPhieuNhap,
             TongConNoPhieuNhapDaGhiCongNo = phieu.TongConNoPhieuNhapDaGhiCongNo,
@@ -7919,7 +7927,8 @@ ORDER BY hd.thoi_gian_ban DESC
     public async Task<bool> ImportPhieuNhapHangAsync(
         PhieuNhapImportReceipt receipt,
         bool updateSupplierDebt = true,
-        IProgress<string>? progress = null)
+        IProgress<string>? progress = null,
+        bool includeInSupplierPurchaseTotal = true)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.PurchasesImport, "Bạn không có quyền import phiếu nhập hàng.");
         ArgumentNullException.ThrowIfNull(receipt);
@@ -7953,7 +7962,7 @@ ORDER BY hd.thoi_gian_ban DESC
             || receipt.DaTraNcc > receipt.CanTraNcc)
             throw new InvalidOperationException($"Dữ liệu tiền của phiếu {code} không nhất quán.");
 
-        await EnsurePhieuNhapDebtTrackingColumnAsync();
+        await EnsurePhieuNhapTrackingColumnsAsync();
 
         var currentBranchId = Session.CurrentUser?.ChiNhanhId ?? 1;
         var branchId = currentBranchId;
@@ -8080,14 +8089,16 @@ ORDER BY hd.thoi_gian_ban DESC
             (
                 ma_phieu_nhap, chi_nhanh_id, nha_cung_cap_id, nguoi_nhap_id,
                 thoi_gian_nhap, tong_tien_hang, giam_gia, chi_phi_khac, tong_tien_nhap,
-                da_thanh_toan, con_no, trang_thai, ghi_chu, cong_no_da_ghi_nhan{extraColumns},
+                da_thanh_toan, con_no, trang_thai, ghi_chu,
+                cong_no_da_ghi_nhan, tong_mua_da_ghi_nhan{extraColumns},
                 ngay_tao, ngay_cap_nhat
             )
             VALUES
             (
                 @MaPhieuNhap, @ChiNhanhId, @NhaCungCapId, @NguoiNhapId,
                 @ThoiGianNhap, @TongTienHang, @GiamGia, @ChiPhiKhac, @TongTienNhap,
-                @DaThanhToan, @ConNo, @TrangThai, @GhiChu, @CongNoDaGhiNhan{extraValues},
+                @DaThanhToan, @ConNo, @TrangThai, @GhiChu,
+                @CongNoDaGhiNhan, @TongMuaDaGhiNhan{extraValues},
                 NOW(), NOW()
             );
             SELECT LAST_INSERT_ID();
@@ -8111,6 +8122,7 @@ ORDER BY hd.thoi_gian_ban DESC
                     phieu.TrangThai,
                     phieu.GhiChu,
                     CongNoDaGhiNhan = updateSupplierDebt,
+                    TongMuaDaGhiNhan = includeInSupplierPurchaseTotal,
                     SoHoaDonDauVao = string.IsNullOrWhiteSpace(phieu.SoHoaDonDauVao)
                         ? null
                         : phieu.SoHoaDonDauVao.Trim()
@@ -8944,34 +8956,42 @@ ORDER BY hd.thoi_gian_ban DESC
         return _hasPhieuNhapExtraColumns.Value;
     }
 
-    private async Task EnsurePhieuNhapDebtTrackingColumnAsync()
+    public async Task EnsurePhieuNhapTrackingColumnsAsync()
     {
-        if (_hasPhieuNhapDebtTrackingColumn == true)
+        if (_hasPhieuNhapTrackingColumns == true)
             return;
 
-        await _ensurePhieuNhapDebtTrackingColumn.WaitAsync();
+        await _ensurePhieuNhapTrackingColumns.WaitAsync();
         try
         {
-            if (_hasPhieuNhapDebtTrackingColumn == true)
+            if (_hasPhieuNhapTrackingColumns == true)
                 return;
 
             await using var connection = await OpenAsync();
-            var count = await connection.ExecuteScalarAsync<long>(
+            var columns = (await connection.QueryAsync<string>(
                 """
-                SELECT COUNT(*)
+                SELECT COLUMN_NAME
                 FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE()
                   AND TABLE_NAME = 'phieu_nhap_hang'
-                  AND COLUMN_NAME = 'cong_no_da_ghi_nhan';
-                """);
+                  AND COLUMN_NAME IN ('cong_no_da_ghi_nhan', 'tong_mua_da_ghi_nhan');
+                """)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            if (count == 0)
+            var requiredColumns = new[]
             {
+                ("cong_no_da_ghi_nhan", "AFTER con_no"),
+                ("tong_mua_da_ghi_nhan", "AFTER cong_no_da_ghi_nhan")
+            };
+            foreach (var (column, position) in requiredColumns)
+            {
+                if (columns.Contains(column))
+                    continue;
+
                 try
                 {
                     await connection.ExecuteAsync(
-                        "ALTER TABLE phieu_nhap_hang "
-                        + "ADD COLUMN cong_no_da_ghi_nhan TINYINT(1) NOT NULL DEFAULT 1 AFTER con_no;");
+                        $"ALTER TABLE phieu_nhap_hang "
+                        + $"ADD COLUMN {column} TINYINT(1) NOT NULL DEFAULT 1 {position};");
                 }
                 catch (Exception ex)
                 {
@@ -8981,52 +9001,61 @@ ORDER BY hd.thoi_gian_ban DESC
                         FROM information_schema.COLUMNS
                         WHERE TABLE_SCHEMA = DATABASE()
                           AND TABLE_NAME = 'phieu_nhap_hang'
-                          AND COLUMN_NAME = 'cong_no_da_ghi_nhan';
-                        """);
+                          AND COLUMN_NAME = @Column;
+                        """,
+                        new { Column = column });
                     if (columnExists == 0)
                         throw new InvalidOperationException(
-                            "Không thể chuẩn bị cột theo dõi việc ghi công nợ nhà cung cấp.",
+                            $"Không thể chuẩn bị cột theo dõi {column} của phiếu nhập hàng.",
                             ex);
                 }
             }
 
-            _hasPhieuNhapDebtTrackingColumn = true;
+            _hasPhieuNhapTrackingColumns = true;
         }
         finally
         {
-            _ensurePhieuNhapDebtTrackingColumn.Release();
+            _ensurePhieuNhapTrackingColumns.Release();
         }
     }
 
-    private async Task EnsureHoaDonDebtTrackingColumnAsync()
+    public async Task EnsureHoaDonTrackingColumnsAsync()
     {
-        if (_hasHoaDonDebtTrackingColumn == true)
+        if (_hasHoaDonTrackingColumns == true)
             return;
 
-        await _ensureHoaDonDebtTrackingColumn.WaitAsync();
+        await _ensureHoaDonTrackingColumns.WaitAsync();
         try
         {
-            if (_hasHoaDonDebtTrackingColumn == true)
+            if (_hasHoaDonTrackingColumns == true)
                 return;
 
             await using var connection = new MySqlConnection(GetConnectionString());
             await connection.OpenAsync();
-            var count = await connection.ExecuteScalarAsync<long>(
+            var columns = (await connection.QueryAsync<string>(
                 """
-                SELECT COUNT(*)
+                SELECT COLUMN_NAME
                 FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE()
                   AND TABLE_NAME = 'hoa_don_ban_hang'
-                  AND COLUMN_NAME = 'cong_no_da_ghi_nhan';
-                """);
+                  AND COLUMN_NAME IN ('cong_no_da_ghi_nhan', 'doanh_so_da_ghi_nhan');
+                """)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            if (count == 0)
+            var requiredColumns = new[]
             {
+                ("cong_no_da_ghi_nhan", "AFTER con_no"),
+                ("doanh_so_da_ghi_nhan", "AFTER cong_no_da_ghi_nhan")
+            };
+            foreach (var (column, position) in requiredColumns)
+            {
+                if (columns.Contains(column))
+                    continue;
+
                 try
                 {
                     await connection.ExecuteAsync(
                         "ALTER TABLE hoa_don_ban_hang "
-                        + "ADD COLUMN cong_no_da_ghi_nhan TINYINT(1) NOT NULL DEFAULT 1 AFTER con_no;");
+                        + $"ADD COLUMN {column} TINYINT(1) NOT NULL DEFAULT 1 {position};");
                 }
                 catch (Exception ex)
                 {
@@ -9036,20 +9065,21 @@ ORDER BY hd.thoi_gian_ban DESC
                         FROM information_schema.COLUMNS
                         WHERE TABLE_SCHEMA = DATABASE()
                           AND TABLE_NAME = 'hoa_don_ban_hang'
-                          AND COLUMN_NAME = 'cong_no_da_ghi_nhan';
-                        """);
+                          AND COLUMN_NAME = @Column;
+                        """,
+                        new { Column = column });
                     if (columnExists == 0)
                         throw new InvalidOperationException(
-                            "Không thể chuẩn bị cột theo dõi việc ghi công nợ khách hàng.",
+                            $"Không thể chuẩn bị cột theo dõi {column} của hóa đơn.",
                             ex);
                 }
             }
 
-            _hasHoaDonDebtTrackingColumn = true;
+            _hasHoaDonTrackingColumns = true;
         }
         finally
         {
-            _ensureHoaDonDebtTrackingColumn.Release();
+            _ensureHoaDonTrackingColumns.Release();
         }
     }
 
@@ -10667,6 +10697,7 @@ ORDER BY hd.thoi_gian_ban DESC
     {
         public int SoPhieuNhap { get; set; }
         public decimal TongTienNhap { get; set; }
+        public decimal TongMuaDaGhiNhan { get; set; }
         public decimal TongDaThanhToan { get; set; }
         public decimal TongConNoPhieuNhap { get; set; }
         public decimal TongConNoPhieuNhapDaGhiCongNo { get; set; }

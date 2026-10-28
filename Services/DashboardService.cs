@@ -157,9 +157,9 @@ public sealed class DashboardService
 
         const string sql = """
         SELECT
-            COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu,
             COUNT(*) AS SoHoaDon,
-            COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThu,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThu,
             COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS ConNo
         FROM hoa_don_ban_hang hd
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
@@ -204,7 +204,7 @@ public sealed class DashboardService
         var sql = $"""
         SELECT
             {bucket} AS Bucket,
-            COALESCE(SUM(hd.khach_can_tra), 0) AS {TenCotTongTien()},
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS {TenCotTongTien()},
             COUNT(*) AS SoHoaDon,
             MAX(hd.thoi_gian_ban) AS ThoiGianLonNhat
         FROM hoa_don_ban_hang hd
@@ -624,7 +624,9 @@ public sealed class DashboardService
 
         // Lưu ý: cotSapXep đã là biểu thức SUM(...) hoàn chỉnh nên không bọc SUM
         // thêm lần nữa, nếu không MariaDB báo "Invalid use of group function".
-        var cotSapXep = theoDoanhThu ? "SUM(ct.thanh_tien)" : "SUM(ct.so_luong)";
+        var cotSapXep = theoDoanhThu
+            ? "SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END)"
+            : "SUM(ct.so_luong)";
 
         var sql = $"""
         SELECT
@@ -632,7 +634,7 @@ public sealed class DashboardService
             COALESCE(NULLIF(TRIM(ct.ten_san_pham), ''), 'Sản phẩm đã xoá') AS Ten,
             COALESCE(NULLIF(TRIM(ct.ma_san_pham), ''), '-') AS TenPhu,
             COALESCE(SUM(ct.so_luong), 0) AS SoLuong,
-            COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu,
             COALESCE({cotSapXep}, 0) AS GiaTriXepHang
         FROM chi_tiet_hoa_don_ban_hang ct
         INNER JOIN hoa_don_ban_hang hd
@@ -697,7 +699,7 @@ public sealed class DashboardService
             COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS Ten,
             COALESCE(kh.ma_khach_hang, 'Khách lẻ') AS TenPhu,
             COUNT(*) AS SoHoaDon,
-            COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'

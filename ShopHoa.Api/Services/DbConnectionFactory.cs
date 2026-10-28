@@ -12,8 +12,8 @@ public sealed class DbConnectionFactory : IDbConnectionFactory
 {
     private static bool? _hasPhieuQuyLoaiPhieuColumn;
     private static readonly SemaphoreSlim KhoaEnsureLoaiPhieu = new(1, 1);
-    private static bool? _hasHoaDonDebtTrackingColumn;
-    private static readonly SemaphoreSlim KhoaEnsureHoaDonDebtTracking = new(1, 1);
+    private static bool? _hasHoaDonTrackingColumns;
+    private static readonly SemaphoreSlim KhoaEnsureHoaDonTrackingColumns = new(1, 1);
 
     private readonly string _connectionString;
 
@@ -26,7 +26,7 @@ public sealed class DbConnectionFactory : IDbConnectionFactory
     public async Task<MySqlConnection> CreateConnectionAsync()
     {
         await EnsurePhieuQuyLoaiPhieuColumnAsync();
-        await EnsureHoaDonDebtTrackingColumnAsync();
+        await EnsureHoaDonTrackingColumnsAsync();
 
         var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
@@ -84,37 +84,45 @@ public sealed class DbConnectionFactory : IDbConnectionFactory
         }
     }
 
-    private async Task EnsureHoaDonDebtTrackingColumnAsync()
+    private async Task EnsureHoaDonTrackingColumnsAsync()
     {
-        if (_hasHoaDonDebtTrackingColumn == true)
+        if (_hasHoaDonTrackingColumns == true)
             return;
 
-        await KhoaEnsureHoaDonDebtTracking.WaitAsync();
+        await KhoaEnsureHoaDonTrackingColumns.WaitAsync();
         try
         {
-            if (_hasHoaDonDebtTrackingColumn == true)
+            if (_hasHoaDonTrackingColumns == true)
                 return;
 
             await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
-            var count = await connection.ExecuteScalarAsync<long>(
+            var columns = (await connection.QueryAsync<string>(
                 """
-                SELECT COUNT(*)
+                SELECT COLUMN_NAME
                 FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE()
                   AND TABLE_NAME = 'hoa_don_ban_hang'
-                  AND COLUMN_NAME = 'cong_no_da_ghi_nhan';
-                """);
+                  AND COLUMN_NAME IN ('cong_no_da_ghi_nhan', 'doanh_so_da_ghi_nhan');
+                """)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            if (count == 0)
+            var requiredColumns = new[]
             {
+                ("cong_no_da_ghi_nhan", "AFTER con_no"),
+                ("doanh_so_da_ghi_nhan", "AFTER cong_no_da_ghi_nhan")
+            };
+            foreach (var (column, position) in requiredColumns)
+            {
+                if (columns.Contains(column))
+                    continue;
+
                 try
                 {
                     await connection.ExecuteAsync(
                         "ALTER TABLE hoa_don_ban_hang "
-                        + "ADD COLUMN cong_no_da_ghi_nhan TINYINT(1) NOT NULL DEFAULT 1 AFTER con_no;");
+                        + $"ADD COLUMN {column} TINYINT(1) NOT NULL DEFAULT 1 {position};");
                 }
-                catch (MySqlException ex) when (ex.Number == 1060)
+                catch (MySqlException ex)
                 {
                     var columnExists = await connection.ExecuteScalarAsync<long>(
                         """
@@ -122,18 +130,21 @@ public sealed class DbConnectionFactory : IDbConnectionFactory
                         FROM information_schema.COLUMNS
                         WHERE TABLE_SCHEMA = DATABASE()
                           AND TABLE_NAME = 'hoa_don_ban_hang'
-                          AND COLUMN_NAME = 'cong_no_da_ghi_nhan';
-                        """);
+                          AND COLUMN_NAME = @Column;
+                        """,
+                        new { Column = column });
                     if (columnExists == 0)
-                        throw;
+                        throw new InvalidOperationException(
+                            $"Không thể chuẩn bị cột theo dõi {column} của hóa đơn.",
+                            ex);
                 }
             }
 
-            _hasHoaDonDebtTrackingColumn = true;
+            _hasHoaDonTrackingColumns = true;
         }
         finally
         {
-            KhoaEnsureHoaDonDebtTracking.Release();
+            KhoaEnsureHoaDonTrackingColumns.Release();
         }
     }
 }
