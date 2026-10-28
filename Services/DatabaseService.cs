@@ -28,6 +28,8 @@ public sealed class DatabaseService
     private bool? _hasPhieuNhapExtraColumns;
     private bool? _hasPhieuNhapDebtTrackingColumn;
     private readonly SemaphoreSlim _ensurePhieuNhapDebtTrackingColumn = new(1, 1);
+    private bool? _hasHoaDonDebtTrackingColumn;
+    private readonly SemaphoreSlim _ensureHoaDonDebtTrackingColumn = new(1, 1);
     private bool? _hasPhieuNhapPhuongThucColumn;
     private bool? _hasPhieuQuyExtraColumns;
     private bool? _hasPhieuQuyHoaDonColumns;
@@ -54,6 +56,7 @@ public sealed class DatabaseService
     public async Task<MySqlConnection> TaoKetNoiAsync()
     {
         await EnsurePhieuQuyLoaiPhieuColumnAsync();
+        await EnsureHoaDonDebtTrackingColumnAsync();
 
         var connection = new MySqlConnection(GetConnectionString());
 
@@ -79,6 +82,7 @@ public sealed class DatabaseService
     public async Task<MySqlConnection> OpenAsync()
     {
         await EnsurePhieuQuyLoaiPhieuColumnAsync();
+        await EnsureHoaDonDebtTrackingColumnAsync();
 
         var connection = new MySqlConnection(GetConnectionString());
 
@@ -2662,6 +2666,7 @@ public sealed class DatabaseService
                     FROM hoa_don_ban_hang hdcn
                     WHERE hdcn.khach_hang_id = {idExpression}
                       AND hdcn.trang_thai_hoa_don = 'HOAN_THANH'
+                      AND hdcn.cong_no_da_ghi_nhan = 1
                 ),
                 0
             )
@@ -2910,6 +2915,7 @@ public sealed class DatabaseService
         uint nhomKhachHangId = 0,
         string? congNoFilter = null)
     {
+        await EnsureHoaDonDebtTrackingColumnAsync();
         var safePage = page < 1 ? 1 : page;
         var safePageSize = pageSize < 1 ? 20 : pageSize;
         var offset = (safePage - 1) * safePageSize;
@@ -3096,6 +3102,7 @@ public sealed class DatabaseService
     public async Task<(int TongSoKhachHang, int SoKhachMoi, decimal TongNoHienTai, decimal TongBan)>
         GetThongKeDanhSachKhachHangAsync(int soNgay = SoNgayKhachMoiMacDinh)
     {
+        await EnsureHoaDonDebtTrackingColumnAsync();
         var coBangTraHang = await HasBangTraHangAsync();
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
         var tien = TaoBieuThucTienKhachHang(coBangTraHang, "kh.id", coCotKiotViet);
@@ -3205,6 +3212,7 @@ public sealed class DatabaseService
     /// </summary>
     public async Task<ThongKeMuaHangKhachHang> GetThongKeMuaHangCuaKhachHangAsync(uint customerId)
     {
+        await EnsureHoaDonDebtTrackingColumnAsync();
         var coBangTraHang = await HasBangTraHangAsync();
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
         var tien = TaoBieuThucTienKhachHang(coBangTraHang, "kh.id", coCotKiotViet);
@@ -3234,6 +3242,7 @@ public sealed class DatabaseService
                 FROM hoa_don_ban_hang
                 WHERE khach_hang_id = @Id
                   AND trang_thai_hoa_don = 'HOAN_THANH'
+                  AND cong_no_da_ghi_nhan = 1
             ) AS TongConNoHoaDon,
             (
                 SELECT COUNT(*)
@@ -8980,6 +8989,61 @@ ORDER BY hd.thoi_gian_ban DESC
         finally
         {
             _ensurePhieuNhapDebtTrackingColumn.Release();
+        }
+    }
+
+    private async Task EnsureHoaDonDebtTrackingColumnAsync()
+    {
+        if (_hasHoaDonDebtTrackingColumn == true)
+            return;
+
+        await _ensureHoaDonDebtTrackingColumn.WaitAsync();
+        try
+        {
+            if (_hasHoaDonDebtTrackingColumn == true)
+                return;
+
+            await using var connection = new MySqlConnection(GetConnectionString());
+            await connection.OpenAsync();
+            var count = await connection.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'hoa_don_ban_hang'
+                  AND COLUMN_NAME = 'cong_no_da_ghi_nhan';
+                """);
+
+            if (count == 0)
+            {
+                try
+                {
+                    await connection.ExecuteAsync(
+                        "ALTER TABLE hoa_don_ban_hang "
+                        + "ADD COLUMN cong_no_da_ghi_nhan TINYINT(1) NOT NULL DEFAULT 1 AFTER con_no;");
+                }
+                catch (Exception ex)
+                {
+                    var columnExists = await connection.ExecuteScalarAsync<long>(
+                        """
+                        SELECT COUNT(*)
+                        FROM information_schema.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE()
+                          AND TABLE_NAME = 'hoa_don_ban_hang'
+                          AND COLUMN_NAME = 'cong_no_da_ghi_nhan';
+                        """);
+                    if (columnExists == 0)
+                        throw new InvalidOperationException(
+                            "Không thể chuẩn bị cột theo dõi việc ghi công nợ khách hàng.",
+                            ex);
+                }
+            }
+
+            _hasHoaDonDebtTrackingColumn = true;
+        }
+        finally
+        {
+            _ensureHoaDonDebtTrackingColumn.Release();
         }
     }
 

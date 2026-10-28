@@ -144,7 +144,7 @@ INNER JOIN khach_hang kh ON kh.id = hd.khach_hang_id";
   COALESCE(SUM(hd.giam_gia), 0) AS GiamGia,
   COALESCE(SUM(hd.tong_tien_hang - hd.giam_gia), 0) AS GiaTriMuaHang,
   COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThanhToan,
-  COALESCE(SUM(hd.con_no), 0) AS CongNo";
+  COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo";
 
     private const string NhomKhach = @"kh.id, kh.ma_khach_hang, kh.ten_khach_hang, kh.so_dien_thoai";
 
@@ -160,7 +160,7 @@ SELECT
   COALESCE(SUM(hd.giam_gia), 0) AS GiamGia,
   COALESCE(SUM(hd.tong_tien_hang - hd.giam_gia), 0) AS GiaTriMuaHang,
   COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThanhToan,
-  COALESCE(SUM(hd.con_no), 0) AS CongNo
+  COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo
 " + DieuKien.From + @"
 WHERE " + dk.Where + @";
 ";

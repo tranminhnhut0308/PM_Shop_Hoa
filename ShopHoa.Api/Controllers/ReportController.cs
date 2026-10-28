@@ -35,7 +35,7 @@ public sealed class ReportController : ControllerBase
                 COALESCE(SUM(khach_can_tra), 0) AS TongDoanhThu,
                 COUNT(*) AS SoHoaDon,
                 COALESCE(SUM(khach_da_thanh_toan), 0) AS DaThu,
-                COALESCE(SUM(con_no), 0) AS ConNo,
+                COALESCE(SUM(CASE WHEN cong_no_da_ghi_nhan = 1 THEN con_no ELSE 0 END), 0) AS ConNo,
                 COALESCE(SUM(giam_gia), 0) AS TongGiamGia
             FROM hoa_don_ban_hang
             WHERE trang_thai_hoa_don = 'HOAN_THANH'
@@ -69,7 +69,7 @@ public sealed class ReportController : ControllerBase
                 COALESCE(kh.ten_khach_hang, 'Khách lẻ') AS TenKhachHang,
                 hd.khach_can_tra AS KhachCanTra,
                 hd.khach_da_thanh_toan AS KhachDaThanhToan,
-                hd.con_no AS ConNo,
+                CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END AS ConNo,
                 hd.trang_thai_thanh_toan AS TrangThaiThanhToan
             FROM hoa_don_ban_hang hd
             LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
@@ -114,13 +114,14 @@ public sealed class ReportController : ControllerBase
                 kh.ma_khach_hang AS MaKhachHang,
                 kh.ten_khach_hang AS TenKhachHang,
                 kh.so_dien_thoai AS SoDienThoai,
-                COALESCE(SUM(hd.con_no), 0) AS TongNo,
+                COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS TongNo,
                 COUNT(hd.id) AS SoDonChuaThanhToan,
                 MAX(hd.thoi_gian_ban) AS NgayMuaGanNhat
             FROM khach_hang kh
             INNER JOIN hoa_don_ban_hang hd ON hd.khach_hang_id = kh.id
             WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
               AND hd.con_no > 0
+              AND hd.cong_no_da_ghi_nhan = 1
               AND kh.trang_thai = 1
             GROUP BY kh.id, kh.ma_khach_hang, kh.ten_khach_hang, kh.so_dien_thoai
             ORDER BY TongNo DESC

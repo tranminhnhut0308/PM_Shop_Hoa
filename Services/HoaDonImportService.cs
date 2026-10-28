@@ -2169,7 +2169,8 @@ public sealed class HoaDonImportService
                 capNhat.Where(h => h.LaHoaDonTongHop).Select(h => h.MaHoaDon).ToList(),
                 ct);
 
-            await CapNhatHeaderAsync(connection, transaction, capNhat, branchId, userId, ct);
+            await CapNhatHeaderAsync(
+                connection, transaction, capNhat, branchId, userId, updateCustomerDebt, ct);
 
             // Chỉ hóa đơn nhập đầy đủ mới thay thế chi tiết; import tổng hợp không xóa dữ liệu hàng cũ.
             await XoaChiTietCuAsync(
@@ -2187,7 +2188,7 @@ public sealed class HoaDonImportService
             {
                 await connection.ExecuteAsync(
                     SqlInsertHeader(),
-                    chunk.Select(hd => TaoDongHeader(hd, branchId, userId)).ToList(),
+                    chunk.Select(hd => TaoDongHeader(hd, branchId, userId, updateCustomerDebt)).ToList(),
                     transaction);
             }
         }
@@ -2327,7 +2328,11 @@ public sealed class HoaDonImportService
         return false;
     }
 
-    private static DongHeader TaoDongHeader(HoaDonImportRow hd, uint branchId, uint? userId) =>
+    private static DongHeader TaoDongHeader(
+        HoaDonImportRow hd,
+        uint branchId,
+        uint? userId,
+        bool updateCustomerDebt) =>
         new()
         {
             MaHoaDon = hd.MaHoaDon,
@@ -2341,6 +2346,7 @@ public sealed class HoaDonImportService
             KhachCanTra = Tien(hd.KhachCanTra),
             KhachDaThanhToan = Tien(hd.DaThanhToanChuan),
             ConNo = Tien(hd.ConNoChuan),
+            CongNoDaGhiNhan = updateCustomerDebt,
             TrangThaiThanhToan = hd.TrangThaiThanhToanChuan,
             TrangThaiHoaDon = hd.LaHoaDonTongHop ? HoaDonTongHop : HoanThanh,
             GhiChu = hd.GhiChu
@@ -2352,14 +2358,14 @@ public sealed class HoaDonImportService
          (
              ma_hoa_don, chi_nhanh_id, khach_hang_id, nguoi_ban_id, thoi_gian_ban,
              tong_tien_hang, giam_gia, thu_khac, khach_can_tra, khach_da_thanh_toan,
-             con_no, trang_thai_thanh_toan, trang_thai_hoa_don, ghi_chu,
+             con_no, cong_no_da_ghi_nhan, trang_thai_thanh_toan, trang_thai_hoa_don, ghi_chu,
              ngay_tao, ngay_cap_nhat
          )
          VALUES
          (
              @MaHoaDon, @ChiNhanhId, @KhachHangId, @NguoiBanId, @ThoiGianBan,
              @TongTienHang, @GiamGia, @ThuKhac, @KhachCanTra, @KhachDaThanhToan,
-             @ConNo, @TrangThaiThanhToan, @TrangThaiHoaDon, @GhiChu,
+             @ConNo, @CongNoDaGhiNhan, @TrangThaiThanhToan, @TrangThaiHoaDon, @GhiChu,
              @ThoiGianBan, @ThoiGianBan
          );
          """;
@@ -2389,6 +2395,7 @@ public sealed class HoaDonImportService
         List<HoaDonImportRow> capNhat,
         uint branchId,
         uint? userId,
+        bool updateCustomerDebt,
         CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -2404,7 +2411,7 @@ public sealed class HoaDonImportService
             var dong = new List<DongHeader>(chunk.Count);
 
             foreach (var hd in chunk)
-                dong.Add(TaoDongHeader(hd, branchId, userId));
+                dong.Add(TaoDongHeader(hd, branchId, userId, updateCustomerDebt));
 
             await connection.ExecuteAsync(SqlInsertHeader(), dong, transaction);
         }
@@ -2423,12 +2430,17 @@ public sealed class HoaDonImportService
                  h.khach_can_tra = t.khach_can_tra,
                  h.khach_da_thanh_toan = t.khach_da_thanh_toan,
                  h.con_no = t.con_no,
+                 h.cong_no_da_ghi_nhan = CASE
+                     WHEN @UpdateCustomerDebt = 1 THEN 1
+                     ELSE h.cong_no_da_ghi_nhan
+                 END,
                  h.trang_thai_thanh_toan = t.trang_thai_thanh_toan,
                  h.trang_thai_hoa_don = t.trang_thai_hoa_don,
                  h.ghi_chu = t.ghi_chu,
                  h.ngay_cap_nhat = NOW();
              """,
-            transaction: transaction);
+            new { UpdateCustomerDebt = updateCustomerDebt },
+            transaction);
     }
 
     /// <summary>Xóa chi tiết cũ của các hóa đơn được cập nhật, theo đúng mã hóa đơn.</summary>
@@ -2992,6 +3004,7 @@ public sealed class HoaDonImportService
         public decimal KhachCanTra { get; init; }
         public decimal KhachDaThanhToan { get; init; }
         public decimal ConNo { get; init; }
+        public bool CongNoDaGhiNhan { get; init; }
         public string TrangThaiThanhToan { get; init; } = DaThanhToan;
         public string TrangThaiHoaDon { get; init; } = HoanThanh;
         public string? GhiChu { get; init; }

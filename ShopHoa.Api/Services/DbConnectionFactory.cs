@@ -12,6 +12,8 @@ public sealed class DbConnectionFactory : IDbConnectionFactory
 {
     private static bool? _hasPhieuQuyLoaiPhieuColumn;
     private static readonly SemaphoreSlim KhoaEnsureLoaiPhieu = new(1, 1);
+    private static bool? _hasHoaDonDebtTrackingColumn;
+    private static readonly SemaphoreSlim KhoaEnsureHoaDonDebtTracking = new(1, 1);
 
     private readonly string _connectionString;
 
@@ -24,6 +26,7 @@ public sealed class DbConnectionFactory : IDbConnectionFactory
     public async Task<MySqlConnection> CreateConnectionAsync()
     {
         await EnsurePhieuQuyLoaiPhieuColumnAsync();
+        await EnsureHoaDonDebtTrackingColumnAsync();
 
         var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
@@ -78,6 +81,59 @@ public sealed class DbConnectionFactory : IDbConnectionFactory
         finally
         {
             KhoaEnsureLoaiPhieu.Release();
+        }
+    }
+
+    private async Task EnsureHoaDonDebtTrackingColumnAsync()
+    {
+        if (_hasHoaDonDebtTrackingColumn == true)
+            return;
+
+        await KhoaEnsureHoaDonDebtTracking.WaitAsync();
+        try
+        {
+            if (_hasHoaDonDebtTrackingColumn == true)
+                return;
+
+            await using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+            var count = await connection.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'hoa_don_ban_hang'
+                  AND COLUMN_NAME = 'cong_no_da_ghi_nhan';
+                """);
+
+            if (count == 0)
+            {
+                try
+                {
+                    await connection.ExecuteAsync(
+                        "ALTER TABLE hoa_don_ban_hang "
+                        + "ADD COLUMN cong_no_da_ghi_nhan TINYINT(1) NOT NULL DEFAULT 1 AFTER con_no;");
+                }
+                catch (MySqlException ex) when (ex.Number == 1060)
+                {
+                    var columnExists = await connection.ExecuteScalarAsync<long>(
+                        """
+                        SELECT COUNT(*)
+                        FROM information_schema.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE()
+                          AND TABLE_NAME = 'hoa_don_ban_hang'
+                          AND COLUMN_NAME = 'cong_no_da_ghi_nhan';
+                        """);
+                    if (columnExists == 0)
+                        throw;
+                }
+            }
+
+            _hasHoaDonDebtTrackingColumn = true;
+        }
+        finally
+        {
+            KhoaEnsureHoaDonDebtTracking.Release();
         }
     }
 }

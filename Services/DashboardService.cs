@@ -160,7 +160,7 @@ public sealed class DashboardService
             COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu,
             COUNT(*) AS SoHoaDon,
             COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThu,
-            COALESCE(SUM(hd.con_no), 0) AS ConNo
+            COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS ConNo
         FROM hoa_don_ban_hang hd
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
           AND hd.thoi_gian_ban >= @TuNgay

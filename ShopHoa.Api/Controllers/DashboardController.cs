@@ -65,7 +65,7 @@ public sealed class DashboardController : ControllerBase
                 COALESCE(SUM(khach_can_tra), 0) AS TongDoanhThu,
                 COUNT(*) AS SoHoaDon,
                 COALESCE(SUM(khach_da_thanh_toan), 0) AS DaThu,
-                COALESCE(SUM(con_no), 0) AS ConNo
+                COALESCE(SUM(CASE WHEN cong_no_da_ghi_nhan = 1 THEN con_no ELSE 0 END), 0) AS ConNo
             FROM hoa_don_ban_hang
             WHERE trang_thai_hoa_don = 'HOAN_THANH'
               AND thoi_gian_ban >= @StartDate AND thoi_gian_ban <= @EndDate;

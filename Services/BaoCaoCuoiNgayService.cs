@@ -124,10 +124,10 @@ public sealed class BaoCaoCuoiNgayService
             COALESCE(SUM(hd.giam_gia), 0)                     AS GiamGia,
             COALESCE(SUM(hd.khach_can_tra), 0)                AS DoanhThu,
             COALESCE(SUM(hd.khach_da_thanh_toan), 0)          AS DaThu,
-            COALESCE(SUM(hd.con_no), 0)                       AS ConNo,
+            COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS ConNo,
             COALESCE(SUM(hd.thu_khac), 0)                     AS TienThua,
             COALESCE(SUM(hd.trang_thai_thanh_toan = 'DA_THANH_TOAN'), 0) AS SoHoaDonDaThanhToan,
-            COALESCE(SUM(hd.trang_thai_thanh_toan <> 'DA_THANH_TOAN'), 0) AS SoHoaDonConCongNo
+            COALESCE(SUM(hd.cong_no_da_ghi_nhan = 1 AND hd.trang_thai_thanh_toan <> 'DA_THANH_TOAN'), 0) AS SoHoaDonConCongNo
         FROM hoa_don_ban_hang hd
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
           AND hd.thoi_gian_ban >= @DauNgay
@@ -419,7 +419,7 @@ public sealed class BaoCaoCuoiNgayService
             COUNT(*)                        AS SoHoaDon,
             COALESCE(SUM(hd.khach_can_tra), 0)         AS TongMua,
             COALESCE(SUM(hd.khach_da_thanh_toan), 0)   AS DaThanhToan,
-            COALESCE(SUM(hd.con_no), 0)                 AS ConNo
+            COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS ConNo
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
@@ -490,12 +490,13 @@ public sealed class BaoCaoCuoiNgayService
             COUNT(*)                                   AS SoHoaDon,
             COALESCE(SUM(hd.khach_can_tra), 0)         AS TongCongNoPhatSinh,
             COALESCE(SUM(hd.khach_da_thanh_toan), 0)   AS TongDaTra,
-            COALESCE(SUM(hd.con_no), 0)                 AS TongConNo,
-            COALESCE(SUM(hd.trang_thai_thanh_toan <> 'DA_THANH_TOAN'), 0) AS SoHoaDonConNo
+            COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS TongConNo,
+            COALESCE(SUM(hd.cong_no_da_ghi_nhan = 1 AND hd.trang_thai_thanh_toan <> 'DA_THANH_TOAN'), 0) AS SoHoaDonConNo
         FROM hoa_don_ban_hang hd
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
           AND hd.thoi_gian_ban >= @DauNgay
-          AND hd.thoi_gian_ban < @NgayKeTiep;
+          AND hd.thoi_gian_ban < @NgayKeTiep
+          AND hd.cong_no_da_ghi_nhan = 1;
         """;
 
         var thamSo = new { DauNgay = dauNgay, NgayKeTiep = ngayKeTiep };
@@ -513,13 +514,14 @@ public sealed class BaoCaoCuoiNgayService
             hd.thu_khac                                    AS ThuKhac,
             hd.khach_can_tra                               AS DoanhThu,
             hd.khach_da_thanh_toan                         AS DaTra,
-            hd.con_no                                      AS ConNo,
+            CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END AS ConNo,
             COALESCE(hd.trang_thai_thanh_toan, '')          AS TrangThai
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
           AND hd.thoi_gian_ban >= @DauNgay
           AND hd.thoi_gian_ban < @NgayKeTiep
+          AND hd.cong_no_da_ghi_nhan = 1
         ORDER BY hd.thoi_gian_ban DESC, hd.ma_hoa_don DESC;
         """;
 
