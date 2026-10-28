@@ -18,6 +18,9 @@ public sealed class ThongKeTaiChinhNhaCungCap
     /// <summary>Tổng nợ còn lại trên các phiếu nhập.</summary>
     public decimal TongConNoPhieuNhap { get; set; }
 
+    /// <summary>Nợ trên phiếu nhập đã được ghi nhận vào công nợ nhà cung cấp.</summary>
+    public decimal TongConNoPhieuNhapDaGhiCongNo { get; set; }
+
     /// <summary>Số lần ghi vào sổ cái công nợ của nhà cung cấp.</summary>
     public int SoLanGhiCongNo { get; set; }
 
@@ -51,11 +54,11 @@ public sealed class ThongKeTaiChinhNhaCungCap
     /// <summary>
     /// Công nợ hiện tại: bao gồm số nợ ban đầu từ file danh sách (nếu có)
     /// cộng dồn với công nợ phát sinh từ các giao dịch trong phần mềm
-    /// (ưu tiên sổ cái công nợ, không có thì lấy tổng nợ còn lại trên phiếu nhập).
+    /// (ưu tiên sổ cái công nợ, không có thì lấy số nợ đã được ghi nhận trên phiếu).
     /// </summary>
     public decimal TongCongNoHienTai =>
         (CoDuLieuKiotViet && NoCanTraHienTaiExcel.HasValue ? NoCanTraHienTaiExcel.Value : 0m)
-        + (SoLanGhiCongNo > 0 ? TongCongNoLichSu : TongConNoPhieuNhap);
+        + (SoLanGhiCongNo > 0 ? TongCongNoLichSu : TongConNoPhieuNhapDaGhiCongNo);
 
     /// <summary>
     /// Tổng tiền đã mua: bao gồm tổng mua từ file danh sách (nếu có)

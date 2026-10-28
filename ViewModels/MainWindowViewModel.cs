@@ -4226,15 +4226,8 @@ public partial class MainWindowViewModel : ObservableObject
                 ? ""
                 : $"\n\n{preview.Loi.Select(issue => issue.MaPhieuNhap).Distinct().Count()} phiếu có lỗi sẽ không được import. " +
                   string.Join("\n", preview.Loi.Take(5).Select(issue => $"{issue.MaPhieuNhap}: {issue.LyDo}"));
-            var confirmation =
-                $"File: {preview.TenFile}\n" +
-                $"Phiếu đủ điều kiện: {preview.PhieuNhap.Count}\n" +
-                $"Phiếu có lỗi: {preview.Loi.Select(issue => issue.MaPhieuNhap).Distinct().Count()}\n\n" +
-                "Hệ thống sẽ cập nhật tồn kho và công nợ nhà cung cấp. Khoản đã trả chỉ được ghi vào công nợ; " +
-                "không tạo phiếu chi hoặc giao dịch quỹ. Mã phiếu đã tồn tại sẽ được bỏ qua." +
-                warning +
-                "\n\nBạn xác nhận tiếp tục?";
-            if (!await ShowConfirmationAsync("Xác nhận import phiếu nhập", confirmation, "Import", "Hủy"))
+            var updateSupplierDebt = await HoiCapNhatCongNoNhaCungCapAsync(preview, warning);
+            if (!updateSupplierDebt.HasValue)
                 return;
 
             var imported = 0;
@@ -4248,7 +4241,7 @@ public partial class MainWindowViewModel : ObservableObject
                 var receipt = preview.PhieuNhap[index];
                 try
                 {
-                    if (await _db.ImportPhieuNhapHangAsync(receipt))
+                    if (await _db.ImportPhieuNhapHangAsync(receipt, updateSupplierDebt.Value))
                     {
                         imported++;
                         importedDetailRows += receipt.Items.Count;
@@ -4303,6 +4296,7 @@ public partial class MainWindowViewModel : ObservableObject
                     : "Không import được phiếu nào.";
             var result =
                 $"{summary}\nFile: {preview.TenFile}\n" +
+                $"Công nợ nhà cung cấp: {(updateSupplierDebt.Value ? "đã cập nhật" : "không thay đổi")}.\n" +
                 $"Thêm mới: {imported}; cập nhật: 0 (phiếu trùng mã được bỏ qua).\n" +
                 $"Bỏ qua do trùng mã: {duplicated} phiếu, {duplicatedDetailRows:N0} dòng chi tiết.\n" +
                 $"Lỗi: {failedReceiptCount} phiếu, {failedDetailRows:N0} dòng chi tiết.\n" +
@@ -4321,6 +4315,107 @@ public partial class MainWindowViewModel : ObservableObject
                 "Không import được phiếu nhập",
                 "Không thể đọc hoặc import file. " + ex.Message);
         }
+    }
+
+    private async Task<bool?> HoiCapNhatCongNoNhaCungCapAsync(
+        PhieuNhapImportPreview preview,
+        string warning)
+    {
+        if (OwnerWindow is null)
+            return null;
+
+        var dialog = new Window
+        {
+            Title = "Xác nhận cập nhật công nợ nhà cung cấp",
+            Width = 620,
+            SizeToContent = SizeToContent.Height,
+            MinHeight = 330,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = Brushes.White
+        };
+
+        var content = new StackPanel
+        {
+            Margin = new Avalonia.Thickness(24),
+            Spacing = 14
+        };
+
+        content.Children.Add(new TextBlock
+        {
+            Text = "Xác nhận cập nhật công nợ nhà cung cấp",
+            FontSize = 20,
+            FontWeight = FontWeight.Bold,
+            Foreground = Brush.Parse("#173F38"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        content.Children.Add(new TextBlock
+        {
+            Text = "Bạn có muốn cập nhật công nợ nhà cung cấp từ các phiếu nhập được import không?",
+            FontSize = 15,
+            Foreground = Brush.Parse("#263B35"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        content.Children.Add(new TextBlock
+        {
+            Text = "Nếu công nợ nhà cung cấp đã được cập nhật trước đó, hãy chọn "
+                   + "“Không cập nhật công nợ” để tránh ghi nhận trùng.",
+            FontSize = 13,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = Brush.Parse("#8A5510"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        content.Children.Add(new TextBlock
+        {
+            Text = $"File: {preview.TenFile}\n"
+                   + $"Phiếu đủ điều kiện: {preview.PhieuNhap.Count:N0}\n"
+                   + $"Phiếu có lỗi: {preview.Loi.Select(issue => issue.MaPhieuNhap).Distinct().Count():N0}\n\n"
+                   + "Cả hai lựa chọn đều lưu phiếu, chi tiết và cập nhật tồn kho. "
+                   + "Mã phiếu đã tồn tại sẽ được bỏ qua; import không tạo phiếu chi hoặc giao dịch quỹ."
+                   + warning,
+            FontSize = 12,
+            Foreground = Brush.Parse("#52645F"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        var buttons = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Spacing = 10,
+            Margin = new Avalonia.Thickness(0, 8, 0, 0)
+        };
+
+        var updateButton = new Button
+        {
+            Content = "Cập nhật công nợ nhà cung cấp",
+            Padding = new Avalonia.Thickness(16, 10),
+            Background = Brush.Parse("#087F6E"),
+            Foreground = Brushes.White,
+            FontWeight = FontWeight.SemiBold
+        };
+        updateButton.Click += (_, _) => dialog.Close(true);
+
+        var keepButton = new Button
+        {
+            Content = "Không cập nhật công nợ nhà cung cấp",
+            Padding = new Avalonia.Thickness(16, 10),
+            Background = Brushes.White,
+            Foreground = Brush.Parse("#263B35"),
+            BorderBrush = Brush.Parse("#C9DCD6"),
+            BorderThickness = new Avalonia.Thickness(1)
+        };
+        keepButton.Click += (_, _) => dialog.Close(false);
+
+        buttons.Children.Add(updateButton);
+        buttons.Children.Add(keepButton);
+        content.Children.Add(buttons);
+        dialog.Content = content;
+
+        return await dialog.ShowDialog<bool?>(OwnerWindow);
     }
 
     /// <summary>

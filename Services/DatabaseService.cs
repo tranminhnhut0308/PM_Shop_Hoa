@@ -26,6 +26,8 @@ public sealed class DatabaseService
 {
     private readonly DatabaseConfigService _configService;
     private bool? _hasPhieuNhapExtraColumns;
+    private bool? _hasPhieuNhapDebtTrackingColumn;
+    private readonly SemaphoreSlim _ensurePhieuNhapDebtTrackingColumn = new(1, 1);
     private bool? _hasPhieuNhapPhuongThucColumn;
     private bool? _hasPhieuQuyExtraColumns;
     private bool? _hasPhieuQuyHoaDonColumns;
@@ -2858,6 +2860,7 @@ public sealed class DatabaseService
                     FROM phieu_nhap_hang p_cn
                     WHERE p_cn.nha_cung_cap_id = {idExpression}
                       AND p_cn.trang_thai NOT IN ('LUU_TAM', 'HUY')
+                      AND p_cn.cong_no_da_ghi_nhan = 1
                 ),
                 0
             )
@@ -6589,6 +6592,7 @@ ORDER BY hd.thoi_gian_ban DESC
         int pageSize)
     {
         loc ??= new BoLocNhaCungCap();
+        await EnsurePhieuNhapDebtTrackingColumnAsync();
 
         var safePage = page < 1 ? 1 : page;
         var safePageSize = pageSize < 1 ? 20 : pageSize;
@@ -6642,6 +6646,7 @@ ORDER BY hd.thoi_gian_ban DESC
         BoLocNhaCungCap loc)
     {
         loc ??= new BoLocNhaCungCap();
+        await EnsurePhieuNhapDebtTrackingColumnAsync();
 
         await using var connection = await OpenAsync();
 
@@ -6671,6 +6676,7 @@ ORDER BY hd.thoi_gian_ban DESC
         BoLocNhaCungCap loc)
     {
         loc ??= new BoLocNhaCungCap();
+        await EnsurePhieuNhapDebtTrackingColumnAsync();
 
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
         var tien = TaoBieuThucTienNhaCungCap("ncc.id", coCotKiotViet);
@@ -6830,7 +6836,11 @@ ORDER BY hd.thoi_gian_ban DESC
             COUNT(*) AS SoPhieuNhap,
             COALESCE(SUM(p.tong_tien_nhap), 0) AS TongTienNhap,
             COALESCE(SUM(p.da_thanh_toan), 0) AS TongDaThanhToan,
-            COALESCE(SUM(p.con_no), 0) AS TongConNoPhieuNhap
+            COALESCE(SUM(p.con_no), 0) AS TongConNoPhieuNhap,
+            COALESCE(
+                SUM(CASE WHEN p.cong_no_da_ghi_nhan = 1 THEN p.con_no ELSE 0 END),
+                0
+            ) AS TongConNoPhieuNhapDaGhiCongNo
         FROM phieu_nhap_hang p
         WHERE p.nha_cung_cap_id = @Id
           AND p.trang_thai NOT IN ('LUU_TAM', 'HUY');
@@ -6845,6 +6855,7 @@ ORDER BY hd.thoi_gian_ban DESC
         WHERE ls.nha_cung_cap_id = @Id;
         """;
 
+        await EnsurePhieuNhapDebtTrackingColumnAsync();
         await using var connection = await OpenAsync();
 
         var thamSo = new { Id = supplierId };
@@ -6865,6 +6876,7 @@ ORDER BY hd.thoi_gian_ban DESC
             TongTienNhap = phieu.TongTienNhap,
             TongDaThanhToan = phieu.TongDaThanhToan,
             TongConNoPhieuNhap = phieu.TongConNoPhieuNhap,
+            TongConNoPhieuNhapDaGhiCongNo = phieu.TongConNoPhieuNhapDaGhiCongNo,
             SoLanGhiCongNo = congNo.SoLanGhiCongNo,
             TongCongNoLichSu = congNo.TongCongNoLichSu,
             LanGhiCongNoGanNhat = congNo.LanGhiCongNoGanNhat,
@@ -7893,9 +7905,11 @@ ORDER BY hd.thoi_gian_ban DESC
 
     /// <summary>
     /// Import một phiếu nhập lịch sử theo dữ liệu nguồn. Header, chi tiết, tồn kho
-    /// và công nợ được ghi nguyên tử; khác luồng nhập thủ công, không tạo phiếu chi.
+    /// và phần công nợ được chọn ghi nguyên tử; khác luồng nhập thủ công, không tạo phiếu chi.
     /// </summary>
-    public async Task<bool> ImportPhieuNhapHangAsync(PhieuNhapImportReceipt receipt)
+    public async Task<bool> ImportPhieuNhapHangAsync(
+        PhieuNhapImportReceipt receipt,
+        bool updateSupplierDebt = true)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.PurchasesImport, "Bạn không có quyền import phiếu nhập hàng.");
         ArgumentNullException.ThrowIfNull(receipt);
@@ -7927,6 +7941,8 @@ ORDER BY hd.thoi_gian_ban DESC
             || receipt.DaTraNcc < 0
             || receipt.DaTraNcc > receipt.CanTraNcc)
             throw new InvalidOperationException($"Dữ liệu tiền của phiếu {code} không nhất quán.");
+
+        await EnsurePhieuNhapDebtTrackingColumnAsync();
 
         var currentBranchId = Session.CurrentUser?.ChiNhanhId ?? 1;
         var branchId = currentBranchId;
@@ -8051,14 +8067,14 @@ ORDER BY hd.thoi_gian_ban DESC
             (
                 ma_phieu_nhap, chi_nhanh_id, nha_cung_cap_id, nguoi_nhap_id,
                 thoi_gian_nhap, tong_tien_hang, giam_gia, chi_phi_khac, tong_tien_nhap,
-                da_thanh_toan, con_no, trang_thai, ghi_chu{extraColumns},
+                da_thanh_toan, con_no, trang_thai, ghi_chu, cong_no_da_ghi_nhan{extraColumns},
                 ngay_tao, ngay_cap_nhat
             )
             VALUES
             (
                 @MaPhieuNhap, @ChiNhanhId, @NhaCungCapId, @NguoiNhapId,
                 @ThoiGianNhap, @TongTienHang, @GiamGia, @ChiPhiKhac, @TongTienNhap,
-                @DaThanhToan, @ConNo, @TrangThai, @GhiChu{extraValues},
+                @DaThanhToan, @ConNo, @TrangThai, @GhiChu, @CongNoDaGhiNhan{extraValues},
                 NOW(), NOW()
             );
             SELECT LAST_INSERT_ID();
@@ -8081,6 +8097,7 @@ ORDER BY hd.thoi_gian_ban DESC
                     phieu.ConNo,
                     phieu.TrangThai,
                     phieu.GhiChu,
+                    CongNoDaGhiNhan = updateSupplierDebt,
                     SoHoaDonDauVao = string.IsNullOrWhiteSpace(phieu.SoHoaDonDauVao)
                         ? null
                         : phieu.SoHoaDonDauVao.Trim()
@@ -8151,12 +8168,15 @@ ORDER BY hd.thoi_gian_ban DESC
                     $"không khớp tổng phiếu {phieu.TongTienHang:N2}.");
 
             await CapNhatTonKhoPhieuNhapAsync(connection, transaction, phieu, items);
-            await GhiCongNoNhaCungCapPhieuNhapAsync(
-                connection,
-                transaction,
-                phieu,
-                branchId,
-                xoaLichSuCu: false);
+            if (updateSupplierDebt)
+            {
+                await GhiCongNoNhaCungCapPhieuNhapAsync(
+                    connection,
+                    transaction,
+                    phieu,
+                    branchId,
+                    xoaLichSuCu: false);
+            }
             await transaction.CommitAsync();
             return true;
         }
@@ -8907,6 +8927,60 @@ ORDER BY hd.thoi_gian_ban DESC
         }
 
         return _hasPhieuNhapExtraColumns.Value;
+    }
+
+    private async Task EnsurePhieuNhapDebtTrackingColumnAsync()
+    {
+        if (_hasPhieuNhapDebtTrackingColumn == true)
+            return;
+
+        await _ensurePhieuNhapDebtTrackingColumn.WaitAsync();
+        try
+        {
+            if (_hasPhieuNhapDebtTrackingColumn == true)
+                return;
+
+            await using var connection = await OpenAsync();
+            var count = await connection.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'phieu_nhap_hang'
+                  AND COLUMN_NAME = 'cong_no_da_ghi_nhan';
+                """);
+
+            if (count == 0)
+            {
+                try
+                {
+                    await connection.ExecuteAsync(
+                        "ALTER TABLE phieu_nhap_hang "
+                        + "ADD COLUMN cong_no_da_ghi_nhan TINYINT(1) NOT NULL DEFAULT 1 AFTER con_no;");
+                }
+                catch (Exception ex)
+                {
+                    var columnExists = await connection.ExecuteScalarAsync<long>(
+                        """
+                        SELECT COUNT(*)
+                        FROM information_schema.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE()
+                          AND TABLE_NAME = 'phieu_nhap_hang'
+                          AND COLUMN_NAME = 'cong_no_da_ghi_nhan';
+                        """);
+                    if (columnExists == 0)
+                        throw new InvalidOperationException(
+                            "Không thể chuẩn bị cột theo dõi việc ghi công nợ nhà cung cấp.",
+                            ex);
+                }
+            }
+
+            _hasPhieuNhapDebtTrackingColumn = true;
+        }
+        finally
+        {
+            _ensurePhieuNhapDebtTrackingColumn.Release();
+        }
     }
 
     /// <summary>
@@ -10525,6 +10599,7 @@ ORDER BY hd.thoi_gian_ban DESC
         public decimal TongTienNhap { get; set; }
         public decimal TongDaThanhToan { get; set; }
         public decimal TongConNoPhieuNhap { get; set; }
+        public decimal TongConNoPhieuNhapDaGhiCongNo { get; set; }
     }
 
     /// <summary>Tổng hợp sổ cái công nợ (chỉ dùng nội bộ DatabaseService).</summary>
