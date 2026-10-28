@@ -13,6 +13,7 @@ namespace ShopHoa.ViewModels;
 public sealed partial class MainWindowViewModel
 {
     private readonly HoaDonImportService _hoaDonImport = new();
+    private bool _suppressInvoiceDateReload;
 
     // =========================================================
     // LỌC NHANH HÓA ĐƠN: TẤT CẢ / ĐÃ THANH TOÁN / CÒN NỢ
@@ -282,6 +283,18 @@ public sealed partial class MainWindowViewModel
             // Danh sách hóa đơn trên màn hình đã cũ, nạp lại để thấy dữ liệu mới.
             IsImporting = false;
             _invoicesLoaded = false;
+
+            InvoiceFilter = "ALL";
+            InvoiceSearch = "";
+            _suppressInvoiceDateReload = true;
+            try
+            {
+                InvoiceFilterDate = null;
+            }
+            finally
+            {
+                _suppressInvoiceDateReload = false;
+            }
 
             await LoadInvoicesAsync();
 

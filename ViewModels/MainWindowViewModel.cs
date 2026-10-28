@@ -6130,7 +6130,7 @@ public partial class MainWindowViewModel : ObservableObject
     // BỘ LỌC NGÀY — MÀN HÓA ĐƠN
     // =========================================================
 
-    private DateTimeOffset? _invoiceFilterDate = DateTimeOffset.Now.Date;
+    private DateTimeOffset? _invoiceFilterDate;
     public DateTimeOffset? InvoiceFilterDate
     {
         get => _invoiceFilterDate;
@@ -6142,7 +6142,8 @@ public partial class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsInvoiceDateYesterday));
                 OnPropertyChanged(nameof(IsInvoiceDateAll));
                 // Đổi ngày → tìm lại luôn
-                _ = SearchInvoicesAsync();
+                if (!_suppressInvoiceDateReload)
+                    _ = SearchInvoicesAsync();
             }
         }
     }
