@@ -1,0 +1,85 @@
+<Window xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:ShopHoa.Models"
+    x:Class="ShopHoa.Views.LichSuThanhToanNhaCungCapWindow"
+    x:CompileBindings="False"
+    Title="Lịch sử thanh toán nhà cung cấp"
+    Width="1450"
+    Height="760"
+    MinWidth="1050"
+    MinHeight="600"
+    WindowStartupLocation="CenterOwner"
+    Background="#F4F7F6">
+
+    <Border Background="White" Margin="14" Padding="20"
+        CornerRadius="14" BorderBrush="#D8E5E0" BorderThickness="1">
+        <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="13">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                    <TextBlock Text="Lịch sử thanh toán nhà cung cấp" FontSize="21"
+                        FontWeight="Bold" Foreground="#163F38" />
+                    <TextBlock x:Name="TxtNhaCungCap" Margin="0,4,0,0"
+                        FontSize="13" Foreground="#61736E" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="Xuất Excel" Padding="16,9"
+                    CornerRadius="8" Background="#087F6E" Foreground="White"
+                    BorderThickness="0" Click="OnExportClick" />
+            </Grid>
+
+            <Grid Grid.Row="1" ColumnDefinitions="Auto,220,Auto,160,Auto,160,*,Auto"
+                ColumnSpacing="7" VerticalAlignment="Center">
+                <TextBlock Text="Nhà cung cấp" VerticalAlignment="Center" />
+                <ComboBox x:Name="CboNhaCungCap" Grid.Column="1" />
+                <TextBlock Grid.Column="2" Text="Từ ngày" VerticalAlignment="Center" />
+                <DatePicker x:Name="TuNgayPicker" Grid.Column="3" />
+                <TextBlock Grid.Column="4" Text="Đến ngày" VerticalAlignment="Center" />
+                <DatePicker x:Name="DenNgayPicker" Grid.Column="5" />
+                <TextBox x:Name="TimKiemBox" Grid.Column="6"
+                    Watermark="Tìm mã giao dịch, nhà cung cấp hoặc mã tham chiếu..."
+                    VerticalContentAlignment="Center" />
+                <Button Grid.Column="7" Content="Lọc" Padding="15,8"
+                    Click="OnFilterClick" />
+            </Grid>
+
+            <Grid Grid.Row="2" ColumnDefinitions="*,*,*" VerticalAlignment="Center">
+                <TextBlock x:Name="TxtTongTien" FontWeight="SemiBold" Foreground="#087F6E" />
+                <TextBlock x:Name="TxtTongGiaoDich" Grid.Column="1"
+                    FontWeight="SemiBold" Foreground="#163F38" />
+                <TextBlock x:Name="TxtTrangThai" Grid.Column="2"
+                    Foreground="#D64545" TextAlignment="Right" />
+            </Grid>
+
+            <DataGrid Grid.Row="3" x:Name="LichSuGrid"
+                AutoGenerateColumns="False"
+                IsReadOnly="True"
+                CanUserReorderColumns="True"
+                CanUserResizeColumns="True"
+                GridLinesVisibility="Horizontal"
+                BorderBrush="#E2ECE8"
+                BorderThickness="1">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Mã giao dịch" Binding="{Binding MaGiaoDich}" Width="145" />
+                    <DataGridTextColumn Header="Ngày giờ" Binding="{Binding ThoiGianText}" Width="140" />
+                    <DataGridTextColumn Header="Mã NCC" Binding="{Binding MaNhaCungCap}" Width="105" />
+                    <DataGridTextColumn Header="Nhà cung cấp" Binding="{Binding TenNhaCungCap}" Width="180" />
+                    <DataGridTextColumn Header="Đơn vị nhận" Binding="{Binding DonViNhan}" Width="150" />
+                    <DataGridTextColumn Header="Công nợ trước" Binding="{Binding CongNoTruocText}" Width="140" />
+                    <DataGridTextColumn Header="Đã thanh toán" Binding="{Binding SoTienText}" Width="140" />
+                    <DataGridTextColumn Header="Công nợ sau" Binding="{Binding CongNoSauText}" Width="140" />
+                    <DataGridTextColumn Header="Phương thức" Binding="{Binding PhuongThucHienThi}" Width="125" />
+                    <DataGridTextColumn Header="Mã tham chiếu" Binding="{Binding MaThamChieuHienThi}" Width="145" />
+                    <DataGridTextColumn Header="Người thực hiện" Binding="{Binding NguoiThucHien}" Width="145" />
+                    <DataGridTextColumn Header="Ghi chú" Binding="{Binding GhiChuHienThi}" Width="*" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <StackPanel Grid.Row="4" Orientation="Horizontal"
+                HorizontalAlignment="Right" Spacing="10">
+                <Button Content="Xem chi tiết giao dịch" Padding="16,8"
+                    Click="OnDetailClick" />
+                <Button Content="Đóng" MinWidth="100" Padding="16,8"
+                    Click="OnCloseClick" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

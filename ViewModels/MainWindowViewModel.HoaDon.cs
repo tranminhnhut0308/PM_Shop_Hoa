@@ -14,9 +14,10 @@ public sealed partial class MainWindowViewModel
 {
     private readonly HoaDonImportService _hoaDonImport = new();
     private bool _suppressInvoiceDateReload;
+    private readonly HashSet<uint> _customerDebtPaymentsInProgress = [];
 
     /// <summary>
-    /// Thu công nợ theo khách hàng (nút "Thanh toán công nợ" ở tab Công nợ):
+    /// Thu công nợ theo khách hàng:
     /// hỏi số tiền + phương thức rồi tự động trừ dần vào các hóa đơn còn nợ (cũ
     /// nhất trước). Mỗi hóa đơn được cập nhật và mỗi lần thu đều tạo phiếu thu
     /// trong sổ quỹ.
@@ -25,6 +26,28 @@ public sealed partial class MainWindowViewModel
     private async Task ThuNoKhachHangAsync(KhachHangRowViewModel? row)
     {
         if (row is null || OwnerWindow is null)
+            return;
+
+        if (!_customerDebtPaymentsInProgress.Add(row.CustomerId))
+        {
+            StatusMessage = $"Đang xử lý thanh toán công nợ của {row.TenKhachHang}.";
+            return;
+        }
+
+        try
+        {
+            await ThuNoKhachHangCoreAsync(row);
+        }
+        finally
+        {
+            _customerDebtPaymentsInProgress.Remove(row.CustomerId);
+        }
+    }
+
+    private async Task ThuNoKhachHangCoreAsync(KhachHangRowViewModel row)
+    {
+        var owner = OwnerWindow;
+        if (owner is null)
             return;
 
         if (!await KiemTraQuyenAsync(
@@ -59,15 +82,32 @@ public sealed partial class MainWindowViewModel
 
         var nguoiThuOptions = await _db.GetSoQuyNguoiTaoOptionsAsync();
         var dialog = new ThuNoKhachHangWindow(
+            row.MaKhachHang,
             row.TenKhachHang,
             conNo,
             nguoiThuOptions,
             Session.CurrentUser?.Id);
-        var ketQua = await dialog.ShowDialog<ThuNoKhachHangYeuCau?>(OwnerWindow);
+        var ketQua = await dialog.ShowDialog<ThuNoKhachHangYeuCau?>(owner);
 
         if (ketQua is null)
         {
             StatusMessage = "Đã hủy thu công nợ.";
+            return;
+        }
+
+        var conNoDuKien = Math.Max(0m, conNo - ketQua.SoTien);
+        var xacNhan = await ShowConfirmationAsync(
+            "Xác nhận thanh toán công nợ",
+            $"Khách hàng: {row.MaKhachHang} - {row.TenKhachHang}\n"
+            + $"Số tiền thanh toán: {ketQua.SoTien:N0} đ\n"
+            + $"Công nợ còn lại dự kiến: {conNoDuKien:N0} đ\n\n"
+            + "Xác nhận ghi nhận giao dịch này?",
+            "Xác nhận thanh toán",
+            "Hủy");
+
+        if (!xacNhan)
+        {
+            StatusMessage = "Đã hủy thanh toán công nợ.";
             return;
         }
 
@@ -110,6 +150,28 @@ public sealed partial class MainWindowViewModel
         {
             await ShowMessageAsync("Không thu được công nợ", ex.Message);
             SafeLog.WriteError("Loi thu no khach hang", ex);
+        }
+    }
+
+    [RelayCommand]
+    private async Task XemLichSuThanhToanKhachHangAsync(KhachHangRowViewModel? row)
+    {
+        if (row is null || OwnerWindow is null)
+            return;
+
+        try
+        {
+            var window = new LichSuThanhToanKhachHangWindow(
+                _db,
+                row.CustomerId,
+                row.MaKhachHang,
+                row.TenKhachHang);
+            await window.ShowDialog(OwnerWindow);
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageAsync("Không mở được lịch sử thanh toán", ex.Message);
+            SafeLog.WriteError("Loi mo lich su thanh toan cong no khach hang", ex);
         }
     }
 

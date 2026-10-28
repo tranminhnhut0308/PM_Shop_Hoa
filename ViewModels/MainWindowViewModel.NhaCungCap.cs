@@ -6,6 +6,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShopHoa.Helpers;
 using ShopHoa.Models;
+using ShopHoa.Services;
+using ShopHoa.Views;
 
 namespace ShopHoa.ViewModels;
 
@@ -18,6 +20,8 @@ namespace ShopHoa.ViewModels;
 /// </summary>
 public sealed partial class MainWindowViewModel
 {
+    private readonly HashSet<uint> _supplierDebtPaymentsInProgress = [];
+
     /// <summary>Số nhà cung cấp tải mỗi lần, có thể đổi trong bộ phân trang.</summary>
     private const int SupplierPageSizeMacDinh = 20;
 
@@ -497,6 +501,141 @@ public sealed partial class MainWindowViewModel
         finally
         {
             detail.IsLoading = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ThanhToanCongNoNhaCungCapAsync(NhaCungCapRowViewModel? row)
+    {
+        if (row is null || OwnerWindow is null)
+            return;
+
+        if (!_supplierDebtPaymentsInProgress.Add(row.SupplierId))
+        {
+            StatusMessage = $"Đang xử lý thanh toán công nợ của {row.TenNhaCungCap}.";
+            return;
+        }
+
+        try
+        {
+            await ThanhToanCongNoNhaCungCapCoreAsync(row);
+        }
+        finally
+        {
+            _supplierDebtPaymentsInProgress.Remove(row.SupplierId);
+        }
+    }
+
+    private async Task ThanhToanCongNoNhaCungCapCoreAsync(NhaCungCapRowViewModel row)
+    {
+        var owner = OwnerWindow;
+        if (owner is null)
+            return;
+
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.SuppliersDebtPay,
+                "Bạn không có quyền thanh toán công nợ nhà cung cấp."))
+        {
+            return;
+        }
+
+        decimal debt;
+        try
+        {
+            var stats = await _db.GetThongKeTaiChinhNhaCungCapAsync(row.SupplierId);
+            debt = stats.TongCongNoHienTai;
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageAsync("Không đọc được công nợ nhà cung cấp", ex.Message);
+            SafeLog.WriteError("Loi doc cong no nha cung cap truoc khi thanh toan", ex);
+            return;
+        }
+
+        if (debt <= 0)
+        {
+            await ShowMessageAsync("Thông báo", $"Nhà cung cấp {row.TenNhaCungCap} không còn công nợ.");
+            return;
+        }
+
+        var dialog = new ThanhToanCongNoNhaCungCapWindow(
+            row.MaNhaCungCap,
+            row.TenNhaCungCap,
+            debt,
+            Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap ?? "");
+        var request = await dialog.ShowDialog<ThanhToanCongNoNhaCungCapYeuCau?>(owner);
+        if (request is null)
+        {
+            StatusMessage = "Đã hủy thanh toán công nợ nhà cung cấp.";
+            return;
+        }
+
+        var estimatedDebtAfter = Math.Max(0m, debt - request.SoTien);
+        if (!await ShowConfirmationAsync(
+                "Xác nhận thanh toán nhà cung cấp",
+                $"Nhà cung cấp: {row.MaNhaCungCap} - {row.TenNhaCungCap}\n"
+                + $"Số tiền thanh toán: {request.SoTien:N0} đ\n"
+                + $"Công nợ còn lại dự kiến: {estimatedDebtAfter:N0} đ\n\n"
+                + "Khoản thanh toán sẽ được phân bổ vào các phiếu nhập cũ nhất còn nợ. Tiếp tục?",
+                "Xác nhận thanh toán",
+                "Hủy"))
+        {
+            StatusMessage = "Đã hủy thanh toán công nợ nhà cung cấp.";
+            return;
+        }
+
+        try
+        {
+            var result = await _db.ThanhToanCongNoNhaCungCapAsync(
+                row.SupplierId,
+                request.SoTien,
+                request.PhuongThuc,
+                request.MaThamChieu,
+                request.GhiChu,
+                request.ThoiGian);
+
+            await LamMoiSauThanhToanPhieuNhapAsync();
+            var refreshedRow = SupplierRows.FirstOrDefault(item => item.SupplierId == row.SupplierId);
+            if (refreshedRow is not null)
+                await ToggleSupplierDetailAsync(refreshedRow);
+
+            StatusMessage =
+                $"Đã thanh toán {result.SoTienThanhToan:N0} đ cho {result.TenNhaCungCap}. "
+                + $"Còn nợ {result.CongNoSau:N0} đ.";
+            await ShowMessageAsync(
+                "Thanh toán thành công",
+                $"Đã thanh toán {result.SoTienThanhToan:N0} đ cho "
+                + $"{result.MaNhaCungCap} - {result.TenNhaCungCap}.\n"
+                + $"Công nợ trước: {result.CongNoTruoc:N0} đ.\n"
+                + $"Công nợ còn lại: {result.CongNoSau:N0} đ.\n"
+                + $"Đã phân bổ vào {result.SoPhieuNhapDuocPhanBo:N0} phiếu nhập.\n"
+                + $"Mã giao dịch / phiếu chi: {result.MaGiaoDich} (ghi sổ quỹ một lần).");
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageAsync("Không thanh toán được công nợ", ex.Message);
+            SafeLog.WriteError("Loi thanh toan cong no nha cung cap", ex);
+        }
+    }
+
+    [RelayCommand]
+    private async Task XemLichSuThanhToanNhaCungCapAsync(NhaCungCapRowViewModel? row)
+    {
+        if (OwnerWindow is null)
+            return;
+
+        try
+        {
+            var window = new LichSuThanhToanNhaCungCapWindow(
+                _db,
+                row?.SupplierId,
+                row?.TenNhaCungCap ?? "");
+            await window.ShowDialog(OwnerWindow);
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageAsync("Không mở được lịch sử thanh toán", ex.Message);
+            SafeLog.WriteError("Loi mo lich su thanh toan nha cung cap", ex);
         }
     }
 

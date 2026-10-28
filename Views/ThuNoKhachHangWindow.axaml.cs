@@ -19,11 +19,12 @@ public partial class ThuNoKhachHangWindow : Window
     private readonly decimal _conNo;
     private readonly uint? _nguoiThucHienIdMacDinh;
 
-    public ThuNoKhachHangWindow() : this("Khách hàng", 0m, Array.Empty<SoQuyLuaChonItem>(), null)
+    public ThuNoKhachHangWindow() : this("", "Khách hàng", 0m, Array.Empty<SoQuyLuaChonItem>(), null)
     {
     }
 
     public ThuNoKhachHangWindow(
+        string maKhachHang,
         string tenKhachHang,
         decimal conNo,
         IReadOnlyList<SoQuyLuaChonItem>? nguoiThuOptions = null,
@@ -41,6 +42,9 @@ public partial class ThuNoKhachHangWindow : Window
 
         _conNo = conNo;
 
+        TxtMaKhachHang.Text = string.IsNullOrWhiteSpace(maKhachHang)
+            ? "—"
+            : maKhachHang;
         TxtKhachHang.Text = string.IsNullOrWhiteSpace(tenKhachHang)
             ? "Khách lẻ"
             : tenKhachHang;

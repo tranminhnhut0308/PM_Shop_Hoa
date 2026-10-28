@@ -1,0 +1,78 @@
+<Window xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    x:Class="ShopHoa.Views.LichSuThanhToanKhachHangWindow"
+    x:CompileBindings="False"
+    Title="Lịch sử thanh toán công nợ"
+    Width="1180"
+    Height="700"
+    MinWidth="900"
+    MinHeight="560"
+    WindowStartupLocation="CenterOwner"
+    Background="#F4F7F6">
+
+    <Border Background="White" Margin="14" Padding="20"
+        CornerRadius="14" BorderBrush="#D8E5E0" BorderThickness="1">
+        <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="14">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                    <TextBlock Text="Lịch sử thanh toán công nợ" FontSize="21"
+                        FontWeight="Bold" Foreground="#163F38" />
+                    <TextBlock x:Name="TxtKhachHang" Margin="0,4,0,0"
+                        FontSize="13" Foreground="#61736E" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="Xuất Excel"
+                    Padding="16,9" CornerRadius="8" Background="#087F6E"
+                    Foreground="White" BorderThickness="0"
+                    Click="OnExportClick" />
+            </Grid>
+
+            <Grid Grid.Row="1" ColumnDefinitions="Auto,190,Auto,190,*,Auto"
+                ColumnSpacing="8" VerticalAlignment="Center">
+                <TextBlock Text="Từ ngày" VerticalAlignment="Center" />
+                <DatePicker x:Name="TuNgayPicker" Grid.Column="1" />
+                <TextBlock Grid.Column="2" Text="Đến ngày" VerticalAlignment="Center" />
+                <DatePicker x:Name="DenNgayPicker" Grid.Column="3" />
+                <TextBox x:Name="TimKiemBox" Grid.Column="4"
+                    Watermark="Tìm mã giao dịch, phương thức, người thực hiện, ghi chú..."
+                    VerticalContentAlignment="Center" />
+                <Button Grid.Column="5" Content="Lọc" Padding="16,8"
+                    Click="OnFilterClick" />
+            </Grid>
+
+            <Grid Grid.Row="2" ColumnDefinitions="*,*,Auto" VerticalAlignment="Center">
+                <TextBlock x:Name="TxtTongTien" FontWeight="SemiBold"
+                    Foreground="#087F6E" />
+                <TextBlock x:Name="TxtTongGiaoDich" Grid.Column="1"
+                    FontWeight="SemiBold" Foreground="#163F38" />
+                <TextBlock x:Name="TxtTrangThai" Grid.Column="2"
+                    Foreground="#D64545" />
+            </Grid>
+
+            <DataGrid Grid.Row="3" x:Name="LichSuGrid"
+                AutoGenerateColumns="False"
+                IsReadOnly="True"
+                CanUserReorderColumns="True"
+                CanUserResizeColumns="True"
+                GridLinesVisibility="Horizontal"
+                BorderBrush="#E2ECE8"
+                BorderThickness="1">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Mã giao dịch" Binding="{Binding MaGiaoDich}" Width="150" />
+                    <DataGridTextColumn Header="Ngày giờ" Binding="{Binding ThoiGianText}" Width="140" />
+                    <DataGridTextColumn Header="Công nợ trước" Binding="{Binding CongNoTruocText}" Width="145" />
+                    <DataGridTextColumn Header="Số tiền thanh toán" Binding="{Binding SoTienText}" Width="150" />
+                    <DataGridTextColumn Header="Công nợ sau" Binding="{Binding CongNoSauText}" Width="145" />
+                    <DataGridTextColumn Header="Phương thức" Binding="{Binding PhuongThucHienThi}" Width="125" />
+                    <DataGridTextColumn Header="Người thực hiện" Binding="{Binding NguoiThucHien}" Width="150" />
+                    <DataGridTextColumn Header="Ghi chú" Binding="{Binding GhiChuHienThi}" Width="*" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <StackPanel Grid.Row="4" Orientation="Horizontal"
+                HorizontalAlignment="Right" Spacing="10">
+                <Button Content="Đóng" MinWidth="100" Padding="16,8"
+                    Click="OnCloseClick" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

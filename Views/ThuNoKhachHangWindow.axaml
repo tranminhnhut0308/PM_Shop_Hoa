@@ -67,6 +67,12 @@
                 Padding="14,12">
                 <StackPanel Spacing="8">
                     <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Mã khách hàng" Foreground="#61736E" FontSize="13" />
+                        <TextBlock x:Name="TxtMaKhachHang" Grid.Column="1" FontWeight="SemiBold"
+                            Foreground="#163F38" FontSize="13" />
+                    </Grid>
+                    <Border Height="1" Background="#E8F0ED" />
+                    <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Text="Khách hàng" Foreground="#61736E" FontSize="13" />
                         <TextBlock x:Name="TxtKhachHang" Grid.Column="1" FontWeight="SemiBold"
                             Foreground="#163F38" FontSize="13" />

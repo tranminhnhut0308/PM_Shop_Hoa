@@ -42,6 +42,10 @@ public sealed class DatabaseService
     private bool? _coCotDuLieuKiotVietNhaCungCap;
     private bool? _hasHoaDonContactColumns;
     private bool _daBackfillNhomSoQuy;
+    private bool _daDamBaoBangLichSuThanhToanKhachHang;
+    private readonly SemaphoreSlim _khoaDamBaoBangLichSuThanhToanKhachHang = new(1, 1);
+    private bool _daDamBaoBangLichSuThanhToanNhaCungCap;
+    private readonly SemaphoreSlim _khoaDamBaoBangLichSuThanhToanNhaCungCap = new(1, 1);
 
     public DatabaseService()
     {
@@ -3282,6 +3286,43 @@ public sealed class DatabaseService
         return thongKe;
     }
 
+    public async Task<IReadOnlyList<ThanhToanCongNoKhachHang>> GetLichSuThanhToanCongNoKhachHangAsync(
+        uint customerId,
+        DateTime? tuNgay = null,
+        DateTime? denNgayExclusive = null)
+    {
+        await EnsureBangLichSuThanhToanKhachHangAsync();
+
+        const string sql = """
+        SELECT
+            ls.id AS Id,
+            kh.ma_khach_hang AS MaKhachHang,
+            ls.ma_giao_dich AS MaGiaoDich,
+            ls.thoi_gian AS ThoiGian,
+            ls.cong_no_truoc AS CongNoTruoc,
+            ls.so_tien AS SoTien,
+            ls.cong_no_sau AS CongNoSau,
+            ls.phuong_thuc AS PhuongThuc,
+            COALESCE(NULLIF(TRIM(nd.ho_ten), ''), nd.ten_dang_nhap, '') AS NguoiThucHien,
+            ls.ghi_chu AS GhiChu
+        FROM lich_su_thanh_toan_cong_no_khach_hang ls
+        INNER JOIN khach_hang kh ON kh.id = ls.khach_hang_id
+        LEFT JOIN nguoi_dung nd ON nd.id = ls.nguoi_thuc_hien_id
+        WHERE ls.khach_hang_id = @CustomerId
+          AND ls.trang_thai = 'HOAN_THANH'
+          AND (@TuNgay IS NULL OR ls.thoi_gian >= @TuNgay)
+          AND (@DenNgayExclusive IS NULL OR ls.thoi_gian < @DenNgayExclusive)
+        ORDER BY ls.thoi_gian DESC, ls.id DESC;
+        """;
+
+        await using var connection = await OpenAsync();
+        var records = await connection.QueryAsync<ThanhToanCongNoKhachHang>(
+            sql,
+            new { CustomerId = customerId, TuNgay = tuNgay, DenNgayExclusive = denNgayExclusive });
+
+        return records.AsList();
+    }
+
     public async Task<uint> ThemKhachHangAsync(KhachHang customer)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CustomersCreate, "Bạn không có quyền thêm khách hàng.");
@@ -5429,6 +5470,7 @@ ORDER BY hd.thoi_gian_ban DESC
 
         var now = thoiGianThanhToan ?? DateTime.Now;
         var userId = nguoiThucHienId ?? Session.CurrentUser?.Id;
+        await EnsureBangLichSuThanhToanKhachHangAsync();
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
         var coCotLienKet = await EnsurePhieuQuyHoaDonColumnsAsync();
 
@@ -5621,6 +5663,31 @@ ORDER BY hd.thoi_gian_ban DESC
                 tongDaThu += conLai;
             }
 
+            const string insertPaymentHistorySql = """
+            INSERT INTO lich_su_thanh_toan_cong_no_khach_hang
+            (khach_hang_id, ma_giao_dich, so_tien, cong_no_truoc, cong_no_sau,
+             thoi_gian, phuong_thuc, ghi_chu, nguoi_thuc_hien_id, trang_thai)
+            VALUES
+            (@KhachHangId, @MaGiaoDich, @SoTien, @CongNoTruoc, @CongNoSau,
+             @ThoiGian, @PhuongThuc, @GhiChu, @NguoiThucHienId, 'HOAN_THANH');
+            """;
+
+            await connection.ExecuteAsync(
+                insertPaymentHistorySql,
+                new
+                {
+                    KhachHangId = khachHangId,
+                    MaGiaoDich = maPhieuThu,
+                    SoTien = tongDaThu,
+                    CongNoTruoc = conNoHienTai,
+                    CongNoSau = Math.Max(0m, conNoHienTai - tongDaThu),
+                    ThoiGian = now,
+                    PhuongThuc = ChuanHoaPhuongThuc(phuongThucThanhToan),
+                    GhiChu = BlankToNull(ghiChu),
+                    NguoiThucHienId = userId
+                },
+                transaction);
+
             await transaction.CommitAsync();
             daCommit = true;
 
@@ -5632,15 +5699,12 @@ ORDER BY hd.thoi_gian_ban DESC
                 $"Thu nợ khách hàng {(tenKhach ?? khachHangId.ToString())}: {tongDaThu:N0} đ",
                 tongDaThu);
 
-            // Đọc lại công nợ còn lại theo cùng cách hiển thị ở danh sách khách hàng.
-            var thongKe = await GetThongKeMuaHangCuaKhachHangAsync(khachHangId);
-
             return new ThuNoKhachHangKetQua
             {
                 KhachHangId = khachHangId,
                 TenKhachHang = tenKhach ?? "",
                 TongDaThu = tongDaThu,
-                ConNoConLai = thongKe.TongConNoHienTai,
+                ConNoConLai = Math.Max(0m, conNoHienTai - tongDaThu),
                 SoHoaDonDaThu = soHoaDon,
                 MaPhieuThus = [maPhieuThu]
             };
@@ -5802,6 +5866,222 @@ ORDER BY hd.thoi_gian_ban DESC
         public decimal KhachCanTra { get; set; }
         public decimal KhachDaThanhToan { get; set; }
         public decimal ConNo { get; set; }
+    }
+
+    private async Task EnsureBangLichSuThanhToanKhachHangAsync()
+    {
+        if (_daDamBaoBangLichSuThanhToanKhachHang)
+            return;
+
+        await _khoaDamBaoBangLichSuThanhToanKhachHang.WaitAsync();
+        try
+        {
+            if (_daDamBaoBangLichSuThanhToanKhachHang)
+                return;
+
+            await using var connection = await OpenAsync();
+            await connection.ExecuteAsync(
+                """
+                CREATE TABLE IF NOT EXISTS lich_su_thanh_toan_cong_no_khach_hang (
+                    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    khach_hang_id INT UNSIGNED NOT NULL,
+                    ma_giao_dich VARCHAR(50) NOT NULL,
+                    so_tien DECIMAL(15,2) NOT NULL,
+                    cong_no_truoc DECIMAL(15,2) NOT NULL,
+                    cong_no_sau DECIMAL(15,2) NOT NULL,
+                    thoi_gian DATETIME NOT NULL,
+                    phuong_thuc VARCHAR(30) NOT NULL DEFAULT 'TIEN_MAT',
+                    ghi_chu TEXT NULL,
+                    nguoi_thuc_hien_id INT UNSIGNED NULL,
+                    trang_thai VARCHAR(20) NOT NULL DEFAULT 'HOAN_THANH',
+                    PRIMARY KEY (id),
+                    UNIQUE KEY uk_lsthukh_ma_giao_dich (ma_giao_dich),
+                    KEY idx_lsthukh_khach_thoi_gian (khach_hang_id, thoi_gian),
+                    CONSTRAINT fk_lsthukh_khach_hang
+                        FOREIGN KEY (khach_hang_id) REFERENCES khach_hang (id)
+                        ON UPDATE CASCADE,
+                    CONSTRAINT fk_lsthukh_nguoi_thuc_hien
+                        FOREIGN KEY (nguoi_thuc_hien_id) REFERENCES nguoi_dung (id)
+                        ON DELETE SET NULL ON UPDATE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                """);
+
+            await BackfillLichSuThanhToanKhachHangCuAsync(connection);
+            _daDamBaoBangLichSuThanhToanKhachHang = true;
+        }
+        finally
+        {
+            _khoaDamBaoBangLichSuThanhToanKhachHang.Release();
+        }
+    }
+
+    private static async Task BackfillLichSuThanhToanKhachHangCuAsync(
+        MySqlConnection connection)
+    {
+        await connection.ExecuteAsync(
+            """
+            INSERT IGNORE INTO lich_su_thanh_toan_cong_no_khach_hang
+            (khach_hang_id, ma_giao_dich, so_tien, cong_no_truoc, cong_no_sau,
+             thoi_gian, phuong_thuc, ghi_chu, nguoi_thuc_hien_id, trang_thai)
+            SELECT
+                p.KhachHangId,
+                p.MaGiaoDich,
+                p.SoTien + COALESCE((
+                    SELECT SUM(ls.ghi_co)
+                    FROM lich_su_cong_no_khach_hang ls
+                    WHERE ls.khach_hang_id = p.KhachHangId
+                      AND ls.loai_giao_dich = 'THU_TIEN'
+                      AND ls.loai_chung_tu = 'PHIEU_THU'
+                      AND ls.ma_chung_tu = p.MaGiaoDich
+                ), 0),
+                p.CongNoSau + p.SoTien + COALESCE((
+                    SELECT SUM(ls.ghi_co)
+                    FROM lich_su_cong_no_khach_hang ls
+                    WHERE ls.khach_hang_id = p.KhachHangId
+                      AND ls.loai_giao_dich = 'THU_TIEN'
+                      AND ls.loai_chung_tu = 'PHIEU_THU'
+                      AND ls.ma_chung_tu = p.MaGiaoDich
+                ), 0),
+                p.CongNoSau,
+                p.ThoiGian,
+                p.PhuongThuc,
+                p.GhiChu,
+                p.NguoiThucHienId,
+                'HOAN_THANH'
+            FROM (
+                SELECT
+                    grouped.KhachHangId,
+                    grouped.MaGiaoDich,
+                    grouped.SoTien,
+                    grouped.ThoiGian,
+                    grouped.PhuongThuc,
+                    grouped.NguoiThucHienId,
+                    grouped.GhiChu,
+                    COALESCE((
+                        SELECT ls.so_du
+                        FROM lich_su_cong_no_khach_hang ls
+                        WHERE ls.khach_hang_id = grouped.KhachHangId
+                          AND ls.loai_giao_dich = 'THU_TIEN'
+                          AND (
+                              (ls.loai_chung_tu = 'PHIEU_THU'
+                               AND ls.ma_chung_tu = grouped.MaGiaoDich)
+                              OR
+                              (ls.loai_chung_tu = 'HOA_DON'
+                               AND TRIM(SUBSTRING_INDEX(ls.ghi_chu, 'Phiếu thu ', -1))
+                                   = grouped.MaGiaoDich)
+                          )
+                        ORDER BY ls.id DESC
+                        LIMIT 1
+                    ), 0) AS CongNoSau
+                FROM (
+                    SELECT
+                        tt.khach_hang_id AS KhachHangId,
+                        TRIM(SUBSTRING_INDEX(
+                            SUBSTRING_INDEX(tt.ghi_chu, '[Phiếu thu ', -1),
+                            ']', 1
+                        )) AS MaGiaoDich,
+                        SUM(tt.so_tien) AS SoTien,
+                        MAX(tt.thoi_gian) AS ThoiGian,
+                        MAX(tt.phuong_thuc) AS PhuongThuc,
+                        MAX(tt.nguoi_thuc_hien_id) AS NguoiThucHienId,
+                        TRIM(SUBSTRING_INDEX(MAX(tt.ghi_chu), ' [Phiếu thu ', 1)) AS GhiChu
+                    FROM thanh_toan tt
+                    WHERE tt.khach_hang_id IS NOT NULL
+                      AND tt.ghi_chu LIKE '%[Phiếu thu %'
+                    GROUP BY tt.khach_hang_id, MaGiaoDich
+                ) grouped
+            ) p;
+            """);
+
+        await connection.ExecuteAsync(
+            """
+            INSERT IGNORE INTO lich_su_thanh_toan_cong_no_khach_hang
+            (khach_hang_id, ma_giao_dich, so_tien, cong_no_truoc, cong_no_sau,
+             thoi_gian, phuong_thuc, ghi_chu, nguoi_thuc_hien_id, trang_thai)
+            SELECT
+                ls.khach_hang_id,
+                ls.ma_chung_tu,
+                ls.ghi_co,
+                ls.so_du + ls.ghi_co,
+                ls.so_du,
+                ls.thoi_gian,
+                COALESCE(pc.phuong_thuc, 'TIEN_MAT'),
+                ls.ghi_chu,
+                ls.nguoi_thuc_hien_id,
+                'HOAN_THANH'
+            FROM lich_su_cong_no_khach_hang ls
+            LEFT JOIN phieu_chi pc ON pc.ma_phieu_chi = ls.ma_chung_tu
+            WHERE ls.loai_giao_dich = 'THU_TIEN'
+              AND ls.loai_chung_tu = 'PHIEU_THU'
+              AND ls.ma_chung_tu IS NOT NULL
+              AND ls.id = (
+                  SELECT MAX(latest.id)
+                  FROM lich_su_cong_no_khach_hang latest
+                  WHERE latest.khach_hang_id = ls.khach_hang_id
+                    AND latest.loai_giao_dich = 'THU_TIEN'
+                    AND latest.loai_chung_tu = 'PHIEU_THU'
+                    AND latest.ma_chung_tu = ls.ma_chung_tu
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM lich_su_thanh_toan_cong_no_khach_hang h
+                  WHERE h.ma_giao_dich = ls.ma_chung_tu
+              );
+            """);
+
+        await connection.ExecuteAsync(
+            """
+            INSERT IGNORE INTO lich_su_thanh_toan_cong_no_khach_hang
+            (khach_hang_id, ma_giao_dich, so_tien, cong_no_truoc, cong_no_sau,
+             thoi_gian, phuong_thuc, ghi_chu, nguoi_thuc_hien_id, trang_thai)
+            SELECT
+                tt.khach_hang_id,
+                CONCAT('LEGACY-', tt.ma_thanh_toan),
+                tt.so_tien,
+                COALESCE((
+                    SELECT ls.so_du
+                    FROM lich_su_cong_no_khach_hang ls
+                    WHERE ls.khach_hang_id = tt.khach_hang_id
+                      AND ls.loai_giao_dich = 'THU_TIEN'
+                      AND ls.loai_chung_tu = 'HOA_DON'
+                      AND ls.ma_chung_tu = hd.ma_hoa_don
+                      AND ls.ghi_co = tt.so_tien
+                      AND ls.thoi_gian = tt.thoi_gian
+                    ORDER BY ls.id DESC
+                    LIMIT 1
+                ), 0) + tt.so_tien,
+                COALESCE((
+                    SELECT ls.so_du
+                    FROM lich_su_cong_no_khach_hang ls
+                    WHERE ls.khach_hang_id = tt.khach_hang_id
+                      AND ls.loai_giao_dich = 'THU_TIEN'
+                      AND ls.loai_chung_tu = 'HOA_DON'
+                      AND ls.ma_chung_tu = hd.ma_hoa_don
+                      AND ls.ghi_co = tt.so_tien
+                      AND ls.thoi_gian = tt.thoi_gian
+                    ORDER BY ls.id DESC
+                    LIMIT 1
+                ), 0),
+                tt.thoi_gian,
+                tt.phuong_thuc,
+                tt.ghi_chu,
+                tt.nguoi_thuc_hien_id,
+                'HOAN_THANH'
+            FROM thanh_toan tt
+            INNER JOIN hoa_don_ban_hang hd ON hd.id = tt.hoa_don_id
+            WHERE tt.khach_hang_id IS NOT NULL
+              AND (tt.ghi_chu IS NULL OR tt.ghi_chu NOT LIKE '%[Phiếu thu %')
+              AND EXISTS (
+                  SELECT 1
+                  FROM lich_su_cong_no_khach_hang ls
+                  WHERE ls.khach_hang_id = tt.khach_hang_id
+                    AND ls.loai_giao_dich = 'THU_TIEN'
+                    AND ls.loai_chung_tu = 'HOA_DON'
+                    AND ls.ma_chung_tu = hd.ma_hoa_don
+                    AND ls.ghi_co = tt.so_tien
+                    AND ls.thoi_gian = tt.thoi_gian
+              );
+            """);
     }
 
     /// <summary>Dòng phiếu nhập cần cho việc ghi nhận thanh toán công nợ.</summary>
@@ -6102,6 +6382,597 @@ ORDER BY hd.thoi_gian_ban DESC
     }
 
     /// <summary>
+            public async Task<ThanhToanCongNoNhaCungCapKetQua> ThanhToanCongNoNhaCungCapAsync(
+                uint nhaCungCapId,
+                decimal soTien,
+                string? phuongThucThanhToan = null,
+                string? maThamChieu = null,
+                string? ghiChu = null,
+                DateTime? thoiGianThanhToan = null)
+            {
+                Quyen.RequirePermission(
+                    Session.CurrentUser,
+                    PermissionKeys.SuppliersDebtPay,
+                    "Bạn không có quyền thanh toán công nợ nhà cung cấp.");
+
+                if (nhaCungCapId == 0)
+                    throw new InvalidOperationException("Thiếu nhà cung cấp cần thanh toán.");
+                if (soTien <= 0)
+                    throw new InvalidOperationException("Số tiền thanh toán phải lớn hơn 0.");
+                if (maThamChieu?.Length > 150)
+                    throw new InvalidOperationException("Mã tham chiếu không được dài quá 150 ký tự.");
+
+                var now = thoiGianThanhToan ?? DateTime.Now;
+                var userId = Session.CurrentUser?.Id;
+                await EnsureBangLichSuThanhToanNhaCungCapAsync();
+                await EnsurePhieuNhapTrackingColumnsAsync();
+                var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
+                var coCotNguoiNopNhanGhiChu = await EnsurePhieuQuyExtraColumnsAsync();
+                var coCotPhieuNhap = await EnsurePhieuQuyPhieuNhapColumnsAsync();
+
+                await using var connection = await OpenAsync();
+                await using var transaction = await connection.BeginTransactionAsync();
+                var daCommit = false;
+
+                try
+                {
+                    const string supplierSql = """
+                    SELECT
+                        id AS Id,
+                        ma_nha_cung_cap AS MaNhaCungCap,
+                        ten_nha_cung_cap AS TenNhaCungCap,
+                        chi_nhanh_id AS ChiNhanhId
+                    FROM nha_cung_cap
+                    WHERE id = @Id
+                    LIMIT 1
+                    FOR UPDATE;
+                    """;
+
+                    var supplier = await connection.QueryFirstOrDefaultAsync<NhaCungCapThanhToanRow>(
+                        supplierSql,
+                        new { Id = nhaCungCapId },
+                        transaction);
+
+                    if (supplier is null)
+                        throw new InvalidOperationException($"Không tìm thấy nhà cung cấp id {nhaCungCapId}.");
+
+                    const string invoicesSql = """
+                    SELECT
+                        p.id AS Id,
+                        p.chi_nhanh_id AS ChiNhanhId,
+                        p.nha_cung_cap_id AS NhaCungCapId,
+                        p.ma_phieu_nhap AS MaPhieuNhap,
+                        @TenNhaCungCap AS TenNhaCungCap,
+                        p.tong_tien_nhap AS TongTienNhap,
+                        p.da_thanh_toan AS DaThanhToan,
+                        p.con_no AS ConNo,
+                        p.trang_thai AS TrangThai
+                    FROM phieu_nhap_hang p
+                    WHERE p.nha_cung_cap_id = @NhaCungCapId
+                      AND p.con_no > 0
+                      AND p.cong_no_da_ghi_nhan = 1
+                      AND p.trang_thai NOT IN ('LUU_TAM', 'HUY')
+                    ORDER BY p.thoi_gian_nhap ASC, p.id ASC
+                    FOR UPDATE;
+                    """;
+
+                    var invoices = (await connection.QueryAsync<PhieuNhapCongNoRow>(
+                        invoicesSql,
+                        new
+                        {
+                            NhaCungCapId = nhaCungCapId,
+                            TenNhaCungCap = supplier.TenNhaCungCap
+                        },
+                        transaction)).AsList();
+
+                    var debtExpression = TaoBieuThucTienNhaCungCap("ncc.id", coCotKiotViet).NoHienTai;
+                    var debtBefore = await connection.ExecuteScalarAsync<decimal>(
+                        $"""
+                        SELECT {debtExpression}
+                        FROM nha_cung_cap ncc
+                        WHERE ncc.id = @Id
+                        FOR UPDATE;
+                        """,
+                        new { Id = nhaCungCapId },
+                        transaction);
+
+                    if (debtBefore <= 0)
+                        throw new InvalidOperationException("Nhà cung cấp không còn công nợ cần thanh toán.");
+                    if (soTien > debtBefore)
+                        throw new InvalidOperationException(
+                            $"Số tiền thanh toán ({soTien:N0} đ) vượt quá công nợ mới nhất ({debtBefore:N0} đ). "
+                            + "Vui lòng tải lại công nợ trước khi thanh toán.");
+
+                    var ledgerCount = await connection.ExecuteScalarAsync<long>(
+                        """
+                        SELECT COUNT(*)
+                        FROM lich_su_cong_no_nha_cung_cap
+                        WHERE nha_cung_cap_id = @Id;
+                        """,
+                        new { Id = nhaCungCapId },
+                        transaction);
+
+                    if (ledgerCount == 0)
+                    {
+                        var openingInvoiceDebt = invoices.Sum(invoice => Math.Max(0m, invoice.ConNo));
+                        if (openingInvoiceDebt > 0)
+                        {
+                            await GhiMotDongCongNoNhaCungCapAsync(
+                                connection,
+                                transaction,
+                                nhaCungCapId,
+                                supplier.ChiNhanhId ?? Session.CurrentUser?.ChiNhanhId ?? 1,
+                                "GHI_NO_DAU_KY",
+                                $"NO_DAU_KY-{nhaCungCapId}",
+                                openingInvoiceDebt,
+                                0,
+                                now,
+                                null,
+                                "Số dư công nợ đầu kỳ từ các phiếu nhập còn nợ hiện có.");
+                        }
+                    }
+
+                    var method = ChuanHoaPhuongThuc(phuongThucThanhToan);
+                    var reference = BlankToNull(maThamChieu);
+                    var maPhieuChi = await SinhMaPhieuChiTrongGiaoDichAsync(connection, transaction);
+                    var remainingToAllocate = soTien;
+                    var allocations = new List<PhanBoThanhToanNhaCungCap>();
+
+                    foreach (var invoice in invoices)
+                    {
+                        if (remainingToAllocate <= 0)
+                            break;
+
+                        var allocation = Math.Min(remainingToAllocate, invoice.ConNo);
+                        var paidAfter = invoice.DaThanhToan + allocation;
+                        var debtAfter = Math.Max(0m, invoice.ConNo - allocation);
+
+                        await connection.ExecuteAsync(
+                            """
+                            UPDATE phieu_nhap_hang
+                            SET da_thanh_toan = @DaThanhToan,
+                                con_no = @ConNo,
+                                ngay_cap_nhat = @ThoiGian
+                            WHERE id = @Id;
+                            """,
+                            new
+                            {
+                                DaThanhToan = paidAfter,
+                                ConNo = debtAfter,
+                                ThoiGian = now,
+                                Id = invoice.Id
+                            },
+                            transaction);
+
+                        var maThanhToan = await SinhMaThanhToanNhaCungCapTrongGiaoDichAsync(
+                            connection,
+                            transaction);
+                        var allocationNote = TaoGhiChuPhanBoThanhToanNhaCungCap(
+                            ghiChu,
+                            reference,
+                            maPhieuChi);
+
+                        await connection.ExecuteAsync(
+                            """
+                            INSERT INTO thanh_toan_nha_cung_cap
+                            (ma_thanh_toan, nha_cung_cap_id, phieu_nhap_id, so_tien, phuong_thuc,
+                             thoi_gian, nguoi_thuc_hien_id, ghi_chu)
+                            VALUES
+                            (@MaThanhToan, @NhaCungCapId, @PhieuNhapId, @SoTien, @PhuongThuc,
+                             @ThoiGian, @NguoiThucHienId, @GhiChu);
+                            """,
+                            new
+                            {
+                                MaThanhToan = maThanhToan,
+                                NhaCungCapId = nhaCungCapId,
+                                PhieuNhapId = invoice.Id,
+                                SoTien = allocation,
+                                PhuongThuc = method,
+                                ThoiGian = now,
+                                NguoiThucHienId = userId,
+                                GhiChu = allocationNote
+                            },
+                            transaction);
+
+                        await GhiMotDongCongNoNhaCungCapAsync(
+                            connection,
+                            transaction,
+                            nhaCungCapId,
+                            invoice.ChiNhanhId,
+                            "THANH_TOAN_NHAP",
+                            invoice.MaPhieuNhap,
+                            0,
+                            allocation,
+                            now,
+                            userId,
+                            $"Thanh toán công nợ phiếu {invoice.MaPhieuNhap}, mã giao dịch {maPhieuChi}.");
+
+                        allocations.Add(new PhanBoThanhToanNhaCungCap
+                        {
+                            MaPhieuNhap = invoice.MaPhieuNhap,
+                            SoTien = allocation
+                        });
+                        remainingToAllocate -= allocation;
+                    }
+
+                    if (remainingToAllocate > 0)
+                    {
+                        await GhiMotDongCongNoNhaCungCapAsync(
+                            connection,
+                            transaction,
+                            nhaCungCapId,
+                            supplier.ChiNhanhId ?? Session.CurrentUser?.ChiNhanhId ?? 1,
+                            "THANH_TOAN_NHAP",
+                            maPhieuChi,
+                            0,
+                            remainingToAllocate,
+                            now,
+                            userId,
+                            $"Thanh toán phần công nợ không gắn phiếu nhập, mã giao dịch {maPhieuChi}.");
+                    }
+
+                    await GhiPhieuChiTongHopNhaCungCapTrongGiaoDichAsync(
+                        connection,
+                        transaction,
+                        maPhieuChi,
+                        supplier.ChiNhanhId ?? Session.CurrentUser?.ChiNhanhId ?? 1,
+                        supplier.TenNhaCungCap,
+                        soTien,
+                        method,
+                        reference,
+                        ghiChu,
+                        now,
+                        userId,
+                        coCotNguoiNopNhanGhiChu,
+                        coCotPhieuNhap);
+
+                    await connection.ExecuteAsync(
+                        """
+                        INSERT INTO lich_su_thanh_toan_cong_no_nha_cung_cap
+                        (nha_cung_cap_id, ma_nha_cung_cap, ten_nha_cung_cap, don_vi_nhan,
+                         ma_giao_dich, so_tien, cong_no_truoc, cong_no_sau, thoi_gian,
+                         phuong_thuc, ma_tham_chieu, ghi_chu, nguoi_thuc_hien_id, trang_thai)
+                        VALUES
+                        (@NhaCungCapId, @MaNhaCungCap, @TenNhaCungCap, @DonViNhan,
+                         @MaGiaoDich, @SoTien, @CongNoTruoc, @CongNoSau, @ThoiGian,
+                         @PhuongThuc, @MaThamChieu, @GhiChu, @NguoiThucHienId, 'HOAN_THANH');
+                        """,
+                        new
+                        {
+                            NhaCungCapId = nhaCungCapId,
+                            supplier.MaNhaCungCap,
+                            supplier.TenNhaCungCap,
+                            DonViNhan = supplier.TenNhaCungCap,
+                            MaGiaoDich = maPhieuChi,
+                            SoTien = soTien,
+                            CongNoTruoc = debtBefore,
+                            CongNoSau = Math.Max(0m, debtBefore - soTien),
+                            ThoiGian = now,
+                            PhuongThuc = method,
+                            MaThamChieu = reference,
+                            GhiChu = BlankToNull(ghiChu),
+                            NguoiThucHienId = userId
+                        },
+                        transaction);
+
+                    await transaction.CommitAsync();
+                    daCommit = true;
+
+                    _ = LogSubAccountActivityAsync(
+                        "Thanh toán công nợ nhà cung cấp",
+                        "NHA_CUNG_CAP",
+                        nhaCungCapId,
+                        maPhieuChi,
+                        $"Thanh toán công nợ {supplier.TenNhaCungCap}: {soTien:N0} đ "
+                        + $"(còn nợ {Math.Max(0m, debtBefore - soTien):N0} đ)",
+                        soTien);
+
+                    return new ThanhToanCongNoNhaCungCapKetQua
+                    {
+                        NhaCungCapId = nhaCungCapId,
+                        MaNhaCungCap = supplier.MaNhaCungCap,
+                        TenNhaCungCap = supplier.TenNhaCungCap,
+                        MaGiaoDich = maPhieuChi,
+                        SoTienThanhToan = soTien,
+                        CongNoTruoc = debtBefore,
+                        CongNoSau = Math.Max(0m, debtBefore - soTien),
+                        SoPhieuNhapDuocPhanBo = allocations.Count,
+                        PhanBo = allocations
+                    };
+                }
+                catch (Exception ex)
+                {
+                    if (!daCommit)
+                    {
+                        try
+                        {
+                            await transaction.RollbackAsync();
+                        }
+                        catch (Exception rollbackEx)
+                        {
+                            SafeLog.WriteError(
+                                "Không rollback được giao dịch thanh toán công nợ nhà cung cấp",
+                                rollbackEx);
+                        }
+                    }
+
+                    SafeLog.WriteError("Lỗi thanh toán công nợ nhà cung cấp", ex);
+                    throw;
+                }
+            }
+
+            public async Task<IReadOnlyList<ThanhToanCongNoNhaCungCap>> GetLichSuThanhToanCongNoNhaCungCapAsync(
+                uint? nhaCungCapId = null,
+                DateTime? tuNgay = null,
+                DateTime? denNgayExclusive = null)
+            {
+                await EnsureBangLichSuThanhToanNhaCungCapAsync();
+
+                const string sql = """
+                SELECT
+                    ls.id AS Id,
+                    ls.nha_cung_cap_id AS NhaCungCapId,
+                    ls.ma_nha_cung_cap AS MaNhaCungCap,
+                    ls.ten_nha_cung_cap AS TenNhaCungCap,
+                    ls.don_vi_nhan AS DonViNhan,
+                    ls.ma_giao_dich AS MaGiaoDich,
+                    ls.thoi_gian AS ThoiGian,
+                    ls.cong_no_truoc AS CongNoTruoc,
+                    ls.so_tien AS SoTien,
+                    ls.cong_no_sau AS CongNoSau,
+                    ls.phuong_thuc AS PhuongThuc,
+                    ls.ma_tham_chieu AS MaThamChieu,
+                    COALESCE(NULLIF(TRIM(nd.ho_ten), ''), nd.ten_dang_nhap, '') AS NguoiThucHien,
+                    ls.ghi_chu AS GhiChu
+                FROM lich_su_thanh_toan_cong_no_nha_cung_cap ls
+                LEFT JOIN nguoi_dung nd ON nd.id = ls.nguoi_thuc_hien_id
+                WHERE ls.trang_thai = 'HOAN_THANH'
+                  AND (@NhaCungCapId IS NULL OR ls.nha_cung_cap_id = @NhaCungCapId)
+                  AND (@TuNgay IS NULL OR ls.thoi_gian >= @TuNgay)
+                  AND (@DenNgayExclusive IS NULL OR ls.thoi_gian < @DenNgayExclusive)
+                ORDER BY ls.thoi_gian DESC, ls.id DESC;
+                """;
+
+                await using var connection = await OpenAsync();
+                return (await connection.QueryAsync<ThanhToanCongNoNhaCungCap>(
+                    sql,
+                    new
+                    {
+                        NhaCungCapId = nhaCungCapId,
+                        TuNgay = tuNgay,
+                        DenNgayExclusive = denNgayExclusive
+                    })).AsList();
+            }
+
+            public async Task<IReadOnlyList<PhanBoThanhToanNhaCungCap>> GetPhanBoThanhToanNhaCungCapAsync(
+                string maGiaoDich)
+            {
+                const string sql = """
+                SELECT
+                    p.ma_phieu_nhap AS MaPhieuNhap,
+                    t.so_tien AS SoTien
+                FROM thanh_toan_nha_cung_cap t
+                INNER JOIN phieu_nhap_hang p ON p.id = t.phieu_nhap_id
+                WHERE t.ghi_chu LIKE CONCAT('%[Giao dịch ', @MaGiaoDich, ']%')
+                ORDER BY p.thoi_gian_nhap, p.id;
+                """;
+
+                await using var connection = await OpenAsync();
+                return (await connection.QueryAsync<PhanBoThanhToanNhaCungCap>(
+                    sql,
+                    new { MaGiaoDich = maGiaoDich })).AsList();
+            }
+
+            private static string TaoGhiChuPhanBoThanhToanNhaCungCap(
+                string? ghiChu,
+                string? maThamChieu,
+                string maGiaoDich)
+            {
+                var parts = new List<string>();
+                if (!string.IsNullOrWhiteSpace(ghiChu))
+                    parts.Add(ghiChu.Trim());
+                if (!string.IsNullOrWhiteSpace(maThamChieu))
+                    parts.Add($"Tham chiếu: {maThamChieu.Trim()}");
+                parts.Add($"[Giao dịch {maGiaoDich}]");
+                return string.Join(". ", parts);
+            }
+
+            private static async Task GhiPhieuChiTongHopNhaCungCapTrongGiaoDichAsync(
+                MySqlConnection connection,
+                MySqlTransaction transaction,
+                string maPhieuChi,
+                uint chiNhanhId,
+                string tenNhaCungCap,
+                decimal soTien,
+                string phuongThuc,
+                string? maThamChieu,
+                string? ghiChu,
+                DateTime thoiGian,
+                uint? nguoiThucHienId,
+                bool coCotNguoiNopNhanGhiChu,
+                bool coCotPhieuNhap)
+            {
+                var idNhomChi = await LayIdNhomChiPhiTheoMaAsync(
+                    connection,
+                    transaction,
+                    "CHI_NHA_CUNG_CAP");
+                var noiDung = "Thanh toán công nợ nhà cung cấp";
+                var noiDungChiTiet = new List<string> { noiDung };
+                if (!string.IsNullOrWhiteSpace(maThamChieu))
+                    noiDungChiTiet.Add($"Mã tham chiếu: {maThamChieu.Trim()}");
+                if (!string.IsNullOrWhiteSpace(ghiChu))
+                    noiDungChiTiet.Add(ghiChu.Trim());
+                var ghiChuPhieu = string.Join(". ", noiDungChiTiet);
+
+                string sql;
+                if (coCotPhieuNhap && coCotNguoiNopNhanGhiChu)
+                {
+                    sql = """
+                    INSERT INTO phieu_chi
+                    (ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                     noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
+                     nguoi_thuc_hien_id, trang_thai, phieu_nhap_hang_id, ma_phieu_nhap)
+                    VALUES
+                    (@MaPhieuChi, @ChiNhanhId, @NhomChiId, @SoTien, @PhuongThuc,
+                     @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
+                     @NguoiThucHienId, @TrangThai, NULL, NULL);
+                    """;
+                }
+                else if (coCotNguoiNopNhanGhiChu)
+                {
+                    sql = """
+                    INSERT INTO phieu_chi
+                    (ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                     noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
+                     nguoi_thuc_hien_id, trang_thai)
+                    VALUES
+                    (@MaPhieuChi, @ChiNhanhId, @NhomChiId, @SoTien, @PhuongThuc,
+                     @NoiDung, @NguoiNopNhan, @GhiChu, @ThoiGian,
+                     @NguoiThucHienId, @TrangThai);
+                    """;
+                }
+                else
+                {
+                    sql = """
+                    INSERT INTO phieu_chi
+                    (ma_phieu_chi, chi_nhanh_id, nhom_chi_phi_id, so_tien, phuong_thuc,
+                     noi_dung, thoi_gian_chi, nguoi_thuc_hien_id, trang_thai)
+                    VALUES
+                    (@MaPhieuChi, @ChiNhanhId, @NhomChiId, @SoTien, @PhuongThuc,
+                     @NoiDung, @ThoiGian, @NguoiThucHienId, @TrangThai);
+                    """;
+                }
+
+                await connection.ExecuteAsync(
+                    sql,
+                    new
+                    {
+                        MaPhieuChi = maPhieuChi,
+                        ChiNhanhId = chiNhanhId,
+                        NhomChiId = idNhomChi,
+                        SoTien = soTien,
+                        PhuongThuc = phuongThuc,
+                        NoiDung = noiDung,
+                        NguoiNopNhan = Truncate150(tenNhaCungCap),
+                        GhiChu = ghiChuPhieu,
+                        ThoiGian = thoiGian,
+                        NguoiThucHienId = nguoiThucHienId,
+                        TrangThai = TrangThaiPhieuHoanThanh
+                    },
+                    transaction);
+            }
+
+            private async Task EnsureBangLichSuThanhToanNhaCungCapAsync()
+            {
+                if (_daDamBaoBangLichSuThanhToanNhaCungCap)
+                    return;
+
+                await _khoaDamBaoBangLichSuThanhToanNhaCungCap.WaitAsync();
+                try
+                {
+                    if (_daDamBaoBangLichSuThanhToanNhaCungCap)
+                        return;
+
+                    await using var connection = await OpenAsync();
+                    await connection.ExecuteAsync(
+                        """
+                        CREATE TABLE IF NOT EXISTS lich_su_thanh_toan_cong_no_nha_cung_cap (
+                            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                            nha_cung_cap_id INT UNSIGNED NOT NULL,
+                            ma_nha_cung_cap VARCHAR(30) NOT NULL,
+                            ten_nha_cung_cap VARCHAR(200) NOT NULL,
+                            don_vi_nhan VARCHAR(200) NOT NULL,
+                            ma_giao_dich VARCHAR(50) NOT NULL,
+                            so_tien DECIMAL(15,2) NOT NULL,
+                            cong_no_truoc DECIMAL(15,2) NOT NULL,
+                            cong_no_sau DECIMAL(15,2) NOT NULL,
+                            thoi_gian DATETIME NOT NULL,
+                            phuong_thuc VARCHAR(30) NOT NULL DEFAULT 'TIEN_MAT',
+                            ma_tham_chieu VARCHAR(150) NULL,
+                            ghi_chu TEXT NULL,
+                            nguoi_thuc_hien_id INT UNSIGNED NULL,
+                            trang_thai VARCHAR(20) NOT NULL DEFAULT 'HOAN_THANH',
+                            PRIMARY KEY (id),
+                            UNIQUE KEY uk_lstncc_ma_giao_dich (ma_giao_dich),
+                            KEY idx_lstncc_ncc_thoi_gian (nha_cung_cap_id, thoi_gian),
+                            KEY idx_lstncc_nguoi_thuc_hien (nguoi_thuc_hien_id),
+                            CONSTRAINT fk_lstncc_thanh_toan_ncc
+                                FOREIGN KEY (nha_cung_cap_id) REFERENCES nha_cung_cap (id)
+                                ON UPDATE CASCADE,
+                            CONSTRAINT fk_lstncc_thanh_toan_nguoi
+                                FOREIGN KEY (nguoi_thuc_hien_id) REFERENCES nguoi_dung (id)
+                                ON DELETE SET NULL ON UPDATE CASCADE
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                        """);
+
+                    await BackfillLichSuThanhToanNhaCungCapCuAsync(connection);
+                    _daDamBaoBangLichSuThanhToanNhaCungCap = true;
+                }
+                finally
+                {
+                    _khoaDamBaoBangLichSuThanhToanNhaCungCap.Release();
+                }
+            }
+
+            private static async Task BackfillLichSuThanhToanNhaCungCapCuAsync(
+                MySqlConnection connection)
+            {
+                await connection.ExecuteAsync(
+                    """
+                    INSERT IGNORE INTO lich_su_thanh_toan_cong_no_nha_cung_cap
+                    (nha_cung_cap_id, ma_nha_cung_cap, ten_nha_cung_cap, don_vi_nhan,
+                     ma_giao_dich, so_tien, cong_no_truoc, cong_no_sau, thoi_gian,
+                     phuong_thuc, ma_tham_chieu, ghi_chu, nguoi_thuc_hien_id, trang_thai)
+                    SELECT
+                        tt.nha_cung_cap_id,
+                        ncc.ma_nha_cung_cap,
+                        ncc.ten_nha_cung_cap,
+                        ncc.ten_nha_cung_cap,
+                        tt.ma_thanh_toan,
+                        tt.so_tien,
+                        COALESCE((
+                            SELECT ls.so_du
+                            FROM lich_su_cong_no_nha_cung_cap ls
+                            WHERE ls.nha_cung_cap_id = tt.nha_cung_cap_id
+                              AND ls.loai_giao_dich = 'THANH_TOAN_NHAP'
+                              AND ls.ma_chung_tu = p.ma_phieu_nhap
+                              AND ls.ghi_co = tt.so_tien
+                              AND ls.thoi_gian = tt.thoi_gian
+                            ORDER BY ls.id DESC
+                            LIMIT 1
+                        ), 0) + tt.so_tien,
+                        COALESCE((
+                            SELECT ls.so_du
+                            FROM lich_su_cong_no_nha_cung_cap ls
+                            WHERE ls.nha_cung_cap_id = tt.nha_cung_cap_id
+                              AND ls.loai_giao_dich = 'THANH_TOAN_NHAP'
+                              AND ls.ma_chung_tu = p.ma_phieu_nhap
+                              AND ls.ghi_co = tt.so_tien
+                              AND ls.thoi_gian = tt.thoi_gian
+                            ORDER BY ls.id DESC
+                            LIMIT 1
+                        ), 0),
+                        tt.thoi_gian,
+                        tt.phuong_thuc,
+                        NULL,
+                        tt.ghi_chu,
+                        tt.nguoi_thuc_hien_id,
+                        'HOAN_THANH'
+                    FROM thanh_toan_nha_cung_cap tt
+                    INNER JOIN nha_cung_cap ncc ON ncc.id = tt.nha_cung_cap_id
+                    INNER JOIN phieu_nhap_hang p ON p.id = tt.phieu_nhap_id
+                    WHERE tt.ghi_chu IS NULL OR tt.ghi_chu NOT LIKE '%[Giao dịch %';
+                    """);
+            }
+
+            private sealed class NhaCungCapThanhToanRow
+            {
+                public uint Id { get; set; }
+                public string MaNhaCungCap { get; set; } = "";
+                public string TenNhaCungCap { get; set; } = "";
+                public uint? ChiNhanhId { get; set; }
+            }
+
     /// Cấp mã lịch sử thanh toán nhà cung cấp kế tiếp (TTNCC0001, TTNCC0002...)
     /// bằng chính connection và transaction đang chạy, tránh trùng mã
     /// (cột <c>ma_thanh_toan</c> có UNIQUE).
