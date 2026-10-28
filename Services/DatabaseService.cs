@@ -4350,7 +4350,6 @@ public sealed class DatabaseService
 
     public async Task<IReadOnlyList<HoaDon>> GetHoaDonAsync(
      string? search = null,
-     string? trangThaiLoc = null,
      DateTime? ngayLoc = null,
      int? limit = 500)
     {
@@ -4373,7 +4372,6 @@ SELECT
     hd.khach_can_tra AS KhachCanTra,
     hd.khach_da_thanh_toan AS KhachDaThanhToan,
     hd.con_no AS ConNo,
-    hd.trang_thai_thanh_toan AS TrangThaiThanhToan,
     hd.trang_thai_hoa_don AS TrangThaiHoaDon,
     hd.ghi_chu AS GhiChu
 
@@ -4387,11 +4385,6 @@ WHERE (
     OR hd.ma_hoa_don LIKE CONCAT('%', @Search, '%')
     OR kh.ma_khach_hang LIKE CONCAT('%', @Search, '%')
     OR kh.ten_khach_hang LIKE CONCAT('%', @Search, '%')
-)
-AND (
-    @Loc = ''
-    OR (@Loc = 'PAID' AND hd.con_no <= 0)
-    OR (@Loc = 'DEBT' AND hd.con_no > 0)
 )
 AND (
     @Ngay IS NULL
@@ -4408,7 +4401,6 @@ ORDER BY hd.thoi_gian_ban DESC
                 new
                 {
                     Search = search ?? "",
-                    Loc = (trangThaiLoc ?? "").Trim().ToUpperInvariant(),
                     Ngay = ngayLoc?.Date   // chỉ lấy phần ngày, bỏ giờ
                 })
         ).AsList();

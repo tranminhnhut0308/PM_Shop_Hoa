@@ -15,40 +15,6 @@ public sealed partial class MainWindowViewModel
     private readonly HoaDonImportService _hoaDonImport = new();
     private bool _suppressInvoiceDateReload;
 
-    // =========================================================
-    // LỌC NHANH HÓA ĐƠN: TẤT CẢ / ĐÃ THANH TOÁN / CÒN NỢ
-    // =========================================================
-
-    /// <summary>Bộ lọc trạng thái đang chọn: ALL, PAID hoặc DEBT.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsInvoiceFilterAll))]
-    [NotifyPropertyChangedFor(nameof(IsInvoiceFilterPaid))]
-    [NotifyPropertyChangedFor(nameof(IsInvoiceFilterDebt))]
-    private string invoiceFilter = "ALL";
-
-    public bool IsInvoiceFilterAll => InvoiceFilter == "ALL";
-    public bool IsInvoiceFilterPaid => InvoiceFilter == "PAID";
-    public bool IsInvoiceFilterDebt => InvoiceFilter == "DEBT";
-
-    /// <summary>Giá trị lọc truyền xuống database (rỗng = không lọc).</summary>
-    private string? LocHoaDonHienTai => InvoiceFilter switch
-    {
-        "PAID" => "PAID",
-        "DEBT" => "DEBT",
-        _ => null
-    };
-
-    /// <summary>Đổi bộ lọc nhanh rồi tải lại danh sách hóa đơn.</summary>
-    [RelayCommand]
-    private async Task LocHoaDonAsync(string? filter)
-    {
-        InvoiceFilter = string.IsNullOrWhiteSpace(filter)
-            ? "ALL"
-            : filter.Trim().ToUpperInvariant();
-
-        await LoadInvoicesAsync();
-    }
-
     /// <summary>
     /// Thu công nợ theo khách hàng (nút "Thanh toán công nợ" ở tab Công nợ):
     /// hỏi số tiền + phương thức rồi tự động trừ dần vào các hóa đơn còn nợ (cũ
@@ -293,7 +259,6 @@ public sealed partial class MainWindowViewModel
             IsImporting = false;
             _invoicesLoaded = false;
 
-            InvoiceFilter = "ALL";
             InvoiceSearch = "";
             _suppressInvoiceDateReload = true;
             try
@@ -545,10 +510,9 @@ public sealed partial class MainWindowViewModel
         {
             StatusMessage = "Đang xuất danh sách hóa đơn...";
 
-            // Lấy toàn bộ hóa đơn theo đúng điều kiện tìm kiếm và ngày/trạng thái đang lọc (không giới hạn 500 dòng)
+            // Lấy toàn bộ hóa đơn theo đúng điều kiện tìm kiếm và ngày đang lọc (không giới hạn 500 dòng)
             var danhSach = await _db.GetHoaDonAsync(
                 InvoiceSearch,
-                LocHoaDonHienTai,
                 InvoiceFilterDate?.Date,
                 limit: null);
 
@@ -565,10 +529,6 @@ public sealed partial class MainWindowViewModel
             var moTaLoc = new List<string>();
             if (InvoiceFilterDate.HasValue)
                 moTaLoc.Add($"Ngày: {InvoiceFilterDate.Value:dd/MM/yyyy}");
-            if (IsInvoiceFilterPaid)
-                moTaLoc.Add("Đã thanh toán");
-            else if (IsInvoiceFilterDebt)
-                moTaLoc.Add("Còn nợ");
             if (!string.IsNullOrWhiteSpace(InvoiceSearch))
                 moTaLoc.Add($"Từ khóa: \"{InvoiceSearch.Trim()}\"");
 

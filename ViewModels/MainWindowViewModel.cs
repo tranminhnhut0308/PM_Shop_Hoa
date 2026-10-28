@@ -1753,7 +1753,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         try
         {
-            var invoices = await _db.GetHoaDonAsync(InvoiceSearch, LocHoaDonHienTai, InvoiceFilterDate?.Date);
+            var invoices = await _db.GetHoaDonAsync(InvoiceSearch, InvoiceFilterDate?.Date);
 
             HoaDons.Clear();
 
@@ -3052,7 +3052,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             HoaDons.Clear();
             var ngay = InvoiceFilterDate?.Date;   // null = không lọc ngày (nếu sau này muốn)
-            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, LocHoaDonHienTai, InvoiceFilterDate?.Date))
+            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, ngay))
                 HoaDons.Add(item);
             StatusMessage = $"Tìm thấy {HoaDons.Count} hóa đơn";
         }
@@ -3073,7 +3073,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             HoaDons.Clear();
             var ngay = InvoiceFilterDate?.Date;
-            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, LocHoaDonHienTai, ngay))
+            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, ngay))
                 HoaDons.Add(item);
             StatusMessage = $"Đã tải {HoaDons.Count} hóa đơn";
         }

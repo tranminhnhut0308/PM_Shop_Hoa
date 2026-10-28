@@ -232,23 +232,6 @@
               Foreground="#D64545" />
           </Grid>
 
-          <!-- Trạng thái -->
-          <Border Background="#FFF4E5"
-            CornerRadius="6"
-            Padding="10,7"
-            Margin="0,3,0,0">
-            <Grid ColumnDefinitions="Auto,*">
-              <TextBlock Text="Trạng thái:"
-                FontWeight="SemiBold"
-                Foreground="#8A5A00" />
-              <TextBlock Grid.Column="1"
-                Text="{Binding TrangThaiThanhToan}"
-                HorizontalAlignment="Right"
-                FontWeight="Bold"
-                Foreground="#8A5A00" />
-            </Grid>
-          </Border>
-
         </StackPanel>
       </Border>
 

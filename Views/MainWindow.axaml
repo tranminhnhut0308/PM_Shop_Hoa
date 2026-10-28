@@ -3203,26 +3203,6 @@
                   Padding="18,0"
                   Command="{Binding SearchInvoicesCommand}" />
 
-                <StackPanel Orientation="Horizontal"
-                  Spacing="6"
-                  Margin="3"
-                  VerticalAlignment="Center">
-                  <Button Classes="invoiceFilterChip"
-                    Classes.active="{Binding IsInvoiceFilterAll}"
-                    Content="Tất cả"
-                    Command="{Binding LocHoaDonCommand}"
-                    CommandParameter="ALL" />
-                  <Button Classes="invoiceFilterChip"
-                    Classes.active="{Binding IsInvoiceFilterPaid}"
-                    Content="Đã thanh toán"
-                    Command="{Binding LocHoaDonCommand}"
-                    CommandParameter="PAID" />
-                  <Button Classes="invoiceFilterChip"
-                    Classes.active="{Binding IsInvoiceFilterDebt}"
-                    Content="Còn nợ"
-                    Command="{Binding LocHoaDonCommand}"
-                    CommandParameter="DEBT" />
-                </StackPanel>
               </WrapPanel>
             </Border>
 
@@ -3241,7 +3221,7 @@
                   BorderBrush="#D5EAE3"
                   BorderThickness="0,0,0,1"
                   Padding="16,12">
-                  <Grid ColumnDefinitions="200,160,*,140,140,140,140,64,56" ColumnSpacing="12">
+                  <Grid ColumnDefinitions="200,160,*,140,140,140,64,56" ColumnSpacing="12">
                     <TextBlock Text="MÃ HÓA ĐƠN" FontWeight="Bold" Foreground="#164B40"
                       FontSize="12" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="1" Text="THỜI GIAN" FontWeight="Bold"
@@ -3255,13 +3235,10 @@
                       FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="5" Text="CÒN NỢ" FontWeight="Bold" Foreground="#164B40"
                       FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="6" Text="TRẠNG THÁI" FontWeight="Bold"
+                    <TextBlock Grid.Column="6" Text="THU NỢ" FontWeight="Bold"
                       Foreground="#164B40" FontSize="12" HorizontalAlignment="Center"
                       VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="7" Text="THU NỢ" FontWeight="Bold"
-                      Foreground="#164B40" FontSize="12" HorizontalAlignment="Center"
-                      VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="8" Text="XEM" FontWeight="Bold"
+                    <TextBlock Grid.Column="7" Text="XEM" FontWeight="Bold"
                       Foreground="#164B40" FontSize="12" HorizontalAlignment="Center"
                       VerticalAlignment="Center" />
                   </Grid>
@@ -3287,7 +3264,7 @@
                       <Border BorderBrush="#EEF3F1" BorderThickness="0,0,0,1" Padding="16,12"
                         Background="Transparent"
                         DoubleTapped="InvoiceRow_OnDoubleTapped">
-                        <Grid ColumnDefinitions="200,160,*,140,140,140,140,64,56" ColumnSpacing="12"
+                        <Grid ColumnDefinitions="200,160,*,140,140,140,64,56" ColumnSpacing="12"
                           VerticalAlignment="Center">
 
                           <!-- Mã hóa đơn: bấm để xem chi tiết hóa đơn -->
@@ -3357,25 +3334,8 @@
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center" />
 
-                          <!-- CỘT TRẠNG THÁI: ô riêng, CHỈ chứa badge trạng thái -->
-                          <Border Grid.Column="6"
-                            CornerRadius="14"
-                            Padding="10,4"
-                            Margin="0"
-                            MaxWidth="130"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Background="#E4F5EC">
-                            <TextBlock Text="{Binding TrangThaiThanhToanHienThi}"
-                              FontSize="11"
-                              FontWeight="SemiBold"
-                              TextAlignment="Center"
-                              TextTrimming="CharacterEllipsis"
-                              Foreground="#087F6E" />
-                          </Border>
-
                           <!-- CỘT THU NỢ: chỉ hiện khi hóa đơn còn nợ -->
-                          <Button Grid.Column="7"
+                          <Button Grid.Column="6"
                             IsVisible="{Binding ConNoDuong}"
                             Content="Thu"
                             Width="52" Height="26"
@@ -3397,7 +3357,7 @@
 
                           <!-- CỘT XEM: ô cố định 56px, nút luôn nằm chính giữa
                                nên mọi dòng thẳng hàng bất kể trạng thái dài/ngắn -->
-                          <Button Grid.Column="8"
+                          <Button Grid.Column="7"
                             Width="26" Height="26"
                             Padding="0"
                             CornerRadius="13"

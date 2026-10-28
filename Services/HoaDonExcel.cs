@@ -35,7 +35,7 @@ public static class HoaDonExcel
         [
             "STT", "Mã hóa đơn", "Thời gian", "Mã khách hàng", "Tên khách hàng",
             "Tổng tiền hàng", "Giảm giá", "Khách cần trả", "Đã thanh toán", "Còn nợ",
-            "Trạng thái thanh toán", "Ghi chú"
+            "Ghi chú"
         ];
 
         const int dongTieuDe = 4;
@@ -87,10 +87,7 @@ public static class HoaDonExcel
                 ws.Cell(dong, c).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
             }
 
-            ws.Cell(dong, 11).Value = hd.TrangThaiThanhToanHienThi;
-            ws.Cell(dong, 11).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-
-            ws.Cell(dong, 12).Value = hd.GhiChu ?? "";
+            ws.Cell(dong, 11).Value = hd.GhiChu ?? "";
 
             tongTienHang += hd.TongTienHang;
             tongGiamGia += hd.GiamGia;
@@ -135,8 +132,7 @@ public static class HoaDonExcel
         ws.Column(8).Width = 16;  // Cần trả
         ws.Column(9).Width = 16;  // Đã trả
         ws.Column(10).Width = 16; // Còn nợ
-        ws.Column(11).Width = 18; // Trạng thái
-        ws.Column(12).Width = 30; // Ghi chú
+        ws.Column(11).Width = 30; // Ghi chú
 
         return wb;
     }
