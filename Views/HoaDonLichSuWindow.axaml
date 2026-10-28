@@ -1,0 +1,189 @@
+<Window xmlns="https://github.com/avaloniaui"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:models="using:ShopHoa.Models"
+  xmlns:views="using:ShopHoa.Views"
+  x:Class="ShopHoa.Views.HoaDonLichSuWindow"
+  x:DataType="views:HoaDonLichSuWindow"
+  Title="Lịch sử chỉnh sửa hóa đơn"
+  Width="880"
+  Height="650"
+  MinWidth="700"
+  MinHeight="500"
+  WindowStartupLocation="CenterOwner"
+  Background="#F8FAF9">
+  <Window.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="#263B35" />
+    </Style>
+    <Style Selector="Button.btn-close">
+      <Setter Property="Background" Value="#F2F4F7" />
+      <Setter Property="Foreground" Value="#344054" />
+      <Setter Property="BorderBrush" Value="#D0D5DD" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="18,8" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.btn-close:pointerover">
+      <Setter Property="Background" Value="#E4E7EC" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+    <!-- TIÊU ĐỀ -->
+    <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="18,14" Margin="0,0,0,14">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="4">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="📜 LỊCH SỬ CHỈNH SỬA HÓA ĐƠN" FontSize="16" FontWeight="Bold" Foreground="#087F6E" />
+            <TextBlock x:Name="TxtMaHoaDon" FontSize="16" FontWeight="Bold" Foreground="#1F2937" />
+          </StackPanel>
+          <TextBlock Text="Theo dõi chi tiết các lần thay đổi thông tin, sản phẩm, doanh thu và công nợ." FontSize="12" Foreground="#61736E" />
+        </StackPanel>
+        <TextBlock x:Name="TxtTongSoLan" Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#087F6E" FontSize="13" />
+      </Grid>
+    </Border>
+
+    <!-- NỘI DUNG 2 CỘT: DANH SÁCH BÊN TRÁI, CHI TIẾT BÊN PHẢI -->
+    <Grid Grid.Row="1" ColumnDefinitions="330,12,*">
+      <!-- CỘT TRÁI: DANH SÁCH CÁC LẦN SỬA -->
+      <Border Grid.Column="0" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="12">
+        <Grid RowDefinitions="Auto,*">
+          <TextBlock Text="CÁC LẦN CHỈNH SỬA" FontWeight="Bold" FontSize="12" Foreground="#61736E" Margin="4,0,0,8" />
+          <ListBox Grid.Row="1" x:Name="ListLichSu" SelectionChanged="ListLichSu_OnSelectionChanged" Background="Transparent" BorderThickness="0">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="models:LichSuChinhSuaHoaDon">
+                <Border BorderBrush="#EEF3F1" BorderThickness="0,0,0,1" Padding="10,8">
+                  <StackPanel Spacing="4">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="{Binding ThoiGianHienThi}" FontWeight="Bold" FontSize="13" Foreground="#087F6E" />
+                      <TextBlock Grid.Column="1" Text="{Binding ChenhLechConNoHienThi}" FontSize="11" FontWeight="SemiBold"
+                                 Foreground="#C53030" />
+                    </Grid>
+                    <TextBlock Text="{Binding TenNguoiThucHien, StringFormat='Người sửa: {0}'}" FontSize="12" Foreground="#374151" />
+                    <TextBlock Text="{Binding LyDo, StringFormat='Lý do: {0}'}" FontSize="12" Foreground="#6B7280" TextTrimming="CharacterEllipsis" MaxLines="2" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+      </Border>
+
+      <GridSplitter Grid.Column="1" Background="Transparent" ResizeDirection="Columns" />
+
+      <!-- CỘT PHẢI: CHI TIẾT LẦN SỬA ĐƯỢC CHỌN -->
+      <Border Grid.Column="2" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="16">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel x:Name="PanelChiTiet" Spacing="14">
+            <!-- THÔNG TIN CHUNG CỦA LẦN SỬA -->
+            <Border Background="#F4FAF8" BorderBrush="#D1E7E1" BorderThickness="1" CornerRadius="8" Padding="14,10">
+              <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*" RowSpacing="6" ColumnSpacing="12">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Người thực hiện:" FontWeight="SemiBold" Foreground="#61736E" />
+                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtChiTietNguoiSua" FontWeight="Bold" Foreground="#111827" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Thời gian:" FontWeight="SemiBold" Foreground="#61736E" />
+                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TxtChiTietThoiGian" Foreground="#111827" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Lý do sửa:" FontWeight="SemiBold" Foreground="#61736E" />
+                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TxtChiTietLyDo" Foreground="#B45309" TextWrapping="Wrap" FontWeight="SemiBold" />
+              </Grid>
+            </Border>
+
+            <!-- SO SÁNH SỐ LIỆU TÀI CHÍNH (BẢNG TRƯỚC VÀ SAU) -->
+            <StackPanel Spacing="6">
+              <TextBlock Text="SO SÁNH TÀI CHÍNH" FontWeight="Bold" FontSize="13" Foreground="#173F38" />
+              <Border BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="*,120,120,120">
+                  <!-- Header -->
+                  <Border Grid.Row="0" Grid.ColumnSpan="4" Background="#EAF5F2" Padding="10,8">
+                    <Grid ColumnDefinitions="*,120,120,120">
+                      <TextBlock Text="Chỉ tiêu" FontWeight="Bold" FontSize="12" Foreground="#164B40" />
+                      <TextBlock Grid.Column="1" Text="Trước khi sửa" FontWeight="Bold" FontSize="12" Foreground="#164B40" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Column="2" Text="Sau khi sửa" FontWeight="Bold" FontSize="12" Foreground="#164B40" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Column="3" Text="Chênh lệch" FontWeight="Bold" FontSize="12" Foreground="#164B40" HorizontalAlignment="Right" />
+                    </Grid>
+                  </Border>
+
+                  <!-- Row 1: Tổng tiền hàng -->
+                  <Border Grid.Row="1" Grid.ColumnSpan="4" BorderBrush="#F0F4F2" BorderThickness="0,0,0,1" Padding="10,7">
+                    <Grid ColumnDefinitions="*,120,120,120">
+                      <TextBlock Text="Tổng tiền hàng" />
+                      <TextBlock Grid.Column="1" x:Name="TxtTongTienTruoc" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Column="2" x:Name="TxtTongTienSau" HorizontalAlignment="Right" FontWeight="SemiBold" />
+                      <TextBlock Grid.Column="3" x:Name="TxtTongTienDiff" HorizontalAlignment="Right" />
+                    </Grid>
+                  </Border>
+
+                  <!-- Row 2: Giảm giá -->
+                  <Border Grid.Row="2" Grid.ColumnSpan="4" BorderBrush="#F0F4F2" BorderThickness="0,0,0,1" Padding="10,7">
+                    <Grid ColumnDefinitions="*,120,120,120">
+                      <TextBlock Text="Giảm giá" />
+                      <TextBlock Grid.Column="1" x:Name="TxtGiamGiaTruoc" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Column="2" x:Name="TxtGiamGiaSau" HorizontalAlignment="Right" FontWeight="SemiBold" />
+                      <TextBlock Grid.Column="3" x:Name="TxtGiamGiaDiff" HorizontalAlignment="Right" />
+                    </Grid>
+                  </Border>
+
+                  <!-- Row 3: Khách cần trả -->
+                  <Border Grid.Row="3" Grid.ColumnSpan="4" BorderBrush="#F0F4F2" BorderThickness="0,0,0,1" Padding="10,7">
+                    <Grid ColumnDefinitions="*,120,120,120">
+                      <TextBlock Text="Khách cần trả" FontWeight="SemiBold" />
+                      <TextBlock Grid.Column="1" x:Name="TxtCanTraTruoc" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Column="2" x:Name="TxtCanTraSau" HorizontalAlignment="Right" FontWeight="Bold" Foreground="#087F6E" />
+                      <TextBlock Grid.Column="3" x:Name="TxtCanTraDiff" HorizontalAlignment="Right" FontWeight="SemiBold" />
+                    </Grid>
+                  </Border>
+
+                  <!-- Row 4: Còn nợ -->
+                  <Border Grid.Row="4" Grid.ColumnSpan="4" Padding="10,7" Background="#FFF8F7">
+                    <Grid ColumnDefinitions="*,120,120,120">
+                      <TextBlock Text="Công nợ còn lại" FontWeight="Bold" Foreground="#B91C1C" />
+                      <TextBlock Grid.Column="1" x:Name="TxtConNoTruoc" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Column="2" x:Name="TxtConNoSau" HorizontalAlignment="Right" FontWeight="Bold" Foreground="#B91C1C" />
+                      <TextBlock Grid.Column="3" x:Name="TxtConNoDiff" HorizontalAlignment="Right" FontWeight="Bold" />
+                    </Grid>
+                  </Border>
+                </Grid>
+              </Border>
+            </StackPanel>
+
+            <!-- SO SÁNH DANH SÁCH MẶT HÀNG (TRƯỚC VS SAU) -->
+            <StackPanel Spacing="6">
+              <TextBlock Text="CHI TIẾT SẢN PHẨM (TRƯỚC VS SAU)" FontWeight="Bold" FontSize="13" Foreground="#173F38" />
+              <Border BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                <DataGrid x:Name="GridItemDiff" AutoGenerateColumns="False" IsReadOnly="True"
+                          GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                          Background="White" RowHeight="32"
+                          x:DataType="views:HoaDonLichSuWindow+ItemDiffRow">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="Sản phẩm" Binding="{Binding TenSanPham}" Width="*" x:DataType="views:HoaDonLichSuWindow+ItemDiffRow" />
+                    <DataGridTextColumn Header="SL trước" Binding="{Binding SoLuongTruocHienThi}" Width="90" x:DataType="views:HoaDonLichSuWindow+ItemDiffRow" />
+                    <DataGridTextColumn Header="SL sau" Binding="{Binding SoLuongSauHienThi}" Width="90" x:DataType="views:HoaDonLichSuWindow+ItemDiffRow" />
+                    <DataGridTextColumn Header="Đơn giá" Binding="{Binding DonGiaHienThi}" Width="100" x:DataType="views:HoaDonLichSuWindow+ItemDiffRow" />
+                    <DataGridTextColumn Header="Thành tiền trước" Binding="{Binding ThanhTienTruocHienThi}" Width="120" x:DataType="views:HoaDonLichSuWindow+ItemDiffRow" />
+                    <DataGridTextColumn Header="Thành tiền sau" Binding="{Binding ThanhTienSauHienThi}" Width="120" x:DataType="views:HoaDonLichSuWindow+ItemDiffRow" />
+                  </DataGrid.Columns>
+                </DataGrid>
+              </Border>
+            </StackPanel>
+
+            <!-- GHI CHÚ THAY ĐỔI KHÁC -->
+            <Border Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="8" Padding="12">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Tóm tắt thay đổi:" FontWeight="SemiBold" FontSize="12" Foreground="#4B5563" />
+                <TextBlock x:Name="TxtChiTietThayDoiText" FontSize="12" Foreground="#1F2937" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <!-- NÚT ĐÓNG -->
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+      <Button Content="Đóng" Classes="btn-close" Click="CloseButton_OnClick" />
+    </StackPanel>
+  </Grid>
+</Window>

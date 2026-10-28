@@ -4,9 +4,9 @@
   x:Class="ShopHoa.Views.InvoiceWindow"
   x:DataType="models:HoaDonBanHangReceipt"
   Title="Hóa đơn bán hàng"
-  Width="620"
-  Height="760"
-  MinWidth="520"
+  Width="680"
+  Height="780"
+  MinWidth="560"
   MinHeight="600"
   Background="#FFFFFF">
   <Window.Styles>
@@ -29,7 +29,7 @@
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="CornerRadius" Value="8" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Padding" Value="20,10" />
+      <Setter Property="Padding" Value="16,10" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
     <Style Selector="Button.btn-pay-debt:pointerover">
@@ -42,12 +42,25 @@
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="8" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Padding" Value="20,10" />
+      <Setter Property="Padding" Value="16,10" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
     <Style Selector="Button.btn-print:pointerover">
       <Setter Property="Background" Value="#D4EDE6" />
       <Setter Property="Foreground" Value="#056B5D" />
+    </Style>
+    <Style Selector="Button.btn-action-outline">
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="Foreground" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="#B2DDD0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="14,10" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.btn-action-outline:pointerover">
+      <Setter Property="Background" Value="#F0FAF7" />
     </Style>
     <Style Selector="Button.btn-close">
       <Setter Property="Background" Value="#F2F4F7" />
@@ -56,7 +69,7 @@
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="8" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Padding" Value="20,10" />
+      <Setter Property="Padding" Value="16,10" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
     <Style Selector="Button.btn-close:pointerover">
@@ -272,12 +285,21 @@
         HorizontalAlignment="Center" TextAlignment="Center"
         Foreground="#D92D20" FontSize="12" Margin="0,0,0,6" />
 
-      <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
-        <Button x:Name="ThanhToanCongNoButton" Content="💵 Thanh toán công nợ"
+      <!-- CÁC NÚT THAO TÁC -->
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+        <Button x:Name="ThanhToanCongNoButton" Content="💵 Thanh toán nợ"
           Classes="btn-pay-debt" IsVisible="False"
           Click="ThanhToanCongNoButton_OnClick"
           ToolTip.Tip="Thu công nợ cho hóa đơn này" />
-        <Button x:Name="PrintButton" Content="🖨 In hóa đơn" Classes="btn-print"
+        <Button x:Name="EditInvoiceButton" Content="✏️ Sửa hóa đơn"
+          Classes="btn-action-outline"
+          Click="EditInvoiceButton_OnClick"
+          ToolTip.Tip="Chỉnh sửa hóa đơn này" />
+        <Button x:Name="HistoryInvoiceButton" Content="📜 Lịch sử sửa"
+          Classes="btn-action-outline"
+          Click="HistoryInvoiceButton_OnClick"
+          ToolTip.Tip="Xem lịch sử chỉnh sửa của hóa đơn này" />
+        <Button x:Name="PrintButton" Content="🖨 In" Classes="btn-print"
           Click="PrintButton_OnClick" />
         <Button Content="Đóng" Classes="btn-close"
           Click="CloseButton_OnClick" />

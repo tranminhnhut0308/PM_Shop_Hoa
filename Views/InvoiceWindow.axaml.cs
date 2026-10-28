@@ -36,6 +36,7 @@ public partial class InvoiceWindow : Window
         DataContext = receipt;
         CapNhatNutThanhToan(receipt);
         PrintButton.IsVisible = !receipt.LaHoaDonTongHop;
+        EditInvoiceButton.IsVisible = !receipt.LaHoaDonTongHop;
     }
 
     public InvoiceWindow(
@@ -50,6 +51,40 @@ public partial class InvoiceWindow : Window
         // Yêu cầu: Nếu công nợ là 0 (khách không nợ) thì hóa đơn không có nút thanh toán công nợ.
         // Chỉ hiển thị nút khi hóa đơn còn nợ (ConNo > 0).
         ThanhToanCongNoButton.IsVisible = receipt.ConNo > 0;
+    }
+
+    private async void EditInvoiceButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not HoaDonBanHangReceipt receipt)
+            return;
+
+        if (!Quyen.HasPermission(Session.CurrentUser, PermissionKeys.InvoicesEdit) &&
+            !Quyen.IsAdmin(Session.CurrentUser))
+        {
+            await HienThiThongBaoAsync("Thông báo", "Bạn không có quyền chỉnh sửa hóa đơn.");
+            return;
+        }
+
+        var editor = new HoaDonEditorWindow(receipt.MaHoaDon);
+        var updated = await editor.ShowDialog<HoaDonBanHangReceipt?>(this);
+        if (updated != null)
+        {
+            updated.ThongTinTiem = receipt.ThongTinTiem;
+            DataContext = null;
+            DataContext = updated;
+            CapNhatNutThanhToan(updated);
+
+            await HienThiThongBaoAsync("Thành công", $"Đã cập nhật hóa đơn {updated.MaHoaDon}. Lịch sử chỉnh sửa đã được ghi nhận.");
+        }
+    }
+
+    private async void HistoryInvoiceButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not HoaDonBanHangReceipt receipt)
+            return;
+
+        var historyWindow = new HoaDonLichSuWindow(receipt.MaHoaDon);
+        await historyWindow.ShowDialog(this);
     }
 
     private async void ThanhToanCongNoButton_OnClick(object? sender, RoutedEventArgs e)
