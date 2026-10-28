@@ -162,6 +162,10 @@ public sealed class TongQuanHangTop
 
     public double TyLeBeRong => Math.Clamp(TyLePhanTram, 0, 100);
 
+    public double TyLeSoLuong { get; set; }
+
+    public double TyLeSoLuongAnToan => Math.Clamp(TyLeSoLuong, 0, 100);
+
     public string DoanhThuHienThi => $"{DoanhThu:N0} đ";
 
     public string SoLuongHienThi => $"{SoLuong:N0}";
@@ -268,6 +272,14 @@ public sealed class TongQuanDuLieu
 
     public int SoDonHangHomNay { get; set; }
 
+    public int SoHoaDonChuaGhiNhan { get; set; }
+
+    public decimal DoanhThuChuaGhiNhan { get; set; }
+
+    public decimal DaThuChuaGhiNhan { get; set; }
+
+    public decimal ConNoChuaGhiNhan { get; set; }
+
     // --- Biểu đồ doanh thu theo bộ lọc đang chọn ---
     public decimal TongDoanhThuKyChon { get; set; }
 
@@ -309,6 +321,14 @@ public sealed class TongQuanDuLieu
     public string ConNoHomNayHienThi => $"{ConNoHomNay:N0} đ";
 
     public string SoDonHangHomNayHienThi => $"{SoDonHangHomNay:N0}";
+
+    public string SoHoaDonChuaGhiNhanHienThi => $"{SoHoaDonChuaGhiNhan:N0}";
+
+    public string DoanhThuChuaGhiNhanHienThi => $"{DoanhThuChuaGhiNhan:N0} đ";
+
+    public string DaThuChuaGhiNhanHienThi => $"{DaThuChuaGhiNhan:N0} đ";
+
+    public string ConNoChuaGhiNhanHienThi => $"{ConNoChuaGhiNhan:N0} đ";
 
     public string TongDoanhThuKyChonHienThi => $"{TongDoanhThuKyChon:N0} đ";
 

@@ -223,7 +223,7 @@ public sealed partial class DashboardViewModel : ObservableObject
     public bool HienThiTrangThaiBieuDo => !CoLoi && !DangTai && !CoDuLieu;
 
     public string TrangThaiBieuDo => BieuDoDoanhThu.Any(d => d.SoHoaDon > 0)
-        ? "Có hóa đơn trong kỳ nhưng chưa có doanh thu được ghi nhận. Kiểm tra tùy chọn cập nhật Tổng bán khi import."
+        ? "Các hóa đơn chưa ghi nhận được thống kê riêng ở phần dữ liệu bên trên; biểu đồ này chỉ hiển thị doanh thu chính thức."
         : "Chưa có phát sinh trong khoảng đã chọn. Hãy thử chọn khoảng thời gian khác.";
 
     /// <summary>Nội dung mô tả khoảng đang xem, hiển thị trên đầu thẻ doanh thu.</summary>
@@ -248,6 +248,18 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     [ObservableProperty]
     private string soDonHangHomNayHienThi = "0";
+
+    [ObservableProperty]
+    private string soHoaDonChuaGhiNhanHienThi = "0";
+
+    [ObservableProperty]
+    private string doanhThuChuaGhiNhanHienThi = "0 đ";
+
+    [ObservableProperty]
+    private string daThuChuaGhiNhanHienThi = "0 đ";
+
+    [ObservableProperty]
+    private string conNoChuaGhiNhanHienThi = "0 đ";
 
     // ============================================================
     // THẺ DOANH THU + BIỂU ĐỒ + CHỈ SỐ PHÂN TÍCH GÓC NHÌN
@@ -484,6 +496,10 @@ public sealed partial class DashboardViewModel : ObservableObject
         DaThuHomNayHienThi = duLieu.DaThuHomNayHienThi;
         ConNoHomNayHienThi = duLieu.ConNoHomNayHienThi;
         SoDonHangHomNayHienThi = duLieu.SoDonHangHomNayHienThi;
+        SoHoaDonChuaGhiNhanHienThi = duLieu.SoHoaDonChuaGhiNhanHienThi;
+        DoanhThuChuaGhiNhanHienThi = duLieu.DoanhThuChuaGhiNhanHienThi;
+        DaThuChuaGhiNhanHienThi = duLieu.DaThuChuaGhiNhanHienThi;
+        ConNoChuaGhiNhanHienThi = duLieu.ConNoChuaGhiNhanHienThi;
 
         TongDoanhThuKyChonHienThi = duLieu.TongDoanhThuKyChonHienThi;
         TongSoHoaDonKyChonHienThi = duLieu.TongSoHoaDonKyChonHienThi;

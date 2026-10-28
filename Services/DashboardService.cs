@@ -130,6 +130,10 @@ public sealed class DashboardService
         ketQua.DaThuHomNay = banHang.DaThu;
         ketQua.ConNoHomNay = banHang.ConNo;
         ketQua.SoDonHangHomNay = banHang.SoHoaDon;
+        ketQua.SoHoaDonChuaGhiNhan = banHang.SoHoaDonChuaGhiNhan;
+        ketQua.DoanhThuChuaGhiNhan = banHang.DoanhThuChuaGhiNhan;
+        ketQua.DaThuChuaGhiNhan = banHang.DaThuChuaGhiNhan;
+        ketQua.ConNoChuaGhiNhan = banHang.ConNoChuaGhiNhan;
 
         ketQua.TongDoanhThuKyChon = tongDoanhThu;
         ketQua.TongSoHoaDonKyChon = tongSoHoaDon;
@@ -147,8 +151,16 @@ public sealed class DashboardService
         return ketQua;
     }
 
-    /// <summary>5 thẻ kết quả bán hàng theo khoảng thời gian đang chọn — 1 câu COUNT/SUM duy nhất.</summary>
-    private async Task<(decimal DoanhThu, int SoHoaDon, decimal DaThu, decimal ConNo)> TaiSoLieuBanHangHomNayAsync(
+    /// <summary>KPI chính thức và số liệu riêng của hóa đơn chưa ghi nhận, trong cùng khoảng thời gian.</summary>
+    private async Task<(
+        decimal DoanhThu,
+        int SoHoaDon,
+        decimal DaThu,
+        decimal ConNo,
+        int SoHoaDonChuaGhiNhan,
+        decimal DoanhThuChuaGhiNhan,
+        decimal DaThuChuaGhiNhan,
+        decimal ConNoChuaGhiNhan)> TaiSoLieuBanHangHomNayAsync(
         DateTime tuNgay,
         DateTime denNgay,
         CancellationToken token)
@@ -160,14 +172,26 @@ public sealed class DashboardService
             COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu,
             COUNT(*) AS SoHoaDon,
             COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThu,
-            COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS ConNo
+            COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS ConNo,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 0 THEN 1 ELSE 0 END), 0) AS SoHoaDonChuaGhiNhan,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 0 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThuChuaGhiNhan,
+            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 0 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThuChuaGhiNhan,
+            COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 0 THEN hd.con_no ELSE 0 END), 0) AS ConNoChuaGhiNhan
         FROM hoa_don_ban_hang hd
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
           AND hd.thoi_gian_ban >= @TuNgay
           AND hd.thoi_gian_ban <= @DenNgay;
         """;
 
-        var row = await connection.QuerySingleAsync<(decimal DoanhThu, int SoHoaDon, decimal DaThu, decimal ConNo)>(
+        var row = await connection.QuerySingleAsync<(
+            decimal DoanhThu,
+            int SoHoaDon,
+            decimal DaThu,
+            decimal ConNo,
+            int SoHoaDonChuaGhiNhan,
+            decimal DoanhThuChuaGhiNhan,
+            decimal DaThuChuaGhiNhan,
+            decimal ConNoChuaGhiNhan)>(
             new CommandDefinition(
                 sql,
                 new
@@ -578,7 +602,6 @@ public sealed class DashboardService
                     COALESCE((SELECT vt.ten_vai_tro FROM nguoi_dung_vai_tro ndvt JOIN vai_tro vt ON vt.id = ndvt.vai_tro_id WHERE ndvt.nguoi_dung_id = nd.id LIMIT 1), 'Nhân viên') AS VaiTro,
                     CASE 
                         WHEN pc.trang_thai = 'HUY' THEN 'Hủy sổ quỹ'
-                        WHEN pc.hoa_don_ban_hang_id IS NOT NULL THEN 'Thu tiền'
                         WHEN {PhieuQuySql.LaThu} THEN 'Thu tiền'
                         ELSE 'Chi tiền'
                     END AS HanhDong,
@@ -625,7 +648,7 @@ public sealed class DashboardService
         // Lưu ý: cotSapXep đã là biểu thức SUM(...) hoàn chỉnh nên không bọc SUM
         // thêm lần nữa, nếu không MariaDB báo "Invalid use of group function".
         var cotSapXep = theoDoanhThu
-            ? "SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END)"
+            ? "SUM(ct.thanh_tien)"
             : "SUM(ct.so_luong)";
 
         var sql = $"""
@@ -634,12 +657,13 @@ public sealed class DashboardService
             COALESCE(NULLIF(TRIM(ct.ten_san_pham), ''), 'Sản phẩm đã xoá') AS Ten,
             COALESCE(NULLIF(TRIM(ct.ma_san_pham), ''), '-') AS TenPhu,
             COALESCE(SUM(ct.so_luong), 0) AS SoLuong,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu,
+            COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu,
             COALESCE({cotSapXep}, 0) AS GiaTriXepHang
         FROM chi_tiet_hoa_don_ban_hang ct
         INNER JOIN hoa_don_ban_hang hd
             ON hd.id = ct.hoa_don_id
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+          AND hd.doanh_so_da_ghi_nhan = 1
           AND hd.thoi_gian_ban >= @TuNgay
           AND hd.thoi_gian_ban <= @DenNgay
         GROUP BY ct.san_pham_id, Ten, TenPhu
@@ -660,6 +684,7 @@ public sealed class DashboardService
         ).AsList();
 
         var maxGiaTri = hangDuLieu.Count == 0 ? 0m : hangDuLieu.Max(r => r.GiaTriXepHang);
+        var maxSoLuong = hangDuLieu.Count == 0 ? 0m : hangDuLieu.Max(r => r.SoLuong);
 
         var kq = new List<TongQuanHangTop>(hangDuLieu.Count);
 
@@ -674,7 +699,8 @@ public sealed class DashboardService
                 TenPhu = r.TenPhu,
                 SoLuong = r.SoLuong,
                 DoanhThu = r.DoanhThu,
-                TyLePhanTram = maxGiaTri <= 0 ? 0 : (double)(r.GiaTriXepHang / maxGiaTri * 100m)
+                TyLePhanTram = maxGiaTri <= 0 ? 0 : (double)(r.GiaTriXepHang / maxGiaTri * 100m),
+                TyLeSoLuong = maxSoLuong <= 0 ? 0 : (double)(r.SoLuong / maxSoLuong * 100m)
             });
         }
 
@@ -682,9 +708,8 @@ public sealed class DashboardService
     }
 
     /// <summary>
-    /// Top 10 khách hàng. Hóa đơn không gắn khách hàng ("khách lẻ") gộp chung
-    /// thành một nhóm đúng như tên hiển thị sẵn có của phần mềm, không tạo
-    /// khách hàng ảo trong database.
+    /// Top 10 khách hàng theo doanh thu đã ghi nhận. Nhóm "khách lẻ"
+    /// gộp các hóa đơn không gắn khách hàng, không tạo khách hàng ảo.
     /// </summary>
     private async Task<List<TongQuanHangTop>> TaiTopKhachHangAsync(
         DateTime tuNgay,
@@ -699,7 +724,7 @@ public sealed class DashboardService
             COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS Ten,
             COALESCE(kh.ma_khach_hang, 'Khách lẻ') AS TenPhu,
             COUNT(*) AS SoHoaDon,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu
+            COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'

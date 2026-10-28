@@ -490,6 +490,47 @@
         </Border>
       </Grid>
 
+      <Border Classes="tqCard" Padding="12,10">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <StackPanel Spacing="2">
+              <TextBlock Text="HÓA ĐƠN CHƯA GHI NHẬN VÀO TỔNG BÁN"
+                Classes="tqSectionTitle" />
+              <TextBlock Text="Doanh thu/đã thu dùng cờ doanh số; công nợ dùng cờ công nợ. Số liệu này không cộng vào KPI chính thức."
+                Classes="tqSectionSub" />
+            </StackPanel>
+            <Border Grid.Column="1" Background="#FFF5E5" CornerRadius="6"
+              Padding="8,4" VerticalAlignment="Center">
+              <TextBlock Text="{Binding SoHoaDonChuaGhiNhanHienThi, StringFormat='{}{0} hóa đơn'}"
+                FontSize="12" FontWeight="SemiBold" Foreground="#A45B00" />
+            </Border>
+          </Grid>
+          <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+            <Border Classes="tqFilter" Padding="10,6">
+              <StackPanel Spacing="2">
+                <TextBlock Text="Doanh thu hóa đơn" Classes="tqMuted" />
+                <TextBlock Text="{Binding DoanhThuChuaGhiNhanHienThi}"
+                  FontSize="16" FontWeight="Bold" Foreground="#087F6E" />
+              </StackPanel>
+            </Border>
+            <Border Grid.Column="1" Classes="tqFilter" Padding="10,6">
+              <StackPanel Spacing="2">
+                <TextBlock Text="Đã thu từ hóa đơn" Classes="tqMuted" />
+                <TextBlock Text="{Binding DaThuChuaGhiNhanHienThi}"
+                  FontSize="16" FontWeight="Bold" Foreground="#087F6E" />
+              </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Classes="tqFilter" Padding="10,6">
+              <StackPanel Spacing="2">
+                <TextBlock Text="Còn nợ trên hóa đơn" Classes="tqMuted" />
+                <TextBlock Text="{Binding ConNoChuaGhiNhanHienThi}"
+                  FontSize="16" FontWeight="Bold" Foreground="#A45B00" />
+              </StackPanel>
+            </Border>
+          </Grid>
+        </StackPanel>
+      </Border>
+
       <!-- THỐNG KÊ KHO -->
       <Border Classes="tqCard" Padding="12">
         <Grid ColumnDefinitions="Auto,*,*,*,*,*" ColumnSpacing="8" RowDefinitions="Auto,Auto">
@@ -726,7 +767,7 @@
                         <Grid ColumnDefinitions="28,*">
                           <ProgressBar Grid.Column="1" Classes="tqBar"
                             Minimum="0" Maximum="100"
-                            Value="{Binding TyLeBeRong}"
+                            Value="{Binding TyLeSoLuongAnToan}"
                             ClipToBounds="True" />
                         </Grid>
                       </StackPanel>
@@ -736,7 +777,7 @@
               </ItemsControl>
             </ScrollViewer>
 
-            <TextBlock Text="Chưa có hàng nào bán trong khoảng đang chọn"
+            <TextBlock Text="Chưa có dữ liệu bán hàng trong khoảng thời gian này"
               Classes="tqMuted" HorizontalAlignment="Center" Margin="0,10,0,0"
               IsVisible="{Binding !CoHangBanChay}" />
           </StackPanel>
@@ -748,10 +789,10 @@
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <StackPanel>
                   <TextBlock Text="TOP 10 KHÁCH HÀNG" Classes="tqSectionTitle" />
-                  <TextBlock Text="{Binding ThoiGianHienThi}" Classes="tqSectionSub"
+                  <TextBlock Text="Khách hàng mua nhiều nhất theo doanh thu" Classes="tqSectionSub"
                     Margin="0,2,0,0" />
                 </StackPanel>
-                <TextBlock Grid.Column="1" Text="Theo doanh thu" Classes="tqMuted"
+                <TextBlock Grid.Column="1" Text="{Binding ThoiGianHienThi}" Classes="tqMuted"
                   VerticalAlignment="Center" />
               </Grid>
 
@@ -786,7 +827,7 @@
                 </ItemsControl>
               </ScrollViewer>
 
-              <TextBlock Text="Chưa có doanh thu được ghi nhận cho khách hàng trong khoảng này"
+              <TextBlock Text="Chưa có dữ liệu khách hàng trong khoảng thời gian này"
                 Classes="tqMuted" HorizontalAlignment="Center" Margin="0,10,0,0"
                 IsVisible="{Binding !CoKhachHang}" />
             </StackPanel>
