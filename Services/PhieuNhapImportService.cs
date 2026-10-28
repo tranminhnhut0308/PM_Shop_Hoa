@@ -11,6 +11,7 @@ public sealed class PhieuNhapImportService
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["manhaphang"] = "maphieunhap",
+            ["chiphinhaptrancc"] = "chiphinaptranncc",
             ["chiphipnhaptncc"] = "chiphinaptranncc",
             ["chiphinaptncc"] = "chiphinaptranncc",
             ["chiphinaptranhacungcap"] = "chiphinaptranncc",
