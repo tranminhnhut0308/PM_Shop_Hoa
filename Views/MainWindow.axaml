@@ -1875,7 +1875,7 @@
 
               <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
                 <StackPanel>
-                  <TextBlock Text="SĐT" Foreground="#61736E" FontSize="11" FontWeight="SemiBold" />
+                  <TextBlock Text="SĐT (không bắt buộc)" Foreground="#61736E" FontSize="11" FontWeight="SemiBold" />
                   <TextBox Text="{Binding SaleCustomerPhone, Mode=TwoWay}"
                            Watermark="Số điện thoại" FontSize="12" />
                 </StackPanel>
@@ -1886,7 +1886,7 @@
                 </StackPanel>
               </Grid>
 
-              <TextBlock Text="Địa chỉ" Foreground="#61736E" FontSize="11" FontWeight="SemiBold" />
+              <TextBlock Text="Địa chỉ (không bắt buộc)" Foreground="#61736E" FontSize="11" FontWeight="SemiBold" />
               <TextBox Text="{Binding SaleCustomerAddress, Mode=TwoWay}"
                        Watermark="Địa chỉ đầy đủ khi chọn khách"
                        AcceptsReturn="True" TextWrapping="Wrap"

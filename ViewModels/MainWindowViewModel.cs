@@ -5671,8 +5671,8 @@ public partial class MainWindowViewModel : ObservableObject
             }
         }
 
-        // 2c. Bắt buộc thông tin liên hệ và in kèm đối với đơn nợ lại hoặc giao hàng:
-        // nếu không thỏa mãn thì không thể tạo đơn.
+        // 2c. Đơn nợ lại hoặc giao hàng phải bật in kèm thông tin liên hệ.
+        // Số điện thoại và địa chỉ vẫn được phép để trống.
         var laDonNoLai = TienCongNo > 0;
         var laDonGiaoHang = SaleCanGiaoHang;
         if (laDonNoLai || laDonGiaoHang)
@@ -5685,20 +5685,6 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 StatusMessage = $"⚠️ {lyDo}: Bắt buộc phải tích chọn in kèm SĐT và địa chỉ.";
                 await ShowMessageAsync("Bắt buộc in kèm thông tin liên hệ", $"Đối với {lyDo}, bạn bắt buộc phải tích chọn 'In kèm SĐT và địa chỉ' lên hóa đơn.");
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(SaleCustomerPhone))
-            {
-                StatusMessage = $"⚠️ {lyDo}: Vui lòng nhập số điện thoại của khách hàng.";
-                await ShowMessageAsync("Thiếu số điện thoại", $"Đối với {lyDo}, bắt buộc phải có số điện thoại khách hàng. Vui lòng nhập số điện thoại.");
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(SaleCustomerAddress))
-            {
-                StatusMessage = $"⚠️ {lyDo}: Vui lòng nhập địa chỉ của khách hàng.";
-                await ShowMessageAsync("Thiếu địa chỉ", $"Đối với {lyDo}, bắt buộc phải có địa chỉ khách hàng. Vui lòng nhập địa chỉ.");
                 return;
             }
         }
