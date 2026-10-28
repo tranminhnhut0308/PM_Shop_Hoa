@@ -15,8 +15,12 @@ public sealed class PhieuNhapImportService
             ["chiphinaptncc"] = "chiphinaptranncc",
             ["chiphinaptranhacungcap"] = "chiphinaptranncc",
             ["chiphiphitranncc"] = "chiphinaptranncc",
+            ["chiphiphatncc"] = "chiphinaptranncc",
+            ["chiphiphatnhacungcap"] = "chiphinaptranncc",
             ["cantranhancc"] = "cantranncc",
+            ["cantrancc"] = "cantranncc",
             ["cantranhacungcap"] = "cantranncc",
+            ["cantrannhacungcap"] = "cantranncc",
             ["tiencantra"] = "cantranncc",
             ["sotiencantra"] = "cantranncc",
             ["tongtiencantra"] = "cantranncc",
@@ -24,8 +28,11 @@ public sealed class PhieuNhapImportService
             ["phaithanhtoan"] = "cantranncc",
             ["tiendatrancc"] = "tiendatranncc",
             ["tiendatran"] = "tiendatranncc",
+            ["tiendathanhtoan"] = "tiendatranncc",
+            ["sotiendathanhtoan"] = "tiendatranncc",
             ["dathanhtoanncc"] = "tiendatranncc",
             ["dathanhtoan"] = "tiendatranncc",
+            ["dathanhtoannhacungcap"] = "tiendatranncc",
             ["thanhtoanncc"] = "tiendatranncc",
             ["tienthanhtoan"] = "tiendatranncc",
             ["sotienthanhtoan"] = "tiendatranncc"
@@ -154,7 +161,12 @@ public sealed class PhieuNhapImportService
                 }
 
                 var expectedLineTotal = Math.Max(0, quantity * unitPrice - lineDiscount);
-                if (Math.Abs(expectedLineTotal - lineTotal) > 0.01m)
+                var roundedLineTotal = decimal.Round(
+                    expectedLineTotal,
+                    0,
+                    MidpointRounding.AwayFromZero);
+                if (Math.Abs(expectedLineTotal - lineTotal) > 0.01m
+                    && Math.Abs(roundedLineTotal - lineTotal) > 0.01m)
                 {
                     AddIssue(issues, code,
                         $"Dòng {row.RowNumber()}: Thành tiền {lineTotal:N2} không khớp số lượng × giá nhập − giảm giá ({expectedLineTotal:N2}).");
