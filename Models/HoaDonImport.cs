@@ -358,6 +358,27 @@ public sealed class HoaDonImportSanPham
 }
 
 /// <summary>
+/// Một sản phẩm có mã chưa tồn tại trong danh mục, dùng để xem trước và
+/// tạo mới trong cùng transaction import.
+/// </summary>
+public sealed class SanPhamImportMoi
+{
+    public required string MaSanPham { get; init; }
+
+    public string TenSanPham { get; init; } = "";
+
+    public string? DonViTinh { get; init; }
+
+    public int SoDongExcel { get; init; }
+
+    public string? MaChungTu { get; init; }
+
+    public string TenHienThi =>
+        $"{MaSanPham} — {(string.IsNullOrWhiteSpace(TenSanPham) ? "(chưa có tên)" : TenSanPham)}"
+        + (string.IsNullOrWhiteSpace(DonViTinh) ? "" : $" ({DonViTinh})");
+}
+
+/// <summary>
 /// Một dòng chi tiết hóa đơn đọc được từ file. Tiền trong file không sửa
 /// trực tiếp mà để nguyên, mọi giá trị ghi xuống database đều tính lại ở
 /// các thuộc tính tính toán, nên không bao giờ phải gán đè sau khi đọc.
@@ -374,6 +395,9 @@ public sealed class HoaDonImportDetailRow
 
     /// <summary>Tên hàng hóa ghi trong file, có thể trống.</summary>
     public string TenSanPhamTrongFile { get; init; } = "";
+
+    /// <summary>Đơn vị tính ghi trong file, dùng khi tạo sản phẩm mới.</summary>
+    public string DonViTinhTrongFile { get; init; } = "";
 
     public decimal SoLuong { get; init; }
 
@@ -619,6 +643,9 @@ public sealed class HoaDonImportPreview
     /// <summary>Số hóa đơn không tìm thấy hàng hóa ở ít nhất một dòng chi tiết.</summary>
     public int SoSanPhamKhongTonTai { get; init; }
 
+    /// <summary>Các mã hàng hóa chưa có trong danh mục, đã gom trùng theo mã.</summary>
+    public List<SanPhamImportMoi> SanPhamChuaCo { get; init; } = [];
+
     /// <summary>Số hóa đơn bị hủy ngay trong file, sẽ không nhập.</summary>
     public int SoHoaDonHuy { get; init; }
 
@@ -642,6 +669,9 @@ public sealed class HoaDonImportPreview
 
     /// <summary>Có thể tạo khách hàng mới hay không: cần mã khách hàng và tên.</summary>
     public bool CoTheTaoKhachHangMoi => SoKhachHangCoTheTaoMoi > 0;
+
+    /// <summary>Có mã hàng hóa chưa tồn tại và có thể tạo mới hay không.</summary>
+    public bool CoTheTaoSanPhamMoi => SanPhamChuaCo.Count > 0;
 }
 
 /// <summary>
@@ -684,6 +714,9 @@ public sealed class HoaDonImportResult
     /// <summary>Số khách hàng được tạo mới trong lượt import này.</summary>
     public int SoKhachHangTaoMoi { get; set; }
 
+    /// <summary>Số sản phẩm được tạo mới trong lượt import này.</summary>
+    public int SoSanPhamTaoMoi { get; set; }
+
     public TimeSpan ThoiGian { get; set; }
 
     public List<HoaDonImportError> DanhSachLoi { get; } = [];
@@ -721,6 +754,9 @@ public sealed class HoaDonImportResult
 
             if (SoKhachHangTaoMoi > 0)
                 dong.Add($"Khách hàng đã tạo mới: {SoKhachHangTaoMoi:N0}");
+
+            if (SoSanPhamTaoMoi > 0)
+                dong.Add($"Sản phẩm đã tạo mới: {SoSanPhamTaoMoi:N0}");
 
             if (DaRollback)
                 dong.Add("ĐÃ ROLLBACK toàn bộ: database không bị để lại trạng thái nhập dở dang.");

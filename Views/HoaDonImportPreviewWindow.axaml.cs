@@ -6,7 +6,10 @@ using ShopHoa.Models;
 namespace ShopHoa.Views;
 
 /// <summary>Lựa chọn của người dùng trong cửa sổ xem trước hóa đơn.</summary>
-public sealed record QuyetDinhNhapHoaDon(XuLyHoaDonTrung XuLyTrung, bool TaoKhachHangMoi);
+public sealed record QuyetDinhNhapHoaDon(
+    XuLyHoaDonTrung XuLyTrung,
+    bool TaoKhachHangMoi,
+    bool TaoSanPhamMoi);
 
 /// <summary>
 /// Cửa sổ xem trước trước khi nhập hóa đơn: tóm tắt số hóa đơn, cảnh báo, lỗi,
@@ -62,6 +65,16 @@ public partial class HoaDonImportPreviewWindow : Window
 
         CapNhatGhiChuTaoKhachHang();
 
+        SanPhamChuaCoItems.ItemsSource = preview.SanPhamChuaCo;
+        SanPhamChuaCoBorder.IsVisible = preview.SanPhamChuaCo.Count > 0;
+        SanPhamChuaCoTieudeTextBlock.Text =
+            $"Hàng hóa chưa có trong danh mục ({preview.SanPhamChuaCo.Count:N0} mã)";
+
+        TaoSanPhamMoiCheckBox.IsEnabled = preview.CoTheTaoSanPhamMoi;
+        TaoSanPhamMoiCheckBox.IsChecked = preview.CoTheTaoSanPhamMoi;
+
+        CapNhatGhiChuTaoSanPham();
+
         CapNhatButton.IsEnabled = coTheNhap;
         BoQuaButton.IsEnabled = coTheNhap;
     }
@@ -105,7 +118,12 @@ public partial class HoaDonImportPreviewWindow : Window
         }
 
         if (preview.SoSanPhamKhongTonTai > 0)
-            dong.Add($"Không tìm thấy hàng hóa: {preview.SoSanPhamKhongTonTai:N0} hóa đơn sẽ bị loại.");
+        {
+            dong.Add(
+                $"Không tìm thấy hàng hóa: {preview.SanPhamChuaCo.Count:N0} mã, "
+                + $"liên quan {preview.SoSanPhamKhongTonTai:N0} hóa đơn. "
+                + "Chọn tạo sản phẩm mới bên dưới để nhập đầy đủ các dòng hàng.");
+        }
 
         if (preview.SoLoi > 0)
             dong.Add($"Dòng lỗi: {preview.SoLoi:N0}");
@@ -132,12 +150,40 @@ public partial class HoaDonImportPreviewWindow : Window
                 + "mỗi mã chỉ tạo một lần trong lượt nhập này.";
     }
 
+    private void CapNhatGhiChuTaoSanPham()
+    {
+        if (!_preview.CoTheTaoSanPhamMoi)
+        {
+            TaoSanPhamMoiGhiChuTextBlock.Text =
+                "Không có mã hàng hóa nào cần tạo mới.";
+            return;
+        }
+
+        var coTen = _preview.SanPhamChuaCo.Count(item => !string.IsNullOrWhiteSpace(item.TenSanPham));
+        var coDvt = _preview.SanPhamChuaCo.Count(item => !string.IsNullOrWhiteSpace(item.DonViTinh));
+        var thieuTen = _preview.SanPhamChuaCo.Count - coTen;
+
+        TaoSanPhamMoiGhiChuTextBlock.Text =
+            $"Sẽ tạo mới {_preview.SanPhamChuaCo.Count:N0} sản phẩm, mỗi mã chỉ tạo một lần. "
+            + $"Có tên hàng: {coTen:N0}; có đơn vị tính: {coDvt:N0}."
+            + (thieuTen > 0
+                ? $" {thieuTen:N0} mã thiếu tên sẽ dùng chính mã hàng làm tên và có thể sửa lại sau."
+                : "")
+            + " Không tạo tồn kho, không thay đổi công nợ hay tổng bán ngoài các dòng hàng của hóa đơn.";
+    }
+
     private void HuyButton_OnClick(object? sender, RoutedEventArgs e)
         => Close();
 
     private void BoQuaButton_OnClick(object? sender, RoutedEventArgs e)
-        => Close(new QuyetDinhNhapHoaDon(XuLyHoaDonTrung.BoQua, TaoKhachHangMoiCheckBox.IsChecked == true));
+        => Close(new QuyetDinhNhapHoaDon(
+            XuLyHoaDonTrung.BoQua,
+            TaoKhachHangMoiCheckBox.IsChecked == true,
+            TaoSanPhamMoiCheckBox.IsChecked == true));
 
     private void CapNhatButton_OnClick(object? sender, RoutedEventArgs e)
-        => Close(new QuyetDinhNhapHoaDon(XuLyHoaDonTrung.CapNhat, TaoKhachHangMoiCheckBox.IsChecked == true));
+        => Close(new QuyetDinhNhapHoaDon(
+            XuLyHoaDonTrung.CapNhat,
+            TaoKhachHangMoiCheckBox.IsChecked == true,
+            TaoSanPhamMoiCheckBox.IsChecked == true));
 }

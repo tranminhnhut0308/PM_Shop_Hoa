@@ -66,6 +66,12 @@ public sealed class PhieuNhapHangDetail
 
     public List<PhieuNhapHangDetailItem> Items { get; set; } = [];
 
+    /// <summary>
+    /// Các lần thanh toán công nợ đã phân bổ cho đúng phiếu nhập này
+    /// (bảng thanh_toan_nha_cung_cap). Rỗng nếu phiếu chưa phát sinh thanh toán.
+    /// </summary>
+    public List<PhieuNhapHangPaymentItem> Payments { get; set; } = [];
+
     // ============================================================
     // TỔNG TIỀN: tính lại từ chính các dòng chi tiết đã đọc,
     // đúng quy tắc nghiệp vụ hiện tại (tổng thành tiền từng dòng).
@@ -73,9 +79,20 @@ public sealed class PhieuNhapHangDetail
 
     public decimal TongTienHang => Items.Sum(item => item.ThanhTien);
 
-    public decimal TongTienNhap => TongTienHang + ChiPhiKhac;
+    /// <summary>
+    /// Tổng thanh toán của phiếu = tiền hàng - giảm giá cấp phiếu + chi phí khác.
+    /// Giảm giá cấp phiếu được lưu ở cột giam_gia của phieu_nhap_hang và đã được
+    /// trừ vào tong_tien_nhap khi import, nên phải trừ ở đây để khớp dữ liệu.
+    /// </summary>
+    public decimal TongTienNhap => Math.Max(0m, TongTienHang - GiamGia + ChiPhiKhac);
 
     public decimal ConNo => Math.Max(0m, TongTienNhap - DaThanhToan);
+
+    public bool CoLichSuThanhToan => Payments.Count > 0;
+
+    public decimal TongDaThanhToanLichSu => Payments.Sum(payment => payment.SoTien);
+
+    public string TongDaThanhToanLichSuText => TongDaThanhToanLichSu.ToString("N0", Vi) + " đ";
 
     public bool IsLuuTam => string.Equals(TrangThai, "LUU_TAM", StringComparison.OrdinalIgnoreCase);
 
@@ -186,4 +203,50 @@ public sealed class PhieuNhapHangDetailItem
     public string GiamGiaText => GiamGia.ToString("N0", Vi);
 
     public string ThanhTienText => ThanhTien.ToString("N0", Vi);
+}
+
+/// <summary>
+/// Một lần thanh toán công nợ đã phân bổ cho phiếu nhập (thanh_toan_nha_cung_cap).
+/// Chỉ đọc để hiển thị trong cửa sổ chi tiết phiếu nhập.
+/// </summary>
+public sealed class PhieuNhapHangPaymentItem
+{
+    private static readonly CultureInfo Vi = CultureInfo.GetCultureInfo("vi-VN");
+
+    public ulong Id { get; set; }
+
+    public string MaThanhToan { get; set; } = "";
+
+    public decimal SoTien { get; set; }
+
+    public string PhuongThuc { get; set; } = "";
+
+    public DateTime ThoiGian { get; set; }
+
+    public string? NguoiThucHien { get; set; }
+
+    public string? GhiChu { get; set; }
+
+    public string ThoiGianText =>
+        ThoiGian.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+
+    public string MaThanhToanHienThi =>
+        string.IsNullOrWhiteSpace(MaThanhToan) ? "—" : MaThanhToan.Trim();
+
+    public string SoTienText => SoTien.ToString("N0", Vi) + " đ";
+
+    public string PhuongThucHienThi => PhuongThuc.Trim().ToUpperInvariant() switch
+    {
+        "TIEN_MAT" => "Tiền mặt",
+        "CHUYEN_KHOAN" or "CHUYEN_KHOAN_NGAN_HANG" or "NGAN_HANG" => "Chuyển khoản",
+        "THE" or "THE_TIN_DUNG" => "Thẻ",
+        "VI_DIEN_TU" or "VI" => "Ví điện tử",
+        _ => string.IsNullOrWhiteSpace(PhuongThuc) ? "Chưa ghi nhận" : PhuongThuc
+    };
+
+    public string NguoiThucHienHienThi =>
+        string.IsNullOrWhiteSpace(NguoiThucHien) ? "—" : NguoiThucHien.Trim();
+
+    public string GhiChuHienThi =>
+        string.IsNullOrWhiteSpace(GhiChu) ? "—" : GhiChu.Trim();
 }

@@ -322,6 +322,7 @@ public sealed partial class MainWindowViewModel
                 quyetDinh.TaoKhachHangMoi,
                 tuyChonImport.Value.UpdateCustomerDebt,
                 tuyChonImport.Value.UpdateSalesTotal,
+                quyetDinh.TaoSanPhamMoi,
                 progress);
 
             // Danh sách hóa đơn trên màn hình đã cũ, nạp lại để thấy dữ liệu mới.

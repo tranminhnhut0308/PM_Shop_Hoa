@@ -1030,6 +1030,7 @@ public sealed class HoaDonImportService
         var canhBao = new List<string>(duLieu.CanhBao);
         var danhSach = new List<HoaDonImportRow>(duLieu.Nhom.Count);
         var maKhachCoTheTao = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sanPhamChuaCo = new Dictionary<string, SanPhamImportMoi>(StringComparer.OrdinalIgnoreCase);
 
         if (duLieu.TongSoDongChiTiet == 0 && duLieu.Nhom.Count > 0)
         {
@@ -1146,14 +1147,36 @@ public sealed class HoaDonImportService
 
                 if (ketQuaChiTiet.Loi.Count > 0)
                 {
-                    if (ketQuaChiTiet.CoThieuSanPham)
-                        soSanPhamThieu++;
-
                     // Giữ lại toàn bộ lỗi từng dòng để file xuất lỗi có đủ số liệu,
                     // không cắt bớt ở đây.
                     loi.AddRange(ketQuaChiTiet.Loi);
 
                     continue;
+                }
+
+                if (ketQuaChiTiet.CoThieuSanPham)
+                    soSanPhamThieu++;
+
+                foreach (var sanPhamMoi in ketQuaChiTiet.SanPhamThieu)
+                {
+                    if (!sanPhamChuaCo.TryGetValue(sanPhamMoi.MaSanPham, out var daCo))
+                    {
+                        sanPhamChuaCo[sanPhamMoi.MaSanPham] = sanPhamMoi;
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(daCo.TenSanPham)
+                        && !string.IsNullOrWhiteSpace(sanPhamMoi.TenSanPham))
+                    {
+                        sanPhamChuaCo[sanPhamMoi.MaSanPham] = new SanPhamImportMoi
+                        {
+                            MaSanPham = daCo.MaSanPham,
+                            TenSanPham = sanPhamMoi.TenSanPham,
+                            DonViTinh = daCo.DonViTinh ?? sanPhamMoi.DonViTinh,
+                            SoDongExcel = daCo.SoDongExcel,
+                            MaChungTu = daCo.MaChungTu
+                        };
+                    }
                 }
 
                 hoaDon.ChiTiet.AddRange(ketQuaChiTiet.ChiTiet);
@@ -1218,6 +1241,9 @@ public sealed class HoaDonImportService
             SoKhachHangKhongTonTai = soKhachHangThieu,
             SoKhachHangCoTheTaoMoi = maKhachCoTheTao.Count,
             SoSanPhamKhongTonTai = soSanPhamThieu,
+            SanPhamChuaCo = sanPhamChuaCo.Values
+                .OrderBy(item => item.MaSanPham, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             SoHoaDonHuy = soHoaDonHuy,
             SoLoi = loi.Count,
             DanhSachHoaDon = danhSach,
@@ -1463,6 +1489,8 @@ public sealed class HoaDonImportService
         public int SoDongLoi { get; init; }
 
         public bool CoThieuSanPham { get; init; }
+
+        public List<SanPhamImportMoi> SanPhamThieu { get; init; } = [];
     }
 
     private static KetQuaDocChiTiet DocChiTiet(
@@ -1472,6 +1500,7 @@ public sealed class HoaDonImportService
     {
         var chiTiet = new List<HoaDonImportDetailRow>(group.ChiTiet.Count);
         var loi = new List<HoaDonImportError>();
+        var sanPhamThieu = new Dictionary<string, SanPhamImportMoi>(StringComparer.OrdinalIgnoreCase);
         var soDongLoi = 0;
         var thieuSanPham = false;
 
@@ -1554,17 +1583,31 @@ public sealed class HoaDonImportService
                 continue;
             }
 
-            if (!sanPham.TryGetValue(maSanPham, out var sanPhamDaCo))
-            {
-                thieuSanPham = true;
-                GhiLoi(row.SoDong, $"không tìm thấy hàng hóa có mã \"{maSanPham}\" trong database.");
-                continue;
-            }
-
             var tenSanPham = LayGiaTri(row, TruongHoaDon.TenSanPham) ?? "";
 
             if (tenSanPham.Length > DoDaiToiDaTenSanPham)
                 tenSanPham = tenSanPham[..DoDaiToiDaTenSanPham];
+
+            var donViTinh = LayGiaTri(row, TruongHoaDon.DonViTinh) ?? "";
+            if (donViTinh.Length > 100)
+                donViTinh = donViTinh[..100];
+
+            sanPham.TryGetValue(maSanPham, out var sanPhamDaCo);
+            if (sanPhamDaCo is null)
+            {
+                thieuSanPham = true;
+                if (!sanPhamThieu.ContainsKey(maSanPham))
+                {
+                    sanPhamThieu[maSanPham] = new SanPhamImportMoi
+                    {
+                        MaSanPham = maSanPham,
+                        TenSanPham = tenSanPham,
+                        DonViTinh = donViTinh.Length > 0 ? donViTinh : null,
+                        SoDongExcel = row.SoDong,
+                        MaChungTu = group.MaHoaDon
+                    };
+                }
+            }
 
             chiTiet.Add(new HoaDonImportDetailRow
             {
@@ -1572,6 +1615,7 @@ public sealed class HoaDonImportService
                 MaHoaDon = group.MaHoaDon,
                 MaSanPham = maSanPham,
                 TenSanPhamTrongFile = tenSanPham,
+                DonViTinhTrongFile = donViTinh,
                 SoLuong = soLuong.Value,
                 DonGia = donGia.Value,
                 GiamGia = giamGiaDong,
@@ -1586,7 +1630,8 @@ public sealed class HoaDonImportService
             ChiTiet = chiTiet,
             Loi = loi,
             SoDongLoi = soDongLoi,
-            CoThieuSanPham = thieuSanPham
+            CoThieuSanPham = thieuSanPham,
+            SanPhamThieu = sanPhamThieu.Values.ToList()
         };
 
         bool CoChuNhungKhongDocDuocSo(string? raw) =>
@@ -1791,6 +1836,7 @@ public sealed class HoaDonImportService
         bool taoKhachHangMoi,
         bool updateCustomerDebt,
         bool updateSalesTotal,
+        bool taoSanPhamMoi = false,
         IProgress<HoaDonImportProgress>? progress = null,
         CancellationToken ct = default)
     {
@@ -1890,7 +1936,9 @@ public sealed class HoaDonImportService
                 {
                     if (!sanPham.TryGetValue(dong.MaSanPham, out var sanPhamMoi))
                     {
-                        thieuSanPham.Add(dong.MaSanPham);
+                        if (!taoSanPhamMoi)
+                            thieuSanPham.Add(dong.MaSanPham);
+
                         continue;
                     }
 
@@ -1906,7 +1954,7 @@ public sealed class HoaDonImportService
                 result.DanhSachLoi.Add(new HoaDonImportError(
                     hoaDon.SoDongExcel,
                     hoaDon.MaHoaDon,
-                    "Hàng hóa đã bị xóa khỏi danh mục từ lúc xem trước: "
+                    "Không tìm thấy hàng hóa và chưa chọn tạo sản phẩm mới nên bỏ qua hóa đơn. Mã thiếu: "
                     + string.Join(", ", thieuSanPham.Distinct().Take(5))));
             }
 
@@ -1977,6 +2025,8 @@ public sealed class HoaDonImportService
                         connection,
                         transaction,
                         batch,
+                        sanPham,
+                        taoSanPhamMoi,
                         soDuCongNo,
                         congNoCu,
                         branchId,
@@ -2008,6 +2058,8 @@ public sealed class HoaDonImportService
                         connection,
                         transaction,
                         batch,
+                        sanPham,
+                        taoSanPhamMoi,
                         soDuCongNo,
                         congNoCu,
                         branchId,
@@ -2143,6 +2195,8 @@ public sealed class HoaDonImportService
         MySqlConnection connection,
         MySqlTransaction transaction,
         IReadOnlyList<HoaDonImportRow> batch,
+        Dictionary<string, HoaDonImportSanPham> sanPham,
+        bool taoSanPhamMoi,
         SoDuCongNo soDuCongNo,
         IReadOnlyDictionary<string, CongNoCu> congNoCu,
         uint branchId,
@@ -2214,7 +2268,35 @@ public sealed class HoaDonImportService
             foreach (var dong in hoaDon.ChiTiet)
             {
                 if (dong.SanPham is null)
-                    continue;
+                {
+                    if (!taoSanPhamMoi)
+                        throw new InvalidOperationException(
+                            $"Hàng hóa {dong.MaSanPham} không có trong danh mục và chưa được phép tạo mới.");
+
+                    if (!sanPham.TryGetValue(dong.MaSanPham, out var sanPhamMoi))
+                    {
+                        var daTao = await DatabaseService.GetOrCreateProductForImportAsync(
+                            connection,
+                            transaction,
+                            dong.MaSanPham,
+                            dong.TenSanPhamTrongFile,
+                            dong.DonViTinhTrongFile,
+                            ct);
+
+                        sanPhamMoi = new HoaDonImportSanPham
+                        {
+                            Id = daTao.Id,
+                            TenSanPham = daTao.TenSanPham,
+                            DonViTinh = daTao.DonViTinh,
+                            GiaVon = daTao.GiaVon
+                        };
+
+                        sanPham[dong.MaSanPham] = sanPhamMoi;
+                        result.SoSanPhamTaoMoi++;
+                    }
+
+                    dong.SanPham = sanPhamMoi;
+                }
 
                 chiTiet.Add(new DongChiTiet
                 {
@@ -2263,6 +2345,8 @@ public sealed class HoaDonImportService
         MySqlConnection connection,
         MySqlTransaction transaction,
         IReadOnlyList<HoaDonImportRow> batch,
+        Dictionary<string, HoaDonImportSanPham> sanPham,
+        bool taoSanPhamMoi,
         SoDuCongNo soDuCongNo,
         IReadOnlyDictionary<string, CongNoCu> congNoCu,
         uint branchId,
@@ -2288,6 +2372,8 @@ public sealed class HoaDonImportService
                     connection,
                     transaction,
                     [hoaDon],
+                    sanPham,
+                    taoSanPhamMoi,
                     soDuCongNo,
                     congNoCu,
                     branchId,

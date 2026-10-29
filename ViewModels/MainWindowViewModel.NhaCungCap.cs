@@ -484,7 +484,7 @@ public sealed partial class MainWindowViewModel
                 detail.Supplier = duLieu;
             }
 
-            var phieuNhap = await _db.GetPhieuNhapCuaNhaCungCapAsync(row.SupplierId, 100);
+            var phieuNhap = await _db.GetPhieuNhapCuaNhaCungCapAsync(row.SupplierId, int.MaxValue);
             detail.NapPhieuNhapHang(phieuNhap);
 
             var lichSu = await _db.GetLichSuCongNoNhaCungCapAsync(row.SupplierId, 100);

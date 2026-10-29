@@ -851,6 +851,208 @@ public sealed partial class DatabaseService
         return new ProductOption { Id = newId, Name = ten };
     }
 
+    /// <summary>
+    /// Kiểm tra danh sách mã hàng hóa còn thiếu trong danh mục. Chỉ đọc dữ
+    /// liệu, dùng cho bước xem trước trước khi import.
+    /// </summary>
+    public async Task<IReadOnlyList<SanPhamImportMoi>> GetSanPhamChuaCoAsync(
+        IEnumerable<SanPhamImportMoi> candidates)
+    {
+        var danhSach = candidates
+            .Where(item => !string.IsNullOrWhiteSpace(item.MaSanPham))
+            .GroupBy(item => item.MaSanPham.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+                var dauTien = group.First();
+                var ten = group.Select(item => item.TenSanPham.Trim())
+                    .FirstOrDefault(value => value.Length > 0) ?? "";
+                var donViTinh = group.Select(item => item.DonViTinh?.Trim())
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+                return new SanPhamImportMoi
+                {
+                    MaSanPham = dauTien.MaSanPham.Trim(),
+                    TenSanPham = ten,
+                    DonViTinh = donViTinh,
+                    SoDongExcel = dauTien.SoDongExcel,
+                    MaChungTu = dauTien.MaChungTu
+                };
+            })
+            .ToList();
+
+        if (danhSach.Count == 0)
+            return danhSach;
+
+        var daCo = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using var connection = await OpenAsync();
+
+        foreach (var chunk in danhSach.Chunk(1000))
+        {
+            var codes = chunk.Select(item => item.MaSanPham).ToArray();
+            var timThay = await connection.QueryAsync<string>(
+                "SELECT ma_san_pham FROM san_pham WHERE ma_san_pham IN @Codes;",
+                new { Codes = codes });
+
+            foreach (var code in timThay)
+                daCo.Add(code);
+        }
+
+        return danhSach.Where(item => !daCo.Contains(item.MaSanPham)).ToList();
+    }
+
+    /// <summary>
+    /// Tìm sản phẩm theo mã, nếu chưa có thì tạo mới trong đúng transaction
+    /// đang import. Tên trống sẽ dùng mã hàng; đơn vị tính được tạo hoặc dùng
+    /// lại theo tên, không làm thay đổi tồn kho hay bất kỳ chứng từ nào.
+    /// </summary>
+    internal static async Task<SanPham> GetOrCreateProductForImportAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        string maSanPham,
+        string? tenSanPham,
+        string? donViTinh,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        var ma = maSanPham.Trim();
+        if (ma.Length == 0)
+            throw new InvalidOperationException("Mã hàng hóa không được để trống.");
+        if (ma.Length > 50)
+            throw new InvalidOperationException(
+                $"Mã hàng hóa \"{ma}\" dài {ma.Length} ký tự, vượt quá 50 ký tự.");
+
+        var ten = string.IsNullOrWhiteSpace(tenSanPham) ? ma : tenSanPham.Trim();
+        if (ten.Length > 255)
+            ten = ten[..255];
+
+        const string selectProductSql = """
+            SELECT sp.id AS Id, sp.ma_san_pham AS MaSanPham,
+                   sp.ten_san_pham AS TenSanPham, sp.don_vi_tinh_id AS DonViTinhId,
+                   dvt.ten_don_vi AS DonViTinh, sp.gia_von AS GiaVon
+            FROM san_pham sp
+            LEFT JOIN don_vi_tinh dvt ON dvt.id = sp.don_vi_tinh_id
+            WHERE sp.ma_san_pham = @Ma
+            LIMIT 1;
+            """;
+
+        var daCo = await connection.QueryFirstOrDefaultAsync<SanPham>(
+            selectProductSql,
+            new { Ma = ma },
+            transaction);
+        if (daCo is not null)
+            return daCo;
+
+        uint? donViTinhId = null;
+        string? tenDonViTinh = null;
+        var tenDvt = donViTinh?.Trim();
+        if (!string.IsNullOrWhiteSpace(tenDvt))
+        {
+            if (tenDvt.Length > 100)
+                tenDvt = tenDvt[..100];
+
+            var dvt = await connection.QueryFirstOrDefaultAsync<ProductOption>(
+                """
+                SELECT id AS Id, ten_don_vi AS Name
+                FROM don_vi_tinh
+                WHERE LOWER(TRIM(ten_don_vi)) = LOWER(@Ten)
+                LIMIT 1;
+                """,
+                new { Ten = tenDvt },
+                transaction);
+
+            if (dvt is not null)
+            {
+                await connection.ExecuteAsync(
+                    "UPDATE don_vi_tinh SET trang_thai = 1 WHERE id = @Id;",
+                    new { dvt.Id },
+                    transaction);
+                donViTinhId = dvt.Id;
+                tenDonViTinh = dvt.Name;
+            }
+            else
+            {
+                var coMaDonVi = await connection.ExecuteScalarAsync<int>(
+                    """
+                    SELECT COUNT(*)
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND LOWER(TABLE_NAME) = 'don_vi_tinh'
+                      AND LOWER(COLUMN_NAME) = 'ma_don_vi';
+                    """,
+                    transaction: transaction) > 0;
+
+                if (coMaDonVi)
+                {
+                    await connection.ExecuteAsync(
+                        "INSERT INTO don_vi_tinh (ma_don_vi, ten_don_vi, trang_thai) VALUES (@Ma, @Ten, 1);",
+                        new { Ma = "DVT" + Guid.NewGuid().ToString("N")[..12], Ten = tenDvt },
+                        transaction);
+                }
+                else
+                {
+                    await connection.ExecuteAsync(
+                        "INSERT INTO don_vi_tinh (ten_don_vi, trang_thai) VALUES (@Ten, 1);",
+                        new { Ten = tenDvt },
+                        transaction);
+                }
+
+                donViTinhId = await connection.ExecuteScalarAsync<uint>(
+                    "SELECT LAST_INSERT_ID();",
+                    transaction: transaction);
+                tenDonViTinh = tenDvt;
+            }
+        }
+
+        try
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO san_pham
+                (
+                    ma_san_pham, ten_san_pham, don_vi_tinh_id,
+                    gia_ban, gia_von, co_ban_truc_tiep, trang_thai,
+                    ngay_tao, ngay_cap_nhat
+                )
+                VALUES
+                (
+                    @Ma, @Ten, @DonViTinhId,
+                    0, 0, 1, 1,
+                    NOW(), NOW()
+                );
+                """,
+                new { Ma = ma, Ten = ten, DonViTinhId = donViTinhId },
+                transaction);
+        }
+        catch (MySqlException ex) when (ex.Number == 1062)
+        {
+            var daPhatSinh = await connection.QueryFirstOrDefaultAsync<SanPham>(
+                selectProductSql,
+                new { Ma = ma },
+                transaction);
+            if (daPhatSinh is not null)
+                return daPhatSinh;
+
+            throw;
+        }
+
+        var newId = await connection.ExecuteScalarAsync<uint>(
+            "SELECT LAST_INSERT_ID();",
+            transaction: transaction);
+        if (newId == 0)
+            throw new InvalidOperationException($"Không tạo được hàng hóa mã {ma} trong database.");
+
+        return new SanPham
+        {
+            Id = newId,
+            MaSanPham = ma,
+            TenSanPham = ten,
+            DonViTinhId = donViTinhId,
+            DonViTinh = tenDonViTinh,
+            GiaVon = 0m
+        };
+    }
+
     public async Task CapNhatHinhAnhSanPhamAsync(uint productId, string imagePath)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsEdit, "Bạn không có quyền cập nhật hàng hóa.");
@@ -8894,6 +9096,40 @@ ORDER BY hd.thoi_gian_ban DESC
 
         header.Items = items;
 
+        // Lịch sử thanh toán công nợ đã phân bổ cho đúng phiếu nhập này.
+        // Truy vấn theo phieu_nhap_id (không phải theo nhà cung cấp) để không
+        // lẫn thanh toán của các phiếu khác cùng nhà cung cấp.
+        const string paymentSql = """
+        SELECT
+            tt.id AS Id,
+            tt.ma_thanh_toan AS MaThanhToan,
+            tt.so_tien AS SoTien,
+            tt.phuong_thuc AS PhuongThuc,
+            tt.thoi_gian AS ThoiGian,
+            COALESCE(NULLIF(TRIM(nd.ho_ten), ''), nd.ten_dang_nhap, '') AS NguoiThucHien,
+            tt.ghi_chu AS GhiChu
+        FROM thanh_toan_nha_cung_cap tt
+        LEFT JOIN nguoi_dung nd ON nd.id = tt.nguoi_thuc_hien_id
+        WHERE tt.phieu_nhap_id = @PhieuNhapId
+        ORDER BY tt.thoi_gian DESC, tt.id DESC;
+        """;
+
+        try
+        {
+            header.Payments = (
+                await connection.QueryAsync<PhieuNhapHangPaymentItem>(
+                    paymentSql,
+                    new { PhieuNhapId = phieuNhapId })
+            ).AsList();
+        }
+        catch (MySqlException ex) when (ex.Number == 1146)
+        {
+            // Database cũ chưa có bảng thanh_toan_nha_cung_cap: vẫn mở được
+            // chi tiết phiếu, chỉ không có lịch sử thanh toán chi tiết.
+            SafeLog.WriteError("Khong doc duoc lich su thanh toan phieu nhap", ex);
+            header.Payments = [];
+        }
+
         return header;
     }
 
@@ -8905,7 +9141,8 @@ ORDER BY hd.thoi_gian_ban DESC
         PhieuNhapImportReceipt receipt,
         bool updateSupplierDebt = true,
         IProgress<string>? progress = null,
-        bool includeInSupplierPurchaseTotal = true)
+        bool includeInSupplierPurchaseTotal = true,
+        bool taoSanPhamMoi = false)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.PurchasesImport, "Bạn không có quyền import phiếu nhập hàng.");
         ArgumentNullException.ThrowIfNull(receipt);
@@ -8994,21 +9231,6 @@ ORDER BY hd.thoi_gian_ban DESC
         foreach (var product in products)
             productsByCode[product.MaSanPham] = product;
 
-        var items = new List<ChiTietPhieuNhapHang>(receipt.Items.Count);
-        foreach (var line in receipt.Items)
-        {
-            if (!productsByCode.TryGetValue(line.MaSanPham.Trim(), out var product))
-                throw new InvalidOperationException(
-                    $"Không tìm thấy hàng hóa mã {line.MaSanPham} (dòng Excel {line.SoDongExcel}).");
-            items.Add(new ChiTietPhieuNhapHang(product)
-            {
-                SoLuong = line.SoLuong,
-                DonGiaNhap = line.DonGiaNhap,
-                GiamGia = line.GiamGia,
-                GhiChu = line.GhiChu
-            });
-        }
-
         var hasExtraColumns = await HasPhieuNhapExtraColumnsAsync();
         var extraColumns = hasExtraColumns ? ", so_hoa_don_dau_vao, ma_dat_hang_nhap" : "";
         var extraValues = hasExtraColumns ? ", @SoHoaDonDauVao, NULL" : "";
@@ -9059,6 +9281,51 @@ ORDER BY hd.thoi_gian_ban DESC
                 progress?.Report($"Phiếu nhập {code} đã tồn tại, đang bỏ qua...");
                 await transaction.CommitAsync();
                 return false;
+            }
+
+            var thieuSanPham = receipt.Items
+                .Select(item => item.MaSanPham.Trim())
+                .Where(ma => !productsByCode.ContainsKey(ma))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (thieuSanPham.Count > 0)
+            {
+                if (!taoSanPhamMoi)
+                    throw new InvalidOperationException(
+                        $"Không tìm thấy hàng hóa mã {string.Join(", ", thieuSanPham.Take(10))} "
+                        + $"trong phiếu {code} và chưa chọn tạo sản phẩm mới.");
+
+                foreach (var line in receipt.Items)
+                {
+                    var maSanPham = line.MaSanPham.Trim();
+                    if (productsByCode.ContainsKey(maSanPham))
+                        continue;
+
+                    progress?.Report($"Đang tạo sản phẩm mới {maSanPham}...");
+                    var product = await GetOrCreateProductForImportAsync(
+                        connection,
+                        transaction,
+                        maSanPham,
+                        line.TenSanPham,
+                        line.DonViTinh);
+                    productsByCode[maSanPham] = product;
+                }
+            }
+
+            var items = new List<ChiTietPhieuNhapHang>(receipt.Items.Count);
+            foreach (var line in receipt.Items)
+            {
+                if (!productsByCode.TryGetValue(line.MaSanPham.Trim(), out var product))
+                    throw new InvalidOperationException(
+                        $"Không tìm thấy hàng hóa mã {line.MaSanPham} (dòng Excel {line.SoDongExcel}).");
+                items.Add(new ChiTietPhieuNhapHang(product)
+                {
+                    SoLuong = line.SoLuong,
+                    DonGiaNhap = line.DonGiaNhap,
+                    GiamGia = line.GiamGia,
+                    GhiChu = line.GhiChu
+                });
             }
 
             var insertSql = $"""

@@ -4005,8 +4005,9 @@
                               <StackPanel IsVisible="{Binding Detail.IsTabLichSuNhapHang}"
                                 Spacing="10">
 
-                                <TextBlock Text="Các phiếu nhập hàng gần nhất từ nhà cung cấp này"
-                                  Foreground="#61736E" FontSize="12" />
+                                <TextBlock Text="Các phiếu nhập hàng của nhà cung cấp này. Nhấn đúp vào phiếu hoặc bấm Xem chi tiết để mở đầy đủ hàng hóa và lịch sử thanh toán."
+                                  Foreground="#61736E" FontSize="12"
+                                  TextWrapping="Wrap" />
 
                                 <TextBlock Text="{Binding Detail.LichSuNhapHangRongText}"
                                   IsVisible="{Binding !Detail.HasLichSuNhapHang}"
@@ -4017,8 +4018,11 @@
                                   <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="models:PhieuNhapHang">
                                       <Border BorderBrush="#E2ECE8" BorderThickness="0,0,0,1"
-                                        Padding="0,9">
-                                        <Grid ColumnDefinitions="150,150,140,140,140,130"
+                                        Padding="0,9"
+                                        Cursor="Hand"
+                                        ToolTip.Tip="Nhấn đúp để xem chi tiết phiếu nhập"
+                                        DoubleTapped="OnSupplierPhieuNhapRowDoubleTapped">
+                                        <Grid ColumnDefinitions="150,150,140,140,140,130,110"
                                           ColumnSpacing="10">
                                           <TextBlock Text="{Binding MaPhieuNhap}" FontSize="12"
                                             FontWeight="SemiBold" Foreground="#163F38"
@@ -4050,6 +4054,17 @@
                                             FontSize="12" FontWeight="SemiBold"
                                             Foreground="#D64545" HorizontalAlignment="Right"
                                             VerticalAlignment="Center" />
+                                          <Button Grid.Column="6"
+                                            Classes="toolbar-action"
+                                            Content="Xem chi tiết"
+                                            FontSize="11"
+                                            Padding="10,5"
+                                            Margin="0"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center"
+                                            ToolTip.Tip="Xem đầy đủ hàng hóa và lịch sử thanh toán"
+                                            Command="{Binding ElementName=RootWindow, Path=DataContext.XemChiTietPhieuNhapCommand}"
+                                            CommandParameter="{Binding}" />
                                         </Grid>
                                       </Border>
                                     </DataTemplate>

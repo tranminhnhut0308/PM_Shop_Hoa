@@ -5,9 +5,9 @@
   x:DataType="models:PhieuNhapHangDetail"
   Title="{Binding TieuDe}"
   Width="920"
-  Height="740"
+  Height="820"
   MinWidth="720"
-  MinHeight="560"
+  MinHeight="620"
   WindowStartupLocation="CenterOwner"
   Background="#F4FAF8">
 
@@ -53,7 +53,7 @@
   </Window.Styles>
 
   <Grid Margin="22"
-    RowDefinitions="Auto,Auto,*,Auto"
+    RowDefinitions="Auto,Auto,*,Auto,Auto"
     RowSpacing="14">
 
     <!-- 1. TIÊU ĐỀ + BADGE TRẠNG THÁI -->
@@ -126,7 +126,7 @@
         </StackPanel>
 
         <StackPanel Grid.Column="1" Spacing="2">
-          <TextBlock Classes="label" Text="Nhân viên nhập" />
+          <TextBlock Classes="label" Text="Người tạo phiếu" />
           <TextBlock Classes="value" Text="{Binding TenNhanVienHienThi}" />
         </StackPanel>
 
@@ -316,7 +316,7 @@
               BorderThickness="0,1,0,0"
               Padding="0,8,0,0">
               <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Text="TỔNG TIỀN NHẬP"
+                <TextBlock Text="TỔNG THANH TOÁN"
                   FontSize="15"
                   FontWeight="Bold"
                   Foreground="#163F38" />
@@ -366,8 +366,101 @@
       </Grid>
     </Border>
 
-    <!-- 4. GHI CHÚ + NÚT ĐÓNG -->
-    <Grid Grid.Row="3"
+    <!-- 4. LỊCH SỬ THANH TOÁN CÔNG NỢ CỦA PHIẾU -->
+    <Border Grid.Row="3"
+      Background="White"
+      BorderBrush="#E2ECE8"
+      BorderThickness="1"
+      CornerRadius="12"
+      ClipToBounds="True"
+      IsVisible="{Binding CoLichSuThanhToan}">
+
+      <Grid RowDefinitions="Auto,Auto,Auto">
+
+        <Border Background="#EBF5F1"
+          BorderBrush="#D5EAE3"
+          BorderThickness="0,0,0,1"
+          Padding="16,10">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="section-title" Text="Lịch sử thanh toán công nợ" />
+            <TextBlock Grid.Column="1"
+              Text="{Binding TongDaThanhToanLichSuText, StringFormat='Tổng đã ghi nhận: {0}'}"
+              FontSize="12"
+              FontWeight="SemiBold"
+              Foreground="#087F6E"
+              VerticalAlignment="Center" />
+          </Grid>
+        </Border>
+
+        <Border Grid.Row="1"
+          Background="#F7FAF9"
+          BorderBrush="#E2ECE8"
+          BorderThickness="0,0,0,1"
+          Padding="16,8">
+          <Grid ColumnDefinitions="145,145,125,*,135"
+            ColumnSpacing="10">
+            <TextBlock Classes="table-header" Text="THỜI GIAN" />
+            <TextBlock Grid.Column="1" Classes="table-header" Text="MÃ THANH TOÁN" />
+            <TextBlock Grid.Column="2" Classes="table-header" Text="PHƯƠNG THỨC" />
+            <TextBlock Grid.Column="3" Classes="table-header" Text="NGƯỜI THỰC HIỆN" />
+            <TextBlock Grid.Column="4" Classes="table-header" Text="SỐ TIỀN"
+              HorizontalAlignment="Right" />
+          </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="2"
+          MaxHeight="130"
+          VerticalScrollBarVisibility="Auto">
+          <ItemsControl ItemsSource="{Binding Payments}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="models:PhieuNhapHangPaymentItem">
+                <Border BorderBrush="#EEF3F1"
+                  BorderThickness="0,0,0,1"
+                  Padding="16,8"
+                  ToolTip.Tip="{Binding GhiChuHienThi}">
+                  <Grid ColumnDefinitions="145,145,125,*,135"
+                    ColumnSpacing="10"
+                    VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ThoiGianText}"
+                      FontSize="12"
+                      Foreground="#667A74"
+                      VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1"
+                      Text="{Binding MaThanhToanHienThi}"
+                      FontSize="12"
+                      FontWeight="SemiBold"
+                      Foreground="#163F38"
+                      TextTrimming="CharacterEllipsis"
+                      VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2"
+                      Text="{Binding PhuongThucHienThi}"
+                      FontSize="12"
+                      Foreground="#344B45"
+                      VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3"
+                      Text="{Binding NguoiThucHienHienThi}"
+                      FontSize="12"
+                      Foreground="#344B45"
+                      TextTrimming="CharacterEllipsis"
+                      VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="4"
+                      Text="{Binding SoTienText}"
+                      FontSize="13"
+                      FontWeight="SemiBold"
+                      Foreground="#087F6E"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Grid>
+    </Border>
+
+    <!-- 5. GHI CHÚ + NÚT ĐÓNG -->
+    <Grid Grid.Row="4"
       ColumnDefinitions="*,Auto,Auto"
       ColumnSpacing="14">
 

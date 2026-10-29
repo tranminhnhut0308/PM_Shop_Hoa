@@ -23,6 +23,8 @@ public sealed class PhieuNhapImportLine
 {
     public int SoDongExcel { get; set; }
     public string MaSanPham { get; set; } = "";
+    public string TenSanPham { get; set; } = "";
+    public string DonViTinh { get; set; } = "";
     public decimal SoLuong { get; set; }
     public decimal DonGiaNhap { get; set; }
     public decimal GiamGia { get; set; }
@@ -39,4 +41,6 @@ public sealed class PhieuNhapImportPreview
     public int SoDongChiTietCuaPhieuLoi { get; set; }
     public List<PhieuNhapImportReceipt> PhieuNhap { get; set; } = [];
     public List<PhieuNhapImportIssue> Loi { get; set; } = [];
+    public List<SanPhamImportMoi> SanPhamChuaCo { get; set; } = [];
+    public bool CoTheTaoSanPhamMoi => SanPhamChuaCo.Count > 0;
 }

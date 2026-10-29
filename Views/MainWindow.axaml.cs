@@ -527,6 +527,32 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Nhấn đúp vào một phiếu nhập trong tab Lịch sử nhập hàng của nhà cung cấp:
+    /// mở cửa sổ chi tiết đầy đủ (hàng hóa + lịch sử thanh toán).
+    /// </summary>
+    private void OnSupplierPhieuNhapRowDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        // Bỏ qua nếu bấm vào nút "Xem chi tiết" (nút đã có command riêng).
+        var element = e.Source as StyledElement;
+        while (element is not null && element != sender)
+        {
+            if (element is Button)
+                return;
+
+            element = element.Parent as StyledElement;
+        }
+
+        if ((sender as Control)?.DataContext is not PhieuNhapHang item)
+            return;
+
+        if (viewModel.XemChiTietPhieuNhapCommand.CanExecute(item))
+            viewModel.XemChiTietPhieuNhapCommand.Execute(item);
+    }
+
+    /// <summary>
     /// Click vào ô thống kê nhanh: mở đúng tab tương ứng của vùng chi tiết
     /// đang mở.
     /// </summary>

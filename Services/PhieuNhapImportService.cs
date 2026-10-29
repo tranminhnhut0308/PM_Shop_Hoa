@@ -186,10 +186,24 @@ public sealed class PhieuNhapImportService
                     continue;
                 }
 
+                var tenSanPham = Text(row, headers, "tenhanghoa");
+                if (tenSanPham.Length == 0)
+                    tenSanPham = Text(row, headers, "tensanpham");
+                if (tenSanPham.Length == 0)
+                    tenSanPham = Text(row, headers, "tenhang");
+                if (tenSanPham.Length == 0)
+                    tenSanPham = Text(row, headers, "tenmathang");
+
+                var donViTinh = Text(row, headers, "donvitinh");
+                if (donViTinh.Length == 0)
+                    donViTinh = Text(row, headers, "dvt");
+
                 receipt.Items.Add(new PhieuNhapImportLine
                 {
                     SoDongExcel = row.RowNumber(),
                     MaSanPham = productCode,
+                    TenSanPham = tenSanPham,
+                    DonViTinh = donViTinh,
                     SoLuong = quantity,
                     DonGiaNhap = unitPrice,
                     GiamGia = lineDiscount,

@@ -4237,10 +4237,40 @@ public partial class MainWindowViewModel : ObservableObject
                 return;
             }
 
+            var sanPhamChuaCo = await _db.GetSanPhamChuaCoAsync(
+                preview.PhieuNhap
+                    .SelectMany(receipt => receipt.Items.Select(line => new SanPhamImportMoi
+                    {
+                        MaSanPham = line.MaSanPham,
+                        TenSanPham = line.TenSanPham,
+                        DonViTinh = line.DonViTinh,
+                        SoDongExcel = line.SoDongExcel,
+                        MaChungTu = receipt.MaPhieuNhap
+                    })));
+
+            preview.SanPhamChuaCo = sanPhamChuaCo.ToList();
+
+            var taoSanPhamMoi = false;
+            if (preview.CoTheTaoSanPhamMoi)
+            {
+                var luaChon = await HoiTaoSanPhamMoiAsync(preview);
+                if (!luaChon.HasValue)
+                    return;
+
+                taoSanPhamMoi = luaChon.Value;
+            }
+
             var warning = preview.Loi.Count == 0
                 ? ""
                 : $"\n\n{preview.Loi.Select(issue => issue.MaPhieuNhap).Distinct().Count()} phiếu có lỗi sẽ không được import. " +
                   string.Join("\n", preview.Loi.Take(5).Select(issue => $"{issue.MaPhieuNhap}: {issue.LyDo}"));
+
+            if (preview.CoTheTaoSanPhamMoi && !taoSanPhamMoi)
+            {
+                warning += $"\n\n{preview.SanPhamChuaCo.Count:N0} mã hàng hóa chưa có trong danh mục. "
+                    + "Bạn chọn không tạo mới nên các phiếu chứa các mã này sẽ bị lỗi và không được import.";
+            }
+
             var updateSupplierDebt = await HoiCapNhatCongNoNhaCungCapAsync(preview, warning);
             if (!updateSupplierDebt.HasValue)
                 return;
@@ -4299,7 +4329,8 @@ public partial class MainWindowViewModel : ObservableObject
                             receipt,
                             updateSupplierDebt.Value,
                             stageProgress,
-                            includeInSupplierPurchaseTotal.Value))
+                            includeInSupplierPurchaseTotal.Value,
+                            taoSanPhamMoi))
                     {
                         imported++;
                         importedDetailRows += receipt.Items.Count;
@@ -4363,6 +4394,10 @@ public partial class MainWindowViewModel : ObservableObject
                 $"{summary}\nFile: {preview.TenFile}\n" +
                 $"Công nợ nhà cung cấp: {(updateSupplierDebt.Value ? "đã cập nhật" : "không thay đổi")}.\n" +
                 $"Tổng mua nhà cung cấp: {(includeInSupplierPurchaseTotal.Value ? "đã ghi nhận" : "không thay đổi")}.\n" +
+                (preview.SanPhamChuaCo.Count > 0
+                    ? $"Sản phẩm chưa có trong danh mục: {preview.SanPhamChuaCo.Count:N0} mã; "
+                        + (taoSanPhamMoi ? "đã tạo mới khi import." : "không tạo mới.") + "\n"
+                    : "") +
                 $"Thêm mới: {imported}; cập nhật: 0 (phiếu trùng mã được bỏ qua).\n" +
                 $"Bỏ qua do trùng mã: {duplicated} phiếu, {duplicatedDetailRows:N0} dòng chi tiết.\n" +
                 $"Lỗi: {failedReceiptCount} phiếu, {failedDetailRows:N0} dòng chi tiết.\n" +
