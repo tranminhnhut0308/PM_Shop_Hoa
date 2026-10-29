@@ -250,6 +250,8 @@ public sealed partial class DashboardViewModel : ObservableObject
     private string soDonHangHomNayHienThi = "0";
 
     [ObservableProperty]
+    private bool coHoaDonChuaGhiNhan;
+    [ObservableProperty]
     private string soHoaDonChuaGhiNhanHienThi = "0";
 
     [ObservableProperty]
@@ -496,6 +498,7 @@ public sealed partial class DashboardViewModel : ObservableObject
         DaThuHomNayHienThi = duLieu.DaThuHomNayHienThi;
         ConNoHomNayHienThi = duLieu.ConNoHomNayHienThi;
         SoDonHangHomNayHienThi = duLieu.SoDonHangHomNayHienThi;
+        CoHoaDonChuaGhiNhan = duLieu.SoHoaDonChuaGhiNhan > 0;
         SoHoaDonChuaGhiNhanHienThi = duLieu.SoHoaDonChuaGhiNhanHienThi;
         DoanhThuChuaGhiNhanHienThi = duLieu.DoanhThuChuaGhiNhanHienThi;
         DaThuChuaGhiNhanHienThi = duLieu.DaThuChuaGhiNhanHienThi;

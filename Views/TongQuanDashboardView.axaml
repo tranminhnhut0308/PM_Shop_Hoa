@@ -443,7 +443,7 @@
         </Border>
       </Grid>
 
-      <Border Classes="tqCard" Padding="12,10">
+      <Border Classes="tqCard" Padding="12,10" IsVisible="{Binding CoHoaDonChuaGhiNhan}">
         <StackPanel Spacing="8">
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
             <StackPanel Spacing="2">
