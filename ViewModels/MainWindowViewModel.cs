@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Platform.Storage;
 using ClosedXML.Excel;
@@ -4547,6 +4547,95 @@ public partial class MainWindowViewModel : ObservableObject
 
         buttons.Children.Add(updateButton);
         buttons.Children.Add(keepButton);
+        content.Children.Add(buttons);
+        dialog.Content = content;
+
+        return await dialog.ShowDialog<bool?>(OwnerWindow);
+    }
+    private async Task<bool?> HoiTaoSanPhamMoiAsync(
+        PhieuNhapImportPreview preview)
+    {
+        if (OwnerWindow is null)
+            return null;
+
+        var dialog = new Window
+        {
+            Title = "Xác nhận tạo sản phẩm mới",
+            Width = 620,
+            SizeToContent = SizeToContent.Height,
+            MinHeight = 300,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = Brushes.White
+        };
+
+        var content = new StackPanel
+        {
+            Margin = new Avalonia.Thickness(24),
+            Spacing = 14
+        };
+
+        content.Children.Add(new TextBlock
+        {
+            Text = "Tạo sản phẩm mới cho hàng hóa chưa có?",
+            FontSize = 20,
+            FontWeight = FontWeight.Bold,
+            Foreground = Brush.Parse("#173F38"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        content.Children.Add(new TextBlock
+        {
+            Text = $"Phát hiện {preview.SanPhamChuaCo.Count:N0} mã hàng hóa chưa có trong danh mục sản phẩm.\n"
+                 + "Bạn có muốn hệ thống tự động tạo mới các sản phẩm này khi nhập phiếu không?",
+            FontSize = 14,
+            Foreground = Brush.Parse("#263B35"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        var sampleList = string.Join("\n", preview.SanPhamChuaCo.Take(5).Select(s => $"- {s.MaSanPham}: {s.TenSanPham} ({s.DonViTinh})"));
+        if (preview.SanPhamChuaCo.Count > 5)
+            sampleList += $"\n... và {preview.SanPhamChuaCo.Count - 5:N0} sản phẩm khác";
+
+        content.Children.Add(new TextBlock
+        {
+            Text = sampleList,
+            FontSize = 12,
+            Foreground = Brush.Parse("#52645F"),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        });
+
+        var buttons = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Spacing = 10,
+            Margin = new Avalonia.Thickness(0, 8, 0, 0)
+        };
+
+        var createButton = new Button
+        {
+            Content = "Tạo sản phẩm mới",
+            Padding = new Avalonia.Thickness(16, 10),
+            Background = Brush.Parse("#087F6E"),
+            Foreground = Brushes.White,
+            FontWeight = FontWeight.SemiBold
+        };
+        createButton.Click += (_, _) => dialog.Close(true);
+
+        var skipButton = new Button
+        {
+            Content = "Không tạo mới",
+            Padding = new Avalonia.Thickness(16, 10),
+            Background = Brushes.White,
+            Foreground = Brush.Parse("#263B35"),
+            BorderBrush = Brush.Parse("#C9DCD6"),
+            BorderThickness = new Avalonia.Thickness(1)
+        };
+        skipButton.Click += (_, _) => dialog.Close(false);
+
+        buttons.Children.Add(createButton);
+        buttons.Children.Add(skipButton);
         content.Children.Add(buttons);
         dialog.Content = content;
 

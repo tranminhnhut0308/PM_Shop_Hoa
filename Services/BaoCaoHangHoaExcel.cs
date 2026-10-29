@@ -1,105 +1,244 @@
+using System;
+using System.Collections.Generic;
 using ClosedXML.Excel;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
 
 namespace ShopHoa.Services;
 
-/// <summary>Xuất báo cáo hàng hóa ra file .xlsx (tổng hợp + bảng chi tiết).</summary>
+/// <summary>
+/// Xuất báo cáo hàng hóa ra file .xlsx chuyên nghiệp:
+/// - Sheet 1: Tổng hợp (Chỉ số tổng quan, Top 10 sản phẩm theo doanh thu đầy đủ SL/Doanh thu/Giá vốn/Lợi nhuận, Cơ cấu nhóm hàng)
+/// - Sheet 2: Bảng chi tiết toàn bộ mã hàng với AutoFilter, Freeze Panes, định dạng chuẩn.
+/// </summary>
 public static class BaoCaoHangHoaExcel
 {
-    public static XLWorkbook TaoWorkbook(BaoCaoHangHoaDuLieu duLieu)
+    public static XLWorkbook TaoWorkbook(
+        BaoCaoHangHoaDuLieu duLieu,
+        string? tenCuaHang = null,
+        string? nguoiXuat = null)
     {
         var wb = new XLWorkbook();
 
-        // ---------- Sheet 1: tổng hợp ----------
-        var ws = wb.Worksheets.Add("Tổng hợp");
-        ws.Cell(1, 1).Value = "Báo cáo hàng hóa";
-        ws.Cell(2, 1).Value = $"Từ {duLieu.TuNgay:dd/MM/yyyy} đến {duLieu.DenNgay:dd/MM/yyyy}";
+        // ---------- Sheet 1: Tổng hợp ----------
+        GhiSheetTongHop(wb, duLieu, tenCuaHang, nguoiXuat);
 
-        var th = duLieu.TongHop;
-        ws.Cell(4, 1).Value = "Số mã hàng"; ws.Cell(4, 2).Value = th.SoMaHang;
-        ws.Cell(5, 1).Value = "Số lượng bán"; ws.Cell(5, 2).Value = th.SoLuongBan;
-        ws.Cell(6, 1).Value = "Doanh thu"; ws.Cell(6, 2).Value = th.DoanhThu;
-        ws.Cell(7, 1).Value = "Giá vốn"; ws.Cell(7, 2).Value = th.GiaVon;
-        ws.Cell(8, 1).Value = "Lợi nhuận"; ws.Cell(8, 2).Value = th.LoiNhuan;
-        ws.Cell(9, 1).Value = "Tỉ lệ lợi nhuận (%)"; ws.Cell(9, 2).Value = th.TyLeLoiNhuan;
-        ws.Column(2).Style.NumberFormat.Format = "#,##0.###";
-
-        ws.Cell(11, 1).Value = "Top sản phẩm theo doanh thu";
-        GhiBangTop(ws, 12, duLieu.TopDoanhThu);
-
-        int dongNhom = 12 + duLieu.TopDoanhThu.Count + 2;
-        ws.Cell(dongNhom, 1).Value = "Doanh thu theo nhóm hàng";
-        ws.Cell(dongNhom + 1, 1).Value = "Nhóm hàng";
-        ws.Cell(dongNhom + 1, 2).Value = "Doanh thu";
-        ws.Cell(dongNhom + 1, 3).Value = "Tỉ trọng (%)";
-        int i = dongNhom + 2;
-        foreach (var n in duLieu.NhomHang)
-        {
-            ws.Cell(i, 1).Value = n.TenNhom;
-            ws.Cell(i, 2).Value = n.DoanhThu;
-            ws.Cell(i, 3).Value = n.TyLePhanTram;
-            i++;
-        }
-
-        // ---------- Sheet 2: bảng chi tiết ----------
-        var ct = wb.Worksheets.Add("Chi tiết");
-        ct.Cell(1, 1).Value = "Báo cáo hàng hóa — chi tiết theo mã hàng";
-        ct.Cell(2, 1).Value = $"Từ {duLieu.TuNgay:dd/MM/yyyy} đến {duLieu.DenNgay:dd/MM/yyyy}";
-
-        string[] cot = ["STT", "Mã hàng", "Tên hàng", "Nhóm hàng", "SL bán", "Doanh thu", "Giá vốn", "Lợi nhuận"];
-        for (int c = 0; c < cot.Length; c++)
-        {
-            ct.Cell(4, c + 1).Value = cot[c];
-            ct.Cell(4, c + 1).Style.Font.Bold = true;
-        }
-
-        int dong = 5;
-        for (int r = 0; r < duLieu.ChiTiet.Count; r++)
-        {
-            var row = duLieu.ChiTiet[r];
-            ct.Cell(dong, 1).Value = r + 1;
-            ct.Cell(dong, 2).Value = row.MaHang;
-            ct.Cell(dong, 3).Value = row.TenHang;
-            ct.Cell(dong, 4).Value = row.NhomHang;
-            ct.Cell(dong, 5).Value = row.SoLuongBan;
-            ct.Cell(dong, 6).Value = row.DoanhThu;
-            ct.Cell(dong, 7).Value = row.GiaVon;
-            ct.Cell(dong, 8).Value = row.LoiNhuan;
-            dong++;
-        }
-
-        // Dòng tổng cộng khớp KPI ở trên.
-        ct.Cell(dong, 3).Value = "Tổng cộng";
-        ct.Cell(dong, 3).Style.Font.Bold = true;
-        ct.Cell(dong, 5).Value = th.SoLuongBan;
-        ct.Cell(dong, 6).Value = th.DoanhThu;
-        ct.Cell(dong, 7).Value = th.GiaVon;
-        ct.Cell(dong, 8).Value = th.LoiNhuan;
-        for (int c = 5; c <= 8; c++) ct.Cell(dong, c).Style.Font.Bold = true;
-
-        ct.Columns(5, 8).Style.NumberFormat.Format = "#,##0.###";
-        ct.SheetView.FreezeRows(4);
+        // ---------- Sheet 2: Chi tiết ----------
+        GhiSheetChiTiet(wb, duLieu, tenCuaHang, nguoiXuat);
 
         return wb;
     }
 
-    private static void GhiBangTop(IXLWorksheet ws, int dongDau, List<BaoCaoHangHoaTop> top)
+    private static void GhiSheetTongHop(
+        XLWorkbook wb,
+        BaoCaoHangHoaDuLieu duLieu,
+        string? tenCuaHang,
+        string? nguoiXuat)
     {
-        ws.Cell(dongDau, 1).Value = "STT";
-        ws.Cell(dongDau, 2).Value = "Mã hàng";
-        ws.Cell(dongDau, 3).Value = "Tên hàng";
-        ws.Cell(dongDau, 4).Value = "SL bán";
-        ws.Cell(dongDau, 5).Value = "Doanh thu";
-        for (int c = 1; c <= 5; c++) ws.Cell(dongDau, c).Style.Font.Bold = true;
+        var ws = wb.Worksheets.Add("Tổng hợp");
 
-        for (int r = 0; r < top.Count; r++)
+        var dongHeader = ExcelHelper.GhiHeaderBaoCao(
+            ws,
+            "BÁO CÁO HÀNG HÓA TỔNG HỢP",
+            $"Từ ngày {duLieu.TuNgay:dd/MM/yyyy} đến ngày {duLieu.DenNgay:dd/MM/yyyy}",
+            DateTime.Now,
+            tenCuaHang,
+            nguoiXuat,
+            tongSoCot: 7);
+
+        var th = duLieu.TongHop;
+
+        // BẢNG 1: CHỈ SỐ TỔNG HỢP
+        var dong = dongHeader;
+        var oNhom1 = ws.Cell(dong, 1);
+        oNhom1.Value = "I. CHỈ SỐ TỔNG QUAN";
+        oNhom1.Style.Font.Bold = true;
+        oNhom1.Style.Font.FontSize = 12;
+        oNhom1.Style.Font.FontColor = XLColor.FromHtml(ExcelHelper.MauChuDao);
+        dong++;
+
+        string[] kpiLabels =
+        [
+            "Số mã hàng phát sinh bán",
+            "Tổng số lượng bán",
+            "Doanh thu (sau chiết khấu)",
+            "Giá vốn (snapshot khi bán)",
+            "Lợi nhuận gộp",
+            "Tỷ lệ lợi nhuận / Doanh thu (%)"
+        ];
+
+        object[] kpiValues =
+        [
+            th.SoMaHang,
+            th.SoLuongBan,
+            th.DoanhThu,
+            th.GiaVon,
+            th.LoiNhuan,
+            th.TyLeLoiNhuan
+        ];
+
+        for (int k = 0; k < kpiLabels.Length; k++)
         {
-            int dong = dongDau + 1 + r;
-            ws.Cell(dong, 1).Value = top[r].Stt;
-            ws.Cell(dong, 2).Value = top[r].MaHang;
-            ws.Cell(dong, 3).Value = top[r].TenHang;
-            ws.Cell(dong, 4).Value = top[r].SoLuongBan;
-            ws.Cell(dong, 5).Value = top[r].DoanhThu;
+            var cellLabel = ws.Cell(dong, 1);
+            cellLabel.Value = kpiLabels[k];
+            cellLabel.Style.Font.Bold = k >= 2;
+            cellLabel.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            cellLabel.Style.Border.OutsideBorderColor = XLColor.FromHtml(ExcelHelper.MauVien);
+
+            var cellVal = ws.Cell(dong, 2);
+            if (k == 0)
+                ExcelHelper.GhiO_Chu(cellVal, kpiValues[k], XLAlignmentHorizontalValues.Right);
+            else if (k == 1)
+                ExcelHelper.GhiO_SoLuong(cellVal, (decimal)kpiValues[k]);
+            else if (k == 5)
+                ExcelHelper.GhiO_PhanTram(cellVal, (double)kpiValues[k]);
+            else
+                ExcelHelper.GhiO_Tien(cellVal, (decimal)kpiValues[k]);
+
+            cellVal.Style.Font.Bold = k >= 2;
+            dong++;
         }
+
+        dong += 2;
+
+        // BẢNG 2: TOP 10 SẢN PHẨM THEO DOANH THU
+        var oNhom2 = ws.Cell(dong, 1);
+        oNhom2.Value = "II. TOP 10 SẢN PHẨM THEO DOANH THU";
+        oNhom2.Style.Font.Bold = true;
+        oNhom2.Style.Font.FontSize = 12;
+        oNhom2.Style.Font.FontColor = XLColor.FromHtml(ExcelHelper.MauChuDao);
+        dong++;
+
+        string[] tieuDeTop = ["STT", "Mã hàng", "Tên hàng", "SL bán", "Doanh thu"];
+        ExcelHelper.GhiTieuDeCot(ws, dong, tieuDeTop);
+        dong++;
+
+        decimal topTongSl = 0, topTongDt = 0;
+        for (int r = 0; r < duLieu.TopDoanhThu.Count; r++)
+        {
+            var sp = duLieu.TopDoanhThu[r];
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 1), r + 1, XLAlignmentHorizontalValues.Center);
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 2), sp.MaHang, XLAlignmentHorizontalValues.Center);
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 3), sp.TenHang);
+            ExcelHelper.GhiO_SoLuong(ws.Cell(dong, 4), sp.SoLuongBan);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 5), sp.DoanhThu);
+
+            topTongSl += sp.SoLuongBan;
+            topTongDt += sp.DoanhThu;
+            dong++;
+        }
+
+        if (duLieu.TopDoanhThu.Count > 0)
+        {
+            ws.Cell(dong, 1).Value = "";
+            ws.Cell(dong, 3).Value = "TỔNG TOP 10";
+            ws.Cell(dong, 3).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+            ExcelHelper.GhiO_SoLuong(ws.Cell(dong, 4), topTongSl);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 5), topTongDt);
+            ExcelHelper.DinhDangDongTongCong(ws, dong, 1, tieuDeTop.Length);
+            dong++;
+        }
+
+        dong += 2;
+
+        // BẢNG 3: DOANH THU THEO NHÓM HÀNG
+        var oNhom3 = ws.Cell(dong, 1);
+        oNhom3.Value = "III. DOANH THU THEO NHÓM HÀNG";
+        oNhom3.Style.Font.Bold = true;
+        oNhom3.Style.Font.FontSize = 12;
+        oNhom3.Style.Font.FontColor = XLColor.FromHtml(ExcelHelper.MauChuDao);
+        dong++;
+
+        string[] tieuDeNhom = ["STT", "Nhóm hàng", "Số mã hàng", "Số lượng bán", "Doanh thu", "Tỷ trọng (%)"];
+        ExcelHelper.GhiTieuDeCot(ws, dong, tieuDeNhom);
+        dong++;
+
+        decimal nhomTongDt = 0, nhomTongSl = 0;
+        int nhomTongMa = 0;
+        for (int n = 0; n < duLieu.NhomHang.Count; n++)
+        {
+            var item = duLieu.NhomHang[n];
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 1), n + 1, XLAlignmentHorizontalValues.Center);
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 2), item.TenNhom);
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 3), item.SoMaHang, XLAlignmentHorizontalValues.Right);
+            ExcelHelper.GhiO_SoLuong(ws.Cell(dong, 4), item.SoLuongBan);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 5), item.DoanhThu);
+            ExcelHelper.GhiO_PhanTram(ws.Cell(dong, 6), item.TyLePhanTram);
+
+            nhomTongMa += item.SoMaHang;
+            nhomTongSl += item.SoLuongBan;
+            nhomTongDt += item.DoanhThu;
+            dong++;
+        }
+
+        if (duLieu.NhomHang.Count > 0)
+        {
+            ws.Cell(dong, 1).Value = "";
+            ws.Cell(dong, 2).Value = "TỔNG CỘNG";
+            ws.Cell(dong, 2).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 3), nhomTongMa, XLAlignmentHorizontalValues.Right);
+            ExcelHelper.GhiO_SoLuong(ws.Cell(dong, 4), nhomTongSl);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 5), nhomTongDt);
+            ExcelHelper.GhiO_PhanTram(ws.Cell(dong, 6), 100.0);
+            ExcelHelper.DinhDangDongTongCong(ws, dong, 1, tieuDeNhom.Length);
+        }
+
+        for (int c = 1; c <= 6; c++)
+        {
+            ws.Column(c).AdjustToContents();
+            if (ws.Column(c).Width < 12) ws.Column(c).Width = 12;
+            if (ws.Column(c).Width > 45) ws.Column(c).Width = 45;
+        }
+        ws.ShowGridLines = true;
+    }
+
+    private static void GhiSheetChiTiet(
+        XLWorkbook wb,
+        BaoCaoHangHoaDuLieu duLieu,
+        string? tenCuaHang,
+        string? nguoiXuat)
+    {
+        var ct = wb.Worksheets.Add("Chi tiết theo mã hàng");
+
+        var dongHeader = ExcelHelper.GhiHeaderBaoCao(
+            ct,
+            "BÁO CÁO CHI TIẾT HÀNG HÓA",
+            $"Từ ngày {duLieu.TuNgay:dd/MM/yyyy} đến ngày {duLieu.DenNgay:dd/MM/yyyy} (Tổng số: {duLieu.ChiTiet.Count:N0} mã hàng)",
+            DateTime.Now,
+            tenCuaHang,
+            nguoiXuat,
+            tongSoCot: 8);
+
+        string[] cot = ["STT", "Mã hàng", "Tên hàng", "Nhóm hàng", "SL bán", "Doanh thu", "Giá vốn", "Lợi nhuận"];
+        ExcelHelper.GhiTieuDeCot(ct, dongHeader, cot);
+
+        int dong = dongHeader + 1;
+        for (int r = 0; r < duLieu.ChiTiet.Count; r++)
+        {
+            var row = duLieu.ChiTiet[r];
+            ExcelHelper.GhiO_Chu(ct.Cell(dong, 1), r + 1, XLAlignmentHorizontalValues.Center);
+            ExcelHelper.GhiO_Chu(ct.Cell(dong, 2), row.MaHang, XLAlignmentHorizontalValues.Center);
+            ExcelHelper.GhiO_Chu(ct.Cell(dong, 3), row.TenHang);
+            ExcelHelper.GhiO_Chu(ct.Cell(dong, 4), row.NhomHang);
+            ExcelHelper.GhiO_SoLuong(ct.Cell(dong, 5), row.SoLuongBan);
+            ExcelHelper.GhiO_Tien(ct.Cell(dong, 6), row.DoanhThu);
+            ExcelHelper.GhiO_Tien(ct.Cell(dong, 7), row.GiaVon);
+            ExcelHelper.GhiO_Tien(ct.Cell(dong, 8), row.LoiNhuan);
+
+            dong++;
+        }
+
+        // Dòng tổng cộng khớp KPI
+        var th = duLieu.TongHop;
+        ct.Cell(dong, 1).Value = "";
+        ct.Cell(dong, 4).Value = "TỔNG CỘNG";
+        ct.Cell(dong, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+        ExcelHelper.GhiO_SoLuong(ct.Cell(dong, 5), th.SoLuongBan);
+        ExcelHelper.GhiO_Tien(ct.Cell(dong, 6), th.DoanhThu);
+        ExcelHelper.GhiO_Tien(ct.Cell(dong, 7), th.GiaVon);
+        ExcelHelper.GhiO_Tien(ct.Cell(dong, 8), th.LoiNhuan);
+        ExcelHelper.DinhDangDongTongCong(ct, dong, 1, cot.Length);
+
+        ExcelHelper.HoanThienTrang(ct, dongHeader, dong, cot.Length, batAutoFilter: duLieu.ChiTiet.Count > 0);
     }
 }
