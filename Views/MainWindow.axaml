@@ -1702,7 +1702,18 @@
 
           <Border Grid.Row="2" Padding="6" CornerRadius="10"
                   BorderBrush="#D8E5E0" BorderThickness="1" Background="#F7FAF9">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <Grid>
+              <!-- Thông báo khi tìm kiếm không thấy sản phẩm -->
+              <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6"
+                          IsVisible="{Binding IsSaleSearchEmpty}">
+                <TextBlock Text="🔍" FontSize="26" HorizontalAlignment="Center" Opacity="0.5" />
+                <TextBlock Text="Không tìm thấy sản phẩm phù hợp"
+                           Foreground="#718096" FontWeight="SemiBold" FontSize="13"
+                           HorizontalAlignment="Center" />
+              </StackPanel>
+
+              <ScrollViewer VerticalScrollBarVisibility="Auto"
+                            IsVisible="{Binding !IsSaleSearchEmpty}">
               <ItemsControl ItemsSource="{Binding ProductSearchResults}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="models:SanPham">
@@ -1742,7 +1753,8 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-            </ScrollViewer>
+              </ScrollViewer>
+            </Grid>
           </Border>
         </Grid>
 

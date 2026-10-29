@@ -600,7 +600,9 @@ public sealed partial class DatabaseService
         string cotMaVach,
         string cotTenHang)
     {
-        parameters.Add("Search", ChuauHoaTuKhoa(keyword));
+        var normSearch = ChuauHoaTuKhoa(keyword);
+        parameters.Add("Search", normSearch);
+        parameters.Add("RawSearch", (keyword ?? "").Trim());
 
         var tokens = TachTuKhoa(keyword);
 
@@ -626,9 +628,7 @@ public sealed partial class DatabaseService
     }
 
     /// <summary>
-    /// Điều kiện sắp xếp khi đang tìm kiếm: mã hàng/mã vạch khớp chính xác đưa lên
-    /// đầu, tên hàng bắt đầu bằng từ khóa kế sau, còn lại sắp theo tên hàng.
-    /// So sánh cũng dùng biểu thức chuẩn hóa để không lệch với điều kiện lọc.
+    /// Điều kiện sắp xếp khi đang tìm kiếm: ưu tiên mã hàng khớp, tên hàng khớp, bắt đầu, cụm từ...
     /// </summary>
     private static string TaoDieuKienSapXepTimKiemSanPham(
         string keyword,
@@ -637,20 +637,37 @@ public sealed partial class DatabaseService
         string cotTenHang)
     {
         var tokens = TachTuKhoa(keyword);
+        var maHang = BieuThucChuanHoaSql(cotMaHang);
+        var maVach = BieuThucChuanHoaSql(cotMaVach);
+        var tenHang = BieuThucChuanHoaSql(cotTenHang);
 
         return $"""
             ORDER BY
                 CASE
-                    WHEN {BieuThucChuanHoaSql(cotMaHang)} = @Search THEN 0
-                    WHEN {BieuThucChuanHoaSql(cotMaVach)} = @Search THEN 1
-                    WHEN {BieuThucChuanHoaSql(cotTenHang)} LIKE CONCAT(@S0, '%') THEN 2
-                    ELSE 3
+                    -- 1. Khớp chính xác mã hàng
+                    WHEN {maHang} = @Search OR {cotMaHang} = @RawSearch THEN 10
+                    -- 2. Khớp chính xác mã vạch
+                    WHEN {maVach} = @Search OR {cotMaVach} = @RawSearch THEN 20
+                    -- 3. Khớp chính xác tên sản phẩm
+                    WHEN {tenHang} = @Search THEN 30
+                    -- 4. Tên sản phẩm bắt đầu bằng toàn bộ từ khóa
+                    WHEN {tenHang} LIKE CONCAT(@Search, '%') THEN 40
+                    -- 5. Mã hàng hoặc mã vạch bắt đầu bằng từ khóa
+                    WHEN {maHang} LIKE CONCAT(@Search, '%') OR {cotMaHang} LIKE CONCAT(@RawSearch, '%') THEN 50
+                    WHEN {maVach} LIKE CONCAT(@Search, '%') OR {cotMaVach} LIKE CONCAT(@RawSearch, '%') THEN 55
+                    -- 6. Tên sản phẩm chứa nguyên cụm từ khóa (ranh giới từ hoặc chuỗi liền)
+                    WHEN {tenHang} LIKE CONCAT('% ', @Search, ' %')
+                         OR {tenHang} LIKE CONCAT(@Search, ' %')
+                         OR {tenHang} LIKE CONCAT('% ', @Search) THEN 60
+                    WHEN {tenHang} LIKE CONCAT('%', @Search, '%') THEN 65
+                    -- 7. Khớp token đầu tiên
+                    WHEN {tenHang} LIKE CONCAT(@S0, '%') THEN 70
+                    ELSE 100
                 END,
                 sp.ten_san_pham,
                 sp.id
             """;
     }
-
     /// <summary>
     /// Bảng import Excel cũ: chỉ đọc khi bảng san_pham chưa có dữ liệu.
     /// Dùng chung cách tìm kiếm với bảng san_pham để hành vi nhất quán.

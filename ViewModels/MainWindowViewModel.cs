@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Platform.Storage;
 using ClosedXML.Excel;
@@ -24,6 +24,8 @@ public partial class MainWindowViewModel : ObservableObject
     private int _customerLoadVersion;
     private Task? _customerLoadTask;
     private CancellationTokenSource? _productSearchCts;
+    private CancellationTokenSource? _saleSearchCts;
+    private CancellationTokenSource? _phieuNhapProductSearchCts;
     private int _productLoadVersion;
     public Window? OwnerWindow { get; set; }
     private bool _customersLoaded;
@@ -2796,6 +2798,14 @@ public partial class MainWindowViewModel : ObservableObject
             // Nếu Id == 0 (Tất cả sản phẩm) thì bỏ qua, giữ nguyên danh sách.
             // -------------------------------------------
 
+            if (!string.IsNullOrWhiteSpace(ProductSearch))
+            {
+                var kw = ProductSearch.Trim();
+                products = products
+                    .OrderBy(p => ProductSearchHelper.TinhDiemUuTien(kw, p.MaSanPham, p.MaVach, p.TenSanPham))
+                    .ThenBy(p => p.TenSanPham)
+                    .ToList();
+            }
             if (!string.IsNullOrWhiteSpace(ProductFilter))
             {
                 products = products
@@ -3385,31 +3395,65 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task TimKiemHoaBanAsync(string? keyword = null)
     {
-        var search = keyword ?? SaleSearchText ?? "";
-        var products = await _db.GetSanPhamAsync(search);
+        _saleSearchCts?.Cancel();
+        _saleSearchCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _saleSearchCts = cts;
 
-        // --- BỔ SUNG LOGIC LỌC THEO NHÓM SẢN PHẨM ---
-        if (SelectedNhomSanPham != null && SelectedNhomSanPham.Id > 0)
+        try
         {
-            if (SelectedNhomSanPham.Id == 999999)
+            // Debounce 250ms khi gõ liên tục
+            await Task.Delay(250, cts.Token);
+            if (cts.Token.IsCancellationRequested)
+                return;
+
+            var search = (keyword ?? SaleSearchText ?? "").Trim();
+            var products = await _db.GetSanPhamAsync(search);
+
+            if (cts.Token.IsCancellationRequested)
+                return;
+
+            // Lọc theo nhóm sản phẩm nếu có
+            if (SelectedNhomSanPham != null && SelectedNhomSanPham.Id > 0)
             {
-                // Lọc các sản phẩm chưa phân nhóm (Id nhóm bằng 0 hoặc null)
-                products = products.Where(p => p.NhomSanPhamId == null || p.NhomSanPhamId == 0).ToList();
+                if (SelectedNhomSanPham.Id == 999999)
+                {
+                    products = products.Where(p => p.NhomSanPhamId == null || p.NhomSanPhamId == 0).ToList();
+                }
+                else
+                {
+                    products = products.Where(p => p.NhomSanPhamId == SelectedNhomSanPham.Id).ToList();
+                }
             }
-            else
+
+            // Sắp xếp ưu tiên chính xác theo ProductSearchHelper
+            if (!string.IsNullOrWhiteSpace(search))
             {
-                // Lọc theo nhóm cụ thể
-                products = products.Where(p => p.NhomSanPhamId == SelectedNhomSanPham.Id).ToList();
+                products = products
+                    .OrderBy(p => ProductSearchHelper.TinhDiemUuTien(search, p.MaSanPham, p.MaVach, p.TenSanPham))
+                    .ThenBy(p => p.TenSanPham)
+                    .ToList();
             }
+
+            ProductSearchResults.Clear();
+            foreach (var product in products)
+            {
+                ProductSearchResults.Add(product);
+            }
+
+            OnPropertyChanged(nameof(IsSaleSearchEmpty));
         }
-        // -------------------------------------------
-
-        ProductSearchResults.Clear();
-        foreach (var product in products)
+        catch (OperationCanceledException)
         {
-            ProductSearchResults.Add(product);
+            // Đã bị hủy do người dùng gõ tiếp
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Lỗi tìm kiếm sản phẩm: " + ex.Message;
         }
     }
+
+    public bool IsSaleSearchEmpty => ProductSearchResults.Count == 0 && !string.IsNullOrWhiteSpace(SaleSearchText);
 
     /// <summary>
     /// Đặt lại TOÀN BỘ trạng thái của đơn hàng đang bán.
@@ -5160,14 +5204,26 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task TimKiemSanPhamNhapAsync(string? keyword)
     {
-        // Không gán đè khi lệnh được gọi không có tham số,
-        // nếu không TextBox sẽ bị xoá ngay khi vừa gõ ký tự đầu tiên.
         if (keyword is not null && keyword != ImportProductSearch)
             ImportProductSearch = keyword;
 
+        _phieuNhapProductSearchCts?.Cancel();
+        _phieuNhapProductSearchCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _phieuNhapProductSearchCts = cts;
+
         try
         {
-            await LoadPhieuNhapProductSuggestionsAsync();
+            // Debounce 250ms
+            await Task.Delay(250, cts.Token);
+            if (cts.Token.IsCancellationRequested)
+                return;
+
+            await LoadPhieuNhapProductSuggestionsAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Bị hủy khi người dùng gõ tiếp
         }
         catch (Exception ex)
         {
@@ -5175,22 +5231,32 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    private async Task LoadPhieuNhapProductSuggestionsAsync()
+    private async Task LoadPhieuNhapProductSuggestionsAsync(CancellationToken token = default)
     {
         var keyword = ImportProductSearch.Trim();
 
-        // Rút gọn danh sách gợi ý: sản phẩm đã có trong phiếu thì ẩn đi
         var sanPhamDaChon = PhieuNhapItems
             .Select(item => item.SanPham.Id)
             .ToHashSet();
 
         var products = await _db.GetSanPhamAsync(keyword);
 
+        if (token.IsCancellationRequested)
+            return;
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            products = products
+                .OrderBy(p => ProductSearchHelper.TinhDiemUuTien(keyword, p.MaSanPham, p.MaVach, p.TenSanPham))
+                .ThenBy(p => p.TenSanPham)
+                .ToList();
+        }
+
         PhieuNhapProductSuggestions.Clear();
 
         foreach (var product in products
                      .Where(product => !sanPhamDaChon.Contains(product.Id))
-                     .Take(20))
+                     .Take(25))
         {
             PhieuNhapProductSuggestions.Add(product);
         }
