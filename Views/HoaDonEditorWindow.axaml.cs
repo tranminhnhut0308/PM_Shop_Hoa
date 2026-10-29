@@ -308,6 +308,8 @@ public partial class HoaDonEditorWindow : Window
         };
 
         BtnLuu.IsEnabled = false;
+        BtnHuy.IsEnabled = false;
+        BtnLuu.Content = "Đang lưu...";
 
         try
         {
@@ -319,7 +321,9 @@ public partial class HoaDonEditorWindow : Window
             SafeLog.WriteError("LuuChinhSuaHoaDonAsync that bai", ex);
             TxtError.Text = "Lỗi khi lưu: " + ex.Message;
             TxtError.IsVisible = true;
+            BtnLuu.Content = "💾 Lưu thay đổi";
             BtnLuu.IsEnabled = true;
+            BtnHuy.IsEnabled = true;
         }
     }
 

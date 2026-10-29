@@ -275,12 +275,11 @@
         </Grid>
       </Border>
 
-      <!-- BỘ LỌC -->
+      <!-- BỘ LỌC THỜI GIAN DÙNG CHUNG CHO TOÀN TRANG TỔNG QUAN -->
       <Border Classes="tqCard" Padding="12">
-        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto"
-          ColumnSpacing="16" RowSpacing="8">
+        <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
           <StackPanel Spacing="5">
-            <TextBlock Text="Khoảng thời gian" Classes="tqSectionSub" FontWeight="SemiBold" />
+            <TextBlock Text="Khoảng thời gian (áp dụng cho toàn trang)" Classes="tqSectionSub" FontWeight="SemiBold" />
             <Border Background="#EEF4F2" CornerRadius="9" Padding="2">
               <WrapPanel Orientation="Horizontal" ItemSpacing="2" LineSpacing="2">
                 <Button Classes="tqSegment" Classes.active="{Binding IsKhoangHomNay}"
@@ -305,36 +304,8 @@
             </Border>
           </StackPanel>
 
-          <StackPanel Grid.Column="1" Spacing="5">
-            <TextBlock Text="Góc nhìn" Classes="tqSectionSub" FontWeight="SemiBold" />
-            <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6"
-              HorizontalAlignment="Right">
-              <Button Classes="tqViewSegment" Classes.active="{Binding IsChieuTheoNgay}"
-                Command="{Binding ChonChieuDoanhThuCommand}" CommandParameter="NGAY">
-                <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
-                  <TextBlock Text="▦" FontSize="14" Foreground="#087F6E" />
-                  <TextBlock Text="Theo ngày" VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
-              <Button Classes="tqViewSegment" Classes.active="{Binding IsChieuTheoGio}"
-                Command="{Binding ChonChieuDoanhThuCommand}" CommandParameter="GIO">
-                <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
-                  <TextBlock Text="◷" FontSize="14" Foreground="#087F6E" />
-                  <TextBlock Text="Theo giờ" VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
-              <Button Classes="tqViewSegment" Classes.active="{Binding IsChieuTheoThu}"
-                Command="{Binding ChonChieuDoanhThuCommand}" CommandParameter="THU">
-                <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
-                  <TextBlock Text="▤" FontSize="14" Foreground="#087F6E" />
-                  <TextBlock Text="Theo thứ" VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
-            </WrapPanel>
-          </StackPanel>
-
           <!-- TÙY CHỌN KHOẢNG NGÀY -->
-          <Border Grid.Row="1" Grid.ColumnSpan="2"
+          <Border Grid.Row="1"
             Background="#F7FAF9"
             BorderBrush="#D8E5E0"
             BorderThickness="1"
@@ -391,24 +362,6 @@
                 Height="34" VerticalAlignment="Bottom" />
             </WrapPanel>
           </Border>
-
-          <WrapPanel Grid.Row="2" Grid.ColumnSpan="2"
-            Orientation="Horizontal" ItemSpacing="8" LineSpacing="8"
-            HorizontalAlignment="Right">
-            <TextBlock Text="Top hàng:" Classes="tqSectionSub"
-              VerticalAlignment="Center" Margin="0,0,2,0" />
-            <RadioButton GroupName="tqXep" Classes="tqChip"
-              Content="Theo doanh thu"
-              IsChecked="{Binding XepHangTopHang, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=DOANH_THU}"
-              Command="{Binding ChonXepHangTopCommand}"
-              CommandParameter="DOANH_THU" />
-            <RadioButton GroupName="tqXep" Classes="tqChip"
-              Content="Theo số lượng"
-              IsChecked="{Binding XepHangTopHang, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=SO_LUONG}"
-              Command="{Binding ChonXepHangTopCommand}"
-              CommandParameter="SO_LUONG" />
-          </WrapPanel>
-
         </Grid>
       </Border>
 
@@ -600,6 +553,35 @@
               </StackPanel>
               <TextBlock Text="{Binding MoTaChieuDoanhThu}" Classes="tqSectionSub" />
               <TextBlock Text="{Binding ThoiGianHienThi, StringFormat='Khoảng thời gian: {0}'}" Classes="tqMuted" />
+              <!-- Góc nhìn chỉ điều khiển biểu đồ doanh thu nên đặt ngay trong khung biểu đồ -->
+              <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6" Margin="0,6,0,0">
+                <TextBlock Text="Góc nhìn:" Classes="tqSectionSub" FontWeight="SemiBold"
+                  VerticalAlignment="Center" Margin="0,0,4,0" />
+                <Button Classes="tqViewSegment" MinWidth="96" Height="32" Padding="10,0"
+                  Classes.active="{Binding IsChieuTheoNgay}"
+                  Command="{Binding ChonChieuDoanhThuCommand}" CommandParameter="NGAY">
+                  <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                    <TextBlock Text="▦" FontSize="13" Foreground="#087F6E" />
+                    <TextBlock Text="Theo ngày" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+                <Button Classes="tqViewSegment" MinWidth="96" Height="32" Padding="10,0"
+                  Classes.active="{Binding IsChieuTheoGio}"
+                  Command="{Binding ChonChieuDoanhThuCommand}" CommandParameter="GIO">
+                  <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                    <TextBlock Text="◷" FontSize="13" Foreground="#087F6E" />
+                    <TextBlock Text="Theo giờ" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+                <Button Classes="tqViewSegment" MinWidth="96" Height="32" Padding="10,0"
+                  Classes.active="{Binding IsChieuTheoThu}"
+                  Command="{Binding ChonChieuDoanhThuCommand}" CommandParameter="THU">
+                  <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                    <TextBlock Text="▤" FontSize="13" Foreground="#087F6E" />
+                    <TextBlock Text="Theo thứ" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </WrapPanel>
             </StackPanel>
             <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
               <TextBlock Text="{Binding TongDoanhThuKyChonHienThi}"
@@ -719,76 +701,103 @@
       </Border>
 
       <!-- TOP 10 -->
-      <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-        <!-- TOP 10 HÀNG -->
-        <Border Classes="tqCard" Padding="16">
-          <StackPanel Spacing="8">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-              <StackPanel>
-                <TextBlock Text="TOP 10 HÀNG BÁN CHẠY" Classes="tqSectionTitle" />
-                <TextBlock Text="{Binding ThoiGianHienThi}" Classes="tqSectionSub"
-                  Margin="0,2,0,0" />
-              </StackPanel>
-              <TextBlock Grid.Column="1" Text="{Binding XepHangTopHangHienThi}"
-                Classes="tqMuted" VerticalAlignment="Center" />
-            </Grid>
-
-            <Border Height="1" Background="#EEF4F2" />
-
-            <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto"
-              HorizontalScrollBarVisibility="Disabled">
-              <ItemsControl ItemsSource="{Binding TopHangBanChay}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="models:TongQuanHangTop">
-                    <Border Classes="tqRow">
-                      <StackPanel Spacing="5">
-                        <Grid ColumnDefinitions="28,*,Auto" ColumnSpacing="8">
-                          <Border Width="22" Height="22" CornerRadius="11"
-                            Background="#EAF9F5" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding ThuTu}" FontSize="11"
-                              Foreground="#087F6E" FontWeight="SemiBold"
-                              HorizontalAlignment="Center" VerticalAlignment="Center" />
-                          </Border>
-
-                          <TextBlock Grid.Column="1" Text="{Binding Ten}"
-                            FontWeight="SemiBold" Foreground="#263B35"
-                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-
-                          <StackPanel Grid.Column="2" Orientation="Horizontal"
-                            Spacing="14" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding SoLuongHienThi}" Classes="tqMuted"
-                              VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding DoanhThuHienThi}" FontWeight="SemiBold"
-                              Foreground="#087F6E" MinWidth="96"
-                              HorizontalAlignment="Right" />
-                          </StackPanel>
-                        </Grid>
-
-                        <Grid ColumnDefinitions="28,*">
-                          <ProgressBar Grid.Column="1" Classes="tqBar"
-                            Minimum="0" Maximum="100"
-                            Value="{Binding TyLeBeRong}"
-                            ClipToBounds="True" />
-                        </Grid>
-                      </StackPanel>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </ScrollViewer>
-
-            <TextBlock Text="Chưa có dữ liệu bán hàng trong khoảng thời gian này"
-              Classes="tqMuted" HorizontalAlignment="Center" Margin="0,10,0,0"
-              IsVisible="{Binding !CoHangBanChay}" />
+      <StackPanel Spacing="8">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <StackPanel Spacing="2">
+            <TextBlock Text="Thống kê Top 10" Classes="tqSectionTitle" />
+            <TextBlock Text="Bộ lọc xếp hạng chỉ áp dụng cho Top 10 hàng bán chạy; Top 10 khách hàng luôn xếp theo doanh thu."
+              Classes="tqSectionSub" TextWrapping="Wrap" />
           </StackPanel>
-        </Border>
+          <TextBlock Grid.Column="1" Text="{Binding ThoiGianHienThi}" Classes="tqMuted"
+            VerticalAlignment="Center" />
+        </Grid>
 
-        <!-- TOP 10 KHÁCH HÀNG -->
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+          <!-- TOP 10 HÀNG -->
+          <Border Classes="tqCard" Padding="16">
+            <StackPanel Spacing="8">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <StackPanel>
+                  <TextBlock Text="TOP 10 HÀNG BÁN CHẠY" Classes="tqSectionTitle"
+                    TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding ThoiGianHienThi}" Classes="tqSectionSub"
+                    Margin="0,2,0,0" />
+                </StackPanel>
+
+                <!-- Tùy chọn chỉ điều khiển Top 10 hàng nên đặt ngay trong tiêu đề khung -->
+                <WrapPanel Grid.Column="1" Orientation="Horizontal" ItemSpacing="6"
+                  LineSpacing="4" VerticalAlignment="Center" HorizontalAlignment="Right">
+                  <TextBlock Text="Xếp hạng:" Classes="tqMuted" VerticalAlignment="Center" />
+                  <RadioButton GroupName="tqXepTop10" Classes="tqChip"
+                    Content="Doanh thu"
+                    IsChecked="{Binding XepHangTopHang, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=DOANH_THU}"
+                    Command="{Binding ChonXepHangTopCommand}"
+                    CommandParameter="DOANH_THU" />
+                  <RadioButton GroupName="tqXepTop10" Classes="tqChip"
+                    Content="Số lượng"
+                    IsChecked="{Binding XepHangTopHang, Mode=TwoWay, Converter={StaticResource TongQuanChonRadio}, ConverterParameter=SO_LUONG}"
+                    Command="{Binding ChonXepHangTopCommand}"
+                    CommandParameter="SO_LUONG" />
+                </WrapPanel>
+              </Grid>
+
+              <Border Height="1" Background="#EEF4F2" />
+
+              <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto"
+                HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding TopHangBanChay}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="models:TongQuanHangTop">
+                      <Border Classes="tqRow">
+                        <StackPanel Spacing="5">
+                          <Grid ColumnDefinitions="28,*,Auto" ColumnSpacing="8">
+                            <Border Width="22" Height="22" CornerRadius="11"
+                              Background="#EAF9F5" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding ThuTu}" FontSize="11"
+                                Foreground="#087F6E" FontWeight="SemiBold"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+
+                            <TextBlock Grid.Column="1" Text="{Binding Ten}"
+                              FontWeight="SemiBold" Foreground="#263B35"
+                              VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+
+                            <StackPanel Grid.Column="2" Orientation="Horizontal"
+                              Spacing="14" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding SoLuongHienThi}" Classes="tqMuted"
+                                VerticalAlignment="Center" />
+                              <TextBlock Text="{Binding DoanhThuHienThi}" FontWeight="SemiBold"
+                                Foreground="#087F6E" MinWidth="96"
+                                HorizontalAlignment="Right" />
+                            </StackPanel>
+                          </Grid>
+
+                          <Grid ColumnDefinitions="28,*">
+                            <ProgressBar Grid.Column="1" Classes="tqBar"
+                              Minimum="0" Maximum="100"
+                              Value="{Binding TyLeBeRong}"
+                              ClipToBounds="True" />
+                          </Grid>
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+
+              <TextBlock Text="Chưa có dữ liệu bán hàng trong khoảng thời gian này"
+                Classes="tqMuted" HorizontalAlignment="Center" Margin="0,10,0,0"
+                IsVisible="{Binding !CoHangBanChay}" />
+            </StackPanel>
+          </Border>
+
+          <!-- TOP 10 KHÁCH HÀNG -->
           <Border Grid.Column="1" Classes="tqCard" Padding="16">
             <StackPanel Spacing="8">
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <StackPanel>
-                  <TextBlock Text="TOP 10 KHÁCH HÀNG" Classes="tqSectionTitle" />
+                  <TextBlock Text="TOP 10 KHÁCH HÀNG" Classes="tqSectionTitle"
+                    TextTrimming="CharacterEllipsis" />
                   <TextBlock Text="Khách hàng mua nhiều nhất theo doanh thu" Classes="tqSectionSub"
                     Margin="0,2,0,0" />
                 </StackPanel>
@@ -841,7 +850,8 @@
                 IsVisible="{Binding !CoKhachHang}" />
             </StackPanel>
           </Border>
-      </Grid>
+        </Grid>
+      </StackPanel>
 
       <!-- ========================================================= -->
       <!-- NHẬT KÝ HOẠT ĐỘNG NHÂN VIÊN (CHỈ DÀNH CHO ADMIN)          -->
