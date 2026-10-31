@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Text;
 using ShopHoa.Models;
 
@@ -48,6 +49,7 @@ public static class HoaDonPrintService
         sb.Append(".total{font-size:16px;font-weight:bold;color:#087F6E;}");
         sb.Append(".debt{color:#D64545;font-weight:bold;}");
         sb.Append(".note{margin-top:14px;padding:8px;background:#FFF9ED;border:1px solid #F0E0BB;border-radius:6px;font-size:12px;}");
+        sb.Append(".cancelled{margin-top:10px;padding:10px;background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:6px;font-size:12px;color:#991B1B;}");
         sb.Append(".thanks{margin-top:18px;text-align:center;font-style:italic;color:#61736E;}");
         sb.Append(".hr{border:0;border-top:1px dashed #C9D8D3;margin:14px 0;}");
         sb.Append("@media print{body{padding:0;} .noprint{display:none;}}");
@@ -79,6 +81,25 @@ public static class HoaDonPrintService
         sb.Append("<div class=\"center muted\">Ngày bán: ")
           .Append(Enc(receipt.ThoiGianBan.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)))
           .Append("</div>");
+
+        if (receipt.LaHoaDonDaHuy)
+        {
+            sb.Append("<div class=\"cancelled\">");
+            sb.Append("<div><b>TRẠNG THÁI: ĐÃ HỦY HÓA ĐƠN</b></div>");
+            sb.Append("<div><b>Lý do hủy:</b> ").Append(Enc(receipt.LyDoHuy ?? "Không rõ")).Append("</div>");
+            sb.Append("<div><b>Người hủy:</b> ").Append(Enc(receipt.TenNguoiHuyHienThi))
+              .Append(" — ").Append(Enc(receipt.ThoiGianHuyText)).Append("</div>");
+            if (receipt.CoHoaDonThayThe)
+            {
+                sb.Append("<div><b>Hóa đơn mới thay thế:</b> ").Append(Enc(receipt.MaHoaDonThayThe)).Append("</div>");
+            }
+            sb.Append("</div>");
+        }
+        else if (receipt.CoHoaDonGoc)
+        {
+            sb.Append("<div class=\"center muted\" style=\"margin-top:4px;\">Thay thế cho hóa đơn gốc đã hủy: ")
+              .Append(Enc(receipt.MaHoaDonGoc)).Append("</div>");
+        }
 
         sb.Append("<table>");
         sb.Append("<tr><td style=\"border:0;padding-left:0;\"><b>Khách hàng:</b></td><td style=\"border:0;\">")

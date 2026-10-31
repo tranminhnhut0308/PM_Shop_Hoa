@@ -1,0 +1,714 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ShopHoa.ViewModels"
+        xmlns:help="using:ShopHoa.Services"
+        x:Class="ShopHoa.Views.HelpWindow"
+        x:DataType="vm:HelpViewModel"
+        Title="SHOPHOA – HỆ THỐNG VÀ TRỢ GIÚP"
+        Icon="/Assets/logo.ico"
+        Width="1120"
+        Height="760"
+        MinWidth="920"
+        MinHeight="620"
+        WindowStartupLocation="CenterOwner"
+        Background="#F4F7F6"
+        FontFamily="Inter, Segoe UI, Arial">
+
+    <Window.Styles>
+        <Style Selector="TabControl">
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="TabItem">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#61736E" />
+            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="TabItem:pointerover">
+            <Setter Property="Foreground" Value="#087F6E" />
+        </Style>
+        <Style Selector="TabItem:selected">
+            <Setter Property="Foreground" Value="#087F6E" />
+        </Style>
+        <Style Selector="TabItem:selected /template/ ContentPresenter">
+            <Setter Property="Foreground" Value="#087F6E" />
+        </Style>
+
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#E2ECE8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Padding" Value="18" />
+        </Style>
+        <Style Selector="Border.softCard">
+            <Setter Property="Background" Value="#F7FAF9" />
+            <Setter Property="BorderBrush" Value="#E2ECE8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+        <Style Selector="TextBlock.sectionTitle">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="#163F38" />
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Foreground" Value="#61736E" />
+            <Setter Property="FontSize" Value="12.5" />
+        </Style>
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="#087F6E" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16,9" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.primary /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#087F6E" />
+            <Setter Property="TextBlock.Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#067364" />
+            <Setter Property="TextBlock.Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.secondary">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="Foreground" Value="#344054" />
+            <Setter Property="BorderBrush" Value="#D8E5E0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="13,7" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.secondary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#EAF5F1" />
+            <Setter Property="TextBlock.Foreground" Value="#087F6E" />
+        </Style>
+        <Style Selector="Button.link">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#087F6E" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.closeButton">
+            <Setter Property="Background" Value="#1E8E7D" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.closeButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#176E61" />
+            <Setter Property="TextBlock.Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.copyButton">
+            <Setter Property="Background" Value="#F7FAF9" />
+            <Setter Property="Foreground" Value="#087F6E" />
+            <Setter Property="BorderBrush" Value="#D8E5E0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="9,4" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.copyButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#E9F6F2" />
+            <Setter Property="TextBlock.Foreground" Value="#087F6E" />
+        </Style>
+        <Style Selector="TextBox.searchBox">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#D8E5E0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12,9" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="TextBox.searchBox:focus /template/ Border#PART_BorderElement">
+            <Setter Property="BorderBrush" Value="#087F6E" />
+        </Style>
+        <Style Selector="ListBox.guideList">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="ListBox.guideList ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="10" />
+        </Style>
+        <Style Selector="ListBox.guideList ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="#E9F6F2" />
+            <Setter Property="TextBlock.Foreground" Value="#163F38" />
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- HEADER -->
+        <Border Grid.Row="0" Background="#087F6E" Padding="24,18">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                <Border Width="50" Height="50" CornerRadius="14" Background="#0A9180"
+                        BorderBrush="#D9B66F" BorderThickness="1">
+                    <Image Source="avares://ShopHoa/Assets/Logo.png"
+                           Width="40" Height="40" Stretch="Uniform"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="SHOPHOA" Foreground="White" FontSize="23"
+                               FontWeight="Bold" LetterSpacing="1" />
+                    <TextBlock Text="HỆ THỐNG VÀ TRỢ GIÚP" Foreground="#BFE9DF"
+                               FontSize="11.5" FontWeight="SemiBold" LetterSpacing="2" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10"
+                            VerticalAlignment="Center">
+                    <Border Background="#1E8E7D" CornerRadius="8" Padding="11,6"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="{Binding PhienBanHienThi}" Foreground="#E8FFF9"
+                                   FontSize="11.5" FontWeight="SemiBold" />
+                    </Border>
+                    <Button Classes="closeButton" Content="✕"
+                            Click="CloseButton_OnClick" ToolTip.Tip="Đóng (Esc)" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- TABS -->
+        <TabControl Grid.Row="1" Margin="24,14,24,0"
+                    SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+
+            <!-- 1. GIỚI THIỆU -->
+            <TabItem Header="Giới thiệu">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="14" Margin="0,10,0,16">
+                        <Border Classes="card" Padding="24">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
+                                <StackPanel Spacing="8">
+                                    <Border Background="#E9F6F2" CornerRadius="20" Padding="10,4"
+                                            HorizontalAlignment="Left">
+                                        <TextBlock Text="PHẦN MỀM QUẢN LÝ SHOP HOA"
+                                                   Foreground="#087F6E" FontSize="10.5"
+                                                   FontWeight="Bold" LetterSpacing="1" />
+                                    </Border>
+                                    <TextBlock Text="Một màn hình cho toàn bộ hoạt động của tiệm"
+                                               FontSize="21" FontWeight="Bold" Foreground="#163F38" />
+                                    <TextBlock Text="{Binding MoTaNgan}" Classes="muted"
+                                               TextWrapping="Wrap" MaxWidth="680" LineHeight="20" />
+                                    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,6,0,0">
+                                        <Button Classes="primary" Content="Xem hướng dẫn"
+                                                Command="{Binding MoTabHuongDanCommand}" />
+                                        <Button Classes="secondary" Content="Xem phím tắt"
+                                                Command="{Binding MoTabPhimTatCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <Border Grid.Column="1" Background="#F7FAF9" CornerRadius="14"
+                                        Padding="18" Width="230" VerticalAlignment="Center">
+                                    <StackPanel Spacing="7">
+                                        <TextBlock Text="THÔNG TIN BẢN CÀI" Foreground="#98A2B3"
+                                                   FontSize="10.5" FontWeight="Bold" />
+                                        <TextBlock Text="{Binding PhienBanHienThi}" Foreground="#163F38"
+                                                   FontSize="17" FontWeight="Bold" />
+                                        <TextBlock Text="{Binding HeDieuHanh}" Classes="muted"
+                                                   TextWrapping="Wrap" />
+                                        <Button Classes="link" Content="Sao chép thông tin phiên bản"
+                                                Command="{Binding SaoChepPhienBanCommand}"
+                                                HorizontalAlignment="Left" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="Tính năng chính" Classes="sectionTitle" Margin="2,4,0,0" />
+
+                        <ItemsControl ItemsSource="{Binding TinhNang}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="help:HelpFeature">
+                                    <Border Classes="card" Width="342" Margin="0,0,12,12" Padding="16">
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                            <Border Width="38" Height="38" CornerRadius="10"
+                                                    Background="#E9F6F2" VerticalAlignment="Top">
+                                                <TextBlock Text="{Binding BieuTuong}" FontSize="18"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="3">
+                                                <TextBlock Text="{Binding TieuDe}" FontSize="14"
+                                                           FontWeight="SemiBold" Foreground="#163F38" />
+                                                <TextBlock Text="{Binding MoTa}" Classes="muted"
+                                                           TextWrapping="Wrap" LineHeight="18" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Border Classes="softCard">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Bắt đầu trong 3 bước" FontWeight="Bold"
+                                           Foreground="#163F38" FontSize="14" />
+                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                                    <Border Background="White" CornerRadius="10" Padding="13">
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="01" Foreground="#D9B66F" FontWeight="Bold"
+                                                       FontSize="18" />
+                                            <TextBlock Text="Chọn màn hình" FontWeight="SemiBold"
+                                                       Foreground="#163F38" />
+                                            <TextBlock Text="Dùng thanh menu bên trái để mở nghiệp vụ cần làm."
+                                                       Classes="muted" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="1" Background="White" CornerRadius="10" Padding="13">
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="02" Foreground="#D9B66F" FontWeight="Bold"
+                                                       FontSize="18" />
+                                            <TextBlock Text="Làm theo hướng dẫn" FontWeight="SemiBold"
+                                                       Foreground="#163F38" />
+                                            <TextBlock Text="Mở tab Hướng dẫn để xem từng bước chi tiết."
+                                                       Classes="muted" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="2" Background="White" CornerRadius="10" Padding="13">
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="03" Foreground="#D9B66F" FontWeight="Bold"
+                                                       FontSize="18" />
+                                            <TextBlock Text="Dùng phím tắt" FontWeight="SemiBold"
+                                                       Foreground="#163F38" />
+                                            <TextBlock Text="Nhấn F1 để mở trợ giúp bất cứ lúc nào."
+                                                       Classes="muted" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- 2. PHÍM TẮT -->
+            <TabItem Header="Phím tắt nhanh">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="12" Margin="0,10,0,16">
+                        <Border Classes="softCard" Background="#FFF8E8" BorderBrush="#F0DFB8">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Chỉ hiển thị phím tắt đã hoạt động thật"
+                                           Foreground="#7A5A14" FontWeight="SemiBold" FontSize="13" />
+                                <TextBlock Text="Các phím tắt dưới đây đã được nối với thao tác thực tế trong phần mềm. Nếu màn hình không hỗ trợ, phím sẽ không làm gì để tránh thao tác nhầm."
+                                           Foreground="#8A6A24" FontSize="12" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <ItemsControl ItemsSource="{Binding NhomPhimTat}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="help:HelpShortcutGroup">
+                                    <Border Classes="card" Width="530" Margin="0,0,12,12" Padding="16">
+                                        <StackPanel Spacing="9">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding BieuTuong}" FontSize="16" />
+                                                <TextBlock Text="{Binding TieuDe}" FontSize="14"
+                                                           FontWeight="Bold" Foreground="#163F38" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding MoTa}" Classes="muted" />
+                                            <ItemsControl ItemsSource="{Binding PhimTat}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="help:HelpShortcut">
+                                                        <Grid ColumnDefinitions="125,*,150" ColumnSpacing="10"
+                                                              Margin="0,3">
+                                                            <Border Background="#EAF9F5" BorderBrush="#CFE6E1"
+                                                                    BorderThickness="1" CornerRadius="6"
+                                                                    Padding="8,4" HorizontalAlignment="Left"
+                                                                    VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding Phim}"
+                                                                           FontFamily="Consolas, Cascadia Mono, monospace"
+                                                                           FontSize="11.5" FontWeight="Bold"
+                                                                           Foreground="#087F6E" />
+                                                            </Border>
+                                                            <TextBlock Grid.Column="1" Text="{Binding HanhDong}"
+                                                                       Foreground="#344054" FontSize="12"
+                                                                       TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                            <TextBlock Grid.Column="2" Text="{Binding PhamVi}"
+                                                                       Foreground="#98A2B3" FontSize="11"
+                                                                       TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Border Classes="card">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="Một số thao tác không dùng phím tắt" Classes="sectionTitle"
+                                           FontSize="14" />
+                                <TextBlock Text="Các nút như Đơn mới, Hoàn thành phiếu nhập, In hóa đơn hoặc Xóa vẫn cần bấm trực tiếp để tránh vô tình thay đổi dữ liệu. Hãy dùng nút trên màn hình tương ứng."
+                                           Classes="muted" TextWrapping="Wrap" LineHeight="19" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- 3. HƯỚNG DẪN -->
+            <TabItem Header="Hướng dẫn sử dụng">
+                <Grid RowDefinitions="Auto,*" Margin="0,10,0,16" RowSpacing="10">
+                    <TextBox x:Name="GuideSearchBox" Classes="searchBox"
+                             Text="{Binding GuideSearchText, Mode=TwoWay}"
+                             Watermark="🔍 Tìm theo tên nghiệp vụ, từ khóa... (Ctrl + F)" />
+
+                    <Grid Grid.Row="1" ColumnDefinitions="330,*" ColumnSpacing="14">
+                        <Border Classes="card" Padding="10">
+                            <ListBox Classes="guideList"
+                                     ItemsSource="{Binding DanhSachHuongDan}"
+                                     SelectedItem="{Binding SelectedGuide, Mode=TwoWay}"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="help:HelpGuide">
+                                        <Border Background="Transparent" CornerRadius="10" Padding="11">
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                                <Border Width="34" Height="34" CornerRadius="9"
+                                                        Background="#E9F6F2" VerticalAlignment="Top">
+                                                    <TextBlock Text="{Binding BieuTuong}" FontSize="16"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="2">
+                                                    <TextBlock Text="{Binding TieuDe}" FontSize="13"
+                                                               FontWeight="SemiBold" Foreground="#163F38" />
+                                                    <TextBlock Text="{Binding MoTa}" Foreground="#61736E"
+                                                               FontSize="11.5" TextWrapping="Wrap"
+                                                               LineHeight="17" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+
+                        <Border Grid.Column="1" Classes="card">
+                            <Grid RowDefinitions="Auto,*">
+                                <StackPanel Spacing="5" Margin="0,0,0,12">
+                                    <TextBlock Text="{Binding SelectedGuide.TieuDe}" FontSize="19"
+                                               FontWeight="Bold" Foreground="#163F38" />
+                                    <TextBlock Text="{Binding SelectedGuide.MoTa}" Classes="muted"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+
+                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="10">
+                                        <ItemsControl ItemsSource="{Binding SelectedGuide.CacBuoc}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="help:HelpGuideStep">
+                                                    <Border Background="#F7FAF9" BorderBrush="#E2ECE8"
+                                                            BorderThickness="1" CornerRadius="10"
+                                                            Padding="13" Margin="0,0,0,8">
+                                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="11">
+                                                            <Border Width="28" Height="28" CornerRadius="14"
+                                                                    Background="#087F6E" VerticalAlignment="Top">
+                                                                <TextBlock Text="{Binding ThuTu}"
+                                                                           Foreground="White" FontSize="12"
+                                                                           FontWeight="Bold"
+                                                                           HorizontalAlignment="Center"
+                                                                           VerticalAlignment="Center" />
+                                                            </Border>
+                                                            <StackPanel Grid.Column="1" Spacing="3">
+                                                                <TextBlock Text="{Binding TieuDe}"
+                                                                           FontSize="13" FontWeight="SemiBold"
+                                                                           Foreground="#163F38" />
+                                                                <TextBlock Text="{Binding NoiDung}"
+                                                                           Foreground="#475467" FontSize="12.5"
+                                                                           TextWrapping="Wrap" LineHeight="19" />
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <Border Background="#FFF8E8" BorderBrush="#F0DFB8"
+                                                BorderThickness="1" CornerRadius="10" Padding="13"
+                                                IsVisible="{Binding SelectedGuide.GhiChu, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Text="Lưu ý" Foreground="#7A5A14"
+                                                           FontSize="12" FontWeight="Bold" />
+                                                <TextBlock Text="{Binding SelectedGuide.GhiChu}"
+                                                           Foreground="#8A6A24" FontSize="12.5"
+                                                           TextWrapping="Wrap" LineHeight="19" />
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="1" Grid.ColumnSpan="2" Background="#F7FAF9" CornerRadius="10"
+                                Padding="18" IsVisible="{Binding KhongCoHuongDan}">
+                            <TextBlock Text="Không tìm thấy hướng dẫn phù hợp. Hãy thử từ khóa khác."
+                                       Foreground="#61736E" FontSize="13"
+                                       HorizontalAlignment="Center" />
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- 4. CẬP NHẬT -->
+            <TabItem Header="Cập nhật phần mềm">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="13" Margin="0,10,0,16">
+                        <Border Classes="card" Padding="22">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <StackPanel Spacing="7">
+                                    <TextBlock Text="Phiên bản đang sử dụng" Classes="muted" />
+                                    <TextBlock Text="{Binding PhienBanHienThi}" FontSize="24"
+                                               FontWeight="Bold" Foreground="#163F38" />
+                                    <TextBlock Text="Kiểm tra bản mới từ kênh phát hành chính thức. Bản cập nhật chỉ được tải khi bạn xác nhận."
+                                               Classes="muted" TextWrapping="Wrap" MaxWidth="680"
+                                               LineHeight="19" />
+                                    <StackPanel Orientation="Horizontal" Spacing="9" Margin="0,4,0,0">
+                                        <Button Classes="primary" Content="🔄 Kiểm tra cập nhật"
+                                                Command="{Binding MoCapNhatCommand}" />
+                                        <Button Classes="secondary" Content="Sao chép phiên bản"
+                                                Command="{Binding SaoChepPhienBanCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <Border Grid.Column="1" Background="#EAF9F5" BorderBrush="#CFE6E1"
+                                        BorderThickness="1" CornerRadius="12" Padding="16"
+                                        Width="210" VerticalAlignment="Center">
+                                    <StackPanel Spacing="5">
+                                        <TextBlock Text="TRẠNG THÁI" Foreground="#078C7A"
+                                                   FontSize="10.5" FontWeight="Bold" />
+                                        <TextBlock Text="Sẵn sàng kiểm tra" Foreground="#087F6E"
+                                                   FontSize="15" FontWeight="Bold" />
+                                        <TextBlock Text="Cần kết nối Internet để tìm bản mới."
+                                                   Classes="muted" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="Có gì trong bản này" Classes="sectionTitle" Margin="2,3,0,0" />
+                        <Border Classes="card">
+                            <ItemsControl ItemsSource="{Binding DiemMoi}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Margin="0,5">
+                                            <TextBlock Text="✓" Foreground="#087F6E" FontWeight="Bold"
+                                                       FontSize="13" />
+                                            <TextBlock Grid.Column="1" Text="{Binding}"
+                                                       Foreground="#475467" FontSize="12.5"
+                                                       TextWrapping="Wrap" LineHeight="19" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+
+                        <TextBlock Text="Lưu ý khi cập nhật" Classes="sectionTitle" Margin="2,3,0,0" />
+                        <ItemsControl ItemsSource="{Binding LuuYCapNhat}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="help:HelpUpdateNote">
+                                    <Border Classes="softCard" Width="342" Margin="0,0,12,12">
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="{Binding BieuTuong}" FontSize="18" />
+                                            <TextBlock Text="{Binding TieuDe}" FontWeight="SemiBold"
+                                                       Foreground="#163F38" FontSize="13" />
+                                            <TextBlock Text="{Binding MoTa}" Classes="muted"
+                                                       TextWrapping="Wrap" LineHeight="18" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Border Classes="card">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Trang phát hành chính thức" FontWeight="SemiBold"
+                                               Foreground="#163F38" FontSize="13" />
+                                    <TextBlock Text="{Binding TrangCapNhatUrl}" Classes="muted"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Classes="secondary"
+                                        Content="Mở trang phát hành"
+                                        Command="{Binding MoTrangCapNhatCommand}"
+                                        VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- 5. HỖ TRỢ -->
+            <TabItem Header="Thông tin hỗ trợ">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="13" Margin="0,10,0,16">
+                        <Border Classes="card">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="Thông tin liên hệ" Classes="sectionTitle" />
+                                        <TextBlock Text="{Binding TenTiemHienThi}" Foreground="#087F6E"
+                                                   FontSize="14" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                    <Border Grid.Column="1" Background="#EAF9F5" CornerRadius="8"
+                                            Padding="10,5" VerticalAlignment="Top"
+                                            IsVisible="{Binding CoThongTinLienHe}">
+                                        <TextBlock Text="Đã cấu hình" Foreground="#087F6E"
+                                                   FontSize="11" FontWeight="SemiBold" />
+                                    </Border>
+                                </Grid>
+
+                                <Border Background="#FFF8E8" BorderBrush="#F0DFB8" BorderThickness="1"
+                                        CornerRadius="9" Padding="12"
+                                        IsVisible="{Binding KhongCoThongTinLienHe}">
+                                    <TextBlock Text="Chưa cấu hình số điện thoại, email hoặc địa chỉ hỗ trợ. Vào Thông tin tiệm trong menu tài khoản để bổ sung."
+                                               Foreground="#8A6A24" FontSize="12.5"
+                                               TextWrapping="Wrap" LineHeight="19" />
+                                </Border>
+
+                                <StackPanel Spacing="2" IsVisible="{Binding CoDiaChi}">
+                                    <TextBlock Text="Địa chỉ" Foreground="#98A2B3" FontSize="11" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                        <TextBlock Text="{Binding DiaChi}" Foreground="#344054"
+                                                   FontSize="13" TextWrapping="Wrap"
+                                                   VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Classes="copyButton" Content="Sao chép"
+                                                Command="{Binding SaoChepDiaChiCommand}" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Spacing="2" IsVisible="{Binding CoDienThoai}">
+                                    <TextBlock Text="Số điện thoại" Foreground="#98A2B3" FontSize="11" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                        <TextBlock Text="{Binding SoDienThoai}" Foreground="#344054"
+                                                   FontSize="13" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Classes="copyButton" Content="Sao chép"
+                                                Command="{Binding SaoChepDienThoaiCommand}" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Spacing="2" IsVisible="{Binding CoEmail}">
+                                    <TextBlock Text="Email" Foreground="#98A2B3" FontSize="11" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                        <TextBlock Text="{Binding Email}" Foreground="#344054"
+                                                   FontSize="13" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Classes="copyButton" Content="Sao chép"
+                                                Command="{Binding SaoChepEmailCommand}" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Spacing="2" IsVisible="{Binding CoWebsite}">
+                                    <TextBlock Text="Website" Foreground="#98A2B3" FontSize="11" />
+                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                        <TextBlock Text="{Binding Website}" Foreground="#344054"
+                                                   FontSize="13" VerticalAlignment="Center"
+                                                   TextWrapping="Wrap" />
+                                        <Button Grid.Column="1" Classes="copyButton" Content="Sao chép"
+                                                Command="{Binding SaoChepWebsiteCommand}" />
+                                        <Button Grid.Column="2" Classes="secondary" Content="Mở"
+                                                Command="{Binding MoWebsiteCommand}" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Spacing="2" IsVisible="{Binding CoMaSoThue}">
+                                    <TextBlock Text="Mã số thuế" Foreground="#98A2B3" FontSize="11" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                        <TextBlock Text="{Binding MaSoThue}" Foreground="#344054"
+                                                   FontSize="13" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Classes="copyButton" Content="Sao chép"
+                                                Command="{Binding SaoChepMaSoThueCommand}" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <TextBlock Text="{Binding LoiThongTin}" Foreground="#C94A3D"
+                                           FontSize="12" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding ThongBaoSaoChep}" Foreground="#087F6E"
+                                           FontSize="12" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Border>
+
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                            <Border Classes="card">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="Khi cần hỗ trợ" Classes="sectionTitle"
+                                               FontSize="14" />
+                                    <TextBlock Text="Chuẩn bị các thông tin sau để được hỗ trợ nhanh hơn:"
+                                               Classes="muted" TextWrapping="Wrap" />
+                                    <TextBlock Text="1. Mã hóa đơn, mã phiếu nhập hoặc mã khách hàng đang gặp vấn đề."
+                                               Foreground="#475467" FontSize="12.5" TextWrapping="Wrap" />
+                                    <TextBlock Text="2. Thao tác vừa thực hiện và thông báo lỗi hiển thị trên màn hình."
+                                               Foreground="#475467" FontSize="12.5" TextWrapping="Wrap" />
+                                    <TextBlock Text="3. Ảnh chụp màn hình (nếu có) để mô tả rõ tình trạng."
+                                               Foreground="#475467" FontSize="12.5" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1" Classes="card">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="Thông tin kỹ thuật" Classes="sectionTitle"
+                                               FontSize="14" />
+                                    <TextBlock Text="{Binding ThongTinKyThuat}" Classes="muted"
+                                               TextWrapping="Wrap" LineHeight="19" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,3,0,0">
+                                        <Button Classes="secondary" Content="Sao chép thông tin"
+                                                Command="{Binding SaoChepThongTinKyThuatCommand}" />
+                                        <Button Classes="secondary" Content="Xem cập nhật"
+                                                Command="{Binding MoTabCapNhatCommand}" />
+                                    </StackPanel>
+                                    <TextBlock Text="Không gửi mật khẩu, mã PIN hoặc thông tin thanh toán qua kênh hỗ trợ."
+                                               Foreground="#8A6A24" FontSize="11.5"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <!-- FOOTER -->
+        <Border Grid.Row="2" Background="White" BorderBrush="#E2ECE8"
+                BorderThickness="0,1,0,0" Padding="24,11">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Mẹo: Nhấn F1 bất cứ lúc nào để mở cửa sổ Trợ giúp."
+                           Foreground="#98A2B3" FontSize="11.5" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="secondary" Content="Đóng"
+                        Command="{Binding DongCommand}" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

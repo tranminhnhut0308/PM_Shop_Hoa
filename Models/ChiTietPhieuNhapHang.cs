@@ -78,6 +78,21 @@ public partial class ChiTietPhieuNhapHang : ObservableObject
                                && string.IsNullOrWhiteSpace(product.DonViTinh);
     }
 
+    public void CapNhatSanPham(SanPham sanPham)
+    {
+        SanPham = sanPham;
+
+        if (sanPham.DonViTinhId is > 0 || !string.IsNullOrWhiteSpace(sanPham.DonViTinh))
+        {
+            ChoPhepChonDonViTinh = false;
+            SelectedDonViTinh = null;
+        }
+
+        OnPropertyChanged(nameof(MaSanPham));
+        OnPropertyChanged(nameof(TenSanPham));
+        OnPropertyChanged(nameof(DonViTinh));
+    }
+
     partial void OnSoLuongChanged(decimal value)
     {
         var safeValue = value < 0 ? 0 : value;

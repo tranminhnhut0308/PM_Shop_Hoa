@@ -3407,7 +3407,8 @@ public sealed partial class DatabaseService
             hd.khach_can_tra AS KhachCanTra,
             hd.khach_da_thanh_toan AS KhachDaThanhToan,
             hd.con_no AS ConNo,
-            hd.trang_thai_thanh_toan AS TrangThaiThanhToan
+            hd.trang_thai_thanh_toan AS TrangThaiThanhToan,
+            hd.trang_thai_hoa_don AS TrangThaiHoaDon
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh
             ON kh.id = hd.khach_hang_id
@@ -4611,11 +4612,42 @@ public sealed partial class DatabaseService
     public async Task<IReadOnlyList<HoaDon>> GetHoaDonAsync(
      string? search = null,
      DateTime? ngayLoc = null,
-     int? limit = 500)
+     int? limit = 500,
+     string? trangThaiLoc = null)
     {
+        var coCotHuy = await EnsureHuyHoaDonSchemaAsync();
+
         await using var connection = await OpenAsync();
 
         var limitClause = limit.HasValue ? $"LIMIT {limit.Value}" : "";
+
+        var huySelectCols = coCotHuy
+            ? """
+              ,
+              hd.ly_do_huy AS LyDoHuy,
+              hd.nguoi_huy_id AS NguoiHuyId,
+              hd.ten_nguoi_huy AS TenNguoiHuy,
+              hd.thoi_gian_huy AS ThoiGianHuy,
+              hd.trang_thai_giao_hang_khi_huy AS TrangThaiGiaoHangKhiHuy,
+              COALESCE(hd.da_hoan_kho, 0) AS DaHoanKho,
+              hd.phuong_an_tien_khi_huy AS PhuongAnTienKhiHuy,
+              COALESCE(hd.so_tien_hoan, 0) AS SoTienHoan,
+              hd.ma_phieu_chi_hoan AS MaPhieuChiHoan,
+              hd.hoa_don_goc_id AS HoaDonGocId,
+              hd.ma_hoa_don_goc AS MaHoaDonGoc,
+              hd.hoa_don_thay_the_id AS HoaDonThayTheId,
+              hd.ma_hoa_don_thay_the AS MaHoaDonThayThe
+              """
+            : "";
+
+        var dieuKienTrangThai = (trangThaiLoc ?? "TAT_CA").Trim().ToUpperInvariant() switch
+        {
+            "HOAN_THANH" => "AND hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') AND hd.con_no <= 0",
+            "CHUA_THANH_TOAN" => "AND hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') AND hd.con_no > 0 AND hd.khach_da_thanh_toan <= 0",
+            "THANH_TOAN_MOT_PHAN" => "AND hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') AND hd.con_no > 0 AND hd.khach_da_thanh_toan > 0",
+            "DA_HUY" => "AND hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY')",
+            _ => ""
+        };
 
         var sql = $"""
 SELECT
@@ -4632,8 +4664,9 @@ SELECT
     hd.khach_can_tra AS KhachCanTra,
     hd.khach_da_thanh_toan AS KhachDaThanhToan,
     hd.con_no AS ConNo,
+    hd.trang_thai_thanh_toan AS TrangThaiThanhToan,
     hd.trang_thai_hoa_don AS TrangThaiHoaDon,
-    hd.ghi_chu AS GhiChu
+    hd.ghi_chu AS GhiChu{huySelectCols}
 
 FROM hoa_don_ban_hang hd
 
@@ -4650,6 +4683,7 @@ AND (
     @Ngay IS NULL
     OR DATE(hd.thoi_gian_ban) = DATE(@Ngay)
 )
+{dieuKienTrangThai}
 
 ORDER BY hd.thoi_gian_ban DESC
 {limitClause};
@@ -4730,6 +4764,7 @@ ORDER BY hd.thoi_gian_ban DESC
         var maCanTim = maHoaDon.Trim();
 
         var coCotContact = await EnsureHoaDonContactColumnsAsync();
+        var coCotHuy = await EnsureHuyHoaDonSchemaAsync();
 
         await using var connection = await OpenAsync();
 
@@ -4744,6 +4779,25 @@ ORDER BY hd.thoi_gian_ban DESC
               COALESCE(kh.dia_chi, '')                         AS DiaChi,
               0                                                AS InKemThongTin
               """;
+
+        var huyCols = coCotHuy
+            ? """
+              ,
+              hd.ly_do_huy                     AS LyDoHuy,
+              hd.nguoi_huy_id                  AS NguoiHuyId,
+              hd.ten_nguoi_huy                 AS TenNguoiHuy,
+              hd.thoi_gian_huy                 AS ThoiGianHuy,
+              hd.trang_thai_giao_hang_khi_huy  AS TrangThaiGiaoHangKhiHuy,
+              COALESCE(hd.da_hoan_kho, 0)      AS DaHoanKho,
+              hd.phuong_an_tien_khi_huy        AS PhuongAnTienKhiHuy,
+              COALESCE(hd.so_tien_hoan, 0)     AS SoTienHoan,
+              hd.ma_phieu_chi_hoan             AS MaPhieuChiHoan,
+              hd.hoa_don_goc_id                AS HoaDonGocId,
+              hd.ma_hoa_don_goc                AS MaHoaDonGoc,
+              hd.hoa_don_thay_the_id           AS HoaDonThayTheId,
+              hd.ma_hoa_don_thay_the           AS MaHoaDonThayThe
+              """
+            : "";
 
         var headerSql = $"""
         SELECT
@@ -4760,7 +4814,7 @@ ORDER BY hd.thoi_gian_ban DESC
             hd.con_no                   AS ConNo,
             hd.trang_thai_hoa_don       AS TrangThaiHoaDon,
             hd.ghi_chu                  AS GhiChu,
-            {contactCols}
+            {contactCols}{huyCols}
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
         LEFT JOIN nguoi_dung  nd ON nd.id = hd.nguoi_ban_id
@@ -4778,6 +4832,7 @@ ORDER BY hd.thoi_gian_ban DESC
         const string detailSql = """
         SELECT
             ten_san_pham AS TenSanPham,
+            COALESCE(NULLIF(TRIM(don_vi_tinh), ''), 'Bó') AS DonViTinh,
             so_luong     AS SoLuong,
             don_gia      AS DonGia,
             thanh_tien   AS ThanhTien
@@ -4793,6 +4848,8 @@ ORDER BY hd.thoi_gian_ban DESC
         var thuKhac = ToDecimal(header.ThuKhac);
         var daThanhToan = ToDecimal(header.KhachDaThanhToan);
         var conNo = ToDecimal(header.ConNo);
+        var trangThaiHoaDon = header.TrangThaiHoaDon?.ToString() ?? "HOAN_THANH";
+        var daHuy = LaTrangThaiHoaDonDaHuy(trangThaiHoaDon);
 
         var inKem = Convert.ToInt32(header.InKemThongTin) == 1;
         if (conNo > 0)
@@ -4800,12 +4857,18 @@ ORDER BY hd.thoi_gian_ban DESC
             inKem = true;
         }
 
+        var giaoDichLienQuans = await LayGiaoDichLienQuanHoaDonAsync(
+            connection,
+            (uint)header.HoaDonId,
+            header.MaHoaDon?.ToString() ?? maCanTim);
+
         return new HoaDonBanHangReceipt
         {
             HoaDonId = (uint)header.HoaDonId,
             MaHoaDon = header.MaHoaDon ?? maCanTim,
+            TrangThaiHoaDon = trangThaiHoaDon,
             LaHoaDonTongHop = string.Equals(
-                header.TrangThaiHoaDon?.ToString(),
+                trangThaiHoaDon,
                 "TONG_HOP",
                 StringComparison.OrdinalIgnoreCase),
             ThoiGianBan = header.ThoiGianBan,
@@ -4826,9 +4889,26 @@ ORDER BY hd.thoi_gian_ban DESC
             TienKhachDua = daThanhToan + thuKhac,
             TienThoi = thuKhac,
 
-            TrangThaiThanhToan = TrangThaiThanhToanHienThi(conNo > 0, thuKhac > 0),
+            TrangThaiThanhToan = daHuy
+                ? "ĐÃ HỦY HÓA ĐƠN"
+                : TrangThaiThanhToanHienThi(conNo > 0, thuKhac > 0),
 
             GhiChu = header.GhiChu as string,
+
+            LyDoHuy = coCotHuy ? header.LyDoHuy as string : null,
+            NguoiHuyId = coCotHuy && header.NguoiHuyId is not null ? Convert.ToUInt32(header.NguoiHuyId) : null,
+            TenNguoiHuy = coCotHuy ? header.TenNguoiHuy as string : null,
+            ThoiGianHuy = coCotHuy ? header.ThoiGianHuy as DateTime? : null,
+            TrangThaiGiaoHangKhiHuy = coCotHuy ? header.TrangThaiGiaoHangKhiHuy as string : null,
+            DaHoanKhoKhiHuy = coCotHuy && Convert.ToInt32(header.DaHoanKho ?? 0) == 1,
+            PhuongAnTienKhiHuy = coCotHuy ? header.PhuongAnTienKhiHuy as string : null,
+            SoTienHoanKhiHuy = coCotHuy ? ToDecimal(header.SoTienHoan) : 0m,
+            MaPhieuChiHoan = coCotHuy ? header.MaPhieuChiHoan as string : null,
+            HoaDonGocId = coCotHuy && header.HoaDonGocId is not null ? Convert.ToUInt32(header.HoaDonGocId) : null,
+            MaHoaDonGoc = coCotHuy ? header.MaHoaDonGoc as string : null,
+            HoaDonThayTheId = coCotHuy && header.HoaDonThayTheId is not null ? Convert.ToUInt32(header.HoaDonThayTheId) : null,
+            MaHoaDonThayThe = coCotHuy ? header.MaHoaDonThayThe as string : null,
+            GiaoDichLienQuans = giaoDichLienQuans,
 
             Items = items
         };
@@ -4856,7 +4936,9 @@ ORDER BY hd.thoi_gian_ban DESC
     string? ghiChu = null,
     string? soDienThoai = null,
     string? diaChi = null,
-    bool inKemThongTin = false)
+    bool inKemThongTin = false,
+    uint? hoaDonGocId = null,
+    string? maHoaDonGoc = null)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SalesPayment, "Bạn không có quyền tạo hóa đơn bán hàng.");
         if (items.Count == 0)
@@ -4934,6 +5016,8 @@ ORDER BY hd.thoi_gian_ban DESC
         // "Table definition has changed" và huỷ cả giao dịch.
         var coCotPhieuThuLienKet = await EnsurePhieuQuyHoaDonColumnsAsync();
         var coCotContactHoaDon = await EnsureHoaDonContactColumnsAsync();
+        var coLienKetHoaDonGoc = (hoaDonGocId is > 0 || !string.IsNullOrWhiteSpace(maHoaDonGoc))
+                                 && await EnsureHuyHoaDonSchemaAsync();
 
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -5109,6 +5193,18 @@ ORDER BY hd.thoi_gian_ban DESC
             if (invoiceId == 0)
                 throw new InvalidOperationException(
                     "Không tạo được hóa đơn trong database. Giao dịch đã hủy, dữ liệu bán hàng không bị thay đổi.");
+
+            if (coLienKetHoaDonGoc)
+            {
+                await GhiLienKetHoaDonThayTheTrongGiaoDichAsync(
+                    connection,
+                    transaction,
+                    invoiceId,
+                    invoiceCode,
+                    hoaDonGocId ?? 0,
+                    maHoaDonGoc,
+                    now);
+            }
 
             // ============================================================
             // 2. CHI TIẾT HÓA ĐƠN
@@ -5384,7 +5480,8 @@ ORDER BY hd.thoi_gian_ban DESC
                 khach_hang_id       AS KhachHangId,
                 khach_can_tra       AS KhachCanTra,
                 khach_da_thanh_toan AS KhachDaThanhToan,
-                con_no              AS ConNo
+                con_no              AS ConNo,
+                trang_thai_hoa_don  AS TrangThaiHoaDon
             FROM hoa_don_ban_hang
             WHERE ma_hoa_don = @MaHoaDon
             LIMIT 1
@@ -5398,6 +5495,9 @@ ORDER BY hd.thoi_gian_ban DESC
 
             if (hd is null)
                 throw new InvalidOperationException($"Không tìm thấy hóa đơn {maCanTim} trong database.");
+
+            if (LaTrangThaiHoaDonDaHuy(hd.TrangThaiHoaDon))
+                throw new InvalidOperationException($"Hóa đơn {maCanTim} đã bị hủy, không thể thu nợ hoặc thay đổi dữ liệu.");
 
             var hoaDonId = hd.Id;
             var branchCuaHoaDon = hd.ChiNhanhId;
@@ -6085,6 +6185,7 @@ ORDER BY hd.thoi_gian_ban DESC
         public decimal KhachCanTra { get; set; }
         public decimal KhachDaThanhToan { get; set; }
         public decimal ConNo { get; set; }
+        public string TrangThaiHoaDon { get; set; } = "";
     }
 
     private async Task EnsureBangLichSuThanhToanKhachHangAsync()
@@ -9481,7 +9582,8 @@ ORDER BY hd.thoi_gian_ban DESC
     /// </summary>
     public async Task<uint> LuuPhieuNhapHangAsync(
         PhieuNhapHang phieu,
-        IReadOnlyList<ChiTietPhieuNhapHang> items)
+        IReadOnlyList<ChiTietPhieuNhapHang> items,
+        string? draftId = null)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.PurchasesCreate, "Bạn không có quyền lưu phiếu nhập hàng.");
         if (phieu is null)
@@ -9532,6 +9634,9 @@ ORDER BY hd.thoi_gian_ban DESC
         var extraAssignments = (hasPhuongThucColumn ? ",\n                    phuong_thuc_thanh_toan = @PhuongThucThanhToan" : string.Empty)
             + (hasExtraColumns ? ",\n                    so_hoa_don_dau_vao = @SoHoaDonDauVao,\n                    ma_dat_hang_nhap   = @MaDatHangNhap" : string.Empty);
 
+        if (!string.IsNullOrWhiteSpace(draftId))
+            await EnsurePhieuNhapNhapTableAsync();
+
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
 
@@ -9542,6 +9647,11 @@ ORDER BY hd.thoi_gian_ban DESC
             //    Đọc trạng thái hiện tại trong transaction để tồn kho
             //    không bị cộng hai lần cho cùng một phiếu.
             // ============================================================
+
+            // Phiếu nháp: khóa dòng nháp (FOR UPDATE). Lần hoàn tất thứ hai sẽ thấy
+            // trạng thái DA_HOAN_TAT và bị từ chối trước khi chạm vào tồn kho/công nợ/sổ quỹ.
+            if (!string.IsNullOrWhiteSpace(draftId))
+                await KhoaPhieuNhapNhapDeHoanTatAsync(connection, transaction, draftId);
 
             var trangThaiHienTai = phieu.Id == 0
                 ? null
@@ -9728,6 +9838,11 @@ ORDER BY hd.thoi_gian_ban DESC
                 phieu,
                 hasPhieuQuyExtraColumns,
                 hasPhieuQuyPhieuNhapColumns);
+
+            // Đóng phiếu nháp trong CÙNG transaction: chỉ đóng đúng phiếu này,
+            // các phiếu nháp khác không bị ảnh hưởng.
+            if (!string.IsNullOrWhiteSpace(draftId))
+                await DanhDauPhieuNhapNhapHoanTatAsync(connection, transaction, draftId, phieu.Id);
 
             await transaction.CommitAsync();
 

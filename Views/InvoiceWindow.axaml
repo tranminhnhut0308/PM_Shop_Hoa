@@ -4,10 +4,10 @@
   x:Class="ShopHoa.Views.InvoiceWindow"
   x:DataType="models:HoaDonBanHangReceipt"
   Title="Hóa đơn bán hàng"
-  Width="680"
-  Height="780"
-  MinWidth="560"
-  MinHeight="600"
+  Width="700"
+  Height="800"
+  MinWidth="580"
+  MinHeight="620"
   Background="#FFFFFF">
   <Window.Styles>
     <Style Selector="TextBlock">
@@ -49,18 +49,19 @@
       <Setter Property="Background" Value="#D4EDE6" />
       <Setter Property="Foreground" Value="#056B5D" />
     </Style>
-    <Style Selector="Button.btn-action-outline">
-      <Setter Property="Background" Value="#FFFFFF" />
-      <Setter Property="Foreground" Value="#087F6E" />
-      <Setter Property="BorderBrush" Value="#B2DDD0" />
+    <Style Selector="Button.btn-cancel-invoice">
+      <Setter Property="Background" Value="#FEF2F2" />
+      <Setter Property="Foreground" Value="#B91C1C" />
+      <Setter Property="BorderBrush" Value="#FCA5A5" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Padding" Value="14,10" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Padding" Value="16,10" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
-    <Style Selector="Button.btn-action-outline:pointerover">
-      <Setter Property="Background" Value="#F0FAF7" />
+    <Style Selector="Button.btn-cancel-invoice:pointerover">
+      <Setter Property="Background" Value="#FEE2E2" />
+      <Setter Property="Foreground" Value="#991B1B" />
     </Style>
     <Style Selector="Button.btn-close">
       <Setter Property="Background" Value="#F2F4F7" />
@@ -114,6 +115,97 @@
         FontWeight="Bold" Foreground="#163F38" />
       <TextBlock Text="{Binding MaHoaDon, StringFormat=Mã hóa đơn: {0}}"
         HorizontalAlignment="Center" Foreground="#61736E" />
+
+      <!-- BANNER HÓA ĐƠN ĐÃ HỦY -->
+      <Border IsVisible="{Binding LaHoaDonDaHuy}"
+        Background="#FEF2F2"
+        BorderBrush="#FCA5A5"
+        BorderThickness="1.5"
+        CornerRadius="10"
+        Padding="14,12"
+        Margin="0,6,0,2">
+        <StackPanel Spacing="6">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Border Background="#DC2626" CornerRadius="5" Padding="8,3">
+              <TextBlock Text="ĐÃ HỦY" Foreground="White" FontWeight="Bold" FontSize="11.5" />
+            </Border>
+            <TextBlock Text="Hóa đơn này đã bị hủy — chỉ giữ lại lịch sử để đối soát, không tính vào doanh thu."
+              Foreground="#991B1B" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" />
+          </StackPanel>
+
+          <Grid ColumnDefinitions="135,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="4" Margin="0,4,0,0">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="Lý do hủy:" FontWeight="SemiBold" Foreground="#7F1D1D" FontSize="12" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding LyDoHuy, FallbackValue='Không rõ'}" FontWeight="Bold" Foreground="#991B1B" FontSize="12" TextWrapping="Wrap" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Người thực hiện:" FontWeight="SemiBold" Foreground="#7F1D1D" FontSize="12" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TenNguoiHuyHienThi}" Foreground="#7F1D1D" FontSize="12" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="Thời gian hủy:" FontWeight="SemiBold" Foreground="#7F1D1D" FontSize="12" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ThoiGianHuyText}" Foreground="#7F1D1D" FontSize="12" />
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="Xử lý tồn kho:" FontWeight="SemiBold" Foreground="#7F1D1D" FontSize="12" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TrangThaiGiaoHangKhiHuyHienThi}" Foreground="#7F1D1D" FontSize="12" TextWrapping="Wrap" />
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Text="Xử lý thanh toán:" FontWeight="SemiBold" Foreground="#7F1D1D" FontSize="12" />
+            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding PhuongAnTienKhiHuyHienThi}" Foreground="#7F1D1D" FontSize="12" TextWrapping="Wrap" />
+          </Grid>
+
+          <!-- Liên kết tới hóa đơn mới thay thế (nếu có) -->
+          <Border IsVisible="{Binding CoHoaDonThayThe}"
+            Background="#FFFFFF"
+            BorderBrush="#FECACA"
+            BorderThickness="1"
+            CornerRadius="6"
+            Padding="10,6"
+            Margin="0,4,0,0">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <TextBlock Text="🔄 Hóa đơn mới thay thế:" FontWeight="SemiBold" Foreground="#163F38" FontSize="12" />
+                <TextBlock Text="{Binding MaHoaDonThayThe}" FontWeight="Bold" Foreground="#087F6E" FontSize="12.5" />
+              </StackPanel>
+              <Button Grid.Column="1"
+                Content="Xem hóa đơn thay thế →"
+                Padding="10,4"
+                FontSize="11.5"
+                CornerRadius="6"
+                Background="#E6F5F1"
+                Foreground="#087F6E"
+                BorderBrush="#B2DDD0"
+                BorderThickness="1"
+                FontWeight="SemiBold"
+                Click="XemHoaDonThayThe_OnClick" />
+            </Grid>
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <!-- BANNER HÓA ĐƠN ĐƯỢC TẠO LẠI TỪ HÓA ĐƠN ĐÃ HỦY -->
+      <Border IsVisible="{Binding CoHoaDonGoc}"
+        Background="#F0FAF7"
+        BorderBrush="#B2DDD0"
+        BorderThickness="1"
+        CornerRadius="8"
+        Padding="12,8"
+        Margin="0,4,0,2">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <TextBlock Text="🔗 Hóa đơn thay thế cho hóa đơn gốc đã hủy:" FontSize="12" FontWeight="SemiBold" Foreground="#163F38" />
+            <TextBlock Text="{Binding MaHoaDonGoc}" FontSize="12.5" FontWeight="Bold" Foreground="#B91C1C" />
+          </StackPanel>
+          <Button Grid.Column="1"
+            Content="Xem hóa đơn gốc"
+            Padding="10,4"
+            FontSize="11.5"
+            CornerRadius="6"
+            Background="White"
+            Foreground="#087F6E"
+            BorderBrush="#B2DDD0"
+            BorderThickness="1"
+            FontWeight="SemiBold"
+            Click="XemHoaDonGoc_OnClick" />
+        </Grid>
+      </Border>
+
       <Border IsVisible="{Binding LaHoaDonTongHop}"
         Background="#FFF7E8" BorderBrush="#F0D9AE" BorderThickness="1"
         CornerRadius="6" Padding="10,8" Margin="0,6,0,0">
@@ -262,6 +354,33 @@
         </StackPanel>
       </Border>
 
+      <!-- DANH SÁCH GIAO DỊCH SỔ QUỸ / HOÀN TIỀN / ĐIỀU CHỈNH LIÊN QUAN -->
+      <Border IsVisible="{Binding CoGiaoDichLienQuan}"
+        Background="#F8FAFC"
+        BorderBrush="#E2E8F0"
+        BorderThickness="1"
+        CornerRadius="8"
+        Padding="12,10"
+        Margin="0,10,0,0">
+        <StackPanel Spacing="5">
+          <TextBlock Text="📋 Giao dịch sổ quỹ, hoàn tiền &amp; điều chỉnh liên quan"
+            FontWeight="Bold"
+            FontSize="12"
+            Foreground="#163F38" />
+          <ItemsControl ItemsSource="{Binding GiaoDichLienQuans}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="models:GiaoDichLienQuanHoaDonItem">
+                <TextBlock Text="{Binding HienThiTomTat}"
+                  FontSize="11.5"
+                  Foreground="#334155"
+                  TextWrapping="Wrap"
+                  Margin="0,2" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
       <Border IsVisible="{Binding CoCanhBao}"
         Background="#FFF4E5"
         CornerRadius="6"
@@ -285,20 +404,16 @@
         HorizontalAlignment="Center" TextAlignment="Center"
         Foreground="#D92D20" FontSize="12" Margin="0,0,0,6" />
 
-      <!-- CÁC NÚT THAO TÁC -->
+      <!-- CÁC NÚT THAO TÁC (Đã gỡ bỏ nút Chỉnh sửa hóa đơn, thay bằng nút Hủy hóa đơn) -->
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
         <Button x:Name="ThanhToanCongNoButton" Content="💵 Thanh toán nợ"
           Classes="btn-pay-debt" IsVisible="False"
           Click="ThanhToanCongNoButton_OnClick"
           ToolTip.Tip="Thu công nợ cho hóa đơn này" />
-        <Button x:Name="EditInvoiceButton" Content="✏️ Sửa hóa đơn"
-          Classes="btn-action-outline"
-          Click="EditInvoiceButton_OnClick"
-          ToolTip.Tip="Chỉnh sửa hóa đơn này" />
-        <Button x:Name="HistoryInvoiceButton" Content="📜 Lịch sử sửa"
-          Classes="btn-action-outline"
-          Click="HistoryInvoiceButton_OnClick"
-          ToolTip.Tip="Xem lịch sử chỉnh sửa của hóa đơn này" />
+        <Button x:Name="CancelInvoiceButton" Content="🚫 Hủy hóa đơn"
+          Classes="btn-cancel-invoice"
+          Click="CancelInvoiceButton_OnClick"
+          ToolTip.Tip="Hủy hóa đơn này và hoàn tác tồn kho / công nợ / sổ quỹ hoặc tạo lại đơn mới" />
         <Button x:Name="PrintButton" Content="🖨 In" Classes="btn-print"
           Click="PrintButton_OnClick" />
         <Button Content="Đóng" Classes="btn-close"

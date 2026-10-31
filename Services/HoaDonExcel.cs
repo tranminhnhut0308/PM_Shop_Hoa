@@ -87,16 +87,24 @@ public static class HoaDonExcel
             ExcelHelper.GhiO_Tien(ws.Cell(dong, 10), hd.KhachDaThanhToan);
             ExcelHelper.GhiO_Tien(ws.Cell(dong, 11), hd.ConNo);
 
-            var trangThai = hd.LaHoaDonTongHop ? "Tổng hợp" : (hd.ConNo <= 0 ? "Đã thanh toán" : (hd.KhachDaThanhToan > 0 ? "Thanh toán một phần" : "Chưa thanh toán"));
+            var trangThai = hd.LaHoaDonDaHuy
+                ? "Đã hủy"
+                : (hd.LaHoaDonTongHop ? "Tổng hợp" : (hd.ConNo <= 0 ? "Hoàn thành" : (hd.KhachDaThanhToan > 0 ? "Thanh toán một phần" : "Chưa thanh toán")));
+            var ghiChuXuat = hd.LaHoaDonDaHuy && !string.IsNullOrWhiteSpace(hd.ThongTinHuyTomTat)
+                ? (string.IsNullOrWhiteSpace(hd.GhiChu) ? hd.ThongTinHuyTomTat : $"{hd.GhiChu} | {hd.ThongTinHuyTomTat}")
+                : (hd.GhiChu ?? "");
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 12), trangThai, XLAlignmentHorizontalValues.Center);
-            ExcelHelper.GhiO_Chu(ws.Cell(dong, 13), hd.GhiChu ?? "");
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 13), ghiChuXuat);
 
-            tongTienHang += hd.TongTienHang;
-            tongGiamGia += hd.GiamGia;
-            tongThuKhac += hd.ThuKhac;
-            tongCanTra += hd.KhachCanTra;
-            tongDaThanhToan += hd.KhachDaThanhToan;
-            tongConNo += hd.ConNo;
+            if (!hd.LaHoaDonDaHuy)
+            {
+                tongTienHang += hd.TongTienHang;
+                tongGiamGia += hd.GiamGia;
+                tongThuKhac += hd.ThuKhac;
+                tongCanTra += hd.KhachCanTra;
+                tongDaThanhToan += hd.KhachDaThanhToan;
+                tongConNo += hd.ConNo;
+            }
 
             dong++;
         }

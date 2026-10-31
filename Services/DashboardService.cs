@@ -552,7 +552,7 @@ public sealed class DashboardService
                     'HOA_DON' AS DoiTuong,
                     hd.ma_hoa_don AS MaChungTu,
                     CASE
-                        WHEN hd.trang_thai_hoa_don = 'HUY' THEN CONCAT('Hủy đơn bán ', hd.ma_hoa_don)
+                        WHEN hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY') THEN CONCAT('Hủy đơn bán ', hd.ma_hoa_don)
                         WHEN COALESCE(kh.ten_khach_hang, '') != '' THEN CONCAT('Bán hàng cho ', kh.ten_khach_hang)
                         ELSE 'Bán hàng cho khách lẻ'
                     END AS NoiDung,

@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -580,11 +580,12 @@ public sealed partial class MainWindowViewModel
         {
             StatusMessage = "Đang xuất danh sách hóa đơn...";
 
-            // Lấy toàn bộ hóa đơn theo đúng điều kiện tìm kiếm và ngày đang lọc (không giới hạn 500 dòng)
+            // Lấy toàn bộ hóa đơn theo đúng điều kiện tìm kiếm, ngày và trạng thái đang lọc (không giới hạn 500 dòng)
             var danhSach = await _db.GetHoaDonAsync(
                 InvoiceSearch,
                 InvoiceFilterDate?.Date,
-                limit: null);
+                limit: null,
+                trangThaiLoc: InvoiceStatusFilter);
 
             if (danhSach.Count == 0)
             {

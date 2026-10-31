@@ -48,8 +48,49 @@ public partial class SaleCartItem : ObservableObject
         }
     }
 
-    public decimal ThanhTien => SoLuong * SanPham.GiaBan;
-    public decimal TonConLai => Math.Max(0, SanPham.TonKho - SoLuong);
+    public decimal DonGia
+    {
+        get => SanPham?.GiaBan ?? 0m;
+        set
+        {
+            if (SanPham is null)
+                return;
 
-    public void CapNhatThanhTien() => OnPropertyChanged(nameof(ThanhTien));
+            var safePrice = Math.Max(0m, value);
+            if (SanPham.GiaBan == safePrice)
+                return;
+
+            SanPham.GiaBan = safePrice;
+            OnPropertyChanged(nameof(DonGia));
+            OnPropertyChanged(nameof(ThanhTien));
+            QuantityChanged?.Invoke();
+        }
+    }
+
+    public string DonViTinh
+    {
+        get => string.IsNullOrWhiteSpace(SanPham?.DonViTinh) ? "Bó" : SanPham.DonViTinh;
+        set
+        {
+            if (SanPham is null)
+                return;
+
+            var dvt = string.IsNullOrWhiteSpace(value) ? "Bó" : value.Trim();
+            if (SanPham.DonViTinh == dvt)
+                return;
+
+            SanPham.DonViTinh = dvt;
+            OnPropertyChanged(nameof(DonViTinh));
+        }
+    }
+
+    public decimal ThanhTien => SoLuong * (SanPham?.GiaBan ?? 0m);
+    public decimal TonConLai => Math.Max(0, (SanPham?.TonKho ?? 0m) - SoLuong);
+
+    public void CapNhatThanhTien()
+    {
+        OnPropertyChanged(nameof(DonGia));
+        OnPropertyChanged(nameof(DonViTinh));
+        OnPropertyChanged(nameof(ThanhTien));
+    }
 }

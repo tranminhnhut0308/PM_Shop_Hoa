@@ -1755,7 +1755,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         try
         {
-            var invoices = await _db.GetHoaDonAsync(InvoiceSearch, InvoiceFilterDate?.Date);
+            var invoices = await _db.GetHoaDonAsync(InvoiceSearch, InvoiceFilterDate?.Date, trangThaiLoc: InvoiceStatusFilter);
 
             HoaDons.Clear();
 
@@ -3062,7 +3062,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             HoaDons.Clear();
             var ngay = InvoiceFilterDate?.Date;   // null = không lọc ngày (nếu sau này muốn)
-            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, ngay))
+            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, ngay, trangThaiLoc: InvoiceStatusFilter))
                 HoaDons.Add(item);
             StatusMessage = $"Tìm thấy {HoaDons.Count} hóa đơn";
         }
@@ -3076,6 +3076,7 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task ClearInvoiceSearchAsync()
     {
         InvoiceSearch = "";
+        InvoiceStatusFilter = "TAT_CA";
         // Giữ nguyên ngày đang chọn; nếu muốn về hôm nay thì bỏ comment dòng dưới:
         // InvoiceFilterDate = DateTimeOffset.Now.Date;
 
@@ -3083,7 +3084,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             HoaDons.Clear();
             var ngay = InvoiceFilterDate?.Date;
-            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, ngay))
+            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, ngay, trangThaiLoc: InvoiceStatusFilter))
                 HoaDons.Add(item);
             StatusMessage = $"Đã tải {HoaDons.Count} hóa đơn";
         }
@@ -3497,6 +3498,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         SaleMaHoaDonHienThi = "";
         IsThanhToanDangXuLy = false;
+        XoaLienKetHoaDonGocBiHuy();
     }
 
     /// <summary>
@@ -5841,6 +5843,8 @@ public partial class MainWindowViewModel : ObservableObject
         var customerName = customer?.TenKhachHang ?? "Khách lẻ";
         var discountSnapshot = SaleDiscountAmount;
         var cashSnapshot = TienKhachDua;
+        var hoaDonGocIdSnapshot = _hoaDonGocBiHuyId;
+        var maHoaDonGocSnapshot = _maHoaDonGocBiHuy;
 
         // 2b. Khách lẻ không được phép mua chịu: bắt buộc thanh toán đủ trước khi
         // hoàn tất. Kiểm tra bằng số tiền thực tế (decimal) chứ không chỉ dựa vào
@@ -5920,7 +5924,9 @@ public partial class MainWindowViewModel : ObservableObject
                 ghiChu: SaleGhiChu,
                 soDienThoai: SaleCustomerPhone,
                 diaChi: diaChiDayDu,                 // ← dùng bản đã ghép
-                inKemThongTin: SaleInKemSdtDiaChi);
+                inKemThongTin: SaleInKemSdtDiaChi,
+                hoaDonGocId: hoaDonGocIdSnapshot,
+                maHoaDonGoc: maHoaDonGocSnapshot);
         }
         catch (Exception ex)
         {
@@ -5975,7 +5981,7 @@ public partial class MainWindowViewModel : ObservableObject
             // dùng vừa sửa ở màn "Thông tin tiệm" cũng thấy ngay ở hóa đơn này.
             receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
 
-            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync);
+            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync, XuLySauKhiHuyHoaDonAsync);
             await invoiceWindow.ShowDialog(owner);
         }
         catch (Exception ex)
@@ -6034,7 +6040,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
 
-            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync);
+            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync, XuLySauKhiHuyHoaDonAsync);
             await invoiceWindow.ShowDialog(OwnerWindow);
         }
         catch (Exception ex)
@@ -6592,8 +6598,8 @@ public partial class MainWindowViewModel : ObservableObject
     // Hóa đơn
     public bool CanViewInvoiceDetail => CoQuyen(PermissionKeys.InvoicesDetail);
     public bool CanCreateInvoice => CoQuyen(PermissionKeys.InvoicesCreate);
-    public bool CanEditInvoice => CoQuyen(PermissionKeys.InvoicesEdit);
-    public bool CanCancelInvoice => CoQuyen(PermissionKeys.InvoicesCancel);
+    public bool CanEditInvoice => false;
+    public bool CanCancelInvoice => CoQuyen(PermissionKeys.InvoicesCancel) || CoQuyen(PermissionKeys.SalesCancel);
     public bool CanDeleteInvoice => CoQuyen(PermissionKeys.InvoicesDelete);
     public bool CanPrintInvoice => CoQuyen(PermissionKeys.InvoicesPrint);
     public bool CanImportInvoice => CoQuyen(PermissionKeys.InvoicesImport);

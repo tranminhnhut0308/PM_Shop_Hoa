@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -13,8 +14,135 @@ namespace ShopHoa.Services;
 
 public sealed partial class DatabaseService
 {
+    public const string TrangThaiHoaDonHoanThanh = "HOAN_THANH";
+    public const string TrangThaiHoaDonDaHuy = "DA_HUY";
+
     private bool _daDamBaoBangLichSuChinhSuaHoaDon;
     private readonly SemaphoreSlim _khoaDamBaoBangLichSuChinhSuaHoaDon = new(1, 1);
+
+    private bool _daDamBaoSchemaHuyHoaDon;
+    private readonly SemaphoreSlim _khoaDamBaoSchemaHuyHoaDon = new(1, 1);
+    private readonly SemaphoreSlim _khoaXuLyHuyHoaDon = new(1, 1);
+
+    public static bool CoQuyenHuyHoaDonHienTai()
+        => Quyen.HasAnyPermission(
+            Session.CurrentUser,
+            PermissionKeys.InvoicesCancel,
+            PermissionKeys.SalesCancel);
+
+    private static void KiemTraQuyenHuyHoaDon()
+    {
+        if (!CoQuyenHuyHoaDonHienTai())
+        {
+            throw new UnauthorizedAccessException("Bạn không có quyền hủy hóa đơn bán hàng.");
+        }
+    }
+
+    public static bool LaTrangThaiHoaDonDaHuy(string? trangThai)
+        => string.Equals(trangThai, TrangThaiHoaDonDaHuy, StringComparison.OrdinalIgnoreCase)
+           || string.Equals(trangThai, "HUY", StringComparison.OrdinalIgnoreCase);
+
+    public async Task<bool> EnsureHuyHoaDonSchemaAsync()
+    {
+        if (_daDamBaoSchemaHuyHoaDon)
+            return true;
+
+        await _khoaDamBaoSchemaHuyHoaDon.WaitAsync();
+        try
+        {
+            if (_daDamBaoSchemaHuyHoaDon)
+                return true;
+
+            await using var connection = await OpenAsync();
+
+            var existingCols = (await connection.QueryAsync<string>(
+                """
+                SELECT LOWER(COLUMN_NAME)
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'hoa_don_ban_hang';
+                """)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var alterClauses = new List<string>();
+
+            void AddColIfMissing(string colName, string definition)
+            {
+                if (!existingCols.Contains(colName))
+                    alterClauses.Add($"ADD COLUMN `{colName}` {definition}");
+            }
+
+            AddColIfMissing("ly_do_huy", "TEXT NULL");
+            AddColIfMissing("nguoi_huy_id", "INT UNSIGNED NULL");
+            AddColIfMissing("ten_nguoi_huy", "VARCHAR(150) NULL");
+            AddColIfMissing("thoi_gian_huy", "DATETIME NULL");
+            AddColIfMissing("trang_thai_giao_hang_khi_huy", "VARCHAR(50) NULL");
+            AddColIfMissing("da_hoan_kho", "TINYINT(1) NOT NULL DEFAULT 0");
+            AddColIfMissing("phuong_an_tien_khi_huy", "VARCHAR(50) NULL");
+            AddColIfMissing("so_tien_hoan", "DECIMAL(15, 2) NOT NULL DEFAULT 0.00");
+            AddColIfMissing("ma_phieu_chi_hoan", "VARCHAR(50) NULL");
+            AddColIfMissing("hoa_don_goc_id", "INT UNSIGNED NULL");
+            AddColIfMissing("ma_hoa_don_goc", "VARCHAR(50) NULL");
+            AddColIfMissing("hoa_don_thay_the_id", "INT UNSIGNED NULL");
+            AddColIfMissing("ma_hoa_don_thay_the", "VARCHAR(50) NULL");
+
+            if (alterClauses.Count > 0)
+            {
+                var alterSql = $"ALTER TABLE `hoa_don_ban_hang` {string.Join(", ", alterClauses)};";
+                await connection.ExecuteAsync(alterSql);
+            }
+
+            await connection.ExecuteAsync(
+                """
+                CREATE TABLE IF NOT EXISTS `lich_su_huy_hoa_don` (
+                    `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    `hoa_don_id` INT UNSIGNED NOT NULL,
+                    `ma_hoa_don` VARCHAR(50) NOT NULL,
+                    `khach_hang_id` INT UNSIGNED NULL,
+                    `ten_khach_hang` VARCHAR(255) NULL,
+                    `tong_tien_hoa_don` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+                    `so_tien_da_thanh_toan` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+                    `cong_no_khi_huy` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+                    `trang_thai_giao_hang` VARCHAR(50) NOT NULL DEFAULT 'CHUA_GIAO',
+                    `da_hoan_kho` TINYINT(1) NOT NULL DEFAULT 0,
+                    `phuong_an_tien` VARCHAR(50) NOT NULL DEFAULT 'KHONG_CO',
+                    `so_tien_hoan` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+                    `phuong_thuc_hoan` VARCHAR(50) NULL,
+                    `ma_phieu_chi_hoan` VARCHAR(50) NULL,
+                    `che_do_huy` VARCHAR(50) NOT NULL DEFAULT 'CHI_HUY',
+                    `hoa_don_thay_the_id` INT UNSIGNED NULL,
+                    `ma_hoa_don_thay_the` VARCHAR(50) NULL,
+                    `ly_do_huy` TEXT NOT NULL,
+                    `nguoi_huy_id` INT UNSIGNED NULL,
+                    `ten_nguoi_huy` VARCHAR(150) NULL,
+                    `thoi_gian_huy` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `du_lieu_snapshot` LONGTEXT NULL,
+                    INDEX `idx_lshhd_hoa_don_id` (`hoa_don_id`),
+                    INDEX `idx_lshhd_ma_hoa_don` (`ma_hoa_don`),
+                    INDEX `idx_lshhd_thoi_gian_huy` (`thoi_gian_huy`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                """);
+
+            // Đảm bảo nhóm chi phí hoàn tiền khách hàng có sẵn trong nhom_chi_phi
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO nhom_chi_phi (ma_nhom, ten_nhom, ghi_chu, trang_thai)
+                SELECT 'HOAN_TIEN_KHACH', 'Hoàn tiền khách hàng', 'Hoàn tiền khi hủy hóa đơn bán hàng', 1
+                WHERE NOT EXISTS (SELECT 1 FROM nhom_chi_phi WHERE ma_nhom = 'HOAN_TIEN_KHACH');
+                """);
+
+            _daDamBaoSchemaHuyHoaDon = true;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("EnsureHuyHoaDonSchemaAsync error", ex);
+            return false;
+        }
+        finally
+        {
+            _khoaDamBaoSchemaHuyHoaDon.Release();
+        }
+    }
 
     public async Task<bool> EnsureLichSuChinhSuaHoaDonTableAsync()
     {
@@ -70,9 +198,7 @@ public sealed partial class DatabaseService
         catch (Exception ex)
         {
             SafeLog.WriteError("EnsureLichSuChinhSuaHoaDonTableAsync error", ex);
-            throw new InvalidOperationException(
-                "Không thể chuẩn bị bảng lịch sử chỉnh sửa hóa đơn. Vui lòng kiểm tra quyền database.",
-                ex);
+            return false;
         }
         finally
         {
@@ -95,66 +221,107 @@ public sealed partial class DatabaseService
             .ToList();
     }
 
-    public async Task<HoaDonEditRequest?> GetHoaDonDeChinhSuaAsync(string maHoaDon)
+    /// <summary>
+    /// KHÓA NGHIỆP VỤ: Không cho phép chỉnh sửa trực tiếp hóa đơn đã tạo.
+    /// Mọi lời gọi vào phương thức này đều bị chặn ngay tại tầng Service.
+    /// </summary>
+    public Task<HoaDonEditRequest?> GetHoaDonDeChinhSuaAsync(string maHoaDon)
     {
-        Quyen.RequirePermission(
-            Session.CurrentUser,
-            PermissionKeys.InvoicesEdit,
-            "Bạn không có quyền chỉnh sửa hóa đơn bán hàng.");
+        throw new InvalidOperationException(
+            "Chức năng chỉnh sửa trực tiếp hóa đơn đã bị khóa theo quy định nghiệp vụ. " +
+            "Khi phát hiện hóa đơn sai, vui lòng hủy hóa đơn cũ và tạo lại hóa đơn mới.");
+    }
+
+    /// <summary>
+    /// KHÓA NGHIỆP VỤ: Không cho phép ghi đè / sửa trực tiếp dữ liệu hóa đơn cũ.
+    /// Mọi lời gọi vào phương thức này đều bị chặn ngay tại tầng Service.
+    /// </summary>
+    public Task<HoaDonBanHangReceipt> LuuChinhSuaHoaDonAsync(HoaDonEditRequest req)
+    {
+        throw new InvalidOperationException(
+            "Chức năng chỉnh sửa trực tiếp hóa đơn đã bị khóa theo quy định nghiệp vụ. " +
+            "Hóa đơn cũ chỉ được giữ nguyên hoặc chuyển sang trạng thái Đã hủy. " +
+            "Muốn thay đổi nội dung đơn hàng phải hủy hóa đơn cũ và tạo hóa đơn mới.");
+    }
+
+    /// <summary>
+    /// Tải thông tin hóa đơn để hiển thị lên hộp thoại Xác nhận hủy hóa đơn.
+    /// </summary>
+    public async Task<ThongTinXacNhanHuyHoaDon> GetThongTinXacNhanHuyHoaDonAsync(string maHoaDon)
+    {
+        KiemTraQuyenHuyHoaDon();
 
         if (string.IsNullOrWhiteSpace(maHoaDon))
-            return null;
+            throw new InvalidOperationException("Thiếu mã hóa đơn cần hủy.");
 
-        await EnsureHoaDonContactColumnsAsync();
+        var maCanTim = maHoaDon.Trim();
+
+        await EnsureHuyHoaDonSchemaAsync();
+        var coCotContact = await EnsureHoaDonContactColumnsAsync();
+        var coCotPhieuQuy = await EnsurePhieuQuyHoaDonColumnsAsync();
+        var coCotLoaiPhieu = await EnsurePhieuQuyLoaiPhieuColumnAsync();
+
         await using var connection = await OpenAsync();
 
-        var header = await connection.QuerySingleOrDefaultAsync<HoaDonEditHeaderRow>(
-            """
+        var contactSelect = coCotContact
+            ? """
+              COALESCE(hd.so_dien_thoai, kh.so_dien_thoai, '') AS SoDienThoai,
+              COALESCE(hd.dia_chi, kh.dia_chi, '')             AS DiaChi,
+              COALESCE(hd.in_kem_thong_tin, 0)                 AS InKemThongTin
+              """
+            : """
+              COALESCE(kh.so_dien_thoai, '')                   AS SoDienThoai,
+              COALESCE(kh.dia_chi, '')                         AS DiaChi,
+              0                                                AS InKemThongTin
+              """;
+
+        var header = await connection.QueryFirstOrDefaultAsync<HoaDonHuyHeaderRow>(
+            $"""
             SELECT
                 hd.id AS HoaDonId,
                 hd.ma_hoa_don AS MaHoaDon,
                 hd.chi_nhanh_id AS ChiNhanhId,
-                DATE_FORMAT(hd.ngay_cap_nhat, '%Y-%m-%d %H:%i:%s') AS PhienBan,
                 hd.khach_hang_id AS KhachHangId,
+                COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
                 COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
-                COALESCE(hd.so_dien_thoai, kh.so_dien_thoai, '') AS SoDienThoai,
-                COALESCE(hd.dia_chi, kh.dia_chi, '') AS DiaChi,
+                {contactSelect},
                 hd.thoi_gian_ban AS ThoiGianBan,
                 hd.tong_tien_hang AS TongTienHang,
                 hd.giam_gia AS GiamGia,
+                hd.thu_khac AS ThuKhac,
                 hd.khach_can_tra AS KhachCanTra,
                 hd.khach_da_thanh_toan AS KhachDaThanhToan,
                 hd.con_no AS ConNo,
                 hd.cong_no_da_ghi_nhan AS CongNoDaGhiNhan,
+                hd.trang_thai_thanh_toan AS TrangThaiThanhToan,
                 hd.trang_thai_hoa_don AS TrangThaiHoaDon,
-                hd.ghi_chu AS GhiChu,
-                (
-                    SELECT COUNT(*)
-                    FROM thanh_toan tt
-                    WHERE tt.hoa_don_id = hd.id
-                ) AS SoLanThanhToan
+                hd.ghi_chu AS GhiChu
             FROM hoa_don_ban_hang hd
             LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
             WHERE hd.ma_hoa_don = @MaHoaDon
             LIMIT 1;
             """,
-            new { MaHoaDon = maHoaDon.Trim() });
+            new { MaHoaDon = maCanTim });
 
         if (header is null)
-            return null;
+            throw new InvalidOperationException($"Không tìm thấy hóa đơn {maCanTim} trong hệ thống.");
 
-        var items = (await connection.QueryAsync<HoaDonItemEditModel>(
+        if (LaTrangThaiHoaDonDaHuy(header.TrangThaiHoaDon))
+            throw new InvalidOperationException($"Hóa đơn {maCanTim} đã ở trạng thái Đã hủy, không thể hủy lại.");
+
+        var items = (await connection.QueryAsync<ChiTietSanPhamBanSaoHoaDon>(
             """
             SELECT
                 ct.id AS Id,
                 ct.san_pham_id AS SanPhamId,
                 COALESCE(ct.ma_san_pham, '') AS MaSanPham,
                 ct.ten_san_pham AS TenSanPham,
-                COALESCE(ct.don_vi_tinh, '') AS DonViTinh,
+                COALESCE(NULLIF(TRIM(ct.don_vi_tinh), ''), 'Bó') AS DonViTinh,
                 ct.so_luong AS SoLuong,
                 ct.don_gia AS DonGia,
-                ct.giam_gia AS GiamGia,
-                ct.gia_von AS GiaVon,
+                COALESCE(ct.giam_gia, 0) AS GiamGia,
+                ct.thanh_tien AS ThanhTien,
+                COALESCE(ct.gia_von, 0) AS GiaVon,
                 ct.ghi_chu AS GhiChu
             FROM chi_tiet_hoa_don_ban_hang ct
             WHERE ct.hoa_don_id = @HoaDonId
@@ -162,702 +329,1143 @@ public sealed partial class DatabaseService
             """,
             new { HoaDonId = header.HoaDonId })).ToList();
 
-        foreach (var item in items)
-            item.SoLuongBanDau = item.SoLuong;
+        var phieuThus = new List<PhieuQuyLienQuanHoaDonRow>();
+        if (coCotPhieuQuy)
+        {
+            var loaiPhieuCol = coCotLoaiPhieu ? "COALESCE(pc.loai_phieu, 'THU')" : "'THU'";
+            phieuThus = (await connection.QueryAsync<PhieuQuyLienQuanHoaDonRow>(
+                $"""
+                SELECT
+                    pc.id AS Id,
+                    pc.ma_phieu_chi AS MaPhieuChi,
+                    {loaiPhieuCol} AS LoaiPhieu,
+                    pc.so_tien AS SoTien,
+                    COALESCE(pc.phuong_thuc, 'TIEN_MAT') AS PhuongThuc,
+                    COALESCE(pc.noi_dung, '') AS NoiDung,
+                    pc.ghi_chu AS GhiChu,
+                    pc.thoi_gian_chi AS ThoiGianChi,
+                    pc.trang_thai AS TrangThai
+                FROM phieu_chi pc
+                WHERE (pc.hoa_don_ban_hang_id = @HoaDonId OR pc.ma_hoa_don = @MaHoaDon)
+                  AND pc.trang_thai = 'HOAN_THANH'
+                ORDER BY pc.thoi_gian_chi ASC, pc.id ASC;
+                """,
+                new { HoaDonId = header.HoaDonId, MaHoaDon = header.MaHoaDon })).ToList();
+        }
 
-        return new HoaDonEditRequest
+        // Kiểm tra thông tin giao hàng nếu có trong bảng giao_hang
+        var trangThaiGiaoHang = "Đã xuất kho khi bán hàng";
+        var daGiaoHang = true;
+        try
+        {
+            var ghTrangThai = await connection.ExecuteScalarAsync<string?>(
+                """
+                SELECT trang_thai
+                FROM giao_hang
+                WHERE hoa_don_id = @HoaDonId
+                ORDER BY id DESC
+                LIMIT 1;
+                """,
+                new { HoaDonId = header.HoaDonId });
+
+            if (!string.IsNullOrWhiteSpace(ghTrangThai))
+            {
+                if (string.Equals(ghTrangThai, "CHO_GIAO", StringComparison.OrdinalIgnoreCase))
+                {
+                    daGiaoHang = false;
+                    trangThaiGiaoHang = "Chờ giao hàng (Chưa giao)";
+                }
+                else if (string.Equals(ghTrangThai, "DANG_GIAO", StringComparison.OrdinalIgnoreCase))
+                {
+                    daGiaoHang = true;
+                    trangThaiGiaoHang = "Đang giao hàng";
+                }
+                else if (string.Equals(ghTrangThai, "DA_GIAO", StringComparison.OrdinalIgnoreCase))
+                {
+                    daGiaoHang = true;
+                    trangThaiGiaoHang = "Đã giao hàng hoàn tất";
+                }
+            }
+        }
+        catch
+        {
+            // Bảng giao_hang có thể không tồn tại ở một số bản cài đặt cũ
+        }
+
+        return new ThongTinXacNhanHuyHoaDon
         {
             HoaDonId = header.HoaDonId,
             MaHoaDon = header.MaHoaDon,
-            PhienBan = header.PhienBan,
-            LaHoaDonTongHop = string.Equals(
-                header.TrangThaiHoaDon,
-                "TONG_HOP",
-                StringComparison.OrdinalIgnoreCase),
-            ThoiGianBan = header.ThoiGianBan,
+            ChiNhanhId = header.ChiNhanhId == 0 ? 1u : header.ChiNhanhId,
             KhachHangId = header.KhachHangId,
+            MaKhachHang = header.MaKhachHang,
             TenKhachHang = header.TenKhachHang,
             SoDienThoai = header.SoDienThoai,
             DiaChi = header.DiaChi,
-            GiamGiaHoaDon = header.GiamGia,
-            GhiChu = header.GhiChu,
+            InKemThongTin = header.InKemThongTin == 1,
+            ThoiGianBan = header.ThoiGianBan,
+            TongTienHang = header.TongTienHang,
+            GiamGia = header.GiamGia,
+            ThuKhac = header.ThuKhac,
+            KhachCanTra = header.KhachCanTra,
             KhachDaThanhToan = header.KhachDaThanhToan,
             ConNo = header.ConNo,
-            SoLanThanhToan = header.SoLanThanhToan,
-            CongNoDaGhiNhan = header.CongNoDaGhiNhan,
-            Items = items
+            CongNoDaGhiNhan = header.CongNoDaGhiNhan == 1,
+            TrangThaiThanhToan = header.TrangThaiThanhToan,
+            TrangThaiHoaDon = header.TrangThaiHoaDon,
+            GhiChu = header.GhiChu,
+            DaGiaoHang = daGiaoHang,
+            TrangThaiGiaoHangMoTa = trangThaiGiaoHang,
+            Items = items,
+            PhieuThus = phieuThus
         };
     }
 
-    public async Task<HoaDonBanHangReceipt> LuuChinhSuaHoaDonAsync(HoaDonEditRequest req)
+    /// <summary>
+    /// Thực hiện hủy hóa đơn bán hàng trong MỘT transaction duy nhất:
+    /// - Chặn hủy trùng / hủy lại hóa đơn đã hủy (SELECT ... FOR UPDATE).
+    /// - Xử lý tồn kho: hoàn tác tồn kho nếu chưa xuất hàng hoặc đã nhận lại hàng trả về; không tự cộng kho nếu khách vẫn giữ hàng.
+    /// - Xử lý công nợ khách hàng: hoàn tác công nợ còn lại, hỗ trợ chuyển tiền đã thu sang khoản khách trả trước.
+    /// - Xử lý sổ quỹ: giữ nguyên phiếu thu cũ, tạo phiếu chi hoàn tiền (PC...) liên kết với hóa đơn gốc khi chọn hoàn tiền.
+    /// - Chuyển trạng thái hóa đơn sang DA_HUY, lưu lý do, người hủy, thời gian hủy và lịch sử hủy bất biến.
+    /// </summary>
+    public async Task<HuyHoaDonResult> HuyHoaDonBanHangAsync(HuyHoaDonRequest req)
     {
-        Quyen.RequirePermission(
-            Session.CurrentUser,
-            PermissionKeys.InvoicesEdit,
-            "Bạn không có quyền chỉnh sửa hóa đơn bán hàng.");
+        KiemTraQuyenHuyHoaDon();
 
         if (req is null)
-            throw new InvalidOperationException("Dữ liệu chỉnh sửa hóa đơn không hợp lệ.");
+            throw new InvalidOperationException("Yêu cầu hủy hóa đơn không hợp lệ.");
 
-        if (string.IsNullOrWhiteSpace(req.MaHoaDon))
-            throw new InvalidOperationException("Mã hóa đơn không hợp lệ.");
+        var maCanTim = (req.MaHoaDon ?? "").Trim();
+        if (maCanTim.Length == 0 && req.HoaDonId == 0)
+            throw new InvalidOperationException("Thiếu mã hóa đơn cần hủy.");
 
-        var lyDo = (req.LyDoChinhSua ?? "").Trim();
+        var lyDo = (req.LyDoHuy ?? "").Trim();
         if (lyDo.Length == 0)
-            throw new InvalidOperationException("Vui lòng nhập lý do chỉnh sửa hóa đơn.");
+            throw new InvalidOperationException("Bắt buộc phải nhập lý do hủy hóa đơn.");
 
         if (lyDo.Length > 500)
-            throw new InvalidOperationException("Lý do chỉnh sửa không được vượt quá 500 ký tự.");
+            throw new InvalidOperationException("Lý do hủy không được vượt quá 500 ký tự.");
 
-        if (req.Items is null || req.Items.Count == 0)
-            throw new InvalidOperationException("Hóa đơn phải có ít nhất 1 sản phẩm.");
-
-        var items = new List<HoaDonItemEditModel>(req.Items.Count);
-
-        foreach (var item in req.Items)
+        if (req.TrangThaiGiaoHang == TrangThaiGiaoHangKhiHuy.DaGiaoDaNhanLaiHang
+            && !req.XacNhanDaNhanLaiHangTraVe)
         {
-            if (item is null || item.SanPhamId == 0)
-                throw new InvalidOperationException("Có dòng sản phẩm chưa được chọn.");
-
-            if (item.SoLuong <= 0)
-                throw new InvalidOperationException(
-                    $"Số lượng của \"{item.TenSanPham}\" phải lớn hơn 0.");
-
-            if (item.SoLuong > 999999999999.999m)
-                throw new InvalidOperationException(
-                    $"Số lượng của \"{item.TenSanPham}\" vượt quá giới hạn cho phép.");
-
-            if (item.DonGia <= 0 || item.DonGia > MoneyInput.GiaTienToiDa)
-                throw new InvalidOperationException(
-                    $"Đơn giá của \"{item.TenSanPham}\" phải lớn hơn 0 và trong giới hạn cho phép.");
-
-            if (item.GiamGia < 0 || item.GiamGia > item.SoLuong * item.DonGia)
-                throw new InvalidOperationException(
-                    $"Giảm giá của \"{item.TenSanPham}\" không hợp lệ.");
-
-            if (items.Any(x => x.Id > 0 && x.Id == item.Id))
-                throw new InvalidOperationException("Dữ liệu chỉnh sửa có dòng sản phẩm bị lặp.");
-
-            if (items.Any(x => x.SanPhamId == item.SanPhamId))
-                throw new InvalidOperationException(
-                    "Mỗi sản phẩm chỉ được xuất hiện một lần trên hóa đơn.");
-
-            items.Add(new HoaDonItemEditModel
-            {
-                Id = item.Id,
-                SanPhamId = item.SanPhamId,
-                MaSanPham = item.MaSanPham ?? "",
-                TenSanPham = item.TenSanPham ?? "",
-                DonViTinh = item.DonViTinh ?? "",
-                SoLuong = Math.Round(item.SoLuong, 3, MidpointRounding.AwayFromZero),
-                DonGia = Math.Round(item.DonGia, 2, MidpointRounding.AwayFromZero),
-                GiamGia = Math.Round(item.GiamGia, 2, MidpointRounding.AwayFromZero),
-                GiaVon = item.GiaVon,
-                GhiChu = item.GhiChu
-            });
+            throw new InvalidOperationException(
+                "Đối với hóa đơn đã giao hàng, bạn phải tích xác nhận 'Đã nhận lại hàng trả về kho' trước khi cộng lại tồn kho.");
         }
 
-        var daCoBangLichSu = await EnsureLichSuChinhSuaHoaDonTableAsync();
-        if (!daCoBangLichSu)
-            throw new InvalidOperationException("Không thể chuẩn bị bảng lịch sử chỉnh sửa hóa đơn.");
+        // Chuẩn bị toàn bộ schema trước khi mở transaction để tránh implicit commit của DDL trong MySQL
+        await EnsureHuyHoaDonSchemaAsync();
+        var coCotContact = await EnsureHoaDonContactColumnsAsync();
+        var coCotPhieuQuy = await EnsurePhieuQuyHoaDonColumnsAsync();
+        var coCotLoaiPhieu = await EnsurePhieuQuyLoaiPhieuColumnAsync();
+        var coCotExtraPhieuQuy = await EnsurePhieuQuyExtraColumnsAsync();
+        await EnsureNhomChiPhiMacDinhAsync();
+        await EnsureBangLichSuThanhToanKhachHangAsync();
 
-        await EnsureHoaDonContactColumnsAsync();
-
-        var now = DateTime.Now;
-        var user = Session.CurrentUser;
-        var userId = user?.Id;
-        var userName = string.IsNullOrWhiteSpace(user?.HoTen)
-            ? (user?.TenDangNhap ?? "Hệ thống")
-            : user.HoTen;
-
-        await using var connection = await OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-        var daCommit = false;
-
+        await _khoaXuLyHuyHoaDon.WaitAsync();
         try
         {
-            var oldHd = await connection.QuerySingleOrDefaultAsync<HoaDonEditHeaderRow>(
-                """
-                SELECT
-                    hd.id AS HoaDonId,
-                    hd.ma_hoa_don AS MaHoaDon,
-                    hd.chi_nhanh_id AS ChiNhanhId,
-                    DATE_FORMAT(hd.ngay_cap_nhat, '%Y-%m-%d %H:%i:%s') AS PhienBan,
-                    hd.khach_hang_id AS KhachHangId,
-                    COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
-                    COALESCE(hd.so_dien_thoai, kh.so_dien_thoai, '') AS SoDienThoai,
-                    COALESCE(hd.dia_chi, kh.dia_chi, '') AS DiaChi,
-                    hd.thoi_gian_ban AS ThoiGianBan,
-                    hd.tong_tien_hang AS TongTienHang,
-                    hd.giam_gia AS GiamGia,
-                    hd.khach_can_tra AS KhachCanTra,
-                    hd.khach_da_thanh_toan AS KhachDaThanhToan,
-                    hd.con_no AS ConNo,
-                    hd.cong_no_da_ghi_nhan AS CongNoDaGhiNhan,
-                    hd.trang_thai_hoa_don AS TrangThaiHoaDon,
-                    hd.ghi_chu AS GhiChu,
-                    (
-                        SELECT COUNT(*)
-                        FROM thanh_toan tt
-                        WHERE tt.hoa_don_id = hd.id
-                    ) AS SoLanThanhToan
-                FROM hoa_don_ban_hang hd
-                LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
-                WHERE hd.id = @HoaDonId
-                  AND hd.ma_hoa_don = @MaHoaDon
-                LIMIT 1
-                FOR UPDATE;
-                """,
-                new
-                {
-                    HoaDonId = req.HoaDonId,
-                    MaHoaDon = req.MaHoaDon.Trim()
-                },
-                transaction);
+            var now = DateTime.Now;
+            var userId = Session.CurrentUser?.Id;
+            var tenNguoiHuy = string.IsNullOrWhiteSpace(Session.CurrentUser?.HoTen)
+                ? (Session.CurrentUser?.TenDangNhap ?? "Hệ thống")
+                : Session.CurrentUser!.HoTen.Trim();
 
-            if (oldHd is null)
-                throw new InvalidOperationException($"Không tìm thấy hóa đơn {req.MaHoaDon} để chỉnh sửa.");
+            await using var connection = await OpenAsync();
+            await using var transaction = await connection.BeginTransactionAsync();
 
-            if (string.Equals(oldHd.TrangThaiHoaDon, "TONG_HOP", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException(
-                    "Hóa đơn tổng hợp không được chỉnh sửa. Vui lòng chỉnh sửa hóa đơn gốc trước khi tổng hợp.");
+            var daCommit = false;
 
-            if (!string.Equals(oldHd.PhienBan, req.PhienBan, StringComparison.Ordinal))
-                throw new InvalidOperationException(
-                    "Hóa đơn đã được thay đổi bởi người khác. Vui lòng đóng cửa sổ chỉnh sửa và mở lại để xem dữ liệu mới nhất.");
-
-            var soPhieuTraHang = await connection.ExecuteScalarAsync<int>(
-                """
-                SELECT COUNT(*)
-                FROM phieu_tra_hang
-                WHERE hoa_don_id = @HoaDonId
-                  AND trang_thai = 'HOAN_THANH';
-                """,
-                new { HoaDonId = oldHd.HoaDonId },
-                transaction);
-
-            if (soPhieuTraHang > 0)
-                throw new InvalidOperationException(
-                    "Hóa đơn đã phát sinh phiếu trả hàng hoàn thành nên không thể chỉnh sửa. " +
-                    "Vui lòng xử lý phiếu trả hàng trước.");
-
-            var oldItems = (await connection.QueryAsync<HoaDonItemEditModel>(
-                """
-                SELECT
-                    ct.id AS Id,
-                    ct.san_pham_id AS SanPhamId,
-                    COALESCE(ct.ma_san_pham, '') AS MaSanPham,
-                    ct.ten_san_pham AS TenSanPham,
-                    COALESCE(ct.don_vi_tinh, '') AS DonViTinh,
-                    ct.so_luong AS SoLuong,
-                    ct.don_gia AS DonGia,
-                    ct.giam_gia AS GiamGia,
-                    ct.gia_von AS GiaVon,
-                    ct.ghi_chu AS GhiChu
-                FROM chi_tiet_hoa_don_ban_hang ct
-                WHERE ct.hoa_don_id = @HoaDonId
-                ORDER BY ct.id
-                FOR UPDATE;
-                """,
-                new { HoaDonId = oldHd.HoaDonId },
-                transaction)).ToList();
-
-            var oldItemsById = oldItems.ToDictionary(x => x.Id);
-
-            foreach (var item in items.Where(x => x.Id > 0))
+            try
             {
-                if (!oldItemsById.TryGetValue(item.Id, out var oldItem))
-                    throw new InvalidOperationException(
-                        "Một dòng sản phẩm không còn thuộc hóa đơn này. Vui lòng mở lại cửa sổ chỉnh sửa.");
+                var contactSelect = coCotContact
+                    ? """
+                      COALESCE(hd.so_dien_thoai, kh.so_dien_thoai, '') AS SoDienThoai,
+                      COALESCE(hd.dia_chi, kh.dia_chi, '')             AS DiaChi,
+                      COALESCE(hd.in_kem_thong_tin, 0)                 AS InKemThongTin
+                      """
+                    : """
+                      COALESCE(kh.so_dien_thoai, '')                   AS SoDienThoai,
+                      COALESCE(kh.dia_chi, '')                         AS DiaChi,
+                      0                                                AS InKemThongTin
+                      """;
 
-                if (oldItem.SanPhamId != item.SanPhamId)
-                    throw new InvalidOperationException(
-                        "Không thể đổi sản phẩm của dòng đã có. Vui lòng xóa dòng cũ và thêm sản phẩm mới.");
-            }
+                var whereSql = req.HoaDonId > 0
+                    ? "WHERE hd.id = @HoaDonId"
+                    : "WHERE hd.ma_hoa_don = @MaHoaDon";
 
-            var productIds = oldItems.Select(x => x.SanPhamId)
-                .Concat(items.Select(x => x.SanPhamId))
-                .Distinct()
-                .ToList();
-
-            var productRows = (await connection.QueryAsync<HoaDonEditProductRow>(
-                """
-                SELECT
-                    sp.id AS Id,
-                    sp.ma_san_pham AS MaSanPham,
-                    sp.ten_san_pham AS TenSanPham,
-                    dvt.ten_don_vi AS DonViTinh,
-                    sp.gia_von AS GiaVon
-                FROM san_pham sp
-                LEFT JOIN don_vi_tinh dvt ON dvt.id = sp.don_vi_tinh_id
-                WHERE sp.id IN @Ids;
-                """,
-                new { Ids = productIds },
-                transaction)).ToDictionary(x => x.Id);
-
-            var newItems = new List<HoaDonItemEditModel>(items.Count);
-
-            foreach (var item in items)
-            {
-                oldItemsById.TryGetValue(item.Id, out var oldItem);
-                productRows.TryGetValue(item.SanPhamId, out var product);
-
-                if (oldItem is null && product is null)
-                    throw new InvalidOperationException(
-                        $"Sản phẩm có mã #{item.SanPhamId} không còn tồn tại trong hệ thống.");
-
-                var thanhTien = Math.Round(
-                    Math.Max(0, item.SoLuong * item.DonGia - item.GiamGia),
-                    2,
-                    MidpointRounding.AwayFromZero);
-
-                newItems.Add(new HoaDonItemEditModel
-                {
-                    Id = item.Id,
-                    SanPhamId = item.SanPhamId,
-                    MaSanPham = oldItem?.MaSanPham ?? product?.MaSanPham ?? item.MaSanPham ?? "",
-                    TenSanPham = oldItem?.TenSanPham ?? product?.TenSanPham ?? item.TenSanPham ?? "",
-                    DonViTinh = oldItem?.DonViTinh ?? product?.DonViTinh ?? item.DonViTinh ?? "",
-                    SoLuong = item.SoLuong,
-                    DonGia = item.DonGia,
-                    GiamGia = item.GiamGia,
-                    GiaVon = oldItem?.GiaVon ?? product?.GiaVon ?? item.GiaVon,
-                    GhiChu = oldItem?.GhiChu ?? item.GhiChu,
-                    SoLuongBanDau = oldItem?.SoLuongBanDau ?? 0
-                });
-            }
-
-            var newTongTienHang = Math.Round(
-                newItems.Sum(x => Math.Max(0, x.SoLuong * x.DonGia - x.GiamGia)),
-                2,
-                MidpointRounding.AwayFromZero);
-
-            var newGiamGia = Math.Round(req.GiamGiaHoaDon, 2, MidpointRounding.AwayFromZero);
-            if (newGiamGia < 0 || newGiamGia > newTongTienHang)
-                throw new InvalidOperationException("Giảm giá hóa đơn không hợp lệ hoặc vượt quá tổng tiền hàng.");
-
-            var newKhachCanTra = Math.Max(0, newTongTienHang - newGiamGia);
-            var khachDaThanhToan = Math.Max(0, oldHd.KhachDaThanhToan);
-            var newConNo = Math.Max(0, newKhachCanTra - khachDaThanhToan);
-            var newTraThua = Math.Max(0, khachDaThanhToan - newKhachCanTra);
-
-            var newKhachHangId = req.KhachHangId is > 0 ? req.KhachHangId : null;
-            var doiKhachHang = newKhachHangId != oldHd.KhachHangId;
-
-            if (doiKhachHang && (oldHd.SoLanThanhToan > 0 || khachDaThanhToan > 0))
-                throw new InvalidOperationException(
-                    "Không thể đổi khách hàng vì hóa đơn đã phát sinh thanh toán. " +
-                    "Vui lòng điều chỉnh công nợ theo nghiệp vụ hiện có.");
-
-            string? newTenKhachHang = null;
-            if (newKhachHangId is > 0)
-            {
-                newTenKhachHang = await connection.ExecuteScalarAsync<string?>(
-                    "SELECT ten_khach_hang FROM khach_hang WHERE id = @Id LIMIT 1;",
-                    new { Id = newKhachHangId },
+                var header = await connection.QueryFirstOrDefaultAsync<HoaDonHuyHeaderRow>(
+                    $"""
+                    SELECT
+                        hd.id AS HoaDonId,
+                        hd.ma_hoa_don AS MaHoaDon,
+                        hd.chi_nhanh_id AS ChiNhanhId,
+                        hd.khach_hang_id AS KhachHangId,
+                        COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
+                        COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
+                        {contactSelect},
+                        hd.thoi_gian_ban AS ThoiGianBan,
+                        hd.tong_tien_hang AS TongTienHang,
+                        hd.giam_gia AS GiamGia,
+                        hd.thu_khac AS ThuKhac,
+                        hd.khach_can_tra AS KhachCanTra,
+                        hd.khach_da_thanh_toan AS KhachDaThanhToan,
+                        hd.con_no AS ConNo,
+                        hd.cong_no_da_ghi_nhan AS CongNoDaGhiNhan,
+                        hd.trang_thai_thanh_toan AS TrangThaiThanhToan,
+                        hd.trang_thai_hoa_don AS TrangThaiHoaDon,
+                        hd.ghi_chu AS GhiChu
+                    FROM hoa_don_ban_hang hd
+                    LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
+                    {whereSql}
+                    LIMIT 1
+                    FOR UPDATE;
+                    """,
+                    new { req.HoaDonId, MaHoaDon = maCanTim },
                     transaction);
 
-                if (string.IsNullOrWhiteSpace(newTenKhachHang))
-                    throw new InvalidOperationException("Khách hàng được chọn không còn tồn tại trong hệ thống.");
-            }
+                if (header is null)
+                    throw new InvalidOperationException($"Không tìm thấy hóa đơn {(maCanTim.Length > 0 ? maCanTim : $"#{req.HoaDonId}")} trong database.");
 
-            if (newConNo > 0 && newKhachHangId is null)
-                throw new InvalidOperationException(
-                    $"Hóa đơn còn nợ ({newConNo:N0} đ). Khách lẻ không được phép ghi nợ. " +
-                    "Vui lòng chọn khách hàng hoặc tăng số tiền đã thanh toán.");
+                if (LaTrangThaiHoaDonDaHuy(header.TrangThaiHoaDon))
+                {
+                    throw new InvalidOperationException(
+                        $"Hóa đơn {header.MaHoaDon} đã ở trạng thái Đã hủy, không thể hủy lại.");
+                }
 
-            var oldQtyByProduct = oldItems
-                .GroupBy(x => x.SanPhamId)
-                .ToDictionary(g => g.Key, g => g.Sum(x => x.SoLuong));
+                var branchId = header.ChiNhanhId == 0
+                    ? (Session.CurrentUser?.ChiNhanhId ?? 1u)
+                    : header.ChiNhanhId;
 
-            var newQtyByProduct = newItems
-                .GroupBy(x => x.SanPhamId)
-                .ToDictionary(g => g.Key, g => g.Sum(x => x.SoLuong));
-
-            var productAdjustments = oldQtyByProduct.Keys
-                .Concat(newQtyByProduct.Keys)
-                .Distinct()
-                .OrderBy(x => x)
-                .ToList();
-
-            foreach (var productId in productAdjustments)
-            {
-                oldQtyByProduct.TryGetValue(productId, out var oldQty);
-                newQtyByProduct.TryGetValue(productId, out var newQty);
-                var deltaQty = newQty - oldQty;
-
-                if (deltaQty == 0)
-                    continue;
-
-                productRows.TryGetValue(productId, out var product);
-                var tenSanPham = newItems.FirstOrDefault(x => x.SanPhamId == productId)?.TenSanPham
-                    ?? oldItems.FirstOrDefault(x => x.SanPhamId == productId)?.TenSanPham
-                    ?? $"Sản phẩm #{productId}";
-
-                await DieuChinhTonKhoKhiSuaHoaDonAsync(
-                    connection,
-                    transaction,
-                    oldHd.ChiNhanhId,
-                    userId,
-                    oldHd.MaHoaDon,
-                    productId,
-                    tenSanPham,
-                    deltaQty,
-                    product?.GiaVon ?? 0,
-                    lyDo);
-            }
-
-            var newItemIds = newItems
-                .Where(x => x.Id > 0)
-                .Select(x => x.Id)
-                .ToHashSet();
-
-            var deleteIds = oldItems
-                .Where(x => !newItemIds.Contains(x.Id))
-                .Select(x => x.Id)
-                .ToList();
-
-            if (deleteIds.Count > 0)
-            {
-                var deleted = await connection.ExecuteAsync(
+                var items = (await connection.QueryAsync<ChiTietSanPhamBanSaoHoaDon>(
                     """
-                    DELETE FROM chi_tiet_hoa_don_ban_hang
-                    WHERE hoa_don_id = @HoaDonId
-                      AND id IN @Ids;
+                    SELECT
+                        ct.id AS Id,
+                        ct.san_pham_id AS SanPhamId,
+                        COALESCE(ct.ma_san_pham, '') AS MaSanPham,
+                        ct.ten_san_pham AS TenSanPham,
+                        COALESCE(NULLIF(TRIM(ct.don_vi_tinh), ''), 'Bó') AS DonViTinh,
+                        ct.so_luong AS SoLuong,
+                        ct.don_gia AS DonGia,
+                        COALESCE(ct.giam_gia, 0) AS GiamGia,
+                        ct.thanh_tien AS ThanhTien,
+                        COALESCE(ct.gia_von, 0) AS GiaVon,
+                        ct.ghi_chu AS GhiChu
+                    FROM chi_tiet_hoa_don_ban_hang ct
+                    WHERE ct.hoa_don_id = @HoaDonId
+                    ORDER BY ct.id
+                    FOR UPDATE;
+                    """,
+                    new { HoaDonId = header.HoaDonId },
+                    transaction)).ToList();
+
+                var laHoaDonTongHop = string.Equals(
+                    header.TrangThaiHoaDon,
+                    "TONG_HOP",
+                    StringComparison.OrdinalIgnoreCase);
+
+                // ============================================================
+                // 1. XỬ LÝ TỒN KHO KHI HỦY HÓA ĐƠN
+                // - Chưa xuất hàng: hoàn tác số lượng đã trừ kho.
+                // - Đã giao + xác nhận đã nhận lại hàng trả về: cộng lại kho.
+                // - Đã giao + khách vẫn giữ hàng: KHÔNG tự động cộng lại kho.
+                // ============================================================
+                var canHoanKho = !laHoaDonTongHop && req.TrangThaiGiaoHang switch
+                {
+                    TrangThaiGiaoHangKhiHuy.ChuaGiaoHang => true,
+                    TrangThaiGiaoHangKhiHuy.DaGiaoDaNhanLaiHang => req.XacNhanDaNhanLaiHangTraVe,
+                    TrangThaiGiaoHangKhiHuy.DaGiaoKhachVanGiuHang => false,
+                    _ => false
+                };
+
+                var tongSoLuongHoanKho = 0m;
+
+                if (canHoanKho && items.Count > 0)
+                {
+                    foreach (var item in items)
+                    {
+                        if (item.SanPhamId is null or 0 || item.SoLuong <= 0)
+                            continue;
+
+                        await HoanTacTonKhoKhiHuyHoaDonAsync(
+                            connection,
+                            transaction,
+                            branchId,
+                            userId,
+                            header.MaHoaDon,
+                            item.SanPhamId.Value,
+                            item.TenSanPham,
+                            item.SoLuong,
+                            item.GiaVon,
+                            req.TrangThaiGiaoHang,
+                            lyDo,
+                            now);
+
+                        tongSoLuongHoanKho += item.SoLuong;
+                    }
+                }
+
+                // ============================================================
+                // 2. XỬ LÝ CÔNG NỢ KHÁCH HÀNG & KHOẢN ĐÃ THANH TOÁN
+                // ============================================================
+                var congNoDaHoanTac = 0m;
+                var soTienHoanKhach = 0m;
+                var soTienChuyenTraTruoc = 0m;
+                string? maPhieuChiHoan = null;
+
+                var phuongAnTien = header.KhachDaThanhToan <= 0m
+                    ? PhuongAnXuLyTienKhiHuy.KhongCo
+                    : req.PhuongAnTien;
+
+                if (header.KhachDaThanhToan > 0m
+                    && phuongAnTien == PhuongAnXuLyTienKhiHuy.ChuyenKhoanKhachTraTruoc
+                    && (header.KhachHangId is null or 0))
+                {
+                    throw new InvalidOperationException(
+                        "Khách lẻ (không có hồ sơ khách hàng) không thể chuyển tiền đã thanh toán thành khoản trả trước. Vui lòng chọn phương án 'Hoàn tiền cho khách'.");
+                }
+
+                if (header.KhachHangId is uint khId && khId > 0)
+                {
+                    // Khóa dòng khách hàng để đồng bộ sổ cái công nợ
+                    await connection.ExecuteScalarAsync<uint?>(
+                        "SELECT id FROM khach_hang WHERE id = @Id LIMIT 1 FOR UPDATE;",
+                        new { Id = khId },
+                        transaction);
+
+                    // Nếu khách hàng chưa có dòng nào trong lich_su_cong_no_khach_hang (dữ liệu cũ/import)
+                    // nhưng đang có hóa đơn nợ, khởi tạo số dư đầu kỳ từ các hóa đơn HOAN_THANH hiện có
+                    // trước khi ghi giảm công nợ do hủy hóa đơn.
+                    var soDongLedger = await connection.ExecuteScalarAsync<long>(
+                        """
+                        SELECT COUNT(*)
+                        FROM lich_su_cong_no_khach_hang
+                        WHERE khach_hang_id = @KhachHangId;
+                        """,
+                        new { KhachHangId = khId },
+                        transaction);
+
+                    if (soDongLedger == 0)
+                    {
+                        var tongNoHoaDonHienTai = await connection.ExecuteScalarAsync<decimal>(
+                            """
+                            SELECT COALESCE(SUM(con_no), 0)
+                            FROM hoa_don_ban_hang
+                            WHERE khach_hang_id = @KhachHangId
+                              AND trang_thai_hoa_don = 'HOAN_THANH'
+                              AND cong_no_da_ghi_nhan = 1
+                              AND con_no > 0;
+                            """,
+                            new { KhachHangId = khId },
+                            transaction);
+
+                        if (tongNoHoaDonHienTai > 0)
+                        {
+                            await connection.ExecuteAsync(
+                                """
+                                INSERT INTO lich_su_cong_no_khach_hang
+                                (
+                                    khach_hang_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu,
+                                    ghi_no, ghi_co, so_du, thoi_gian, nguoi_thuc_hien_id, ghi_chu
+                                )
+                                VALUES
+                                (
+                                    @KhachHangId, @ChiNhanhId, 'GHI_NO', 'DIEU_CHINH', NULL,
+                                    @GhiNo, 0, @SoDu, @ThoiGian, NULL, @GhiChu
+                                );
+                                """,
+                                new
+                                {
+                                    KhachHangId = khId,
+                                    ChiNhanhId = branchId,
+                                    GhiNo = tongNoHoaDonHienTai,
+                                    SoDu = tongNoHoaDonHienTai,
+                                    ThoiGian = now,
+                                    GhiChu = "Số dư công nợ đầu kỳ từ các hóa đơn còn nợ hiện có."
+                                },
+                                transaction);
+                        }
+                    }
+
+                    // 2a. Hoàn tác phần công nợ còn lại của hóa đơn (nếu có)
+                    if (header.CongNoDaGhiNhan == 1 && header.ConNo > 0)
+                    {
+                        var soDuCu = await connection.ExecuteScalarAsync<decimal>(
+                            """
+                            SELECT COALESCE(SUM(ghi_no - ghi_co), 0)
+                            FROM lich_su_cong_no_khach_hang
+                            WHERE khach_hang_id = @KhachHangId
+                            FOR UPDATE;
+                            """,
+                            new { KhachHangId = khId },
+                            transaction);
+
+                        var soDuMoi = soDuCu - header.ConNo;
+
+                        await connection.ExecuteAsync(
+                            """
+                            INSERT INTO lich_su_cong_no_khach_hang
+                            (
+                                khach_hang_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu,
+                                ghi_no, ghi_co, so_du, thoi_gian, nguoi_thuc_hien_id, ghi_chu
+                            )
+                            VALUES
+                            (
+                                @KhachHangId, @ChiNhanhId, 'HUY_HOA_DON', 'HOA_DON', @MaChungTu,
+                                0, @GhiCo, @SoDu, @ThoiGian, @NguoiThucHienId, @GhiChu
+                            );
+                            """,
+                            new
+                            {
+                                KhachHangId = khId,
+                                ChiNhanhId = branchId,
+                                MaChungTu = header.MaHoaDon,
+                                GhiCo = header.ConNo,
+                                SoDu = soDuMoi,
+                                ThoiGian = now,
+                                NguoiThucHienId = userId,
+                                GhiChu = $"Hoàn tác công nợ phát sinh do hủy hóa đơn {header.MaHoaDon}. Lý do: {lyDo}"
+                            },
+                            transaction);
+
+                        congNoDaHoanTac = header.ConNo;
+                    }
+
+                    // 2b. Nếu hóa đơn đã thu tiền (> 0) và chọn chuyển sang khoản khách trả trước / giảm công nợ
+                    if (header.KhachDaThanhToan > 0 && phuongAnTien == PhuongAnXuLyTienKhiHuy.ChuyenKhoanKhachTraTruoc)
+                    {
+                        var soDuCu = await connection.ExecuteScalarAsync<decimal>(
+                            """
+                            SELECT COALESCE(SUM(ghi_no - ghi_co), 0)
+                            FROM lich_su_cong_no_khach_hang
+                            WHERE khach_hang_id = @KhachHangId
+                            FOR UPDATE;
+                            """,
+                            new { KhachHangId = khId },
+                            transaction);
+
+                        var soDuMoi = soDuCu - header.KhachDaThanhToan;
+
+                        await connection.ExecuteAsync(
+                            """
+                            INSERT INTO lich_su_cong_no_khach_hang
+                            (
+                                khach_hang_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu,
+                                ghi_no, ghi_co, so_du, thoi_gian, nguoi_thuc_hien_id, ghi_chu
+                            )
+                            VALUES
+                            (
+                                @KhachHangId, @ChiNhanhId, 'KHACH_TRA_TRUOC', 'HUY_HOA_DON', @MaChungTu,
+                                0, @GhiCo, @SoDu, @ThoiGian, @NguoiThucHienId, @GhiChu
+                            );
+                            """,
+                            new
+                            {
+                                KhachHangId = khId,
+                                ChiNhanhId = branchId,
+                                MaChungTu = header.MaHoaDon,
+                                GhiCo = header.KhachDaThanhToan,
+                                SoDu = soDuMoi,
+                                ThoiGian = now,
+                                NguoiThucHienId = userId,
+                                GhiChu = $"Chuyển số tiền đã thu ({header.KhachDaThanhToan:N0} đ) của hóa đơn hủy {header.MaHoaDon} thành khoản khách trả trước / cấn trừ công nợ. Lý do: {lyDo}"
+                            },
+                            transaction);
+
+                        soTienChuyenTraTruoc = header.KhachDaThanhToan;
+                    }
+                }
+
+                // ============================================================
+                // 3. XỬ LÝ SỔ QUỸ: TẠO PHIẾU CHI HOÀN TIỀN (KHÔNG XÓA PHIẾU THU CŨ)
+                // ============================================================
+                if (header.KhachDaThanhToan > 0 && phuongAnTien == PhuongAnXuLyTienKhiHuy.HoanTienChoKhach)
+                {
+                    maPhieuChiHoan = await TaoPhieuChiHoanTienHuyHoaDonTrongGiaoDichAsync(
+                        connection,
+                        transaction,
+                        branchId,
+                        userId,
+                        header.MaHoaDon,
+                        header.TenKhachHang,
+                        header.KhachDaThanhToan,
+                        req.PhuongThucHoanTien,
+                        lyDo,
+                        now,
+                        coCotPhieuQuy,
+                        coCotLoaiPhieu,
+                        coCotExtraPhieuQuy);
+
+                    soTienHoanKhach = header.KhachDaThanhToan;
+                }
+
+                // ============================================================
+                // 4. CẬP NHẬT TRẠNG THÁI HÓA ĐƠN SANG DA_HUY (GIỮ NGUYÊN SỐ LIỆU GỐC)
+                // ============================================================
+                var maTrangThaiGiaoHang = req.TrangThaiGiaoHang switch
+                {
+                    TrangThaiGiaoHangKhiHuy.ChuaGiaoHang => "CHUA_GIAO",
+                    TrangThaiGiaoHangKhiHuy.DaGiaoDaNhanLaiHang => "DA_GIAO_DA_NHAN_LAI",
+                    TrangThaiGiaoHangKhiHuy.DaGiaoKhachVanGiuHang => "DA_GIAO_KHACH_GIU",
+                    _ => "CHUA_GIAO"
+                };
+
+                var maPhuongAnTien = phuongAnTien switch
+                {
+                    PhuongAnXuLyTienKhiHuy.HoanTienChoKhach => "HOAN_TIEN",
+                    PhuongAnXuLyTienKhiHuy.ChuyenKhoanKhachTraTruoc => "CHUYEN_TRA_TRUOC",
+                    _ => "KHONG_CO"
+                };
+
+                var maCheDoHuy = req.CheDoHuy == CheDoHuyHoaDon.HuyVaTaoHoaDonTuongTu
+                    ? "HUY_VA_TAO_LAI"
+                    : "CHI_HUY";
+
+                var affected = await connection.ExecuteAsync(
+                    """
+                    UPDATE hoa_don_ban_hang
+                    SET trang_thai_hoa_don = @TrangThaiHoaDon,
+                        ly_do_huy = @LyDoHuy,
+                        nguoi_huy_id = @NguoiHuyId,
+                        ten_nguoi_huy = @TenNguoiHuy,
+                        thoi_gian_huy = @ThoiGianHuy,
+                        trang_thai_giao_hang_khi_huy = @TrangThaiGiaoHang,
+                        da_hoan_kho = @DaHoanKho,
+                        phuong_an_tien_khi_huy = @PhuongAnTien,
+                        so_tien_hoan = @SoTienHoan,
+                        ma_phieu_chi_hoan = @MaPhieuChiHoan,
+                        ngay_cap_nhat = @ThoiGianHuy
+                    WHERE id = @HoaDonId
+                      AND trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY');
                     """,
                     new
                     {
-                        HoaDonId = oldHd.HoaDonId,
-                        Ids = deleteIds
+                        TrangThaiHoaDon = TrangThaiHoaDonDaHuy,
+                        LyDoHuy = lyDo,
+                        NguoiHuyId = userId,
+                        TenNguoiHuy = Truncate150(tenNguoiHuy),
+                        ThoiGianHuy = now,
+                        TrangThaiGiaoHang = maTrangThaiGiaoHang,
+                        DaHoanKho = canHoanKho ? 1 : 0,
+                        PhuongAnTien = maPhuongAnTien,
+                        SoTienHoan = soTienHoanKhach,
+                        MaPhieuChiHoan = maPhieuChiHoan,
+                        HoaDonId = header.HoaDonId
                     },
                     transaction);
 
-                if (deleted != deleteIds.Count)
+                if (affected != 1)
+                {
                     throw new InvalidOperationException(
-                        "Không xóa được đầy đủ các dòng sản phẩm cũ của hóa đơn.");
-            }
+                        $"Không thể cập nhật trạng thái hủy cho hóa đơn {header.MaHoaDon} (có thể hóa đơn đã bị hủy ở phiên khác).");
+                }
 
-            foreach (var item in newItems)
-            {
-                var thanhTien = Math.Round(
-                    Math.Max(0, item.SoLuong * item.DonGia - item.GiamGia),
-                    2,
-                    MidpointRounding.AwayFromZero);
-
-                if (item.Id > 0)
+                // Cập nhật trạng thái bảng giao_hang nếu có
+                try
                 {
-                    var updated = await connection.ExecuteAsync(
+                    await connection.ExecuteAsync(
                         """
-                        UPDATE chi_tiet_hoa_don_ban_hang
-                        SET so_luong = @SoLuong,
-                            don_gia = @DonGia,
-                            giam_gia = @GiamGia,
-                            thanh_tien = @ThanhTien
-                        WHERE id = @Id
-                          AND hoa_don_id = @HoaDonId;
+                        UPDATE giao_hang
+                        SET trang_thai = 'DA_HUY',
+                            ghi_chu = CONCAT(COALESCE(ghi_chu, ''), ' [Đã hủy hóa đơn: ', @LyDo, ']')
+                        WHERE hoa_don_id = @HoaDonId;
                         """,
-                        new
-                        {
-                            item.SoLuong,
-                            item.DonGia,
-                            item.GiamGia,
-                            ThanhTien = thanhTien,
-                            item.Id,
-                            HoaDonId = oldHd.HoaDonId
-                        },
+                        new { HoaDonId = header.HoaDonId, LyDo = lyDo },
                         transaction);
-
-                    if (updated != 1)
-                        throw new InvalidOperationException(
-                            $"Không cập nhật được dòng sản phẩm \"{item.TenSanPham}\".");
                 }
-                else
+                catch
                 {
-                    var newId = await connection.ExecuteScalarAsync<uint>(
-                        """
-                        INSERT INTO chi_tiet_hoa_don_ban_hang
-                        (
-                            hoa_don_id, san_pham_id, ma_san_pham, ten_san_pham,
-                            don_vi_tinh, so_luong, don_gia, giam_gia, thanh_tien, gia_von, ghi_chu
-                        )
-                        VALUES
-                        (
-                            @HoaDonId, @SanPhamId, @MaSanPham, @TenSanPham,
-                            @DonViTinh, @SoLuong, @DonGia, @GiamGia, @ThanhTien, @GiaVon, @GhiChu
-                        );
-                        SELECT LAST_INSERT_ID();
-                        """,
-                        new
-                        {
-                            HoaDonId = oldHd.HoaDonId,
-                            item.SanPhamId,
-                            item.MaSanPham,
-                            item.TenSanPham,
-                            item.DonViTinh,
-                            item.SoLuong,
-                            item.DonGia,
-                            item.GiamGia,
-                            ThanhTien = thanhTien,
-                            item.GiaVon,
-                            item.GhiChu
-                        },
-                        transaction);
-
-                    if (newId == 0)
-                        throw new InvalidOperationException(
-                            $"Không thêm được dòng sản phẩm \"{item.TenSanPham}\" vào hóa đơn.");
-
-                    item.Id = newId;
+                    // Bỏ qua nếu bảng giao_hang không tồn tại
                 }
+
+                // ============================================================
+                // 5. LƯU BẢN GHI KIỂM TOÁN BẤT BIẾN VÀO lich_su_huy_hoa_don
+                // ============================================================
+                var snapshotJson = JsonSerializer.Serialize(new
+                {
+                    header.HoaDonId,
+                    header.MaHoaDon,
+                    header.KhachHangId,
+                    header.TenKhachHang,
+                    header.ThoiGianBan,
+                    header.TongTienHang,
+                    header.GiamGia,
+                    header.KhachCanTra,
+                    header.KhachDaThanhToan,
+                    header.ConNo,
+                    TrangThaiGiaoHang = maTrangThaiGiaoHang,
+                    DaHoanKho = canHoanKho,
+                    TongSoLuongHoanKho = tongSoLuongHoanKho,
+                    PhuongAnTien = maPhuongAnTien,
+                    SoTienHoan = soTienHoanKhach,
+                    SoTienChuyenTraTruoc = soTienChuyenTraTruoc,
+                    CongNoDaHoanTac = congNoDaHoanTac,
+                    MaPhieuChiHoan = maPhieuChiHoan,
+                    CheDoHuy = maCheDoHuy,
+                    LyDoHuy = lyDo,
+                    NguoiHuyId = userId,
+                    TenNguoiHuy = tenNguoiHuy,
+                    ThoiGianHuy = now,
+                    Items = items
+                });
+
+                await connection.ExecuteAsync(
+                    """
+                    INSERT INTO lich_su_huy_hoa_don
+                    (
+                        hoa_don_id, ma_hoa_don, khach_hang_id, ten_khach_hang,
+                        tong_tien_hoa_don, so_tien_da_thanh_toan, cong_no_khi_huy,
+                        trang_thai_giao_hang, da_hoan_kho,
+                        phuong_an_tien, so_tien_hoan, phuong_thuc_hoan, ma_phieu_chi_hoan,
+                        che_do_huy, ly_do_huy, nguoi_huy_id, ten_nguoi_huy, thoi_gian_huy,
+                        du_lieu_snapshot
+                    )
+                    VALUES
+                    (
+                        @HoaDonId, @MaHoaDon, @KhachHangId, @TenKhachHang,
+                        @TongTienHoaDon, @SoTienDaThanhToan, @CongNoKhiHuy,
+                        @TrangThaiGiaoHang, @DaHoanKho,
+                        @PhuongAnTien, @SoTienHoan, @PhuongThucHoan, @MaPhieuChiHoan,
+                        @CheDoHuy, @LyDoHuy, @NguoiHuyId, @TenNguoiHuy, @ThoiGianHuy,
+                        @DuLieuSnapshot
+                    );
+                    """,
+                    new
+                    {
+                        HoaDonId = header.HoaDonId,
+                        MaHoaDon = header.MaHoaDon,
+                        KhachHangId = header.KhachHangId,
+                        TenKhachHang = header.TenKhachHang,
+                        TongTienHoaDon = header.KhachCanTra,
+                        SoTienDaThanhToan = header.KhachDaThanhToan,
+                        CongNoKhiHuy = header.ConNo,
+                        TrangThaiGiaoHang = maTrangThaiGiaoHang,
+                        DaHoanKho = canHoanKho ? 1 : 0,
+                        PhuongAnTien = maPhuongAnTien,
+                        SoTienHoan = soTienHoanKhach,
+                        PhuongThucHoan = soTienHoanKhach > 0 ? ChuanHoaPhuongThuc(req.PhuongThucHoanTien) : null,
+                        MaPhieuChiHoan = maPhieuChiHoan,
+                        CheDoHuy = maCheDoHuy,
+                        LyDoHuy = lyDo,
+                        NguoiHuyId = userId,
+                        TenNguoiHuy = Truncate150(tenNguoiHuy),
+                        ThoiGianHuy = now,
+                        DuLieuSnapshot = snapshotJson
+                    },
+                    transaction);
+
+                await transaction.CommitAsync();
+                daCommit = true;
+
+                var moTaHuy = $"Hủy hóa đơn {header.MaHoaDon} ({header.TenKhachHang}, Tổng: {header.KhachCanTra:N0} đ). Lý do: {lyDo}";
+                if (!string.IsNullOrWhiteSpace(maPhieuChiHoan))
+                    moTaHuy += $". Phiếu chi hoàn tiền: {maPhieuChiHoan} ({soTienHoanKhach:N0} đ)";
+                else if (soTienChuyenTraTruoc > 0)
+                    moTaHuy += $". Chuyển khách trả trước: {soTienChuyenTraTruoc:N0} đ";
+
+                _ = LogSubAccountActivityAsync(
+                    "Hủy hóa đơn",
+                    "HOA_DON",
+                    header.HoaDonId,
+                    header.MaHoaDon,
+                    moTaHuy,
+                    header.KhachCanTra);
+
+                var receiptDaHuy = await GetHoaDonBanHangTheoMaAsync(header.MaHoaDon);
+
+                return new HuyHoaDonResult
+                {
+                    HoaDonId = header.HoaDonId,
+                    MaHoaDon = header.MaHoaDon,
+                    CheDoHuy = req.CheDoHuy,
+                    DaHoanKho = canHoanKho,
+                    TongSoLuongHoanKho = tongSoLuongHoanKho,
+                    CongNoDaHoanTac = congNoDaHoanTac,
+                    SoTienHoanKhach = soTienHoanKhach,
+                    SoTienChuyenTraTruoc = soTienChuyenTraTruoc,
+                    MaPhieuChiHoan = maPhieuChiHoan,
+                    ReceiptDaHuy = receiptDaHuy,
+                    DuLieuSaoChep = new ThongTinXacNhanHuyHoaDon
+                    {
+                        HoaDonId = header.HoaDonId,
+                        MaHoaDon = header.MaHoaDon,
+                        ChiNhanhId = branchId,
+                        KhachHangId = header.KhachHangId,
+                        MaKhachHang = header.MaKhachHang,
+                        TenKhachHang = header.TenKhachHang,
+                        SoDienThoai = header.SoDienThoai,
+                        DiaChi = header.DiaChi,
+                        InKemThongTin = header.InKemThongTin == 1,
+                        ThoiGianBan = header.ThoiGianBan,
+                        TongTienHang = header.TongTienHang,
+                        GiamGia = header.GiamGia,
+                        ThuKhac = header.ThuKhac,
+                        KhachCanTra = header.KhachCanTra,
+                        KhachDaThanhToan = header.KhachDaThanhToan,
+                        ConNo = header.ConNo,
+                        CongNoDaGhiNhan = header.CongNoDaGhiNhan == 1,
+                        TrangThaiThanhToan = header.TrangThaiThanhToan,
+                        TrangThaiHoaDon = TrangThaiHoaDonDaHuy,
+                        GhiChu = header.GhiChu,
+                        Items = items
+                    }
+                };
             }
-
-            var oldConNo = Math.Max(0, oldHd.ConNo);
-            var oldTraThua = Math.Max(0, khachDaThanhToan - Math.Max(0, oldHd.KhachCanTra));
-            var oldNet = oldConNo - oldTraThua;
-            var newNet = newConNo - newTraThua;
-
-            if (oldHd.CongNoDaGhiNhan == 1)
+            catch (Exception ex)
             {
-                if (doiKhachHang)
+                if (!daCommit)
                 {
-                    if (oldHd.KhachHangId is > 0 && oldNet != 0)
+                    try
                     {
-                        await GhiDieuChinhCongNoKhachHangAsync(
-                            connection,
-                            transaction,
-                            oldHd.KhachHangId.Value,
-                            oldHd.ChiNhanhId,
-                            oldHd.MaHoaDon,
-                            -oldNet,
-                            userId,
-                            now,
-                            lyDo);
+                        await transaction.RollbackAsync();
                     }
+                    catch (Exception rollbackEx)
+                    {
+                        SafeLog.WriteError("Rollback HuyHoaDonBanHangAsync thất bại", rollbackEx);
+                    }
+                }
 
-                    if (newKhachHangId is > 0 && newNet != 0)
-                    {
-                        await GhiDieuChinhCongNoKhachHangAsync(
-                            connection,
-                            transaction,
-                            newKhachHangId.Value,
-                            oldHd.ChiNhanhId,
-                            oldHd.MaHoaDon,
-                            newNet,
-                            userId,
-                            now,
-                            lyDo);
-                    }
-                }
-                else if (newKhachHangId is > 0 && newNet != oldNet)
-                {
-                    await GhiDieuChinhCongNoKhachHangAsync(
-                        connection,
-                        transaction,
-                        newKhachHangId.Value,
-                        oldHd.ChiNhanhId,
-                        oldHd.MaHoaDon,
-                        newNet - oldNet,
-                        userId,
-                        now,
-                        lyDo);
-                }
+                SafeLog.WriteError($"Lỗi HuyHoaDonBanHangAsync cho {maCanTim}", ex);
+                throw;
             }
+        }
+        finally
+        {
+            _khoaXuLyHuyHoaDon.Release();
+        }
+    }
 
-            var newTrangThaiThanhToan = newConNo > 0 ? "CONG_NO" : "DA_THANH_TOAN";
+    private async Task HoanTacTonKhoKhiHuyHoaDonAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        uint chiNhanhId,
+        uint? nguoiThucHienId,
+        string maHoaDon,
+        uint sanPhamId,
+        string tenSanPham,
+        decimal soLuongHoan,
+        decimal giaVonHoaDon,
+        TrangThaiGiaoHangKhiHuy trangThaiGiaoHang,
+        string lyDo,
+        DateTime now)
+    {
+        var banGhiTon = (await connection.QueryAsync(
+            """
+            SELECT so_luong_ton, gia_von_binh_quan
+            FROM ton_kho
+            WHERE chi_nhanh_id = @ChiNhanhId
+              AND san_pham_id = @SanPhamId
+            FOR UPDATE;
+            """,
+            new
+            {
+                ChiNhanhId = chiNhanhId,
+                SanPhamId = sanPhamId
+            },
+            transaction)).ToList();
 
-            await connection.ExecuteAsync(
+        decimal tonTruoc = 0m;
+        decimal giaVonCu = 0m;
+
+        if (banGhiTon.FirstOrDefault() is IDictionary<string, object> row)
+        {
+            tonTruoc = ToDecimal(row.TryGetValue("so_luong_ton", out var soLuong) ? soLuong : null);
+            giaVonCu = ToDecimal(row.TryGetValue("gia_von_binh_quan", out var giaVon) ? giaVon : null);
+        }
+        else
+        {
+            var spRow = await connection.QueryFirstOrDefaultAsync(
                 """
-                UPDATE hoa_don_ban_hang
-                SET khach_hang_id = @KhachHangId,
-                    thoi_gian_ban = @ThoiGianBan,
-                    tong_tien_hang = @TongTienHang,
-                    giam_gia = @GiamGia,
-                    khach_can_tra = @KhachCanTra,
-                    con_no = @ConNo,
-                    trang_thai_thanh_toan = @TrangThaiThanhToan,
-                    ghi_chu = @GhiChu,
-                    so_dien_thoai = @SoDienThoai,
-                    dia_chi = @DiaChi,
-                    ngay_cap_nhat = @NgayCapNhat
-                WHERE id = @HoaDonId;
+                SELECT COALESCE(ton_kho_excel, 0) AS TonKho, COALESCE(gia_von, 0) AS GiaVon
+                FROM san_pham
+                WHERE id = @Id
+                LIMIT 1
+                FOR UPDATE;
                 """,
-                new
-                {
-                    KhachHangId = newKhachHangId,
-                    ThoiGianBan = req.ThoiGianBan == default ? oldHd.ThoiGianBan : req.ThoiGianBan,
-                    TongTienHang = newTongTienHang,
-                    GiamGia = newGiamGia,
-                    KhachCanTra = newKhachCanTra,
-                    ConNo = newConNo,
-                    TrangThaiThanhToan = newTrangThaiThanhToan,
-                    GhiChu = BlankToNull(req.GhiChu),
-                    SoDienThoai = BlankToNull(req.SoDienThoai),
-                    DiaChi = BlankToNull(req.DiaChi),
-                    NgayCapNhat = now,
-                    HoaDonId = oldHd.HoaDonId
-                },
+                new { Id = sanPhamId },
                 transaction);
 
-            var oldSnapshot = new HoaDonSnapshot
+            if (spRow is not null)
             {
-                HoaDonId = oldHd.HoaDonId,
-                MaHoaDon = oldHd.MaHoaDon,
-                KhachHangId = oldHd.KhachHangId,
-                TenKhachHang = string.IsNullOrWhiteSpace(oldHd.TenKhachHang)
-                    ? "Khách lẻ"
-                    : oldHd.TenKhachHang,
-                ThoiGianBan = oldHd.ThoiGianBan,
-                TongTienHang = oldHd.TongTienHang,
-                GiamGia = oldHd.GiamGia,
-                KhachCanTra = oldHd.KhachCanTra,
-                KhachDaThanhToan = khachDaThanhToan,
-                ConNo = oldConNo,
-                GhiChu = oldHd.GhiChu,
-                Items = oldItems.Select(x => new HoaDonItemSnapshot
+                tonTruoc = ToDecimal(spRow.TonKho);
+                giaVonCu = ToDecimal(spRow.GiaVon);
+            }
+        }
+
+        var tonSau = tonTruoc + soLuongHoan;
+        var giaVonGhiNhan = giaVonCu > 0 ? giaVonCu : giaVonHoaDon;
+
+        await connection.ExecuteAsync(
+            """
+            INSERT INTO ton_kho
+            (
+                chi_nhanh_id, san_pham_id, so_luong_ton, gia_von_binh_quan, ngay_cap_nhat
+            )
+            VALUES
+            (
+                @ChiNhanhId, @SanPhamId, @SoLuongTon, @GiaVonBinhQuan, @Now
+            )
+            ON DUPLICATE KEY UPDATE
+                so_luong_ton = @SoLuongTon,
+                ngay_cap_nhat = @Now;
+            """,
+            new
+            {
+                ChiNhanhId = chiNhanhId,
+                SanPhamId = sanPhamId,
+                SoLuongTon = tonSau,
+                GiaVonBinhQuan = giaVonGhiNhan,
+                Now = now
+            },
+            transaction);
+
+        await connection.ExecuteAsync(
+            """
+            UPDATE san_pham
+            SET ton_kho_excel = @SoLuongTon,
+                ngay_cap_nhat = @Now
+            WHERE id = @SanPhamId;
+            """,
+            new
+            {
+                SanPhamId = sanPhamId,
+                SoLuongTon = tonSau,
+                Now = now
+            },
+            transaction);
+
+        var ghiChuKho = trangThaiGiaoHang == TrangThaiGiaoHangKhiHuy.ChuaGiaoHang
+            ? $"Hoàn tác xuất kho do hủy hóa đơn chưa giao {maHoaDon} ({tenSanPham}). Lý do: {lyDo}"
+            : $"Nhập lại kho hàng khách trả về do hủy hóa đơn {maHoaDon} ({tenSanPham}). Lý do: {lyDo}";
+
+        await connection.ExecuteAsync(
+            """
+            INSERT INTO lich_su_nhap_xuat_kho
+            (
+                chi_nhanh_id, san_pham_id, loai_giao_dich, loai_chung_tu, ma_chung_tu,
+                so_luong, ton_truoc, ton_sau, gia_von, nguoi_thuc_hien_id, thoi_gian, ghi_chu
+            )
+            VALUES
+            (
+                @ChiNhanhId, @SanPhamId, 'NHAP', 'HUY_HOA_DON', @MaChungTu,
+                @SoLuong, @TonTruoc, @TonSau, @GiaVon, @NguoiThucHienId, @Now, @GhiChu
+            );
+            """,
+            new
+            {
+                ChiNhanhId = chiNhanhId,
+                SanPhamId = sanPhamId,
+                MaChungTu = maHoaDon,
+                SoLuong = soLuongHoan,
+                TonTruoc = tonTruoc,
+                TonSau = tonSau,
+                GiaVon = giaVonGhiNhan,
+                NguoiThucHienId = nguoiThucHienId,
+                Now = now,
+                GhiChu = ghiChuKho
+            },
+            transaction);
+    }
+
+    private async Task<string> TaoPhieuChiHoanTienHuyHoaDonTrongGiaoDichAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        uint chiNhanhId,
+        uint? nguoiThucHienId,
+        string maHoaDon,
+        string tenKhachHang,
+        decimal soTienHoan,
+        string? phuongThucHoan,
+        string lyDoHuy,
+        DateTime now,
+        bool coCotPhieuQuyHoaDon,
+        bool coCotLoaiPhieu,
+        bool coCotNguoiNopNhanGhiChu)
+    {
+        var maPhieuChi = await SinhMaPhieuChiTrongGiaoDichAsync(connection, transaction);
+        var idNhomHoanTien = await LayIdNhomChiPhiTheoMaAsync(connection, transaction, "HOAN_TIEN_KHACH");
+
+        var phuongThuc = ChuanHoaPhuongThuc(phuongThucHoan);
+        var noiDung = $"Hoàn tiền hủy hóa đơn {maHoaDon}";
+        var ghiChu = $"Hoàn tiền cho khách ({tenKhachHang}) do hủy hóa đơn {maHoaDon}. Lý do hủy: {lyDoHuy}";
+
+        // LƯU Ý QUAN TRỌNG: Bảng phieu_chi có UNIQUE INDEX uk_phieu_chi_hoa_don (hoa_don_ban_hang_id).
+        // Phiếu thu lúc bán hàng (PT...) đã giữ hoa_don_ban_hang_id = invoiceId và không được xóa.
+        // Vì vậy phiếu chi hoàn tiền (PC...) lưu hoa_don_ban_hang_id = NULL và liên kết qua ma_hoa_don = @MaHoaDon.
+        var cols = new List<string>
+        {
+            "ma_phieu_chi",
+            "chi_nhanh_id",
+            "nhom_chi_phi_id",
+            "so_tien",
+            "phuong_thuc",
+            "noi_dung",
+            "thoi_gian_chi",
+            "nguoi_thuc_hien_id",
+            "trang_thai"
+        };
+
+        var vals = new List<string>
+        {
+            "@MaPhieu",
+            "@ChiNhanhId",
+            "@NhomChiPhiId",
+            "@SoTien",
+            "@PhuongThuc",
+            "@NoiDung",
+            "@ThoiGian",
+            "@NguoiTaoId",
+            "@TrangThai"
+        };
+
+        if (coCotLoaiPhieu)
+        {
+            cols.Add("loai_phieu");
+            vals.Add("'CHI'");
+        }
+
+        if (coCotNguoiNopNhanGhiChu)
+        {
+            cols.Add("nguoi_nop_nhan");
+            vals.Add("@NguoiNopNhan");
+            cols.Add("ghi_chu");
+            vals.Add("@GhiChu");
+        }
+
+        if (coCotPhieuQuyHoaDon)
+        {
+            cols.Add("hoa_don_ban_hang_id");
+            vals.Add("NULL");
+            cols.Add("ma_hoa_don");
+            vals.Add("@MaHoaDon");
+        }
+
+        var insertSql = $"""
+            INSERT INTO phieu_chi ({string.Join(", ", cols)})
+            VALUES ({string.Join(", ", vals)});
+            """;
+
+        await connection.ExecuteAsync(
+            insertSql,
+            new
+            {
+                MaPhieu = maPhieuChi,
+                ChiNhanhId = chiNhanhId,
+                NhomChiPhiId = idNhomHoanTien,
+                SoTien = soTienHoan,
+                PhuongThuc = phuongThuc,
+                NoiDung = noiDung,
+                NguoiNopNhan = Truncate150(tenKhachHang),
+                GhiChu = ghiChu,
+                ThoiGian = now,
+                NguoiTaoId = nguoiThucHienId,
+                TrangThai = TrangThaiPhieuHoanThanh,
+                MaHoaDon = maHoaDon
+            },
+            transaction);
+
+        return maPhieuChi;
+    }
+
+    /// <summary>
+    /// Ghi nhận liên kết 2 chiều giữa hóa đơn mới vừa tạo và hóa đơn cũ đã hủy
+    /// ngay trong cùng transaction tạo hóa đơn mới.
+    /// </summary>
+    private async Task GhiLienKetHoaDonThayTheTrongGiaoDichAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        uint hoaDonMoiId,
+        string maHoaDonMoi,
+        uint hoaDonGocId,
+        string? maHoaDonGoc,
+        DateTime now)
+    {
+        if (hoaDonGocId == 0 && string.IsNullOrWhiteSpace(maHoaDonGoc))
+            return;
+
+        var gocRow = await connection.QueryFirstOrDefaultAsync<(uint Id, string MaHoaDon)>(
+            hoaDonGocId > 0
+                ? "SELECT id AS Id, ma_hoa_don AS MaHoaDon FROM hoa_don_ban_hang WHERE id = @Id LIMIT 1 FOR UPDATE;"
+                : "SELECT id AS Id, ma_hoa_don AS MaHoaDon FROM hoa_don_ban_hang WHERE ma_hoa_don = @Ma LIMIT 1 FOR UPDATE;",
+            new { Id = hoaDonGocId, Ma = (maHoaDonGoc ?? "").Trim() },
+            transaction);
+
+        if (gocRow.Id == 0)
+            return;
+
+        await connection.ExecuteAsync(
+            """
+            UPDATE hoa_don_ban_hang
+            SET hoa_don_goc_id = @HoaDonGocId,
+                ma_hoa_don_goc = @MaHoaDonGoc
+            WHERE id = @HoaDonMoiId;
+            """,
+            new
+            {
+                HoaDonGocId = gocRow.Id,
+                MaHoaDonGoc = gocRow.MaHoaDon,
+                HoaDonMoiId = hoaDonMoiId
+            },
+            transaction);
+
+        await connection.ExecuteAsync(
+            """
+            UPDATE hoa_don_ban_hang
+            SET hoa_don_thay_the_id = @HoaDonMoiId,
+                ma_hoa_don_thay_the = @MaHoaDonMoi,
+                ngay_cap_nhat = @Now
+            WHERE id = @HoaDonGocId;
+            """,
+            new
+            {
+                HoaDonMoiId = hoaDonMoiId,
+                MaHoaDonMoi = maHoaDonMoi,
+                Now = now,
+                HoaDonGocId = gocRow.Id
+            },
+            transaction);
+
+        await connection.ExecuteAsync(
+            """
+            UPDATE lich_su_huy_hoa_don
+            SET hoa_don_thay_the_id = @HoaDonMoiId,
+                ma_hoa_don_thay_the = @MaHoaDonMoi
+            WHERE hoa_don_id = @HoaDonGocId;
+            """,
+            new
+            {
+                HoaDonMoiId = hoaDonMoiId,
+                MaHoaDonMoi = maHoaDonMoi,
+                HoaDonGocId = gocRow.Id
+            },
+            transaction);
+    }
+
+    /// <summary>
+    /// Lấy danh sách các giao dịch sổ quỹ (phiếu thu, phiếu chi hoàn tiền),
+    /// điều chỉnh công nợ và hoàn kho liên quan đến một hóa đơn để hiển thị đối soát.
+    /// </summary>
+    public async Task<List<GiaoDichLienQuanHoaDonItem>> LayGiaoDichLienQuanHoaDonAsync(
+        MySqlConnection connection,
+        uint hoaDonId,
+        string maHoaDon)
+    {
+        var ketQua = new List<GiaoDichLienQuanHoaDonItem>();
+        if (hoaDonId == 0 && string.IsNullOrWhiteSpace(maHoaDon))
+            return ketQua;
+
+        try
+        {
+            var coCotPhieuQuy = await EnsurePhieuQuyHoaDonColumnsAsync();
+            if (coCotPhieuQuy)
+            {
+                var phieus = await connection.QueryAsync(
+                    """
+                    SELECT
+                        ma_phieu_chi AS MaPhieu,
+                        so_tien AS SoTien,
+                        COALESCE(phuong_thuc, 'TIEN_MAT') AS PhuongThuc,
+                        COALESCE(noi_dung, '') AS NoiDung,
+                        COALESCE(ghi_chu, '') AS GhiChu,
+                        thoi_gian_chi AS ThoiGian
+                    FROM phieu_chi
+                    WHERE (hoa_don_ban_hang_id = @HoaDonId OR ma_hoa_don = @MaHoaDon)
+                      AND trang_thai = 'HOAN_THANH'
+                    ORDER BY thoi_gian_chi ASC, id ASC;
+                    """,
+                    new { HoaDonId = hoaDonId, MaHoaDon = maHoaDon });
+
+                foreach (var p in phieus)
                 {
-                    SanPhamId = x.SanPhamId,
-                    MaSanPham = x.MaSanPham,
-                    TenSanPham = x.TenSanPham,
-                    DonViTinh = x.DonViTinh,
-                    SoLuong = x.SoLuong,
-                    DonGia = x.DonGia,
-                    GiamGia = x.GiamGia,
-                    ThanhTien = Math.Round(
-                        Math.Max(0, x.SoLuong * x.DonGia - x.GiamGia),
-                        2,
-                        MidpointRounding.AwayFromZero),
-                    GiaVon = x.GiaVon,
-                    GhiChu = x.GhiChu
-                }).ToList()
-            };
+                    string ma = p.MaPhieu?.ToString() ?? "";
+                    var laChi = ma.StartsWith("PC", StringComparison.OrdinalIgnoreCase);
+                    ketQua.Add(new GiaoDichLienQuanHoaDonItem
+                    {
+                        LoaiGiaoDich = laChi ? "Phiếu chi hoàn tiền" : "Phiếu thu sổ quỹ",
+                        MaGiaoDich = ma,
+                        SoTien = ToDecimal(p.SoTien),
+                        PhuongThuc = p.PhuongThuc?.ToString() ?? "",
+                        ThoiGian = p.ThoiGian is DateTime dt ? dt : DateTime.Now,
+                        NoiDung = !string.IsNullOrWhiteSpace(p.GhiChu?.ToString())
+                            ? p.GhiChu.ToString()
+                            : (p.NoiDung?.ToString() ?? "")
+                    });
+                }
+            }
 
-            var newSnapshot = new HoaDonSnapshot
-            {
-                HoaDonId = oldHd.HoaDonId,
-                MaHoaDon = oldHd.MaHoaDon,
-                KhachHangId = newKhachHangId,
-                TenKhachHang = newKhachHangId is null
-                    ? "Khách lẻ"
-                    : (string.IsNullOrWhiteSpace(newTenKhachHang) ? "Khách hàng" : newTenKhachHang),
-                ThoiGianBan = req.ThoiGianBan == default ? oldHd.ThoiGianBan : req.ThoiGianBan,
-                TongTienHang = newTongTienHang,
-                GiamGia = newGiamGia,
-                KhachCanTra = newKhachCanTra,
-                KhachDaThanhToan = khachDaThanhToan,
-                ConNo = newConNo,
-                GhiChu = BlankToNull(req.GhiChu),
-                Items = newItems.Select(x => new HoaDonItemSnapshot
-                {
-                    SanPhamId = x.SanPhamId,
-                    MaSanPham = x.MaSanPham,
-                    TenSanPham = x.TenSanPham,
-                    DonViTinh = x.DonViTinh,
-                    SoLuong = x.SoLuong,
-                    DonGia = x.DonGia,
-                    GiamGia = x.GiamGia,
-                    ThanhTien = Math.Round(
-                        Math.Max(0, x.SoLuong * x.DonGia - x.GiamGia),
-                        2,
-                        MidpointRounding.AwayFromZero),
-                    GiaVon = x.GiaVon,
-                    GhiChu = x.GhiChu
-                }).ToList()
-            };
-
-            var diffSummary = TaoMoTaThayDoiHoaDon(oldSnapshot, newSnapshot);
-            if (diffSummary.Count == 0)
-                throw new InvalidOperationException("Không có thông tin nào thay đổi trên hóa đơn.");
-
-            var chiTietThayDoi = string.Join("; ", diffSummary);
-            var jsonOptions = new JsonSerializerOptions
-            {
-                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-                WriteIndented = false
-            };
-
-            await connection.ExecuteAsync(
+            var congNos = await connection.QueryAsync(
                 """
-                INSERT INTO lich_su_chinh_sua_hoa_don
-                (
-                    hoa_don_id, ma_hoa_don, thoi_gian, nguoi_thuc_hien_id, ten_nguoi_thuc_hien,
-                    ly_do, tong_tien_truoc, tong_tien_sau, giam_gia_truoc, giam_gia_sau,
-                    khach_can_tra_truoc, khach_can_tra_sau, khach_da_tra, con_no_truoc, con_no_sau,
-                    khach_hang_id_truoc, khach_hang_id_sau, ten_khach_hang_truoc, ten_khach_hang_sau,
-                    thoi_gian_ban_truoc, thoi_gian_ban_sau, du_lieu_truoc_json, du_lieu_sau_json, chi_tiet_thay_doi
-                )
-                VALUES
-                (
-                    @HoaDonId, @MaHoaDon, @ThoiGian, @NguoiThucHienId, @TenNguoiThucHien,
-                    @LyDo, @TongTienTruoc, @TongTienSau, @GiamGiaTruoc, @GiamGiaSau,
-                    @KhachCanTraTruoc, @KhachCanTraSau, @KhachDaTra, @ConNoTruoc, @ConNoSau,
-                    @KhachHangIdTruoc, @KhachHangIdSau, @TenKhachHangTruoc, @TenKhachHangSau,
-                    @ThoiGianBanTruoc, @ThoiGianBanSau, @DuLieuTruocJson, @DuLieuSauJson, @ChiTietThayDoi
-                );
+                SELECT
+                    loai_giao_dich AS LoaiGiaoDich,
+                    ghi_no AS GhiNo,
+                    ghi_co AS GhiCo,
+                    thoi_gian AS ThoiGian,
+                    COALESCE(ghi_chu, '') AS GhiChu
+                FROM lich_su_cong_no_khach_hang
+                WHERE ma_chung_tu = @MaHoaDon
+                ORDER BY thoi_gian ASC, id ASC;
                 """,
-                new
+                new { MaHoaDon = maHoaDon });
+
+            foreach (var cn in congNos)
+            {
+                string loai = cn.LoaiGiaoDich?.ToString() ?? "";
+                decimal ghiNo = ToDecimal(cn.GhiNo);
+                decimal ghiCo = ToDecimal(cn.GhiCo);
+                var tenLoai = loai switch
                 {
-                    HoaDonId = oldHd.HoaDonId,
-                    MaHoaDon = oldHd.MaHoaDon,
-                    ThoiGian = now,
-                    NguoiThucHienId = userId,
-                    TenNguoiThucHien = userName,
-                    LyDo = lyDo,
-                    TongTienTruoc = oldHd.TongTienHang,
-                    TongTienSau = newTongTienHang,
-                    GiamGiaTruoc = oldHd.GiamGia,
-                    GiamGiaSau = newGiamGia,
-                    KhachCanTraTruoc = oldHd.KhachCanTra,
-                    KhachCanTraSau = newKhachCanTra,
-                    KhachDaTra = khachDaThanhToan,
-                    ConNoTruoc = oldConNo,
-                    ConNoSau = newConNo,
-                    KhachHangIdTruoc = oldHd.KhachHangId,
-                    KhachHangIdSau = newKhachHangId,
-                    TenKhachHangTruoc = oldSnapshot.TenKhachHang,
-                    TenKhachHangSau = newSnapshot.TenKhachHang,
-                    ThoiGianBanTruoc = oldHd.ThoiGianBan,
-                    ThoiGianBanSau = newSnapshot.ThoiGianBan,
-                    DuLieuTruocJson = JsonSerializer.Serialize(oldSnapshot, jsonOptions),
-                    DuLieuSauJson = JsonSerializer.Serialize(newSnapshot, jsonOptions),
-                    ChiTietThayDoi = chiTietThayDoi
-                },
-                transaction);
+                    "BAN_HANG" => "Ghi nợ bán hàng",
+                    "THU_TIEN" => "Thu nợ hóa đơn",
+                    "HUY_HOA_DON" => "Hoàn tác công nợ (Hủy HĐ)",
+                    "KHACH_TRA_TRUOC" => "Chuyển khách trả trước",
+                    _ => "Điều chỉnh công nợ"
+                };
 
-            await transaction.CommitAsync();
-            daCommit = true;
+                ketQua.Add(new GiaoDichLienQuanHoaDonItem
+                {
+                    LoaiGiaoDich = tenLoai,
+                    MaGiaoDich = maHoaDon,
+                    SoTien = ghiNo > 0 ? ghiNo : ghiCo,
+                    ThoiGian = cn.ThoiGian is DateTime dt ? dt : DateTime.Now,
+                    NoiDung = cn.GhiChu?.ToString() ?? ""
+                });
+            }
 
-            _ = LogSubAccountActivityAsync(
-                "Sửa hóa đơn",
-                "HOA_DON",
-                oldHd.HoaDonId,
-                oldHd.MaHoaDon,
-                $"Sửa hóa đơn {oldHd.MaHoaDon}: {chiTietThayDoi}. Lý do: {lyDo}",
-                newKhachCanTra);
+            var khos = await connection.QueryAsync(
+                """
+                SELECT
+                    loai_giao_dich AS LoaiGiaoDich,
+                    loai_chung_tu AS LoaiChungTu,
+                    so_luong AS SoLuong,
+                    thoi_gian AS ThoiGian,
+                    COALESCE(ghi_chu, '') AS GhiChu
+                FROM lich_su_nhap_xuat_kho
+                WHERE ma_chung_tu = @MaHoaDon
+                  AND loai_chung_tu = 'HUY_HOA_DON'
+                ORDER BY thoi_gian ASC, id ASC;
+                """,
+                new { MaHoaDon = maHoaDon });
 
-            var receipt = await GetHoaDonBanHangTheoMaAsync(oldHd.MaHoaDon);
-            if (receipt is null)
-                throw new InvalidOperationException(
-                    $"Chỉnh sửa thành công nhưng không đọc lại được hóa đơn {oldHd.MaHoaDon}.");
-
-            return receipt;
+            foreach (var k in khos)
+            {
+                decimal sl = ToDecimal(k.SoLuong);
+                ketQua.Add(new GiaoDichLienQuanHoaDonItem
+                {
+                    LoaiGiaoDich = "Hoàn nhập kho",
+                    MaGiaoDich = $"SL +{SoLuongFormat.HienThi(sl)}",
+                    SoTien = 0m,
+                    ThoiGian = k.ThoiGian is DateTime dt ? dt : DateTime.Now,
+                    NoiDung = k.GhiChu?.ToString() ?? ""
+                });
+            }
         }
         catch (Exception ex)
         {
-            if (!daCommit)
-            {
-                try
-                {
-                    await transaction.RollbackAsync();
-                }
-                catch (Exception rollbackEx)
-                {
-                    SafeLog.WriteError("Rollback chỉnh sửa hóa đơn thất bại", rollbackEx);
-                }
-            }
-
-            SafeLog.WriteError($"Lỗi LuuChinhSuaHoaDonAsync cho {req.MaHoaDon}", ex);
-            throw;
+            SafeLog.WriteError($"LayGiaoDichLienQuanHoaDonAsync error for {maHoaDon}", ex);
         }
+
+        return ketQua.OrderBy(x => x.ThoiGian).ToList();
     }
 
     public async Task<List<LichSuChinhSuaHoaDon>> GetLichSuChinhSuaHoaDonAsync(string maHoaDon)
@@ -910,297 +1518,27 @@ public sealed partial class DatabaseService
         return rows.ToList();
     }
 
-    private async Task DieuChinhTonKhoKhiSuaHoaDonAsync(
-        MySqlConnection connection,
-        MySqlTransaction transaction,
-        uint chiNhanhId,
-        uint? nguoiThucHienId,
-        string maHoaDon,
-        uint sanPhamId,
-        string tenSanPham,
-        decimal chenhLech,
-        decimal giaVonSanPham,
-        string lyDo)
-    {
-        var banGhiTon = (await connection.QueryAsync(
-            """
-            SELECT so_luong_ton, gia_von_binh_quan
-            FROM ton_kho
-            WHERE chi_nhanh_id = @ChiNhanhId
-              AND san_pham_id = @SanPhamId
-            FOR UPDATE;
-            """,
-            new
-            {
-                ChiNhanhId = chiNhanhId,
-                SanPhamId = sanPhamId
-            },
-            transaction)).ToList();
-
-        decimal tonTruoc;
-        decimal giaVonCu;
-        var coBanGhiTon = banGhiTon.Count > 0;
-
-        if (banGhiTon.FirstOrDefault() is IDictionary<string, object> row)
-        {
-            tonTruoc = ToDecimal(row.TryGetValue("so_luong_ton", out var soLuong) ? soLuong : null);
-            giaVonCu = ToDecimal(row.TryGetValue("gia_von_binh_quan", out var giaVon) ? giaVon : null);
-        }
-        else
-        {
-            var spRow = await connection.QueryFirstOrDefaultAsync(
-                """
-                SELECT COALESCE(ton_kho_excel, 0) AS TonKho, COALESCE(gia_von, 0) AS GiaVon
-                FROM san_pham
-                WHERE id = @Id
-                LIMIT 1;
-                """,
-                new { Id = sanPhamId },
-                transaction);
-
-            if (spRow != null)
-            {
-                tonTruoc = ToDecimal(spRow.TonKho);
-                giaVonCu = ToDecimal(spRow.GiaVon);
-                coBanGhiTon = true;
-            }
-            else
-            {
-                tonTruoc = 0;
-                giaVonCu = 0;
-            }
-        }
-
-        var xuatKho = chenhLech > 0;
-        var soLuongDieuChinh = Math.Abs(chenhLech);
-
-        if (xuatKho && tonTruoc < soLuongDieuChinh)
-        {
-            throw new InvalidOperationException(
-                $"Sản phẩm \"{tenSanPham}\" chỉ còn tồn kho {SoLuongFormat.HienThi(tonTruoc)}, " +
-                $"không đủ để xuất thêm {SoLuongFormat.HienThi(soLuongDieuChinh)}.");
-        }
-
-        if (!coBanGhiTon && !xuatKho)
-            tonTruoc = 0;
-
-        var tonSau = tonTruoc - chenhLech;
-
-        await connection.ExecuteAsync(
-            """
-            INSERT INTO ton_kho
-            (
-                chi_nhanh_id, san_pham_id, so_luong_ton, gia_von_binh_quan, ngay_cap_nhat
-            )
-            VALUES
-            (
-                @ChiNhanhId, @SanPhamId, @SoLuongTon, @GiaVonBinhQuan, NOW()
-            )
-            ON DUPLICATE KEY UPDATE
-                so_luong_ton = @SoLuongTon,
-                ngay_cap_nhat = NOW();
-            """,
-            new
-            {
-                ChiNhanhId = chiNhanhId,
-                SanPhamId = sanPhamId,
-                SoLuongTon = tonSau,
-                GiaVonBinhQuan = giaVonCu > 0 ? giaVonCu : giaVonSanPham
-            },
-            transaction);
-
-        await connection.ExecuteAsync(
-            """
-            UPDATE san_pham
-            SET ton_kho_excel = @SoLuongTon,
-                ngay_cap_nhat = NOW()
-            WHERE id = @SanPhamId;
-            """,
-            new
-            {
-                SanPhamId = sanPhamId,
-                SoLuongTon = tonSau
-            },
-            transaction);
-
-        await connection.ExecuteAsync(
-            """
-            INSERT INTO lich_su_nhap_xuat_kho
-            (
-                chi_nhanh_id, san_pham_id, loai_giao_dich, loai_chung_tu, ma_chung_tu,
-                so_luong, ton_truoc, ton_sau, gia_von, nguoi_thuc_hien_id, thoi_gian, ghi_chu
-            )
-            VALUES
-            (
-                @ChiNhanhId, @SanPhamId, @LoaiGiaoDich, 'DIEU_CHINH_HOA_DON', @MaChungTu,
-                @SoLuong, @TonTruoc, @TonSau, @GiaVon, @NguoiThucHienId, NOW(), @GhiChu
-            );
-            """,
-            new
-            {
-                ChiNhanhId = chiNhanhId,
-                SanPhamId = sanPhamId,
-                LoaiGiaoDich = xuatKho ? "XUAT" : "NHAP",
-                MaChungTu = maHoaDon,
-                SoLuong = soLuongDieuChinh,
-                TonTruoc = tonTruoc,
-                TonSau = tonSau,
-                GiaVon = giaVonSanPham,
-                NguoiThucHienId = nguoiThucHienId,
-                GhiChu = $"{(xuatKho ? "Xuất" : "Nhập")} điều chỉnh do sửa hóa đơn {maHoaDon}. Lý do: {lyDo}"
-            },
-            transaction);
-    }
-
-    private static async Task GhiDieuChinhCongNoKhachHangAsync(
-        MySqlConnection connection,
-        MySqlTransaction transaction,
-        uint khachHangId,
-        uint chiNhanhId,
-        string maHoaDon,
-        decimal chenhLech,
-        uint? nguoiThucHienId,
-        DateTime thoiGian,
-        string lyDo)
-    {
-        if (chenhLech == 0)
-            return;
-
-        var soDuCu = await connection.ExecuteScalarAsync<decimal>(
-            """
-            SELECT COALESCE(SUM(ghi_no - ghi_co), 0)
-            FROM lich_su_cong_no_khach_hang
-            WHERE khach_hang_id = @KhachHangId
-            FOR UPDATE;
-            """,
-            new { KhachHangId = khachHangId },
-            transaction);
-
-        var ghiNo = chenhLech > 0 ? chenhLech : 0;
-        var ghiCo = chenhLech < 0 ? -chenhLech : 0;
-
-        await connection.ExecuteAsync(
-            """
-            INSERT INTO lich_su_cong_no_khach_hang
-            (
-                khach_hang_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu,
-                ghi_no, ghi_co, so_du, thoi_gian, nguoi_thuc_hien_id, ghi_chu
-            )
-            VALUES
-            (
-                @KhachHangId, @ChiNhanhId, 'DIEU_CHINH', 'DIEU_CHINH_HOA_DON', @MaChungTu,
-                @GhiNo, @GhiCo, @SoDu, @ThoiGian, @NguoiThucHienId, @GhiChu
-            );
-            """,
-            new
-            {
-                KhachHangId = khachHangId,
-                ChiNhanhId = chiNhanhId,
-                MaChungTu = maHoaDon,
-                GhiNo = ghiNo,
-                GhiCo = ghiCo,
-                SoDu = soDuCu + chenhLech,
-                ThoiGian = thoiGian,
-                NguoiThucHienId = nguoiThucHienId,
-                GhiChu = $"Điều chỉnh công nợ do sửa hóa đơn {maHoaDon}. Lý do: {lyDo}"
-            },
-            transaction);
-    }
-
-    private static List<string> TaoMoTaThayDoiHoaDon(
-        HoaDonSnapshot truoc,
-        HoaDonSnapshot sau)
-    {
-        var ketQua = new List<string>();
-
-        void Them(string nhan, object? truocValue, object? sauValue)
-        {
-            var a = truocValue?.ToString() ?? "";
-            var b = sauValue?.ToString() ?? "";
-            if (!string.Equals(a, b, StringComparison.Ordinal))
-                ketQua.Add($"{nhan}: {a} -> {b}");
-        }
-
-        string Tien(decimal value) => MoneyInput.Format(value) + " đ";
-        string Ngay(DateTime value) => value.ToString("dd/MM/yyyy HH:mm:ss");
-
-        Them("Tổng tiền hàng", Tien(truoc.TongTienHang), Tien(sau.TongTienHang));
-        Them("Giảm giá hóa đơn", Tien(truoc.GiamGia), Tien(sau.GiamGia));
-        Them("Khách cần trả", Tien(truoc.KhachCanTra), Tien(sau.KhachCanTra));
-        Them("Công nợ", Tien(truoc.ConNo), Tien(sau.ConNo));
-        Them("Khách hàng", truoc.TenKhachHang ?? "Khách lẻ", sau.TenKhachHang ?? "Khách lẻ");
-        Them("Ngày bán", Ngay(truoc.ThoiGianBan), Ngay(sau.ThoiGianBan));
-        Them("Ghi chú", truoc.GhiChu ?? "", sau.GhiChu ?? "");
-
-        var productIds = truoc.Items.Select(x => x.SanPhamId)
-            .Concat(sau.Items.Select(x => x.SanPhamId))
-            .Distinct()
-            .OrderBy(x => x)
-            .ToList();
-
-        foreach (var productId in productIds)
-        {
-            var oldItem = truoc.Items.FirstOrDefault(x => x.SanPhamId == productId);
-            var newItem = sau.Items.FirstOrDefault(x => x.SanPhamId == productId);
-            var ten = newItem?.TenSanPham ?? oldItem?.TenSanPham ?? $"Sản phẩm #{productId}";
-
-            Them(
-                $"Số lượng {ten}",
-                SoLuongFormat.HienThi(oldItem?.SoLuong ?? 0),
-                SoLuongFormat.HienThi(newItem?.SoLuong ?? 0));
-
-            Them(
-                $"Đơn giá {ten}",
-                Tien(oldItem?.DonGia ?? 0),
-                Tien(newItem?.DonGia ?? 0));
-
-            Them(
-                $"Giảm giá dòng {ten}",
-                Tien(oldItem?.GiamGia ?? 0),
-                Tien(newItem?.GiamGia ?? 0));
-
-            Them(
-                $"Thành tiền {ten}",
-                Tien(oldItem?.ThanhTien ?? 0),
-                Tien(newItem?.ThanhTien ?? 0));
-
-            Them(
-                $"Ghi chú dòng {ten}",
-                oldItem?.GhiChu ?? "",
-                newItem?.GhiChu ?? "");
-        }
-
-        return ketQua;
-    }
-
-    private sealed class HoaDonEditHeaderRow
+    private sealed class HoaDonHuyHeaderRow
     {
         public uint HoaDonId { get; set; }
         public string MaHoaDon { get; set; } = "";
         public uint ChiNhanhId { get; set; }
-        public string PhienBan { get; set; } = "";
         public uint? KhachHangId { get; set; }
+        public string MaKhachHang { get; set; } = "";
         public string TenKhachHang { get; set; } = "";
         public string SoDienThoai { get; set; } = "";
         public string DiaChi { get; set; } = "";
+        public int InKemThongTin { get; set; }
         public DateTime ThoiGianBan { get; set; }
         public decimal TongTienHang { get; set; }
         public decimal GiamGia { get; set; }
+        public decimal ThuKhac { get; set; }
         public decimal KhachCanTra { get; set; }
         public decimal KhachDaThanhToan { get; set; }
         public decimal ConNo { get; set; }
         public int CongNoDaGhiNhan { get; set; }
+        public string TrangThaiThanhToan { get; set; } = "";
         public string TrangThaiHoaDon { get; set; } = "";
         public string? GhiChu { get; set; }
-        public int SoLanThanhToan { get; set; }
-    }
-
-    private sealed class HoaDonEditProductRow
-    {
-        public uint Id { get; set; }
-        public string? MaSanPham { get; set; }
-        public string TenSanPham { get; set; } = "";
-        public string? DonViTinh { get; set; }
-        public decimal GiaVon { get; set; }
     }
 }

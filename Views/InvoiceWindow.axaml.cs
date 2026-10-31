@@ -11,92 +11,143 @@ namespace ShopHoa.Views;
 
 public partial class InvoiceWindow : Window
 {
-    /// <summary>
-    /// Hàm thu công nợ cho hóa đơn đang xem. Trả về hóa đơn đã đọc lại sau khi
-    /// thu để cửa sổ cập nhật số nợ và trạng thái nút. Null khi không thu (hủy
-    /// hoặc lỗi). Không truyền gì thì cửa sổ dùng cơ chế thu nợ mặc định qua DatabaseService.
-    /// </summary>
     private readonly Func<HoaDonBanHangReceipt, Window, Task<HoaDonBanHangReceipt?>>? _thuCongNo;
+    private readonly Func<HuyHoaDonResult, Task>? _onHoaDonCancelled;
 
     public InvoiceWindow() : this(new HoaDonBanHangReceipt())
     {
     }
 
     public InvoiceWindow(HoaDonBanHangReceipt receipt)
-        : this(receipt, (Func<HoaDonBanHangReceipt, Window, Task<HoaDonBanHangReceipt?>>?)null)
+        : this(receipt, (Func<HoaDonBanHangReceipt, Window, Task<HoaDonBanHangReceipt?>>?)null, null)
     {
     }
 
     public InvoiceWindow(
         HoaDonBanHangReceipt receipt,
-        Func<HoaDonBanHangReceipt, Window, Task<HoaDonBanHangReceipt?>>? thuCongNo)
+        Func<HoaDonBanHangReceipt, Window, Task<HoaDonBanHangReceipt?>>? thuCongNo,
+        Func<HuyHoaDonResult, Task>? onHoaDonCancelled = null)
     {
         InitializeComponent();
         _thuCongNo = thuCongNo;
-        DataContext = receipt;
-        CapNhatNutThanhToan(receipt);
-        PrintButton.IsVisible = !receipt.LaHoaDonTongHop;
-        EditInvoiceButton.IsVisible = !receipt.LaHoaDonTongHop;
+        _onHoaDonCancelled = onHoaDonCancelled;
+        CapNhatGiaoDienTheoReceipt(receipt);
     }
 
     public InvoiceWindow(
         HoaDonBanHangReceipt receipt,
         Func<HoaDonBanHangReceipt, Task<HoaDonBanHangReceipt?>>? thuCongNo)
-        : this(receipt, thuCongNo == null ? null : (r, _) => thuCongNo(r))
+        : this(receipt, thuCongNo == null ? null : (r, _) => thuCongNo(r), null)
     {
+    }
+
+    private void CapNhatGiaoDienTheoReceipt(HoaDonBanHangReceipt receipt)
+    {
+        DataContext = null;
+        DataContext = receipt;
+        CapNhatNutThanhToan(receipt);
+        PrintButton.IsVisible = !receipt.LaHoaDonTongHop;
+        CancelInvoiceButton.IsVisible = !receipt.LaHoaDonDaHuy && DatabaseService.CoQuyenHuyHoaDonHienTai();
     }
 
     private void CapNhatNutThanhToan(HoaDonBanHangReceipt receipt)
     {
-        // Yêu cầu: Nếu công nợ là 0 (khách không nợ) thì hóa đơn không có nút thanh toán công nợ.
-        // Chỉ hiển thị nút khi hóa đơn còn nợ (ConNo > 0).
-        ThanhToanCongNoButton.IsVisible = receipt.ConNo > 0;
+        // Hóa đơn đã hủy hoặc đã trả đủ (ConNo <= 0) không được phép thu nợ.
+        ThanhToanCongNoButton.IsVisible = !receipt.LaHoaDonDaHuy && receipt.ConNo > 0;
     }
 
-    private async void EditInvoiceButton_OnClick(object? sender, RoutedEventArgs e)
+    private async void CancelInvoiceButton_OnClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not HoaDonBanHangReceipt receipt)
             return;
 
-        if (!Quyen.HasPermission(Session.CurrentUser, PermissionKeys.InvoicesEdit) &&
-            !Quyen.IsAdmin(Session.CurrentUser))
+        if (!DatabaseService.CoQuyenHuyHoaDonHienTai())
         {
-            await HienThiThongBaoAsync("Thông báo", "Bạn không có quyền chỉnh sửa hóa đơn.");
+            await HienThiThongBaoAsync("Thông báo", "Bạn không có quyền hủy hóa đơn bán hàng.");
             return;
         }
 
-        var editor = new HoaDonEditorWindow(receipt.MaHoaDon);
-        var updated = await editor.ShowDialog<HoaDonBanHangReceipt?>(this);
-        if (updated != null)
+        if (receipt.LaHoaDonDaHuy)
         {
-            updated.ThongTinTiem = receipt.ThongTinTiem;
-            DataContext = null;
-            DataContext = updated;
-            CapNhatNutThanhToan(updated);
-
-            await HienThiThongBaoAsync("Thành công", $"Đã cập nhật hóa đơn {updated.MaHoaDon}. Lịch sử chỉnh sửa đã được ghi nhận.");
+            await HienThiThongBaoAsync("Thông báo", $"Hóa đơn {receipt.MaHoaDon} đã ở trạng thái Đã hủy.");
+            return;
         }
+
+        var dialog = new HuyHoaDonWindow(receipt.MaHoaDon);
+        var ketQua = await dialog.ShowDialog<HuyHoaDonResult?>(this);
+        if (ketQua is null)
+            return;
+
+        if (_onHoaDonCancelled is not null)
+        {
+            await _onHoaDonCancelled(ketQua);
+        }
+
+        if (ketQua.CheDoHuy == CheDoHuyHoaDon.HuyVaTaoHoaDonTuongTu)
+        {
+            // Đóng cửa sổ chi tiết hóa đơn để nhân viên làm việc ngay trên đơn nháp tại màn Bán hàng
+            Close();
+            return;
+        }
+
+        if (ketQua.ReceiptDaHuy is not null)
+        {
+            ketQua.ReceiptDaHuy.ThongTinTiem = receipt.ThongTinTiem;
+            CapNhatGiaoDienTheoReceipt(ketQua.ReceiptDaHuy);
+        }
+
+        await HienThiThongBaoAsync(
+            "Đã hủy hóa đơn",
+            $"Hóa đơn {ketQua.MaHoaDon} đã được chuyển sang trạng thái Đã hủy và hoàn tác dữ liệu liên quan.");
     }
 
-    private async void HistoryInvoiceButton_OnClick(object? sender, RoutedEventArgs e)
+    private async void XemHoaDonThayThe_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not HoaDonBanHangReceipt receipt)
+        if (DataContext is not HoaDonBanHangReceipt receipt || string.IsNullOrWhiteSpace(receipt.MaHoaDonThayThe))
             return;
 
-        var historyWindow = new HoaDonLichSuWindow(receipt.MaHoaDon);
-        await historyWindow.ShowDialog(this);
+        await ChuyenSangXemHoaDonKhacAsync(receipt.MaHoaDonThayThe, receipt.ThongTinTiem);
+    }
+
+    private async void XemHoaDonGoc_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not HoaDonBanHangReceipt receipt || string.IsNullOrWhiteSpace(receipt.MaHoaDonGoc))
+            return;
+
+        await ChuyenSangXemHoaDonKhacAsync(receipt.MaHoaDonGoc, receipt.ThongTinTiem);
+    }
+
+    private async Task ChuyenSangXemHoaDonKhacAsync(string maHoaDon, ThongTinTiem thongTinTiem)
+    {
+        try
+        {
+            var db = new DatabaseService();
+            var other = await db.GetHoaDonBanHangTheoMaAsync(maHoaDon);
+            if (other is null)
+            {
+                await HienThiThongBaoAsync("Thông báo", $"Không tìm thấy hóa đơn {maHoaDon}.");
+                return;
+            }
+
+            other.ThongTinTiem = thongTinTiem;
+            CapNhatGiaoDienTheoReceipt(other);
+        }
+        catch (Exception ex)
+        {
+            await HienThiThongBaoAsync("Lỗi", $"Không thể mở hóa đơn {maHoaDon}: {ex.Message}");
+        }
     }
 
     private async void ThanhToanCongNoButton_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not HoaDonBanHangReceipt receipt || receipt.ConNo <= 0)
+        if (DataContext is not HoaDonBanHangReceipt receipt || receipt.LaHoaDonDaHuy || receipt.ConNo <= 0)
             return;
 
         ThanhToanCongNoButton.IsEnabled = false;
 
         try
         {
-            HoaDonBanHangReceipt? capNhat = null;
+            HoaDonBanHangReceipt? capNhat;
 
             if (_thuCongNo is not null)
             {
@@ -109,9 +160,7 @@ public partial class InvoiceWindow : Window
 
             if (capNhat is not null)
             {
-                DataContext = null;
-                DataContext = capNhat;
-                CapNhatNutThanhToan(capNhat);
+                CapNhatGiaoDienTheoReceipt(capNhat);
             }
         }
         finally
@@ -122,7 +171,7 @@ public partial class InvoiceWindow : Window
 
     private async Task<HoaDonBanHangReceipt?> ThuCongNoMacDinhAsync(HoaDonBanHangReceipt receipt)
     {
-        if (receipt.ConNo <= 0)
+        if (receipt.LaHoaDonDaHuy || receipt.ConNo <= 0)
             return null;
 
         if (!Quyen.HasPermission(Session.CurrentUser, PermissionKeys.CustomersDebtPay)

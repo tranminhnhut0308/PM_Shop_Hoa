@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia;
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
 {
     private bool _formattingDiscount;
     private bool _formattingCash;
+    private HelpWindow? _helpWindow;
 
     public MainWindow()
     {
@@ -30,6 +32,8 @@ public partial class MainWindow : Window
         };
 
         DataContext = viewModel;
+
+        AddHandler(KeyDownEvent, OnGlobalKeyDown, RoutingStrategies.Tunnel);
 
         this.Opened += async (_, _) =>
         {
@@ -1108,11 +1112,229 @@ public partial class MainWindow : Window
         var usersWindow = new UsersWindow();
         await usersWindow.ShowDialog(this);
     }
+    private void OpenHelpWindow_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        (AccountButton.Flyout as Flyout)?.Hide();
+        OpenHelpWindow();
+    }
+
+    private void OpenHelpWindow()
+    {
+        if (_helpWindow is { IsVisible: true })
+        {
+            _helpWindow.Activate();
+            return;
+        }
+
+        var helpWindow = new HelpWindow();
+        _helpWindow = helpWindow;
+
+        helpWindow.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_helpWindow, helpWindow))
+                _helpWindow = null;
+        };
+
+        helpWindow.Show(this);
+    }
+
     private async void OpenUpdateWindow_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         (AccountButton.Flyout as Flyout)?.Hide();
         var updateWindow = new UpdateWindow();
         await updateWindow.ShowDialog(this);
+    }
+
+    private void OnGlobalKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        var control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+
+        if (e.Key == Key.F1)
+        {
+            OpenHelpWindow();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Escape && viewModel.IsSalesPanelVisible)
+        {
+            if (viewModel.DongBanHangAnToanCommand.CanExecute(null))
+                _ = viewModel.DongBanHangAnToanCommand.ExecuteAsync(null);
+
+            e.Handled = true;
+            return;
+        }
+
+        if (control && e.Key == Key.F)
+        {
+            if (FocusSearchForCurrentSection(viewModel))
+                e.Handled = true;
+
+            return;
+        }
+
+        if (control && e.Key == Key.K)
+        {
+            if (viewModel.IsSalesPanelVisible)
+                e.Handled = FocusControl("SaleCustomerSearchBox");
+            else if (viewModel.SelectedMenu == "Nhập hàng" && viewModel.IsNhapHangFormVisible)
+                e.Handled = FocusControl("PhieuNhapNccSearchBox");
+
+            return;
+        }
+
+        if (control && e.Key == Key.S
+            && viewModel.SelectedMenu == "Nhập hàng"
+            && viewModel.IsNhapHangFormVisible)
+        {
+            if (viewModel.LuuNhapPhieuNhapCommand.CanExecute(null))
+                _ = viewModel.LuuNhapPhieuNhapCommand.ExecuteAsync(null);
+
+            e.Handled = true;
+            return;
+        }
+
+        if (control && e.Key == Key.N
+            && viewModel.SelectedMenu is "Hàng hóa" or "Khách hàng" or "Nhà cung cấp" or "Nhập hàng" or "Sổ quỹ")
+        {
+            _ = viewModel.TaoMoiTheoNguCanhCommand.ExecuteAsync(null);
+            e.Handled = true;
+            return;
+        }
+
+        if (control && e.Key == Key.Enter
+            && viewModel.IsSalesPanelVisible
+            && viewModel.SaleCart.Count > 0)
+        {
+            // Rời ô đang sửa để giá trị mới nhất được ghi vào mô hình trước khi thanh toán.
+            if (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox textBox
+                && textBox.Parent is Control parent)
+            {
+                parent.Focus();
+            }
+
+            if (viewModel.ThanhToanCommand.CanExecute(null))
+                _ = viewModel.ThanhToanCommand.ExecuteAsync(null);
+
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.F5)
+        {
+            _ = viewModel.LamMoiKhuVucHienTaiCommand.ExecuteAsync(null);
+            e.Handled = true;
+        }
+    }
+
+    private bool FocusSearchForCurrentSection(MainWindowViewModel viewModel)
+    {
+        if (viewModel.IsSalesPanelVisible)
+            return FocusControl("SaleSearchBox");
+
+        return viewModel.SelectedMenu switch
+        {
+            "Hàng hóa" => FocusControl("ProductSearchBox"),
+            "Khách hàng" => FocusControl("CustomerSearchBox"),
+            "Hóa đơn" => FocusControl("InvoiceSearchBox"),
+            "Nhà cung cấp" => FocusControl("SupplierSearchBox"),
+            "Nhập hàng" when viewModel.IsNhapHangFormVisible => FocusControl("ImportProductSearchBox"),
+            "Sổ quỹ" => FocusControl("SoQuySearchBox"),
+            "Báo cáo" when viewModel.SelectedReportKey == "phieu-nhap-hang" => FocusControl("BaoCaoPhieuNhapSearchBox"),
+            _ => false,
+        };
+    }
+
+    private bool FocusControl(string name)
+    {
+        var control = this.FindControl<TextBox>(name);
+
+        if (control is not { IsVisible: true })
+            return false;
+
+        control.Focus();
+        control.SelectAll();
+
+        return true;
+    }
+
+    private void OnSaleSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter
+            || sender is not TextBox textBox
+            || string.IsNullOrWhiteSpace(textBox.Text)
+            || DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var sanPham = viewModel.ProductSearchResults.FirstOrDefault();
+
+        if (sanPham is null || !viewModel.ThemVaoGioHangCommand.CanExecute(sanPham))
+            return;
+
+        _ = viewModel.ThemVaoGioHangCommand.ExecuteAsync(sanPham);
+        e.Handled = true;
+    }
+
+    private void OnSaleCustomerSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter
+            || sender is not TextBox textBox
+            || string.IsNullOrWhiteSpace(textBox.Text)
+            || DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var khachHang = viewModel.SaleCustomerSuggestions.FirstOrDefault();
+
+        if (khachHang is null || !viewModel.ChonKhachHangBanCommand.CanExecute(khachHang))
+            return;
+
+        viewModel.ChonKhachHangBanCommand.Execute(khachHang);
+        e.Handled = true;
+    }
+
+    private void OnImportProductSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter
+            || sender is not TextBox textBox
+            || string.IsNullOrWhiteSpace(textBox.Text)
+            || DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var sanPham = viewModel.PhieuNhapProductSuggestions.FirstOrDefault();
+
+        if (sanPham is null || !viewModel.ThemSanPhamVaoPhieuNhapCommand.CanExecute(sanPham))
+            return;
+
+        viewModel.ThemSanPhamVaoPhieuNhapCommand.Execute(sanPham);
+        e.Handled = true;
+    }
+
+    private void OnImportSupplierSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter
+            || sender is not TextBox textBox
+            || string.IsNullOrWhiteSpace(textBox.Text)
+            || DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var nhaCungCap = viewModel.PhieuNhapSupplierSuggestions.FirstOrDefault();
+
+        if (nhaCungCap is null || !viewModel.ChonNhaCungCapNhapCommand.CanExecute(nhaCungCap))
+            return;
+
+        viewModel.ChonNhaCungCapNhapCommand.Execute(nhaCungCap);
+        e.Handled = true;
     }
 
     private void InvoiceRow_OnDoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)
