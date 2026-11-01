@@ -25,6 +25,12 @@
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <Style Selector="TextBlock.ttSection">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#164B40" />
+    </Style>
+
     <Style Selector="TextBox.ttInput">
       <Setter Property="Background" Value="White" />
       <Setter Property="Foreground" Value="#263B35" />
@@ -36,6 +42,21 @@
 
     <Style Selector="TextBox.ttInput:focus">
       <Setter Property="BorderBrush" Value="#087F6E" />
+    </Style>
+
+    <Style Selector="ComboBox.ttCombo">
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#263B35" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="MinHeight" Value="38" />
+    </Style>
+
+    <Style Selector="CheckBox.ttCheck">
+      <Setter Property="Foreground" Value="#263B35" />
+      <Setter Property="FontSize" Value="12.5" />
     </Style>
 
     <Style Selector="Button.ttSecondary">
@@ -73,23 +94,28 @@
   </UserControl.Styles>
 
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Margin="18" Spacing="14" MaxWidth="1080" HorizontalAlignment="Stretch">
+    <StackPanel Margin="18" Spacing="14" MaxWidth="1180" HorizontalAlignment="Stretch">
 
       <!-- ============ TIÊU ĐỀ + HÀNH ĐỘNG ============ -->
       <Border Classes="ttCard" Padding="16,13">
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
           <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="THÔNG TIN TIỆM" FontSize="18" FontWeight="SemiBold"
+            <TextBlock Text="CÀI ĐẶT HÓA ĐƠN IN" FontSize="18" FontWeight="SemiBold"
               Foreground="#164B40" />
             <TextBlock Classes="ttHint" Margin="0,3,0,0"
-              Text="Thông tin này được in lên hóa đơn. Sửa và bấm “Lưu thông tin”, hóa đơn tiếp theo sẽ tự lấy thông tin mới — không phải sửa mẫu hóa đơn." />
+              Text="Thông tin cửa hàng, logo, QR và bố cục mẫu in. Bấm “Lưu cấu hình” để áp dụng cho các hóa đơn in tiếp theo — không cần sửa source code và không làm thay đổi hóa đơn cũ." />
           </StackPanel>
 
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
             VerticalAlignment="Center">
             <Button Classes="ttSecondary" Content="Tải lại"
               Command="{Binding TaiLaiCommand}" />
-            <Button Classes="ttPrimary" Content="Lưu thông tin"
+            <Button Classes="ttSecondary" Content="Khôi phục mặc định"
+              IsEnabled="{Binding CanChinhSua}"
+              Command="{Binding KhoiPhucMacDinhCommand}" />
+            <Button Classes="ttSecondary" Content="Xem trước hóa đơn"
+              Command="{Binding XemTruocCommand}" />
+            <Button Classes="ttPrimary" Content="Lưu cấu hình"
               Command="{Binding LuuCommand}"
               IsEnabled="{Binding CanChinhSua}" />
           </StackPanel>
@@ -108,19 +134,19 @@
         IsVisible="{Binding DangTai}" Foreground="#087F6E"
         Background="#EAF9F5" BorderThickness="0" />
 
-      <Grid ColumnDefinitions="1.35*,0.65*" ColumnSpacing="14">
+      <Grid ColumnDefinitions="1.4*,0.8*" ColumnSpacing="14">
 
-        <!-- ============ CỘT TRÁI: THÔNG TIN CHUNG ============ -->
+        <!-- ============ CỘT TRÁI ============ -->
         <StackPanel Spacing="14">
 
+          <!-- 1. THÔNG TIN CỬA HÀNG -->
           <Border Classes="ttCard" Padding="16">
             <StackPanel Spacing="13">
 
-              <TextBlock Text="1. THÔNG TIN CỬA HÀNG" FontSize="13" FontWeight="SemiBold"
-                Foreground="#164B40" />
+              <TextBlock Classes="ttSection" Text="1. THÔNG TIN CỬA HÀNG" />
 
               <StackPanel Spacing="5">
-                <TextBlock Classes="ttLabel" Text="Tên tiệm *" />
+                <TextBlock Classes="ttLabel" Text="Tên cửa hàng *" />
                 <TextBox Classes="ttInput" Text="{Binding TenTiem, Mode=TwoWay}"
                   IsEnabled="{Binding CanChinhSua}"
                   Watermark="Ví dụ: Vựa Hoa Nhà Huy" />
@@ -130,8 +156,8 @@
                 <TextBlock Classes="ttLabel" Text="Địa chỉ" />
                 <TextBox Classes="ttInput" Text="{Binding DiaChi, Mode=TwoWay}"
                   IsEnabled="{Binding CanChinhSua}"
-                  Watermark="Ví dụ: 123 Nguyễn Trãi, Cần Thơ"
-                  AcceptsReturn="True" TextWrapping="Wrap" MinHeight="62" />
+                  Watermark="Ví dụ: 101 đường Trần Bình Trọng, NK, TPCT"
+                  AcceptsReturn="True" TextWrapping="Wrap" MinHeight="58" />
               </StackPanel>
 
               <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
@@ -139,23 +165,30 @@
                   <TextBlock Classes="ttLabel" Text="Số điện thoại" />
                   <TextBox Classes="ttInput" Text="{Binding SoDienThoai, Mode=TwoWay}"
                     IsEnabled="{Binding CanChinhSua}"
-                    Watermark="0909xxxxxx" />
+                    Watermark="0357 886 765" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Spacing="5">
+                  <TextBlock Classes="ttLabel" Text="Zalo" />
+                  <TextBox Classes="ttInput" Text="{Binding Zalo, Mode=TwoWay}"
+                    IsEnabled="{Binding CanChinhSua}"
+                    Watermark="0376 879 469" />
+                </StackPanel>
+              </Grid>
+
+              <StackPanel Spacing="5">
+                <TextBlock Classes="ttLabel" Text="Facebook" />
+                <TextBox Classes="ttInput" Text="{Binding Facebook, Mode=TwoWay}"
+                  IsEnabled="{Binding CanChinhSua}"
+                  Watermark="Ví dụ: Vựa Hoa Nhà Huy Cần Thơ" />
+              </StackPanel>
+
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <StackPanel Spacing="5">
                   <TextBlock Classes="ttLabel" Text="Email" />
                   <TextBox Classes="ttInput" Text="{Binding Email, Mode=TwoWay}"
                     IsEnabled="{Binding CanChinhSua}"
                     Watermark="shop@example.com" />
-                </StackPanel>
-              </Grid>
-
-              <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="ttLabel" Text="Mã số thuế" />
-                  <TextBox Classes="ttInput" Text="{Binding MaSoThue, Mode=TwoWay}"
-                    IsEnabled="{Binding CanChinhSua}"
-                    Watermark="0123456789" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Spacing="5">
@@ -167,106 +200,263 @@
               </Grid>
 
               <StackPanel Spacing="5">
-                <TextBlock Classes="ttLabel" Text="Lời cảm ơn / ghi chú cuối hóa đơn" />
-                <TextBox Classes="ttInput" Text="{Binding LoiCamOn, Mode=TwoWay}"
+                <TextBlock Classes="ttLabel" Text="Mã số thuế" />
+                <TextBox Classes="ttInput" Text="{Binding MaSoThue, Mode=TwoWay}"
                   IsEnabled="{Binding CanChinhSua}"
-                  Watermark="Cảm ơn quý khách!"
-                  AcceptsReturn="True" TextWrapping="Wrap" MinHeight="62" />
-                <TextBlock Classes="ttHint"
-                  Text="Để trống thì hóa đơn dùng câu mặc định “Cảm ơn quý khách!”." />
+                  Watermark="0123456789" />
               </StackPanel>
 
             </StackPanel>
           </Border>
 
+          <!-- 2. TÀI KHOẢN NGÂN HÀNG -->
+          <Border Classes="ttCard" Padding="16">
+            <StackPanel Spacing="13">
+              <TextBlock Classes="ttSection" Text="2. TÀI KHOẢN NGÂN HÀNG" />
+
+              <StackPanel Spacing="5">
+                <TextBlock Classes="ttLabel" Text="Tên ngân hàng" />
+                <TextBox Classes="ttInput" Text="{Binding TenNganHang, Mode=TwoWay}"
+                  IsEnabled="{Binding CanChinhSua}"
+                  Watermark="Ví dụ: Techcombank" />
+              </StackPanel>
+
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="ttLabel" Text="Số tài khoản" />
+                  <TextBox Classes="ttInput" Text="{Binding SoTaiKhoan, Mode=TwoWay}"
+                    IsEnabled="{Binding CanChinhSua}"
+                    Watermark="9376 8794 68" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Spacing="5">
+                  <TextBlock Classes="ttLabel" Text="Chủ tài khoản" />
+                  <TextBox Classes="ttInput" Text="{Binding ChuTaiKhoan, Mode=TwoWay}"
+                    IsEnabled="{Binding CanChinhSua}"
+                    Watermark="Trương Đan Huy" />
+                </StackPanel>
+              </Grid>
+
+              <TextBlock Classes="ttHint"
+                Text="Thông tin này được in ở đầu hóa đơn để khách chuyển khoản. Không tự tạo QR từ số tài khoản — hãy tải ảnh QR của cửa hàng ở cột bên phải." />
+            </StackPanel>
+          </Border>
+
+          <!-- 3. TÙY CHỈNH MẪU IN -->
+          <Border Classes="ttCard" Padding="16">
+            <StackPanel Spacing="13">
+              <TextBlock Classes="ttSection" Text="3. TÙY CHỈNH MẪU IN" />
+
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="ttLabel" Text="Khổ giấy in" />
+                  <ComboBox Classes="ttCombo"
+                    ItemsSource="{Binding KhoGiayOptions}"
+                    SelectedItem="{Binding KhoGiayChon, Mode=TwoWay}"
+                    IsEnabled="{Binding CanChinhSua}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Spacing="5">
+                  <TextBlock Classes="ttLabel" Text="Kích thước QR" />
+                  <ComboBox Classes="ttCombo"
+                    ItemsSource="{Binding KichThuocQrOptions}"
+                    SelectedItem="{Binding KichThuocQrChon, Mode=TwoWay}"
+                    IsEnabled="{Binding CanChinhSua}" />
+                </StackPanel>
+              </Grid>
+
+              <StackPanel Spacing="5">
+                <TextBlock Classes="ttLabel" Text="Vị trí QR cuối hóa đơn" />
+                <ComboBox Classes="ttCombo"
+                  ItemsSource="{Binding ViTriQrOptions}"
+                  SelectedItem="{Binding ViTriQrChon, Mode=TwoWay}"
+                  IsEnabled="{Binding CanChinhSua}" />
+              </StackPanel>
+
+              <Border Height="1" Background="#EEF4F2" />
+
+              <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                <CheckBox Classes="ttCheck" Grid.Row="0" Grid.Column="0"
+                  Content="Hiển thị logo cửa hàng"
+                  IsChecked="{Binding HienThiLogo, Mode=TwoWay}"
+                  IsEnabled="{Binding CanChinhSua}" />
+                <CheckBox Classes="ttCheck" Grid.Row="0" Grid.Column="1"
+                  Content="Hiển thị QR Code"
+                  IsChecked="{Binding HienThiQr, Mode=TwoWay}"
+                  IsEnabled="{Binding CanChinhSua}" />
+                <CheckBox Classes="ttCheck" Grid.Row="1" Grid.Column="0"
+                  Content="Hiển thị Facebook"
+                  IsChecked="{Binding HienThiFacebook, Mode=TwoWay}"
+                  IsEnabled="{Binding CanChinhSua}" />
+                <CheckBox Classes="ttCheck" Grid.Row="1" Grid.Column="1"
+                  Content="Hiển thị thông tin ngân hàng"
+                  IsChecked="{Binding HienThiNganHang, Mode=TwoWay}"
+                  IsEnabled="{Binding CanChinhSua}" />
+                <CheckBox Classes="ttCheck" Grid.Row="2" Grid.Column="0"
+                  Content="Hiển thị địa chỉ khách hàng"
+                  IsChecked="{Binding HienThiDiaChiKhachHang, Mode=TwoWay}"
+                  IsEnabled="{Binding CanChinhSua}" />
+              </Grid>
+
+              <Border Height="1" Background="#EEF4F2" />
+
+              <StackPanel Spacing="5">
+                <TextBlock Classes="ttLabel" Text="Lời cảm ơn cuối hóa đơn" />
+                <TextBox Classes="ttInput" Text="{Binding LoiCamOn, Mode=TwoWay}"
+                  IsEnabled="{Binding CanChinhSua}"
+                  Watermark="Cảm ơn quý khách! Hẹn gặp lại."
+                  AcceptsReturn="True" TextWrapping="Wrap" MinHeight="58" />
+                <TextBlock Classes="ttHint"
+                  Text="Để trống thì hóa đơn dùng câu mặc định “Cảm ơn quý khách!”." />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- 4. LƯU Ý -->
           <Border Classes="ttCard" Padding="16">
             <StackPanel Spacing="9">
-              <TextBlock Text="2. LƯU Ý KHI SỬA" FontSize="13" FontWeight="SemiBold"
-                Foreground="#164B40" />
+              <TextBlock Classes="ttSection" Text="4. LƯU Ý" />
               <TextBlock Classes="ttHint"
                 Text="• Thông tin được lưu vào một bản ghi duy nhất trong database. Bấm Lưu nhiều lần vẫn chỉ cập nhật đúng bản ghi đó, không sinh thêm bản ghi." />
               <TextBlock Classes="ttHint"
-                Text="• Hóa đơn đã xuất trước đây vẫn in theo thông tin lúc bấm Thanh toán; các hóa đơn tạo sau khi lưu sẽ dùng thông tin mới." />
+                Text="• Hóa đơn đã in trước đây vẫn giữ nguyên dữ liệu; chỉ các lần in sau mới dùng cấu hình mới." />
               <TextBlock Classes="ttHint"
-                Text="• Trường có dấu * là bắt buộc." />
+                Text="• Trường có dấu * là bắt buộc. Ảnh logo/QR được sao chép vào thư mục dữ liệu ứng dụng nên không mất khi di chuyển file gốc." />
+              <TextBlock Classes="ttHint"
+                Text="• Mẫu in hỗ trợ khổ 58mm, 80mm và A4. Chọn đúng khổ giấy trước khi bấm in trong hộp thoại của trình duyệt." />
             </StackPanel>
           </Border>
 
         </StackPanel>
 
-        <!-- ============ CỘT PHẢI: LOGO ============ -->
-        <Border Grid.Column="1" Classes="ttCard" Padding="16" VerticalAlignment="Top">
-          <StackPanel Spacing="13">
+        <!-- ============ CỘT PHẢI: ẢNH + XEM TRƯỚC ============ -->
+        <StackPanel Grid.Column="1" Spacing="14">
 
-            <TextBlock Text="3. LOGO TIỆM" FontSize="13" FontWeight="SemiBold"
-              Foreground="#164B40" />
+          <!-- LOGO -->
+          <Border Classes="ttCard" Padding="16" VerticalAlignment="Top">
+            <StackPanel Spacing="12">
+              <TextBlock Classes="ttSection" Text="LOGO CỬA HÀNG" />
 
-            <Border Height="180" Background="#F7FAF9" CornerRadius="10"
-              BorderBrush="#E2ECE8" BorderThickness="1">
-              <Panel>
-                <!-- Logo đang chọn -->
-                <Image Source="{Binding LogoXemTruoc}" IsVisible="{Binding CoLogoXemTruoc}"
-                  Stretch="Uniform" Margin="10" />
+              <Border Height="150" Background="#F7FAF9" CornerRadius="10"
+                BorderBrush="#E2ECE8" BorderThickness="1">
+                <Panel>
+                  <Image Source="{Binding LogoXemTruoc}" IsVisible="{Binding CoLogoXemTruoc}"
+                    Stretch="Uniform" Margin="10" />
+                  <StackPanel IsVisible="{Binding !CoLogoXemTruoc}" VerticalAlignment="Center"
+                    HorizontalAlignment="Center" Spacing="5">
+                    <TextBlock Text="🖼" FontSize="28" HorizontalAlignment="Center"
+                      Foreground="#B6C6C1" />
+                    <TextBlock Text="Chưa có logo" FontSize="12" Foreground="#8FA39D"
+                      HorizontalAlignment="Center" />
+                  </StackPanel>
+                </Panel>
+              </Border>
 
-                <!-- Chưa có logo -->
-                <StackPanel IsVisible="{Binding !CoLogoXemTruoc}" VerticalAlignment="Center"
-                  HorizontalAlignment="Center" Spacing="5">
-                  <TextBlock Text="🖼" FontSize="30" HorizontalAlignment="Center"
-                    Foreground="#B6C6C1" />
-                  <TextBlock Text="Chưa có logo" FontSize="12" Foreground="#8FA39D"
-                    HorizontalAlignment="Center" />
-                </StackPanel>
-              </Panel>
-            </Border>
-
-            <TextBlock Classes="ttHint"
-              Text="Logo được hiển thị ở đầu hóa đơn. File được sao chép vào thư mục dữ liệu ứng dụng khi bấm Lưu nên sau này di chuyển file gốc vẫn không mất." />
-
-            <StackPanel Spacing="8">
-              <Button Classes="ttSecondary" Content="📁  Chọn logo từ máy tính"
-                HorizontalAlignment="Stretch"
-                HorizontalContentAlignment="Center"
-                IsEnabled="{Binding CanChinhSua}"
-                Command="{Binding ChonLogoCommand}" />
-
-              <Button Classes="ttSecondary" Content="Bỏ logo"
-                HorizontalAlignment="Stretch"
-                HorizontalContentAlignment="Center"
-                IsVisible="{Binding CoLogoXemTruoc}"
-                IsEnabled="{Binding CanChinhSua}"
-                Command="{Binding BoLogoCommand}" />
-            </StackPanel>
-
-            <Border Height="1" Background="#EEF4F2" />
-
-            <StackPanel Spacing="4">
-              <TextBlock Classes="ttLabel" Text="File đang dùng" />
-              <TextBlock Text="{Binding TenLogoHienThi}" FontSize="12"
-                Foreground="#4B5D57" TextWrapping="Wrap" />
-            </StackPanel>
-
-            <Border Background="#F2F8F6" CornerRadius="10" Padding="12,10">
-              <StackPanel Spacing="6">
-                <TextBlock Text="XEM TRƯỚC TRÊN HÓA ĐƠN" FontSize="11"
-                  FontWeight="SemiBold" Foreground="#164B40" />
-                <TextBlock Text="{Binding LoiCamOn}" FontSize="12" FontStyle="Italic"
-                  Foreground="#61736E" HorizontalAlignment="Center"
-                  TextWrapping="Wrap" TextAlignment="Center" />
-                <TextBlock Text="{Binding TenTiem}" FontSize="15" FontWeight="Bold"
-                  Foreground="#163F38" HorizontalAlignment="Center"
-                  TextWrapping="Wrap" TextAlignment="Center" />
-                <TextBlock Text="{Binding DiaChi}" FontSize="11" Foreground="#61736E"
-                  HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
-                <TextBlock Text="{Binding SoDienThoai}" FontSize="11" Foreground="#61736E"
-                  HorizontalAlignment="Center" />
-                <TextBlock Text="{Binding Email}" FontSize="11" Foreground="#61736E"
-                  HorizontalAlignment="Center" />
+              <StackPanel Spacing="8">
+                <Button Classes="ttSecondary" Content="📁  Chọn logo"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  IsEnabled="{Binding CanChinhSua}"
+                  Command="{Binding ChonLogoCommand}" />
+                <Button Classes="ttSecondary" Content="Xóa logo"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  IsVisible="{Binding CoLogoXemTruoc}"
+                  IsEnabled="{Binding CanChinhSua}"
+                  Command="{Binding BoLogoCommand}" />
               </StackPanel>
-            </Border>
 
-          </StackPanel>
-        </Border>
+              <StackPanel Spacing="3">
+                <TextBlock Classes="ttLabel" Text="File đang dùng" Margin="0" />
+                <TextBlock Text="{Binding TenLogoHienThi}" FontSize="11.5"
+                  Foreground="#4B5D57" TextWrapping="Wrap" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
 
+          <!-- QR -->
+          <Border Classes="ttCard" Padding="16" VerticalAlignment="Top">
+            <StackPanel Spacing="12">
+              <TextBlock Classes="ttSection" Text="QR CODE THANH TOÁN / LIÊN HỆ" />
+
+              <Border Height="190" Background="#F7FAF9" CornerRadius="10"
+                BorderBrush="#E2ECE8" BorderThickness="1">
+                <Panel>
+                  <Image Source="{Binding QrXemTruoc}" IsVisible="{Binding CoQrXemTruoc}"
+                    Stretch="Uniform" Margin="10" />
+                  <StackPanel IsVisible="{Binding !CoQrXemTruoc}" VerticalAlignment="Center"
+                    HorizontalAlignment="Center" Spacing="5">
+                    <TextBlock Text="▦" FontSize="28" HorizontalAlignment="Center"
+                      Foreground="#B6C6C1" />
+                    <TextBlock Text="Chưa có QR" FontSize="12" Foreground="#8FA39D"
+                      HorizontalAlignment="Center" />
+                  </StackPanel>
+                </Panel>
+              </Border>
+
+              <StackPanel Spacing="8">
+                <Button Classes="ttSecondary" Content="📁  Chọn ảnh QR (PNG/JPG/JPEG)"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  IsEnabled="{Binding CanChinhSua}"
+                  Command="{Binding ChonQrCommand}" />
+                <Button Classes="ttSecondary" Content="Xóa QR"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  IsVisible="{Binding CoQrXemTruoc}"
+                  IsEnabled="{Binding CanChinhSua}"
+                  Command="{Binding BoQrCommand}" />
+              </StackPanel>
+
+              <StackPanel Spacing="3">
+                <TextBlock Classes="ttLabel" Text="File đang dùng" Margin="0" />
+                <TextBlock Text="{Binding TenQrHienThi}" FontSize="11.5"
+                  Foreground="#4B5D57" TextWrapping="Wrap" />
+              </StackPanel>
+
+              <TextBlock Classes="ttHint"
+                Text="Ưu tiên dùng ảnh QR do cửa hàng cung cấp. Ảnh được nhúng trực tiếp vào bản in nên không bị mất hoặc méo khi in." />
+            </StackPanel>
+          </Border>
+
+          <!-- XEM TRƯỚC NHANH -->
+          <Border Classes="ttCard" Padding="16" VerticalAlignment="Top">
+            <StackPanel Spacing="9">
+              <TextBlock Classes="ttSection" Text="XEM TRƯỚC NHANH" />
+
+              <Border Background="#F2F8F6" CornerRadius="10" Padding="12,12">
+                <StackPanel Spacing="5">
+                  <Image Source="{Binding LogoXemTruoc}" IsVisible="{Binding CoLogoXemTruoc}"
+                    Height="48" Stretch="Uniform" HorizontalAlignment="Center" />
+                  <TextBlock Text="{Binding TenTiem}" FontSize="14.5" FontWeight="Bold"
+                    Foreground="#163F38" HorizontalAlignment="Center"
+                    TextWrapping="Wrap" TextAlignment="Center" />
+                  <TextBlock Text="{Binding DiaChi}" FontSize="11" Foreground="#61736E"
+                    HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
+                  <TextBlock Text="{Binding SoDienThoai}" FontSize="11" Foreground="#61736E"
+                    HorizontalAlignment="Center" />
+                  <TextBlock Text="{Binding Zalo, StringFormat='Zalo: {0}'}" FontSize="11"
+                    Foreground="#61736E" HorizontalAlignment="Center" />
+                  <TextBlock Text="{Binding Facebook}" FontSize="11" Foreground="#61736E"
+                    HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
+                  <TextBlock Text="{Binding TenNganHang}" FontSize="11" Foreground="#61736E"
+                    HorizontalAlignment="Center" />
+                  <TextBlock Text="{Binding SoTaiKhoan}" FontSize="11" Foreground="#61736E"
+                    HorizontalAlignment="Center" />
+
+                  <Border Height="1" Background="#D5E6E0" Margin="0,4" />
+
+                  <TextBlock Text="HÓA ĐƠN BÁN HÀNG" FontSize="11.5" FontWeight="Bold"
+                    Foreground="#163F38" HorizontalAlignment="Center" />
+                  <TextBlock Text="{Binding LoiCamOn}" FontSize="11" FontStyle="Italic"
+                    Foreground="#61736E" HorizontalAlignment="Center"
+                    TextWrapping="Wrap" TextAlignment="Center" />
+                </StackPanel>
+              </Border>
+
+              <Button Classes="ttPrimary" Content="Xem trước bản in đầy đủ"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                Command="{Binding XemTruocCommand}" />
+            </StackPanel>
+          </Border>
+
+        </StackPanel>
       </Grid>
 
     </StackPanel>

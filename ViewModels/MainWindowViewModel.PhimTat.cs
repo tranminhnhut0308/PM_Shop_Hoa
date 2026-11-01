@@ -1,5 +1,7 @@
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
+using ShopHoa.Models;
+using ShopHoa.Services;
 
 namespace ShopHoa.ViewModels;
 
@@ -34,11 +36,28 @@ public sealed partial class MainWindowViewModel
                 await ThemNhaCungCapAsync();
                 break;
 
+            case "Phiếu nhập hàng":
+                await MoGiaoDienNhapHangAsync();
+                break;
+
             case "Nhập hàng":
-                if (IsNhapHangFormVisible)
-                    await TaoPhieuNhapMoiAsync();
-                else
-                    await MoPhieuNhapHangAsync();
+                if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesCreate, "Bạn không có quyền tạo phiếu nhập hàng."))
+                    break;
+
+                if (CoDuLieuPhieuNhapDangSoan)
+                {
+                    var confirmed = await ShowConfirmationAsync(
+                        "Tạo phiếu nhập mới",
+                        "Phiếu nhập hiện tại đang có dữ liệu chưa hoàn thành. Xóa dữ liệu đang nhập và tạo phiếu mới?",
+                        "Tạo phiếu mới",
+                        "Hủy");
+
+                    if (!confirmed)
+                        break;
+                }
+
+                await KhoiTaoPhieuNhapMoiAsync();
+                StatusMessage = "Đã tạo phiếu nhập mới.";
                 break;
 
             case "Sổ quỹ":
@@ -85,6 +104,11 @@ public sealed partial class MainWindowViewModel
                 StatusMessage = "Đã làm mới danh sách nhà cung cấp.";
                 break;
 
+            case "Phiếu nhập hàng":
+                await LoadBaoCaoPhieuNhapAsync();
+                StatusMessage = "Đã làm mới danh sách phiếu nhập hàng.";
+                break;
+
             case "Nhập hàng":
                 if (IsNhapHangFormVisible)
                 {
@@ -118,10 +142,6 @@ public sealed partial class MainWindowViewModel
     {
         switch (SelectedReportKey)
         {
-            case "phieu-nhap-hang":
-                await LoadBaoCaoPhieuNhapAsync();
-                break;
-
             case "ban-hang":
                 await BaoCaoBanHang.TaiLaiAsync();
                 break;

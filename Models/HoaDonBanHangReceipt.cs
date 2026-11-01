@@ -31,9 +31,25 @@ public sealed class HoaDonBanHangReceipt
     public string? DiaChi { get; set; }
     public bool InKemThongTin { get; set; }
 
-    public bool HienThiThongTinLienHe => InKemThongTin && (!string.IsNullOrWhiteSpace(SoDienThoai) || !string.IsNullOrWhiteSpace(DiaChi));
-    public string SoDienThoaiHienThi => string.IsNullOrWhiteSpace(SoDienThoai) ? "Chưa có" : SoDienThoai;
-    public string DiaChiHienThi => string.IsNullOrWhiteSpace(DiaChi) ? "Chưa có" : DiaChi;
+    /// <summary>
+    /// Số điện thoại khách hàng chỉ hiện khi thực sự có dữ liệu — không in dòng
+    /// trống hay chữ "Chưa có" lên hóa đơn.
+    /// </summary>
+    public bool HienThiSoDienThoaiKhachHang => !string.IsNullOrWhiteSpace(SoDienThoai);
+
+    /// <summary>
+    /// Địa chỉ khách hàng chỉ hiện khi có dữ liệu và người dùng không tắt trong
+    /// "Cài đặt hóa đơn in".
+    /// </summary>
+    public bool HienThiDiaChiKhachHang =>
+        ThongTinTiem.HienThiDiaChiKhachHang && !string.IsNullOrWhiteSpace(DiaChi);
+
+    /// <summary>Giữ tên cũ cho giao diện xem trước: có ít nhất một dòng liên hệ.</summary>
+    public bool HienThiThongTinLienHe =>
+        HienThiSoDienThoaiKhachHang || HienThiDiaChiKhachHang;
+
+    public string SoDienThoaiHienThi => string.IsNullOrWhiteSpace(SoDienThoai) ? "" : SoDienThoai.Trim();
+    public string DiaChiHienThi => string.IsNullOrWhiteSpace(DiaChi) ? "" : DiaChi.Trim();
 
     /// <summary>Ghi chú riêng của hóa đơn (yêu cầu riêng của khách...).</summary>
     public string? GhiChu { get; set; }

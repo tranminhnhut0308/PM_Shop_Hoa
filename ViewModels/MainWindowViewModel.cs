@@ -86,12 +86,13 @@ public partial class MainWindowViewModel : ObservableObject
         if (!CanViewDashboard)
         {
             if (CanViewProducts) SelectedMenu = "Hàng hóa";
-            else if (CanViewPurchases) SelectedMenu = "Nhập hàng";
-            else if (CanViewInvoices) SelectedMenu = "Hóa đơn";
             else if (CanViewCustomers) SelectedMenu = "Khách hàng";
+            else if (CanViewInvoices) SelectedMenu = "Hóa đơn";
             else if (CanViewSuppliers) SelectedMenu = "Nhà cung cấp";
+            else if (CanViewPurchases) SelectedMenu = "Phiếu nhập hàng";
             else if (CanViewCashBook) SelectedMenu = "Sổ quỹ";
             else if (CanViewReports) SelectedMenu = "Báo cáo";
+            else if (CanCreatePurchase) SelectedMenu = "Nhập hàng";
             else SelectedMenu = "";
         }
 
@@ -201,6 +202,11 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty] private string saleSearchText = "";
     [ObservableProperty] private bool isSalesPanelVisible;
+
+    partial void OnIsSalesPanelVisibleChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsNhapHangSelected));
+    }
     [ObservableProperty] private string saleCustomerName = "Khách lẻ";
     [ObservableProperty] private string saleCustomerPhone = "";
     [ObservableProperty] private string saleCustomerAddress = "";
@@ -1452,6 +1458,9 @@ public partial class MainWindowViewModel : ObservableObject
     }
     private async Task LoadSelectedSectionAsync(string menu)
     {
+        if (!CoQuyenTruyCapMenu(menu))
+            return;
+
         try
         {
             switch (menu)
@@ -1476,11 +1485,19 @@ public partial class MainWindowViewModel : ObservableObject
                     await LoadSuppliersAsync();
                     break;
 
+                case "Phiếu nhập hàng":
+                    // Chỉ tải lần đầu khi vào màn hoặc khi vừa có phiếu nhập mới,
+                    // các lần sau giữ nguyên trang/bộ lọc đang xem.
+                    if (!_baoCaoPhieuNhapLoaded)
+                    {
+                        _baoCaoPhieuNhapLoaded = true;
+                        await LoadBaoCaoPhieuNhapAsync();
+                    }
+                    break;
+
                 case "Nhập hàng":
-                    // Mỗi lần bấm menu "Nhập hàng" phải khởi tạo phiếu mới:
-                    // sinh mã phiếu, gán nhân viên/ngày/trạng thái và nạp danh sách hàng hóa.
-                    // Thiếu bước này thì PhieuNhapMa rỗng => lưu phiếu sẽ lỗi
-                    // "Duplicate entry '' for key 'uk_pnh_ma'".
+                    // Mở màn hình Lập phiếu nhập hàng và giữ nguyên dữ liệu phiếu nháp
+                    // đang thao tác (chỉ khởi tạo phiếu mới khi chưa có phiếu đang soạn).
                     await MoPhieuNhapHangAsync();
                     break;
 
@@ -1502,13 +1519,6 @@ public partial class MainWindowViewModel : ObservableObject
                         || BaoCaoMenuItems.All(i => !i.IsVisible || i.Key != SelectedReportKey))
                     {
                         SelectedReportKey = BaoCaoMenuItems.FirstOrDefault(i => i.IsVisible)?.Key ?? "";
-                    }
-
-                    // Chỉ tải lần đầu khi vào màn, các lần sau giữ nguyên trang/tìm kiếm đang xem
-                    if (SelectedReportKey == "phieu-nhap-hang" && !_baoCaoPhieuNhapLoaded)
-                    {
-                        _baoCaoPhieuNhapLoaded = true;
-                        await LoadBaoCaoPhieuNhapAsync();
                     }
 
                     // Báo cáo bán hàng cũng chỉ tải lần đầu; các lần sau giữ nguyên
@@ -3501,9 +3511,20 @@ public partial class MainWindowViewModel : ObservableObject
         XoaLienKetHoaDonGocBiHuy();
     }
 
+    private bool CoDuLieuDonBanHangDangSoan =>
+        SaleCart.Count > 0
+        || SelectedSaleCustomer is not null
+        || !string.IsNullOrWhiteSpace(SaleCustomerPhone)
+        || !string.IsNullOrWhiteSpace(SaleCustomerAddress)
+        || !string.IsNullOrWhiteSpace(SaleGhiChu)
+        || SaleDiscountInput > 0
+        || TienKhachDua > 0
+        || DangTaoLaiTuHoaDonDaHuy;
+
     /// <summary>
-    /// Bắt đầu một đơn hàng mới: xoá sạch đơn cũ rồi tải lại danh sách sản phẩm.
-    /// Dùng chung cho lệnh "🛒 Bán hàng" và lệnh "Đơn mới".
+    /// Mở giao diện bán hàng: nếu đang có đơn hàng đang thao tác thì giữ nguyên
+    /// để người dùng chuyển qua lại giữa Bán hàng / Nhập hàng không bị mất dữ liệu;
+    /// nếu chưa có dữ liệu thì khởi tạo đơn mới.
     /// </summary>
     [RelayCommand]
     private async Task MoGiaoDienBanHangAsync()
@@ -3517,17 +3538,24 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        ResetDonHangVeMacDinh();
+        var giuDonHienTai = CoDuLieuDonBanHangDangSoan;
+        if (!giuDonHienTai)
+        {
+            ResetDonHangVeMacDinh();
+        }
 
         IsSalesPanelVisible = true;
 
-        StatusMessage = "Đã tạo đơn hàng mới. Chọn sản phẩm để bắt đầu.";
+        StatusMessage = giuDonHienTai
+            ? "Đang tiếp tục đơn hàng hiện tại."
+            : "Đã tạo đơn hàng mới. Chọn sản phẩm để bắt đầu.";
 
         // TẢI DANH SÁCH SẢN PHẨM KHI MỞ BÁN HÀNG
         try
         {
-            var products = await _db.GetSanPhamAsync();
+            var products = await _db.GetSanPhamAsync(SaleSearchText);
 
+            ProductSearchResults.Clear();
             foreach (var product in products)
                 ProductSearchResults.Add(product);
         }
@@ -3570,6 +3598,7 @@ public partial class MainWindowViewModel : ObservableObject
             }
         }
 
+        ResetDonHangVeMacDinh();
         await MoGiaoDienBanHangAsync();
     }
 
@@ -3824,13 +3853,6 @@ public partial class MainWindowViewModel : ObservableObject
             TieuDe = "Báo cáo nhà cung cấp",
             BieuTuong = "🏢",
             PermissionKey = PermissionKeys.ReportsPurchases
-        },
-        new BaoCaoMenuItem
-        {
-            Key = "phieu-nhap-hang",
-            TieuDe = "Báo cáo phiếu nhập hàng",
-            BieuTuong = "📥",
-            PermissionKey = PermissionKeys.ReportsPurchases
         }
     };
 
@@ -3950,8 +3972,11 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool IsBaoCaoSectionSelected => SelectedMenu == "Báo cáo";
 
-    public bool IsBaoCaoPhieuNhapSelected =>
-        SelectedMenu == "Báo cáo" && SelectedReportKey == "phieu-nhap-hang";
+    public bool IsPhieuNhapHangSelected => SelectedMenu == "Phiếu nhập hàng";
+
+    public bool IsNhapHangSelected => !IsSalesPanelVisible && SelectedMenu == "Nhập hàng";
+
+    public bool IsBaoCaoPhieuNhapSelected => IsPhieuNhapHangSelected;
 
     public bool IsBaoCaoBanHangSelected =>
         IsBaoCaoSectionSelected && SelectedReportKey == "ban-hang";
@@ -4035,7 +4060,6 @@ public partial class MainWindowViewModel : ObservableObject
             "ban-hang" => PermissionKeys.ReportsSales,
             "hang-hoa" => PermissionKeys.ReportsProducts,
             "khach-hang" => PermissionKeys.ReportsSales,
-            "phieu-nhap-hang" => PermissionKeys.ReportsPurchases,
             "nha-cung-cap" => PermissionKeys.ReportsPurchases,
             _ => PermissionKeys.ReportsView
         };
@@ -4055,15 +4079,6 @@ public partial class MainWindowViewModel : ObservableObject
         SelectedMenu = "Báo cáo";
         SelectedReportKey = item.Key;
         CapNhatTrangThaiChonBaoCao();
-
-        // Mỗi báo cáo có danh sách riêng
-        BaoCaoPhieuNhapPage = 1;
-
-        if (item.Key == "phieu-nhap-hang" && !_baoCaoPhieuNhapLoaded)
-        {
-            _baoCaoPhieuNhapLoaded = true;
-            _ = LoadBaoCaoPhieuNhapAsync();
-        }
 
         // Báo cáo bán hàng cũng chỉ tải một lần đầu, các lần sau giữ nguyên
         // bộ lọc ngày người dùng đang xem.
@@ -4188,6 +4203,11 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task XuatExcelBaoCaoPhieuNhapAsync()
     {
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.PurchasesExport,
+                "Bạn không có quyền xuất file phiếu nhập hàng."))
+            return;
+
         try
         {
             var cuaSo = Avalonia.Application.Current?.ApplicationLifetime
@@ -4212,12 +4232,12 @@ public partial class MainWindowViewModel : ObservableObject
 
             var file = await cuaSo.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
             {
-                Title = "Xuất Excel báo cáo phiếu nhập hàng",
+                Title = "Xuất Excel danh sách phiếu nhập hàng",
                 FileTypeChoices = new[]
                 {
                     new Avalonia.Platform.Storage.FilePickerFileType("Excel") { Patterns = new[] { "*.xlsx" } }
                 },
-                SuggestedFileName = $"BaoCaoPhieuNhap_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
+                SuggestedFileName = $"PhieuNhapHang_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
             });
 
             if (file is not null)
@@ -4851,6 +4871,12 @@ public partial class MainWindowViewModel : ObservableObject
         if (item is null || OwnerWindow is null)
             return;
 
+        if (!CanViewPurchaseDetail && !CanViewPurchases)
+        {
+            await KiemTraQuyenAsync(PermissionKeys.PurchasesDetail, "Bạn không có quyền xem chi tiết phiếu nhập hàng.");
+            return;
+        }
+
         var maPhieu = item.MaPhieuNhap;
 
         try
@@ -4887,6 +4913,9 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task InPhieuNhapAsync(PhieuNhapHang? item)
     {
         if (item is null || item.Id == 0)
+            return;
+
+        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesPrint, "Bạn không có quyền in phiếu nhập hàng."))
             return;
 
         var maPhieu = item.MaPhieuNhap;
@@ -4929,11 +4958,11 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task MoGiaoDienNhapHangTuBaoCaoAsync()
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesView, "Bạn không có quyền mở màn hình nhập hàng."))
+        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesCreate, "Bạn không có quyền lập phiếu nhập hàng."))
         {
             return;
         }
-        // Nút "+ Nhập hàng" trong báo cáo: chuyển sang màn lập phiếu nhập hàng
+        // Nút "+ Nhập hàng" trong danh sách Phiếu nhập hàng: chuyển sang màn lập phiếu nhập hàng
         await MoGiaoDienNhapHangAsync();
     }
 
@@ -5119,6 +5148,16 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    private bool _phieuNhapDaKhoiTao;
+
+    public bool CoDuLieuPhieuNhapDangSoan =>
+        PhieuNhapItems.Count > 0
+        || SelectedPhieuNhapNcc is not null
+        || !string.IsNullOrWhiteSpace(PhieuNhapSoHoaDonDauVao)
+        || !string.IsNullOrWhiteSpace(PhieuNhapGhiChu)
+        || PhieuNhapChiPhiKhac > 0
+        || PhieuNhapDaThanhToan > 0;
+
     [RelayCommand]
     private async Task MoPhieuNhapHangAsync()
     {
@@ -5126,7 +5165,44 @@ public partial class MainWindowViewModel : ObservableObject
         {
             return;
         }
+
+        IsSalesPanelVisible = false;
         IsNhapHangFormVisible = true;
+
+        // Nếu đã có phiếu nhập đang thao tác hoặc đã khởi tạo trong phiên hiện tại,
+        // giữ nguyên toàn bộ dữ liệu nháp khi chuyển trang thay vì tự động tạo phiếu mới.
+        if (_phieuNhapDaKhoiTao && (CoDuLieuPhieuNhapDangSoan || !string.IsNullOrWhiteSpace(PhieuNhapMa)))
+        {
+            PhieuNhapNhanVien = Session.CurrentUser?.HoTen ?? "Chưa đăng nhập";
+
+            if (string.IsNullOrWhiteSpace(PhieuNhapMa))
+            {
+                try
+                {
+                    PhieuNhapMa = await _db.TaoMaPhieuNhapMoiAsync();
+                }
+                catch (Exception ex)
+                {
+                    SafeLog.WriteError("Loi tao ma phieu nhap", ex);
+                }
+            }
+
+            await LoadPhieuNhapDonViTinhOptionsAsync();
+            await LoadPhieuNhapProductSuggestionsAsync();
+            return;
+        }
+
+        await KhoiTaoPhieuNhapMoiAsync();
+    }
+
+    /// <summary>
+    /// Khởi tạo một phiếu nhập mới hoàn toàn: xóa dữ liệu cũ, đặt lại ngày nhập và sinh mã phiếu mới.
+    /// Chỉ gọi lần đầu mở màn hoặc sau khi hoàn thành/reset phiếu nhập.
+    /// </summary>
+    private async Task KhoiTaoPhieuNhapMoiAsync()
+    {
+        IsNhapHangFormVisible = true;
+        _phieuNhapDaKhoiTao = true;
 
         _phieuNhapId = 0;
 
@@ -5176,16 +5252,18 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task MoGiaoDienNhapHangAsync()
     {
-        // Vào đây từ 2 nguồn: nút "＋ Nhập hàng" trên màn Hàng hóa (hiện theo
-        // CanCreatePurchase) và nút "＋ Nhập hàng" trong Báo cáo phiếu nhập (hiện
-        // theo CanViewPurchases). Cho phép khi có quyền xem HOẶC tạo phiếu nhập.
-        if (!CanViewPurchases && !CanCreatePurchase)
+        // Nút "Nhập hàng" truy cập nhanh và nút "＋ Nhập hàng" đều chuyển thẳng đến
+        // màn hình Lập phiếu nhập hàng nên bắt buộc kiểm tra quyền tạo phiếu nhập (PurchasesCreate).
+        if (!await KiemTraQuyenAsync(PermissionKeys.PurchasesCreate, "Bạn không có quyền lập phiếu nhập hàng."))
         {
-            await ShowMessageAsync("Thông báo", "Bạn không có quyền mở màn hình nhập hàng.");
             return;
         }
+
+        IsSalesPanelVisible = false;
+
         // Nếu đang đứng ở màn Nhập hàng thì SelectedMenu không đổi,
-        // LoadSelectedSectionAsync sẽ không chạy nên phải tự khởi tạo phiếu mới.
+        // LoadSelectedSectionAsync sẽ không chạy nên gọi MoPhieuNhapHangAsync() trực tiếp
+        // (hàm này vẫn giữ nguyên dữ liệu phiếu nháp đang thao tác).
         if (SelectedMenu == "Nhập hàng")
         {
             await MoPhieuNhapHangAsync();
@@ -5195,6 +5273,18 @@ public partial class MainWindowViewModel : ObservableObject
         // SelectedMenu đổi => case "Nhập hàng" trong LoadSelectedSectionAsync gọi
         // MoPhieuNhapHangAsync() giúp, không gọi ở đây để tránh chạy 2 lần.
         SelectedMenu = "Nhập hàng";
+    }
+
+    [RelayCommand]
+    private void QuayLaiDanhSachPhieuNhap()
+    {
+        if (!CanViewPurchases)
+        {
+            StatusMessage = "Bạn không có quyền xem danh sách phiếu nhập hàng.";
+            return;
+        }
+
+        ChonMenu("Phiếu nhập hàng");
     }
 
     private void BoDangKyPhieuNhapItems()
@@ -5668,12 +5758,12 @@ public partial class MainWindowViewModel : ObservableObject
 
         // Chỉ reset SAU khi hộp thoại thành công đã đóng, và vẫn giữ nguyên
         // màn hình "Lập phiếu nhập hàng" (IsNhapHangFormVisible vẫn = true).
-        // MoPhieuNhapHangAsync() xóa hàng hóa, nhà cung cấp, số hóa đơn đầu vào,
+        // KhoiTaoPhieuNhapMoiAsync() xóa hàng hóa, nhà cung cấp, số hóa đơn đầu vào,
         // ghi chú, chi phí khác, đã thanh toán, ngày nhập về hôm nay,
         // tính lại tổng tiền và SINH MÃ PHIẾU MỚI từ database.
-        await MoPhieuNhapHangAsync();
+        await KhoiTaoPhieuNhapMoiAsync();
 
-        // MoPhieuNhapHangAsync() để PhieuNhapMa = "" nếu sinh mã thất bại
+        // KhoiTaoPhieuNhapMoiAsync() để PhieuNhapMa = "" nếu sinh mã thất bại
         // (lỗi SQL/kết nối). Không được báo "sẵn sàng" khi mã còn rỗng.
         StatusMessage = string.IsNullOrWhiteSpace(PhieuNhapMa)
             ? $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Không tạo được mã phiếu mới, vui lòng mở lại màn hình."
@@ -5956,7 +6046,10 @@ public partial class MainWindowViewModel : ObservableObject
         ResetDonHangVeMacDinh();
 
         _invoicesLoaded = false;
-        ChonMenu("Hóa đơn");
+        if (CanViewInvoices)
+            ChonMenu("Hóa đơn");
+        else
+            IsSalesPanelVisible = false;
 
         // Dashboard phải thấy ngay hóa đơn vừa tạo (doanh thu, số hóa đơn,
         // hoạt động gần đây, top hàng bán chạy, top khách hàng).
@@ -6390,9 +6483,31 @@ public partial class MainWindowViewModel : ObservableObject
 
     public string BaoCaoArrowText => IsBaoCaoExpanded ? "▾" : "▸";
 
+    private bool CoQuyenTruyCapMenu(string menu) => menu switch
+    {
+        "Tổng quan" => CanViewDashboard,
+        "Hàng hóa" => CanViewProducts,
+        "Khách hàng" => CanViewCustomers,
+        "Hóa đơn" => CanViewInvoices,
+        "Nhà cung cấp" => CanViewSuppliers,
+        "Phiếu nhập hàng" => CanViewPurchases,
+        "Nhập hàng" => CanCreatePurchase,
+        "Sổ quỹ" => CanViewCashBook,
+        "Báo cáo" => CanViewReports,
+        "Thông tin tiệm" => CanViewStoreInfo,
+        _ => false
+    };
+
     [RelayCommand]
     private void ChonMenu(string menu)
     {
+        if (!CoQuyenTruyCapMenu(menu))
+        {
+            StatusMessage = "Bạn không có quyền truy cập chức năng này.";
+            _ = ShowMessageAsync("Thông báo", "Bạn không có quyền truy cập chức năng này.");
+            return;
+        }
+
         IsSalesPanelVisible = false;
         if (menu == "Báo cáo")
         {
@@ -6411,6 +6526,9 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ToggleBaoCaoMenu()
     {
+        if (!CanViewReports)
+            return;
+
         IsBaoCaoExpanded = !IsBaoCaoExpanded;
     }
 
@@ -6443,6 +6561,8 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsHoaDonSelected));
         OnPropertyChanged(nameof(IsKhachHangSelected));
         OnPropertyChanged(nameof(IsNhaCungCapSelected));
+        OnPropertyChanged(nameof(IsPhieuNhapHangSelected));
+        OnPropertyChanged(nameof(IsNhapHangSelected));
         OnPropertyChanged(nameof(IsSoQuySelected));
         OnPropertyChanged(nameof(IsDataSectionSelected));
         OnPropertyChanged(nameof(IsBaoCaoSectionSelected));
@@ -6525,13 +6645,14 @@ public partial class MainWindowViewModel : ObservableObject
     public bool IsNhaCungCapSelected => SelectedMenu == "Nhà cung cấp";
     public bool IsSoQuySelected => SelectedMenu == "Sổ quỹ";
 
-    // Báo cáo có vùng nội dung riêng nên không dùng chung TabControl dữ liệu
+    // Báo cáo và Phiếu nhập hàng có vùng nội dung riêng nên không dùng chung TabControl dữ liệu.
     // Màn nào có vùng nội dung riêng thì không được bật TabControl dữ liệu,
     // nếu không TabControl sẽ hiện chồng lên màn đó.
     public bool IsDataSectionSelected =>
         !IsTongQuanSelected
         && !IsBaoCaoSectionSelected
-        && !IsThongTinTiemSelected;
+        && !IsThongTinTiemSelected
+        && !IsPhieuNhapHangSelected;
 
     /// <summary>Màn "Thông tin tiệm" có vùng nội dung riêng, không nằm trong TabControl dữ liệu.</summary>
     public bool IsThongTinTiemSelected => SelectedMenu == "Thông tin tiệm";

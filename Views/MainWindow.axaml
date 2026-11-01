@@ -171,14 +171,14 @@
       <Setter Property="Foreground" Value="#FFFFFF" />
       <Setter Property="BorderBrush" Value="#62E8D3" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="Padding" Value="16,12" />
-      <Setter Property="Margin" Value="0,10,0,0" />
+      <Setter Property="Padding" Value="14,10" />
+      <Setter Property="Margin" Value="0,6,0,0" />
       <Setter Property="FontWeight" Value="Bold" />
       <Setter Property="FontSize" Value="13.5" />
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
-      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="CornerRadius" Value="11" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
 
@@ -186,7 +186,7 @@
       <Setter Property="Background" Value="#0A8C78" />
       <Setter Property="BorderBrush" Value="#62E8D3" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="CornerRadius" Value="11" />
       <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
     </Style>
 
@@ -198,6 +198,55 @@
 
     <Style Selector="Button.salesButton:pressed /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="#076E5E" />
+    </Style>
+
+    <Style Selector="Button.salesButton.active /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#10B29A" />
+      <Setter Property="BorderBrush" Value="#F1D08A" />
+      <Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+    </Style>
+
+    <!-- NÚT NHẬP HÀNG TRUY CẬP NHANH -->
+    <Style Selector="Button.importButton">
+      <Setter Property="Background" Value="#165B4C" />
+      <Setter Property="Foreground" Value="#F6E7C1" />
+      <Setter Property="BorderBrush" Value="#D9B66F" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="14,10" />
+      <Setter Property="Margin" Value="0,6,0,0" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="FontSize" Value="13.5" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="CornerRadius" Value="11" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.importButton /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#165B4C" />
+      <Setter Property="BorderBrush" Value="#D9B66F" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="11" />
+      <Setter Property="TextElement.Foreground" Value="#F6E7C1" />
+    </Style>
+
+    <Style Selector="Button.importButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#1E6F5E" />
+      <Setter Property="BorderBrush" Value="#F1D08A" />
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+    </Style>
+
+    <Style Selector="Button.importButton:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#10473B" />
+    </Style>
+
+    <Style Selector="Button.importButton.active /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#217A67" />
+      <Setter Property="BorderBrush" Value="#FFE099" />
+      <Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
     </Style>
 
     <!-- THẺ TÀI KHOẢN ADMIN KÍNH MỜ -->
@@ -1407,7 +1456,7 @@
             <TextBlock Text="CHỨC NĂNG" FontSize="10" FontWeight="Bold" Foreground="#85C7B7"
                        Margin="10,0,0,6" LetterSpacing="0.8" />
 
-            <!-- TỔNG QUAN -->
+            <!-- 1. TỔNG QUAN -->
             <Button Classes="menu" Classes.active="{Binding IsTongQuanSelected}"
               Command="{Binding ChonMenuCommand}" CommandParameter="Tổng quan"
               IsVisible="{Binding CanViewDashboard}">
@@ -1417,7 +1466,7 @@
               </Grid>
             </Button>
 
-            <!-- HÀNG HÓA -->
+            <!-- 2. HÀNG HÓA -->
             <Button Classes="menu" Classes.active="{Binding IsHangHoaSelected}"
               Command="{Binding ChonMenuCommand}" CommandParameter="Hàng hóa"
               IsVisible="{Binding CanViewProducts}">
@@ -1427,17 +1476,7 @@
               </Grid>
             </Button>
 
-            <!-- HÓA ĐƠN -->
-            <Button Classes="menu" Classes.active="{Binding IsHoaDonSelected}"
-              Command="{Binding ChonMenuCommand}" CommandParameter="Hóa đơn"
-              IsVisible="{Binding CanViewInvoices}">
-              <Grid ColumnDefinitions="24,*">
-                <TextBlock Text="🧾" FontSize="14" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="Hóa đơn" VerticalAlignment="Center" Margin="6,0,0,0" />
-              </Grid>
-            </Button>
-
-            <!-- KHÁCH HÀNG -->
+            <!-- 3. KHÁCH HÀNG -->
             <Button Classes="menu" Classes.active="{Binding IsKhachHangSelected}"
               Command="{Binding ChonMenuCommand}" CommandParameter="Khách hàng"
               IsVisible="{Binding CanViewCustomers}">
@@ -1447,7 +1486,17 @@
               </Grid>
             </Button>
 
-            <!-- NHÀ CUNG CẤP -->
+            <!-- 4. HÓA ĐƠN -->
+            <Button Classes="menu" Classes.active="{Binding IsHoaDonSelected}"
+              Command="{Binding ChonMenuCommand}" CommandParameter="Hóa đơn"
+              IsVisible="{Binding CanViewInvoices}">
+              <Grid ColumnDefinitions="24,*">
+                <TextBlock Text="🧾" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Hóa đơn" VerticalAlignment="Center" Margin="6,0,0,0" />
+              </Grid>
+            </Button>
+
+            <!-- 5. NHÀ CUNG CẤP -->
             <Button Classes="menu" Classes.active="{Binding IsNhaCungCapSelected}"
               Command="{Binding ChonMenuCommand}" CommandParameter="Nhà cung cấp"
               IsVisible="{Binding CanViewSuppliers}">
@@ -1457,7 +1506,17 @@
               </Grid>
             </Button>
 
-            <!-- SỔ QUỸ -->
+            <!-- 6. PHIẾU NHẬP HÀNG -->
+            <Button Classes="menu" Classes.active="{Binding IsPhieuNhapHangSelected}"
+              Command="{Binding ChonMenuCommand}" CommandParameter="Phiếu nhập hàng"
+              IsVisible="{Binding CanViewPurchases}">
+              <Grid ColumnDefinitions="24,*">
+                <TextBlock Text="📋" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Phiếu nhập hàng" VerticalAlignment="Center" Margin="6,0,0,0" />
+              </Grid>
+            </Button>
+
+            <!-- 7. SỔ QUỸ -->
             <Button Classes="menu" Classes.active="{Binding IsSoQuySelected}"
               Command="{Binding ChonMenuCommand}" CommandParameter="Sổ quỹ"
               IsVisible="{Binding CanViewCashBook}">
@@ -1467,7 +1526,7 @@
               </Grid>
             </Button>
 
-            <!-- BÁO CÁO (ACCORDION CÓ GẬP MỞ) -->
+            <!-- 8. BÁO CÁO (ACCORDION CÓ GẬP MỞ) -->
             <Button Classes="menu" Classes.active="{Binding IsBaoCaoSectionSelected}"
               Command="{Binding ChonMenuCommand}" CommandParameter="Báo cáo"
               IsVisible="{Binding CanViewReports}">
@@ -1503,11 +1562,22 @@
           </StackPanel>
         </ScrollViewer>
 
-        <!-- KHU VỰC CUỐI THANH MENU -->
+        <!-- KHU VỰC CUỐI THANH MENU (TRUY CẬP NHANH & TÀI KHOẢN) -->
         <StackPanel Grid.Row="2" Margin="0,6,0,12">
+          <TextBlock Text="TRUY CẬP NHANH" FontSize="10" FontWeight="Bold" Foreground="#85C7B7"
+                     Margin="10,2,0,2" LetterSpacing="0.8" />
+
           <!-- NÚT BÁN HÀNG -->
-          <Button Classes="salesButton" Content="🛒  Bán hàng" VerticalAlignment="Center"
+          <Button Classes="salesButton" Classes.active="{Binding IsSalesPanelVisible}"
+            Content="🛒  Bán hàng" VerticalAlignment="Center"
+            ToolTip.Tip="Mở nhanh màn hình Bán hàng (F1)"
             Command="{Binding MoGiaoDienBanHangCommand}" IsVisible="{Binding CanViewSales}" />
+
+          <!-- NÚT NHẬP HÀNG -->
+          <Button Classes="importButton" Classes.active="{Binding IsNhapHangSelected}"
+            Content="📥  Nhập hàng" VerticalAlignment="Center"
+            ToolTip.Tip="Mở nhanh màn hình Lập phiếu nhập hàng"
+            Command="{Binding MoGiaoDienNhapHangCommand}" IsVisible="{Binding CanCreatePurchase}" />
 
           <!-- NÚT CHUÔNG THÔNG BÁO BẢN CẬP NHẬT MỚI -->
           <Button Background="#FEF3C7"
@@ -1572,7 +1642,7 @@
                           VerticalAlignment="Center" />
                       </StackPanel>
                     </Button>
-                    <!-- Mục Thông tin tiệm: cùng kiểu với Cài đặt danh mục,
+                    <!-- Mục Cài đặt hóa đơn in: cùng kiểu với Cài đặt danh mục,
                          chỉ khác là chuyển sang màn hình thay vì mở hộp thoại. -->
                     <Button Background="Transparent"
                       BorderThickness="0"
@@ -1582,9 +1652,9 @@
                       IsVisible="{Binding CanViewStoreInfo}"
                       Click="OpenStoreInfoButton_OnClick">
                       <StackPanel Orientation="Horizontal" Spacing="10">
-                        <TextBlock Text="🏪" FontSize="14" Foreground="#087F6E"
+                        <TextBlock Text="🧾" FontSize="14" Foreground="#087F6E"
                           VerticalAlignment="Center" />
-                        <TextBlock Text="Thông tin tiệm" FontSize="13" Foreground="#263B35"
+                        <TextBlock Text="Cài đặt hóa đơn in" FontSize="13" Foreground="#263B35"
                           VerticalAlignment="Center" />
                       </StackPanel>
                     </Button>
@@ -4548,18 +4618,28 @@
               RowSpacing="12">
 
               <!-- TIÊU ĐỀ -->
-              <StackPanel Grid.Row="0" Grid.ColumnSpan="2">
-                <TextBlock Text="Lập phiếu nhập hàng"
-                  FontSize="26"
-                  FontWeight="Bold"
-                  Foreground="#163F38" />
+              <Grid Grid.Row="0" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="Lập phiếu nhập hàng"
+                    FontSize="26"
+                    FontWeight="Bold"
+                    Foreground="#163F38" />
 
-                <TextBlock
-                  Text="Chọn hàng hóa, nhập số lượng và giá nhập để tạo phiếu nhập từ nhà cung cấp"
-                  Foreground="#61736E"
-                  FontSize="13"
-                  Margin="0,4,0,0" />
-              </StackPanel>
+                  <TextBlock
+                    Text="Chọn hàng hóa, nhập số lượng và giá nhập để tạo phiếu nhập từ nhà cung cấp"
+                    Foreground="#61736E"
+                    FontSize="13"
+                    Margin="0,4,0,0" />
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                  Classes="toolbar-action"
+                  Content="📋  Danh sách phiếu nhập"
+                  Command="{Binding QuayLaiDanhSachPhieuNhapCommand}"
+                  VerticalAlignment="Center"
+                  Margin="0"
+                  IsVisible="{Binding CanViewPurchases}" />
+              </Grid>
 
               <!-- CỘT TRÁI - BẢNG HÀNG HÓA NHẬP                          -->
               <Grid Grid.Row="1" Grid.RowSpan="2" Grid.Column="0"
@@ -6306,8 +6386,8 @@
       </Grid>
 
       <!-- ============================================================ -->
-      <!-- BÁO CÁO PHIẾU NHẬP HÀNG                                       -->
-      <!-- (khác với Mua hàng → Nhập hàng: đây là màn đọc dữ liệu)      -->
+      <!-- PHIẾU NHẬP HÀNG                                               -->
+      <!-- (Quản lý danh sách phiếu nhập hàng đã tạo từ nhà cung cấp)    -->
       <Grid IsVisible="{Binding IsBaoCaoPhieuNhapSelected}"
         RowDefinitions="Auto,Auto,*"
         RowSpacing="14">
@@ -6317,12 +6397,12 @@
           ColumnSpacing="10">
 
           <StackPanel>
-            <TextBlock Text="Báo cáo phiếu nhập hàng"
+            <TextBlock Text="Phiếu nhập hàng"
               FontSize="26"
               FontWeight="Bold"
               Foreground="#163F38" />
 
-            <TextBlock Text="Theo dõi toàn bộ phiếu nhập đã tạo, có phân trang và tìm kiếm theo mã"
+            <TextBlock Text="Quản lý danh sách phiếu nhập hàng từ nhà cung cấp, tìm kiếm, lọc và tra cứu lịch sử"
               Foreground="#61736E"
               FontSize="13"
               Margin="0,4,0,0" />
@@ -6335,7 +6415,7 @@
             Command="{Binding MoGiaoDienNhapHangTuBaoCaoCommand}"
             VerticalAlignment="Center"
             Margin="0"
-            IsVisible="{Binding CanViewPurchases}" />
+            IsVisible="{Binding CanCreatePurchase}" />
 
           <Button Grid.Column="2"
             Classes="toolbar-action"
@@ -6350,7 +6430,8 @@
             Content="📤  Xuất Excel"
             Command="{Binding XuatExcelBaoCaoPhieuNhapCommand}"
             VerticalAlignment="Center"
-            Margin="0" />
+            Margin="0"
+            IsVisible="{Binding CanExportPurchase}" />
 
           <Button Grid.Column="4"
             Classes="toolbar-action"
@@ -6760,6 +6841,7 @@
                             Height="32"
                             Padding="0"
                             Margin="0"
+                            IsVisible="{Binding ElementName=RootWindow, Path=DataContext.CanPrintPurchase}"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             ToolTip.Tip="In phiếu nhập"

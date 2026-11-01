@@ -79,10 +79,10 @@
   </Window.Styles>
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="28" Spacing="10">
-      <!-- ĐẦU HÓA ĐƠN: lấy từ Thông tin tiệm trong database, không hard-code -->
+      <!-- ĐẦU HÓA ĐƠN: lấy từ Cài đặt hóa đơn in trong database, không hard-code -->
       <StackPanel Spacing="3" Margin="0,0,0,4">
         <Image Source="{Binding ThongTinTiem.LogoBitmap}"
-          IsVisible="{Binding ThongTinTiem.CoLogo}"
+          IsVisible="{Binding ThongTinTiem.CoLogoInHoaDon}"
           Height="64" Stretch="Uniform" HorizontalAlignment="Center" />
 
         <TextBlock Text="{Binding ThongTinTiem.TenTiem}"
@@ -94,9 +94,19 @@
           HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
           FontSize="12" Foreground="#61736E" />
 
-        <TextBlock Text="{Binding ThongTinTiem.SoDienThoaiHienThi}"
-          IsVisible="{Binding ThongTinTiem.SoDienThoaiHienThi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+        <TextBlock Text="{Binding ThongTinTiem.DienThoaiZaloHienThi}"
+          IsVisible="{Binding ThongTinTiem.DienThoaiZaloHienThi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
           HorizontalAlignment="Center" FontSize="12" Foreground="#61736E" />
+
+        <TextBlock Text="{Binding ThongTinTiem.FacebookHienThi}"
+          IsVisible="{Binding ThongTinTiem.CoFacebook}"
+          HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
+          FontSize="12" Foreground="#61736E" />
+
+        <TextBlock Text="{Binding ThongTinTiem.NganHangHienThi, StringFormat='NH: {0}'}"
+          IsVisible="{Binding ThongTinTiem.CoThongTinNganHang}"
+          HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
+          FontSize="12" Foreground="#61736E" />
 
         <TextBlock Text="{Binding ThongTinTiem.Email}"
           IsVisible="{Binding ThongTinTiem.Email, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -224,37 +234,41 @@
         <TextBlock Text="Khách hàng:" FontWeight="SemiBold" Foreground="#61736E" />
         <TextBlock Grid.Column="1" Text="{Binding TenKhachHang}" Foreground="#263B35" />
         <TextBlock Grid.Row="1" Text="Số điện thoại:" FontWeight="SemiBold" Foreground="#61736E"
-          IsVisible="{Binding HienThiThongTinLienHe}" Margin="0,2,0,0" />
+          IsVisible="{Binding HienThiSoDienThoaiKhachHang}" Margin="0,2,0,0" />
         <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SoDienThoaiHienThi}" Foreground="#263B35"
-          IsVisible="{Binding HienThiThongTinLienHe}" Margin="0,2,0,0" />
+          IsVisible="{Binding HienThiSoDienThoaiKhachHang}" Margin="0,2,0,0" />
         <TextBlock Grid.Row="2" Text="Địa chỉ:" FontWeight="SemiBold" Foreground="#61736E"
-          IsVisible="{Binding HienThiThongTinLienHe}" Margin="0,2,0,0" />
+          IsVisible="{Binding HienThiDiaChiKhachHang}" Margin="0,2,0,0" />
         <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DiaChiHienThi}" Foreground="#263B35" TextWrapping="Wrap"
-          IsVisible="{Binding HienThiThongTinLienHe}" Margin="0,2,0,0" />
+          IsVisible="{Binding HienThiDiaChiKhachHang}" Margin="0,2,0,0" />
         <TextBlock Grid.Row="3" Text="Nhân viên:" FontWeight="SemiBold" Foreground="#61736E" Margin="0,2,0,0" />
         <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TenNhanVien}" Foreground="#263B35" Margin="0,2,0,0" />
       </Grid>
 
-      <Grid ColumnDefinitions="*,70,110,130" Margin="0,12,0,0">
+      <Grid ColumnDefinitions="*,Auto,60,100,120" Margin="0,12,0,0" ColumnSpacing="6">
         <TextBlock Text="Sản phẩm" FontWeight="Bold" Foreground="#163F38" />
-        <TextBlock Grid.Column="1" Text="SL" FontWeight="Bold" HorizontalAlignment="Right"
+        <TextBlock Grid.Column="1" Text="ĐVT" FontWeight="Bold" HorizontalAlignment="Right"
           Foreground="#163F38" />
-        <TextBlock Grid.Column="2" Text="Đơn giá" FontWeight="Bold" HorizontalAlignment="Right"
+        <TextBlock Grid.Column="2" Text="SL" FontWeight="Bold" HorizontalAlignment="Right"
           Foreground="#163F38" />
-        <TextBlock Grid.Column="3" Text="Thành tiền" FontWeight="Bold" HorizontalAlignment="Right"
+        <TextBlock Grid.Column="3" Text="Đơn giá" FontWeight="Bold" HorizontalAlignment="Right"
+          Foreground="#163F38" />
+        <TextBlock Grid.Column="4" Text="Thành tiền" FontWeight="Bold" HorizontalAlignment="Right"
           Foreground="#163F38" />
       </Grid>
 
       <ItemsControl ItemsSource="{Binding Items}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="models:HoaDonBanHangReceiptItem">
-            <Grid ColumnDefinitions="*,70,110,130" Margin="0,6">
+            <Grid ColumnDefinitions="*,Auto,60,100,120" Margin="0,6" ColumnSpacing="6">
               <TextBlock Text="{Binding TenSanPham}" TextWrapping="Wrap" Foreground="#263B35" />
-              <TextBlock Grid.Column="1" Text="{Binding SoLuong, StringFormat={}{0:N0}}"
+              <TextBlock Grid.Column="1" Text="{Binding DonViTinh}"
+                HorizontalAlignment="Right" Foreground="#61736E" />
+              <TextBlock Grid.Column="2" Text="{Binding SoLuong, StringFormat={}{0:N0}}"
                 HorizontalAlignment="Right" Foreground="#263B35" />
-              <TextBlock Grid.Column="2" Text="{Binding DonGia, StringFormat={}{0:N0}}"
+              <TextBlock Grid.Column="3" Text="{Binding DonGia, StringFormat={}{0:N0}}"
                 HorizontalAlignment="Right" Foreground="#263B35" />
-              <TextBlock Grid.Column="3" Text="{Binding ThanhTien, StringFormat={}{0:N0}}"
+              <TextBlock Grid.Column="4" Text="{Binding ThanhTien, StringFormat={}{0:N0}}"
                 HorizontalAlignment="Right" Foreground="#263B35" />
             </Grid>
           </DataTemplate>
@@ -308,9 +322,9 @@
               Foreground="#263B35" />
           </Grid>
 
-          <!-- Đã thanh toán -->
+          <!-- Khách đã trả -->
           <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Text="Đã thanh toán"
+            <TextBlock Text="Khách đã trả"
               Foreground="#61736E" />
             <TextBlock Grid.Column="1"
               Text="{Binding KhachDaThanhToan, StringFormat={}{0:N0} đ}"
@@ -394,6 +408,19 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
+      </Border>
+
+      <!-- QR CODE CUỐI HÓA ĐƠN -->
+      <Border IsVisible="{Binding ThongTinTiem.CoQrInHoaDon}"
+        BorderBrush="#D8E5E0" BorderThickness="0,1,0,0"
+        Margin="0,14,0,0" Padding="0,12,0,0">
+        <StackPanel Spacing="4">
+          <Image Source="{Binding ThongTinTiem.QrBitmap}"
+            Height="110" Stretch="Uniform" HorizontalAlignment="Center" />
+          <TextBlock Text="Quét mã để thanh toán / liên hệ"
+            FontSize="11" Foreground="#61736E"
+            HorizontalAlignment="Center" />
+        </StackPanel>
       </Border>
 
       <TextBlock Text="{Binding ThongTinTiem.LoiCamOnHienThi}" HorizontalAlignment="Center"

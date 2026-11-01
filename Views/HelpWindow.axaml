@@ -595,7 +595,7 @@
                                 <Border Background="#FFF8E8" BorderBrush="#F0DFB8" BorderThickness="1"
                                         CornerRadius="9" Padding="12"
                                         IsVisible="{Binding KhongCoThongTinLienHe}">
-                                    <TextBlock Text="Chưa cấu hình số điện thoại, email hoặc địa chỉ hỗ trợ. Vào Thông tin tiệm trong menu tài khoản để bổ sung."
+                                    <TextBlock Text="Chưa cấu hình số điện thoại, email hoặc địa chỉ hỗ trợ. Vào Cài đặt hóa đơn in trong menu tài khoản để bổ sung."
                                                Foreground="#8A6A24" FontSize="12.5"
                                                TextWrapping="Wrap" LineHeight="19" />
                                 </Border>

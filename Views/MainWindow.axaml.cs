@@ -1198,7 +1198,7 @@ public partial class MainWindow : Window
         }
 
         if (control && e.Key == Key.N
-            && viewModel.SelectedMenu is "Hàng hóa" or "Khách hàng" or "Nhà cung cấp" or "Nhập hàng" or "Sổ quỹ")
+            && viewModel.SelectedMenu is "Hàng hóa" or "Khách hàng" or "Nhà cung cấp" or "Phiếu nhập hàng" or "Nhập hàng" or "Sổ quỹ")
         {
             _ = viewModel.TaoMoiTheoNguCanhCommand.ExecuteAsync(null);
             e.Handled = true;
@@ -1241,9 +1241,9 @@ public partial class MainWindow : Window
             "Khách hàng" => FocusControl("CustomerSearchBox"),
             "Hóa đơn" => FocusControl("InvoiceSearchBox"),
             "Nhà cung cấp" => FocusControl("SupplierSearchBox"),
+            "Phiếu nhập hàng" => FocusControl("BaoCaoPhieuNhapSearchBox"),
             "Nhập hàng" when viewModel.IsNhapHangFormVisible => FocusControl("ImportProductSearchBox"),
             "Sổ quỹ" => FocusControl("SoQuySearchBox"),
-            "Báo cáo" when viewModel.SelectedReportKey == "phieu-nhap-hang" => FocusControl("BaoCaoPhieuNhapSearchBox"),
             _ => false,
         };
     }
