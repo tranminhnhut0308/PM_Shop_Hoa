@@ -583,9 +583,11 @@ public sealed partial class MainWindowViewModel
             // Lấy toàn bộ hóa đơn theo đúng điều kiện tìm kiếm, ngày và trạng thái đang lọc (không giới hạn 500 dòng)
             var danhSach = await _db.GetHoaDonAsync(
                 InvoiceSearch,
-                InvoiceFilterDate?.Date,
+                null,
                 limit: null,
-                trangThaiLoc: InvoiceStatusFilter);
+                trangThaiLoc: InvoiceStatusFilter,
+                tuNgay: InvoiceFilterStartDate?.Date,
+                denNgay: InvoiceFilterEndDate?.Date);
 
             if (danhSach.Count == 0)
             {
@@ -598,8 +600,22 @@ public sealed partial class MainWindowViewModel
             }
 
             var moTaLoc = new List<string>();
-            if (InvoiceFilterDate.HasValue)
-                moTaLoc.Add($"Ngày: {InvoiceFilterDate.Value:dd/MM/yyyy}");
+            if (InvoiceFilterStartDate.HasValue && InvoiceFilterEndDate.HasValue)
+            {
+                if (InvoiceFilterStartDate.Value.Date == InvoiceFilterEndDate.Value.Date)
+                    moTaLoc.Add($"Ngày: {InvoiceFilterStartDate.Value:dd/MM/yyyy}");
+                else
+                    moTaLoc.Add($"Từ ngày {InvoiceFilterStartDate.Value:dd/MM/yyyy} đến {InvoiceFilterEndDate.Value:dd/MM/yyyy}");
+            }
+            else if (InvoiceFilterStartDate.HasValue)
+            {
+                moTaLoc.Add($"Từ ngày: {InvoiceFilterStartDate.Value:dd/MM/yyyy}");
+            }
+            else if (InvoiceFilterEndDate.HasValue)
+            {
+                moTaLoc.Add($"Đến ngày: {InvoiceFilterEndDate.Value:dd/MM/yyyy}");
+            }
+
             if (!string.IsNullOrWhiteSpace(InvoiceSearch))
                 moTaLoc.Add($"Từ khóa: \"{InvoiceSearch.Trim()}\"");
 

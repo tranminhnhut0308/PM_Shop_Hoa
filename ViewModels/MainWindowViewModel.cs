@@ -1812,23 +1812,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task LoadInvoicesAsync()
     {
-        try
-        {
-            var invoices = await _db.GetHoaDonAsync(InvoiceSearch, InvoiceFilterDate?.Date, trangThaiLoc: InvoiceStatusFilter);
-
-            HoaDons.Clear();
-
-            foreach (var item in invoices)
-                HoaDons.Add(item);
-
-            StatusMessage = $"Đã tải {HoaDons.Count} hóa đơn";
-        }
-        catch (Exception ex)
-        {
-            HoaDons.Clear();
-
-            StatusMessage = $"Lỗi tải hóa đơn: {ex.Message}";
-        }
+        await SearchInvoicesAsync();
     }
 
     private async Task LoadSuppliersAsync()
@@ -3136,17 +3120,39 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task SearchInvoicesAsync()
     {
+        // 1. Kiểm tra ngày bắt đầu > ngày kết thúc
+        if (InvoiceFilterStartDate.HasValue && InvoiceFilterEndDate.HasValue
+            && InvoiceFilterStartDate.Value.Date > InvoiceFilterEndDate.Value.Date)
+        {
+            StatusMessage = "⚠️ Ngày bắt đầu không được lớn hơn ngày kết thúc. Vui lòng chọn lại.";
+            return;
+        }
+
         try
         {
             HoaDons.Clear();
-            var ngay = InvoiceFilterDate?.Date;   // null = không lọc ngày (nếu sau này muốn)
-            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, ngay, trangThaiLoc: InvoiceStatusFilter))
+            var tuNgay = InvoiceFilterStartDate?.Date;
+            var denNgay = InvoiceFilterEndDate?.Date;
+
+            var items = await _db.GetHoaDonAsync(
+                search: InvoiceSearch,
+                ngayLoc: null,
+                limit: 500,
+                trangThaiLoc: InvoiceStatusFilter,
+                tuNgay: tuNgay,
+                denNgay: denNgay);
+
+            foreach (var item in items)
                 HoaDons.Add(item);
-            StatusMessage = $"Tìm thấy {HoaDons.Count} hóa đơn";
+
+            CapNhatThongKeHoaDon();
+            StatusMessage = $"Tìm thấy {HoaDons.Count:N0} hóa đơn";
         }
         catch (Exception ex)
         {
-            StatusMessage = ex.Message;
+            HoaDons.Clear();
+            CapNhatThongKeHoaDon();
+            StatusMessage = "Lỗi tìm kiếm hóa đơn: " + ex.Message;
         }
     }
 
@@ -3155,21 +3161,10 @@ public partial class MainWindowViewModel : ObservableObject
     {
         InvoiceSearch = "";
         InvoiceStatusFilter = "TAT_CA";
-        // Giữ nguyên ngày đang chọn; nếu muốn về hôm nay thì bỏ comment dòng dưới:
-        // InvoiceFilterDate = DateTimeOffset.Now.Date;
+        ApDungPresetNgayHoaDon("Tháng này", tuDongTim: false);
 
-        try
-        {
-            HoaDons.Clear();
-            var ngay = InvoiceFilterDate?.Date;
-            foreach (var item in await _db.GetHoaDonAsync(InvoiceSearch, ngay, trangThaiLoc: InvoiceStatusFilter))
-                HoaDons.Add(item);
-            StatusMessage = $"Đã tải {HoaDons.Count} hóa đơn";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = "Không thể tải hóa đơn: " + ex.Message;
-        }
+        await SearchInvoicesAsync();
+        StatusMessage = $"Đã làm mới bộ lọc hóa đơn (hiển thị {HoaDons.Count:N0} hóa đơn tháng này).";
     }
 
     [RelayCommand]

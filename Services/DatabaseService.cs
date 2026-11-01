@@ -4610,10 +4610,12 @@ public sealed partial class DatabaseService
     }
 
     public async Task<IReadOnlyList<HoaDon>> GetHoaDonAsync(
-     string? search = null,
-     DateTime? ngayLoc = null,
-     int? limit = 500,
-     string? trangThaiLoc = null)
+        string? search = null,
+        DateTime? ngayLoc = null,
+        int? limit = 500,
+        string? trangThaiLoc = null,
+        DateTime? tuNgay = null,
+        DateTime? denNgay = null)
     {
         var coCotHuy = await EnsureHuyHoaDonSchemaAsync();
 
@@ -4649,6 +4651,18 @@ public sealed partial class DatabaseService
             _ => ""
         };
 
+        // Nếu truyền ngayLoc thì tuNgay = denNgay = ngayLoc
+        if (ngayLoc.HasValue && !tuNgay.HasValue && !denNgay.HasValue)
+        {
+            tuNgay = ngayLoc.Value.Date;
+            denNgay = ngayLoc.Value.Date;
+        }
+
+        DateTime? tuNgayDau = tuNgay?.Date;
+        DateTime? denNgaySau = denNgay?.Date.AddDays(1);
+
+        var searchTrim = (search ?? "").Trim();
+
         var sql = $"""
 SELECT
     hd.id AS Id,
@@ -4678,14 +4692,19 @@ WHERE (
     OR hd.ma_hoa_don LIKE CONCAT('%', @Search, '%')
     OR kh.ma_khach_hang LIKE CONCAT('%', @Search, '%')
     OR kh.ten_khach_hang LIKE CONCAT('%', @Search, '%')
+    OR kh.so_dien_thoai LIKE CONCAT('%', @Search, '%')
+    OR hd.ghi_chu LIKE CONCAT('%', @Search, '%')
+    OR EXISTS (
+        SELECT 1 FROM chi_tiet_hoa_don_ban_hang cthd
+        WHERE cthd.hoa_don_id = hd.id
+          AND cthd.ten_san_pham LIKE CONCAT('%', @Search, '%')
+    )
 )
-AND (
-    @Ngay IS NULL
-    OR DATE(hd.thoi_gian_ban) = DATE(@Ngay)
-)
+AND (@TuNgayDau IS NULL OR hd.thoi_gian_ban >= @TuNgayDau)
+AND (@DenNgaySau IS NULL OR hd.thoi_gian_ban < @DenNgaySau)
 {dieuKienTrangThai}
 
-ORDER BY hd.thoi_gian_ban DESC
+ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
 {limitClause};
 """;
 
@@ -4694,8 +4713,9 @@ ORDER BY hd.thoi_gian_ban DESC
                 sql,
                 new
                 {
-                    Search = search ?? "",
-                    Ngay = ngayLoc?.Date   // chỉ lấy phần ngày, bỏ giờ
+                    Search = searchTrim,
+                    TuNgayDau = tuNgayDau,
+                    DenNgaySau = denNgaySau
                 })
         ).AsList();
     }

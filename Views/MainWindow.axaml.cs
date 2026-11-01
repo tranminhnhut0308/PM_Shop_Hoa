@@ -1458,6 +1458,16 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnInvoiceSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && DataContext is MainWindowViewModel viewModel)
+        {
+            if (viewModel.SearchInvoicesCommand.CanExecute(null))
+                _ = viewModel.SearchInvoicesCommand.ExecuteAsync(null);
+            e.Handled = true;
+        }
+    }
+
     private void OnSaleCustomerSearchKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter
