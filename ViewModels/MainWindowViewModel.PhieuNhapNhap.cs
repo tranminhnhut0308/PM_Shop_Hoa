@@ -79,6 +79,26 @@ public sealed partial class MainWindowViewModel
             case nameof(PhieuNhapPhuongThuc):
                 SchedulePhieuNhapAutoSave();
                 break;
+
+            case nameof(SelectedSaleCustomer):
+            case nameof(SaleCustomerName):
+                if (!_dangNapDonBan && ActiveSaleCartTab is { } cartTab)
+                {
+                    cartTab.TenKhachHang = string.IsNullOrWhiteSpace(SaleCustomerName) ? "Khách lẻ" : SaleCustomerName;
+                }
+                ScheduleSaleCartAutoSave();
+                break;
+
+            case nameof(SaleCustomerPhone):
+            case nameof(SaleCustomerAddress):
+            case nameof(SaleCanGiaoHang):
+            case nameof(SaleInKemSdtDiaChi):
+            case nameof(SaleGhiChu):
+            case nameof(SaleDiscountInput):
+            case nameof(SaleDiscountMode):
+            case nameof(TienKhachDua):
+                ScheduleSaleCartAutoSave();
+                break;
         }
     }
 

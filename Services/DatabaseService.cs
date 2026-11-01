@@ -5247,9 +5247,9 @@ ORDER BY hd.thoi_gian_ban DESC
                         SanPhamId = item.SanPham.Id,
                         MaSanPham = item.SanPham.MaSanPham,
                         TenSanPham = item.SanPham.TenSanPham,
-                        DonViTinh = item.SanPham.DonViTinh,
+                        DonViTinh = item.DonViTinh,
                         item.SoLuong,
-                        DonGia = item.SanPham.GiaBan,
+                        DonGia = item.DonGia,
                         item.ThanhTien,
                         GiaVon = item.SanPham.GiaVon
                     },

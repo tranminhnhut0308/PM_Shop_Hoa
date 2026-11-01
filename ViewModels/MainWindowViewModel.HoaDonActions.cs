@@ -184,6 +184,8 @@ public sealed partial class MainWindowViewModel
         try
         {
             danhSachSanPham = await _db.GetSanPhamAsync();
+            _saleSearchKeywordDaTim = string.Empty;
+            IsSaleSearchResultsClosed = false;
             ProductSearchResults.Clear();
             foreach (var sp in danhSachSanPham)
                 ProductSearchResults.Add(sp);

@@ -14,13 +14,16 @@ public sealed partial class MainWindowViewModel
 {
     /// <summary>
     /// Ctrl + N: tạo mới theo màn hình đang mở.
-    /// Không xử lý ở màn hình Bán hàng vì thao tác đó sẽ xóa giỏ hàng hiện tại.
+    /// Ở màn hình Bán hàng: tạo thêm một giỏ hàng mới (hỗ trợ nhiều giỏ hàng).
     /// </summary>
     [RelayCommand]
     private async Task TaoMoiTheoNguCanhAsync()
     {
         if (IsSalesPanelVisible)
+        {
+            await TaoDonBanMoiAsync();
             return;
+        }
 
         switch (SelectedMenu)
         {
@@ -170,27 +173,15 @@ public sealed partial class MainWindowViewModel
         StatusMessage = "Đã làm mới báo cáo đang xem.";
     }
 
-    /// <summary>Esc: đóng màn hình Bán hàng nhưng hỏi lại nếu giỏ còn hàng.</summary>
+    /// <summary>Esc: đóng màn hình Bán hàng an toàn và lưu nháp các đơn hàng đang soạn.</summary>
     [RelayCommand]
     private async Task DongBanHangAnToanAsync()
     {
         if (!IsSalesPanelVisible)
             return;
 
-        if (SaleCart.Count > 0)
-        {
-            var dong = await ShowConfirmationAsync(
-                "Đóng màn hình Bán hàng",
-                $"Giỏ hàng đang có {SaleCart.Count:N0} dòng chưa thanh toán. "
-                + "Đóng màn hình sẽ xóa giỏ hàng hiện tại. Bạn có chắc muốn đóng?",
-                "Đóng và xóa giỏ",
-                "Ở lại");
-
-            if (!dong)
-                return;
-        }
-
+        await FlushSaleCartDraftAsync();
         DongGiaoDienBanHang();
-        StatusMessage = "Đã đóng màn hình Bán hàng.";
+        StatusMessage = "Đã tạm đóng màn hình Bán hàng (dữ liệu các đơn hàng được bảo lưu an toàn).";
     }
 }

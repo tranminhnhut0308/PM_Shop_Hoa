@@ -1,3 +1,4 @@
+using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace ShopHoa.Models;
@@ -10,6 +11,9 @@ public partial class SaleCartItem : ObservableObject
     public required SanPham SanPham { get; set; }
 
     private decimal _soLuong = 1;
+    private decimal? _donGia;
+    private string? _donViTinh;
+    private decimal _giamGia;
 
     public decimal SoLuong
     {
@@ -48,19 +52,22 @@ public partial class SaleCartItem : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Đơn giá áp dụng riêng cho dòng sản phẩm này trong giỏ hàng.
+    /// Mặc định lấy theo giá bán niêm yết của sản phẩm. Khi nhân viên điều chỉnh giá
+    /// trên đơn thì chỉ lưu riêng cho dòng này, KHÔNG làm ảnh hưởng các giỏ hàng khác
+    /// hay danh mục gốc.
+    /// </summary>
     public decimal DonGia
     {
-        get => SanPham?.GiaBan ?? 0m;
+        get => _donGia ?? SanPham?.GiaBan ?? 0m;
         set
         {
-            if (SanPham is null)
-                return;
-
             var safePrice = Math.Max(0m, value);
-            if (SanPham.GiaBan == safePrice)
+            if (_donGia == safePrice)
                 return;
 
-            SanPham.GiaBan = safePrice;
+            _donGia = safePrice;
             OnPropertyChanged(nameof(DonGia));
             OnPropertyChanged(nameof(ThanhTien));
             QuantityChanged?.Invoke();
@@ -69,22 +76,35 @@ public partial class SaleCartItem : ObservableObject
 
     public string DonViTinh
     {
-        get => string.IsNullOrWhiteSpace(SanPham?.DonViTinh) ? "Bó" : SanPham.DonViTinh;
+        get => _donViTinh ?? (string.IsNullOrWhiteSpace(SanPham?.DonViTinh) ? "Bó" : SanPham.DonViTinh);
         set
         {
-            if (SanPham is null)
-                return;
-
             var dvt = string.IsNullOrWhiteSpace(value) ? "Bó" : value.Trim();
-            if (SanPham.DonViTinh == dvt)
+            if (_donViTinh == dvt)
                 return;
 
-            SanPham.DonViTinh = dvt;
+            _donViTinh = dvt;
             OnPropertyChanged(nameof(DonViTinh));
         }
     }
 
-    public decimal ThanhTien => SoLuong * (SanPham?.GiaBan ?? 0m);
+    public decimal GiamGia
+    {
+        get => _giamGia;
+        set
+        {
+            var safeDiscount = Math.Max(0m, value);
+            if (_giamGia == safeDiscount)
+                return;
+
+            _giamGia = safeDiscount;
+            OnPropertyChanged(nameof(GiamGia));
+            OnPropertyChanged(nameof(ThanhTien));
+            QuantityChanged?.Invoke();
+        }
+    }
+
+    public decimal ThanhTien => Math.Max(0m, SoLuong * DonGia - GiamGia);
     public decimal TonConLai => Math.Max(0, (SanPham?.TonKho ?? 0m) - SoLuong);
 
     public void CapNhatThanhTien()
@@ -92,5 +112,6 @@ public partial class SaleCartItem : ObservableObject
         OnPropertyChanged(nameof(DonGia));
         OnPropertyChanged(nameof(DonViTinh));
         OnPropertyChanged(nameof(ThanhTien));
+        OnPropertyChanged(nameof(TonConLai));
     }
 }

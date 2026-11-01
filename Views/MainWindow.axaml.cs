@@ -21,6 +21,10 @@ public partial class MainWindow : Window
     private bool _formattingDiscount;
     private bool _formattingCash;
     private HelpWindow? _helpWindow;
+    private bool _boQuaTimKiemBanHang;
+    private bool _boQuaTimKiemNhapHang;
+    private bool _dangThemSanPhamBanHang;
+    private bool _dangThemSanPhamNhapHang;
 
     public MainWindow()
     {
@@ -130,8 +134,13 @@ public partial class MainWindow : Window
         if (DataContext is not MainWindowViewModel viewModel)
             return;
 
+        // Bỏ qua thay đổi do chính chương trình xóa ô tìm kiếm sau khi thêm hàng.
+        if (_boQuaTimKiemBanHang)
+            return;
+
         var text = (sender as TextBox)?.Text ?? string.Empty;
         viewModel.SaleSearchText = text;
+        viewModel.MoLaiKetQuaTimKiemBanHang();
 
         if (viewModel.TimKiemHoaBanCommand.CanExecute(text))
         {
@@ -219,7 +228,12 @@ public partial class MainWindow : Window
         if (sender is not TextBox textBox)
             return;
 
+        // Bỏ qua thay đổi do chính chương trình xóa ô tìm kiếm sau khi thêm hàng.
+        if (_boQuaTimKiemNhapHang)
+            return;
+
         viewModel.ImportProductSearch = textBox.Text ?? string.Empty;
+        viewModel.MoLaiGoiYPhieuNhap();
 
         if (viewModel.TimKiemSanPhamNhapCommand.CanExecute(null))
         {
@@ -1161,6 +1175,20 @@ public partial class MainWindow : Window
 
         if (e.Key == Key.Escape && viewModel.IsSalesPanelVisible)
         {
+            // Ô tìm kiếm đang mở danh sách gợi ý: Escape chỉ đóng danh sách,
+            // không đóng cả màn bán hàng và không làm mất giỏ hàng.
+            var dangODauTimKiemBanHang =
+                e.Source is TextBox { Name: "SaleSearchBox" }
+                || TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement()
+                    is TextBox { Name: "SaleSearchBox" };
+
+            if (dangODauTimKiemBanHang
+                && (viewModel.HienThiKetQuaTimKiemBanHang
+                    || viewModel.HienThiThongBaoKhongTimThayBanHang))
+            {
+                return;
+            }
+
             if (viewModel.DongBanHangAnToanCommand.CanExecute(null))
                 _ = viewModel.DongBanHangAnToanCommand.ExecuteAsync(null);
 
@@ -1197,10 +1225,28 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (control && e.Key == Key.N
-            && viewModel.SelectedMenu is "Hàng hóa" or "Khách hàng" or "Nhà cung cấp" or "Phiếu nhập hàng" or "Nhập hàng" or "Sổ quỹ")
+        if (control && e.Key == Key.N)
         {
-            _ = viewModel.TaoMoiTheoNguCanhCommand.ExecuteAsync(null);
+            if (viewModel.IsSalesPanelVisible)
+            {
+                if (viewModel.TaoDonBanMoiCommand.CanExecute(null))
+                    _ = viewModel.TaoDonBanMoiCommand.ExecuteAsync(null);
+                e.Handled = true;
+                return;
+            }
+
+            if (viewModel.SelectedMenu is "Hàng hóa" or "Khách hàng" or "Nhà cung cấp" or "Phiếu nhập hàng" or "Nhập hàng" or "Sổ quỹ")
+            {
+                _ = viewModel.TaoMoiTheoNguCanhCommand.ExecuteAsync(null);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        if (control && e.Key == Key.W && viewModel.IsSalesPanelVisible)
+        {
+            if (viewModel.ActiveSaleCartTab != null && viewModel.DongDonBanCommand.CanExecute(viewModel.ActiveSaleCartTab))
+                _ = viewModel.DongDonBanCommand.ExecuteAsync(viewModel.ActiveSaleCartTab);
             e.Handled = true;
             return;
         }
@@ -1261,23 +1307,119 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private void OnSaleSearchKeyDown(object? sender, KeyEventArgs e)
+    private async void OnSaleSearchKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter
-            || sender is not TextBox textBox
-            || string.IsNullOrWhiteSpace(textBox.Text)
-            || DataContext is not MainWindowViewModel viewModel)
-        {
+        if (sender is not TextBox textBox || DataContext is not MainWindowViewModel viewModel)
             return;
+
+        switch (e.Key)
+        {
+            case Key.Down:
+                if (viewModel.HienThiKetQuaTimKiemBanHang)
+                {
+                    viewModel.DiChuyenChonBanHang(1);
+                    e.Handled = true;
+                }
+                return;
+
+            case Key.Up:
+                if (viewModel.HienThiKetQuaTimKiemBanHang)
+                {
+                    viewModel.DiChuyenChonBanHang(-1);
+                    e.Handled = true;
+                }
+                return;
+
+            case Key.Escape:
+                if (viewModel.HienThiKetQuaTimKiemBanHang
+                    || viewModel.HienThiThongBaoKhongTimThayBanHang)
+                {
+                    viewModel.DongKetQuaTimKiemBanHang();
+                    e.Handled = true;
+                }
+                return;
+
+            case Key.Enter:
+                break;
+
+            default:
+                return;
         }
 
-        var sanPham = viewModel.ProductSearchResults.FirstOrDefault();
+        // Enter trong ô tìm kiếm chỉ thêm hàng, không bao giờ kích hoạt Thanh toán.
+        e.Handled = true;
 
-        if (sanPham is null || !viewModel.ThemVaoGioHangCommand.CanExecute(sanPham))
+        if (_dangThemSanPhamBanHang)
             return;
 
-        _ = viewModel.ThemVaoGioHangCommand.ExecuteAsync(sanPham);
-        e.Handled = true;
+        var keyword = (textBox.Text ?? string.Empty).Trim();
+        if (keyword.Length == 0)
+            return;
+
+        _dangThemSanPhamBanHang = true;
+        try
+        {
+            // 1. Ưu tiên khớp chính xác mã hàng/mã vạch (máy quét barcode).
+            var sanPham = await viewModel.TimSanPhamKhopChinhXacAsync(keyword);
+
+            if (sanPham is null)
+            {
+                // 2. Kết quả đang hiển thị đã đúng từ khóa: dùng dòng đang chọn.
+                if (viewModel.KetQuaBanHangKhopTuKhoa(keyword))
+                {
+                    if (viewModel.ProductSearchResults.Count == 0)
+                        return;
+
+                    sanPham = viewModel.SaleSearchSelectedProduct
+                              ?? viewModel.ProductSearchResults[0];
+                }
+                else
+                {
+                    // 3. Debounce chưa xong: tìm ngay rồi mới quyết định.
+                    await viewModel.TimKiemHoaBanNgayAsync(keyword);
+
+                    if (viewModel.ProductSearchResults.Count == 1)
+                    {
+                        sanPham = viewModel.ProductSearchResults[0];
+                    }
+                    else
+                    {
+                        // Nhiều kết quả: chỉ hiển thị danh sách để người dùng chọn.
+                        return;
+                    }
+                }
+            }
+
+            if (sanPham is null || !viewModel.ThemVaoGioHangCommand.CanExecute(sanPham))
+                return;
+
+            var daThem = await viewModel.ThemSanPhamVaoGioHangVoiKetQuaAsync(sanPham);
+            if (!daThem)
+                return;
+
+            // Xóa ô tìm kiếm, đóng danh sách để Enter kế tiếp không thêm trùng.
+            _boQuaTimKiemBanHang = true;
+            try
+            {
+                viewModel.SaleSearchText = string.Empty;
+                textBox.Text = string.Empty;
+            }
+            finally
+            {
+                _boQuaTimKiemBanHang = false;
+            }
+
+            viewModel.HuyTimKiemBanHang();
+            viewModel.DongKetQuaTimKiemBanHang();
+            viewModel.ProductSearchResults.Clear();
+
+            textBox.Focus();
+            textBox.CaretIndex = 0;
+        }
+        finally
+        {
+            _dangThemSanPhamBanHang = false;
+        }
     }
 
     private void OnSaleCustomerSearchKeyDown(object? sender, KeyEventArgs e)
@@ -1299,23 +1441,115 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void OnImportProductSearchKeyDown(object? sender, KeyEventArgs e)
+    private async void OnImportProductSearchKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter
-            || sender is not TextBox textBox
-            || string.IsNullOrWhiteSpace(textBox.Text)
-            || DataContext is not MainWindowViewModel viewModel)
-        {
+        if (sender is not TextBox textBox || DataContext is not MainWindowViewModel viewModel)
             return;
+
+        switch (e.Key)
+        {
+            case Key.Down:
+                if (viewModel.HienThiGoiYPhieuNhap)
+                {
+                    viewModel.DiChuyenChonPhieuNhap(1);
+                    e.Handled = true;
+                }
+                return;
+
+            case Key.Up:
+                if (viewModel.HienThiGoiYPhieuNhap)
+                {
+                    viewModel.DiChuyenChonPhieuNhap(-1);
+                    e.Handled = true;
+                }
+                return;
+
+            case Key.Escape:
+                if (viewModel.HienThiGoiYPhieuNhap)
+                {
+                    viewModel.DongGoiYPhieuNhap();
+                    e.Handled = true;
+                }
+                return;
+
+            case Key.Enter:
+                break;
+
+            default:
+                return;
         }
 
-        var sanPham = viewModel.PhieuNhapProductSuggestions.FirstOrDefault();
+        e.Handled = true;
 
-        if (sanPham is null || !viewModel.ThemSanPhamVaoPhieuNhapCommand.CanExecute(sanPham))
+        if (_dangThemSanPhamNhapHang)
             return;
 
-        viewModel.ThemSanPhamVaoPhieuNhapCommand.Execute(sanPham);
-        e.Handled = true;
+        var keyword = (textBox.Text ?? string.Empty).Trim();
+        if (keyword.Length == 0)
+            return;
+
+        _dangThemSanPhamNhapHang = true;
+        try
+        {
+            // 1. Ưu tiên khớp chính xác mã hàng/mã vạch (máy quét barcode).
+            var sanPham = await viewModel.TimSanPhamKhopChinhXacAsync(keyword);
+
+            if (sanPham is null)
+            {
+                // 2. Kết quả đang hiển thị đã đúng từ khóa: dùng dòng đang chọn.
+                if (viewModel.KetQuaGoiYNhapKhopTuKhoa(keyword))
+                {
+                    if (viewModel.PhieuNhapProductSuggestions.Count == 0)
+                        return;
+
+                    sanPham = viewModel.PhieuNhapSelectedProduct
+                              ?? viewModel.PhieuNhapProductSuggestions[0];
+                }
+                else
+                {
+                    // 3. Debounce chưa xong: tìm ngay rồi mới quyết định.
+                    await viewModel.TimKiemSanPhamNhapNgayAsync(keyword);
+
+                    if (viewModel.PhieuNhapProductSuggestions.Count == 1)
+                    {
+                        sanPham = viewModel.PhieuNhapProductSuggestions[0];
+                    }
+                    else
+                    {
+                        // Nhiều kết quả: chỉ hiển thị danh sách để người dùng chọn.
+                        return;
+                    }
+                }
+            }
+
+            if (sanPham is null || !viewModel.ThemSanPhamVaoPhieuNhapCommand.CanExecute(sanPham))
+                return;
+
+            viewModel.ThemSanPhamVaoPhieuNhapCommand.Execute(sanPham);
+
+            // Xóa ô tìm kiếm, đóng danh sách để Enter kế tiếp không thêm trùng.
+            _boQuaTimKiemNhapHang = true;
+            try
+            {
+                viewModel.ImportProductSearch = string.Empty;
+                textBox.Text = string.Empty;
+            }
+            finally
+            {
+                _boQuaTimKiemNhapHang = false;
+            }
+
+            viewModel.HuyTimKiemSanPhamNhap();
+            viewModel.DongGoiYPhieuNhap();
+            viewModel.PhieuNhapProductSuggestions.Clear();
+
+            textBox.Focus();
+            textBox.CaretIndex = 0;
+        }
+        finally
+        {
+            _dangThemSanPhamNhapHang = false;
+        }
     }
 
     private void OnImportSupplierSearchKeyDown(object? sender, KeyEventArgs e)
