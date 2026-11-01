@@ -114,13 +114,19 @@ public sealed class TongQuanDiemDoanhThu
     public double BeRongCotTuyChinh { get; set; }
 
     /// <summary>Chiều cao tối đa của vùng vẽ cột (px) — XAML lấy hằng này làm mốc.</summary>
-    public const double ChieuCaoToiDa = 150;
+    public const double ChieuCaoToiDa = 105;
 
     /// <summary>Bề rộng tối đa của một cột (px) để các cột không giãn quá rộng.</summary>
     public const double BeRongToiDa = 90;
 
+    /// <summary>Có doanh thu dương hay không; dùng để ẩn hiện cột và số liệu.</summary>
+    public bool CoDoanhThu => DoanhThu > 0;
+
     /// <summary>Chiều cao cột tính bằng pixel để XAML bind thẳng, không cần converter.</summary>
-    public double ChieuCaoCot => DoanhThu <= 0 ? 4 : Math.Max(10, TyLeChieuCao / 100d * ChieuCaoToiDa);
+    public double ChieuCaoCot =>
+        DoanhThu <= 0 || TyLeChieuCao <= 0
+            ? 0
+            : Math.Max(3.0, Math.Round(Math.Clamp(TyLeChieuCao, 0, 100) / 100d * ChieuCaoToiDa, 1));
 
     /// <summary>Bề rộng cột (px); nhiều điểm thì cuộn ngang trong vùng biểu đồ.</summary>
     public double BeRongCot => BeRongCotTuyChinh > 0
@@ -130,7 +136,7 @@ public sealed class TongQuanDiemDoanhThu
     public bool CoDuLieu => SoHoaDon > 0 || DoanhThu > 0;
 
     public string MauCot => DoanhThu <= 0
-        ? "#E2ECE8"
+        ? "Transparent"
         : (LaDiemCaoNhat ? "#047857" : "#0D9488");
 
     public string MauChuNhan => LaDiemCaoNhat

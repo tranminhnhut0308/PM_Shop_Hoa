@@ -84,8 +84,67 @@ public partial class LichSuThanhToanKhachHangWindow : Window
                 .ToList();
 
         LichSuGrid.ItemsSource = _visibleRecords;
-        TxtTongTien.Text = $"Tổng đã thanh toán: {_visibleRecords.Sum(record => record.SoTien):N0} đ";
+        TxtTongTien.Text = $"Tổng đã thanh toán: {_visibleRecords.Where(record => !record.DaHuy).Sum(record => record.SoTien):N0} đ";
         TxtTongGiaoDich.Text = $"Tổng số giao dịch: {_visibleRecords.Count:N0}";
+    }
+
+    private async void OnDetailClick(object? sender, RoutedEventArgs e)
+    {
+        if (LichSuGrid.SelectedItem is not ThanhToanCongNoKhachHang record)
+        {
+            TxtTrangThai.Text = "Vui lòng chọn một giao dịch cần xem chi tiết.";
+            return;
+        }
+
+        try
+        {
+            TxtTrangThai.Text = "";
+            var allocations = await _database.GetPhanBoThanhToanKhachHangAsync(record.MaGiaoDich);
+
+            var detail = new System.Text.StringBuilder()
+                .AppendLine($"Mã giao dịch: {record.MaGiaoDich}")
+                .AppendLine($"Khách hàng: {_customerCode} - {_customerName}")
+                .AppendLine($"Thời gian: {record.ThoiGianText}")
+                .AppendLine($"Công nợ trước: {record.CongNoTruoc:N0} đ")
+                .AppendLine($"Số tiền thanh toán: {record.SoTien:N0} đ")
+                .AppendLine($"Công nợ sau: {record.CongNoSau:N0} đ")
+                .AppendLine($"Phương thức: {record.PhuongThucHienThi}")
+                .AppendLine($"Người thực hiện: {record.NguoiThucHien}")
+                .AppendLine($"Ghi chú: {record.GhiChuHienThi}");
+
+            if (record.DaHuy)
+            {
+                detail.AppendLine()
+                      .AppendLine("--- THÔNG TIN HỦY GIAO DỊCH ---")
+                      .AppendLine("Trạng thái: ĐÃ HỦY")
+                      .AppendLine($"Người hủy: {record.NguoiHuy}")
+                      .AppendLine($"Thời gian hủy: {record.ThoiGianHuyText}")
+                      .AppendLine($"Lý do hủy: {record.LyDoHuy}");
+            }
+
+            detail.AppendLine()
+                  .AppendLine("Phân bổ vào hóa đơn bán hàng:");
+
+            foreach (var allocation in allocations)
+                detail.AppendLine($"• {allocation.MaHoaDon}: {allocation.SoTien:N0} đ");
+
+            var allocatedTotal = allocations.Sum(a => a.SoTien);
+            if (record.SoTien > allocatedTotal)
+                detail.AppendLine($"• Thu công nợ tổng không gắn hóa đơn: {record.SoTien - allocatedTotal:N0} đ");
+            if (allocations.Count == 0 && record.SoTien <= allocatedTotal)
+                detail.Append("Không có dữ liệu phân bổ hóa đơn cho giao dịch này.");
+
+            var dialog = new ConfirmationWindow(
+                "Chi tiết giao dịch thanh toán khách hàng",
+                detail.ToString(),
+                "Đóng",
+                "Đóng");
+            await dialog.ShowDialog<bool>(this);
+        }
+        catch (Exception ex)
+        {
+            TxtTrangThai.Text = "Không đọc được chi tiết giao dịch: " + ex.Message;
+        }
     }
 
     private async void OnExportClick(object? sender, RoutedEventArgs e)

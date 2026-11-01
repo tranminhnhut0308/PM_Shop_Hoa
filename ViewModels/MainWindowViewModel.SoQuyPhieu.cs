@@ -859,43 +859,170 @@ public sealed partial class MainWindowViewModel
         if (chiTiet is null || chiTiet.DaHuy || _soQuyDangHuyPhieu)
             return;
 
-        var xacNhan = await XacNhanHuyPhieuAsync(
-            1,
-            $"Bạn có chắc muốn hủy phiếu {chiTiet.MaPhieu}?\n\n"
-            + "Phiếu đã hủy sẽ không còn được tính vào tổng thu, tổng chi của sổ quỹ.\n"
-            + "Thao tác này không thể hoàn tác.");
+        // Nghiệp vụ Phần II, Mục 8: Không cho phép hủy độc lập phiếu thu thuộc hóa đơn khách lẻ
+        if (chiTiet.LaKhachLe)
+        {
+            if (OwnerWindow is not null)
+            {
+                var dialogKhachLe = new ConfirmationWindow(
+                    "Không thể hủy phiếu thu",
+                    "Phiếu thu này thuộc hóa đơn của khách lẻ. Để hủy giao dịch, vui lòng thực hiện hủy hóa đơn liên quan. Phiếu thu sẽ được hủy đồng thời.",
+                    "Đã hiểu",
+                    "");
+                await dialogKhachLe.ShowDialog<bool>(OwnerWindow);
+            }
+            return;
+        }
 
-        if (!xacNhan)
+        if (OwnerWindow is null)
+            return;
+
+        // Mở hộp thoại xác nhận hủy phiếu với cảnh báo hoàn tác công nợ và yêu cầu nhập lý do
+        var dialog = new HuyPhieuQuyWindow(chiTiet);
+        var lyDoHuy = await dialog.ShowDialog<string?>(OwnerWindow);
+
+        if (string.IsNullOrWhiteSpace(lyDoHuy))
             return;
 
         _soQuyDangHuyPhieu = true;
 
         try
         {
-            await _db.HuyPhieuQuyAsync(chiTiet.MaPhieu);
-
-            StatusMessage = "Đã hủy phiếu thành công.";
-
             var maPhieu = chiTiet.MaPhieu;
+            await _db.HuyPhieuQuyChiTietAsync(maPhieu, lyDoHuy, Session.CurrentUser?.Id);
 
-            IsSoQuyChiTietVisible = false;
-            SoQuyChiTietDangXem = null;
+            StatusMessage = $"Đã hủy phiếu {maPhieu} thành công.";
 
             await TaiLaiSoQuyAsync();
 
-            // Mở lại chi tiết để người dùng thấy trạng thái vừa đổi.
-            var gd = SoQuyGiaoDichs.FirstOrDefault(x => x.MaPhieu == maPhieu);
-
-            if (gd is not null)
-                await MoChiTietPhieuAsync(gd);
+            // Mở lại chi tiết để người dùng thấy trạng thái Đã hủy và lịch sử hoàn tác
+            var chiTietMoi = await _db.GetSoQuyChiTietAsync(maPhieu);
+            if (chiTietMoi is not null)
+            {
+                SoQuyChiTietDangXem = chiTietMoi;
+                IsSoQuyChiTietVisible = true;
+            }
+            else
+            {
+                IsSoQuyChiTietVisible = false;
+                SoQuyChiTietDangXem = null;
+            }
         }
         catch (Exception ex)
         {
             StatusMessage = "Không thể hủy phiếu: " + ex.Message;
+            if (OwnerWindow is not null)
+            {
+                var errDlg = new ConfirmationWindow("Lỗi hủy phiếu", ex.Message, "Đóng", "");
+                await errDlg.ShowDialog<bool>(OwnerWindow);
+            }
         }
         finally
         {
             _soQuyDangHuyPhieu = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task XemChungTuLienQuanAsync(SoQuyChungTuLienQuan? doc)
+    {
+        if (doc is null)
+            return;
+
+        if (doc.LaHoaDon)
+        {
+            await MoHoaDonTheoMaAsync(doc.MaChungTu);
+        }
+        else if (doc.LaPhieuNhap)
+        {
+            await MoPhieuNhapTheoMaAsync(doc.MaChungTu);
+        }
+    }
+
+    [RelayCommand]
+    private async Task XemHoaDonLienQuanAsync(string? maHoaDon)
+    {
+        if (!string.IsNullOrWhiteSpace(maHoaDon))
+        {
+            await MoHoaDonTheoMaAsync(maHoaDon);
+        }
+    }
+
+    [RelayCommand]
+    private async Task XemPhieuNhapLienQuanAsync(string? maPhieuNhap)
+    {
+        if (!string.IsNullOrWhiteSpace(maPhieuNhap))
+        {
+            await MoPhieuNhapTheoMaAsync(maPhieuNhap);
+        }
+    }
+
+    private async Task MoHoaDonTheoMaAsync(string maHoaDon)
+    {
+        if (string.IsNullOrWhiteSpace(maHoaDon) || OwnerWindow is null)
+            return;
+
+        try
+        {
+            var receipt = await _db.GetHoaDonBanHangTheoMaAsync(maHoaDon.Trim());
+            if (receipt is null)
+            {
+                StatusMessage = $"Không tìm thấy hóa đơn {maHoaDon} trong hệ thống.";
+                var dlg = new ConfirmationWindow("Thông báo", $"Không tìm thấy hóa đơn {maHoaDon} trong cơ sở dữ liệu.", "Đóng", "");
+                await dlg.ShowDialog<bool>(OwnerWindow);
+                return;
+            }
+
+            receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
+            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync, XuLySauKhiHuyHoaDonAsync);
+            await invoiceWindow.ShowDialog(OwnerWindow);
+
+            // Làm mới chi tiết phiếu nếu có thay đổi
+            if (SoQuyChiTietDangXem is not null)
+            {
+                var refChiTiet = await _db.GetSoQuyChiTietAsync(SoQuyChiTietDangXem.MaPhieu);
+                if (refChiTiet is not null)
+                    SoQuyChiTietDangXem = refChiTiet;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Không mở được hóa đơn {maHoaDon}: {ex.Message}";
+            SafeLog.WriteError($"Lỗi mở hóa đơn {maHoaDon}", ex);
+        }
+    }
+
+    private async Task MoPhieuNhapTheoMaAsync(string maPhieuNhap)
+    {
+        if (string.IsNullOrWhiteSpace(maPhieuNhap) || OwnerWindow is null)
+            return;
+
+        try
+        {
+            var detail = await _db.GetPhieuNhapHangDetailTheoMaAsync(maPhieuNhap.Trim());
+            if (detail is null)
+            {
+                StatusMessage = $"Không tìm thấy phiếu nhập {maPhieuNhap} trong hệ thống.";
+                var dlg = new ConfirmationWindow("Thông báo", $"Không tìm thấy phiếu nhập {maPhieuNhap} trong cơ sở dữ liệu.", "Đóng", "");
+                await dlg.ShowDialog<bool>(OwnerWindow);
+                return;
+            }
+
+            var window = new PhieuNhapDetailWindow(detail, ThanhToanTuChiTietPhieuNhapAsync);
+            await window.ShowDialog(OwnerWindow);
+
+            // Làm mới chi tiết phiếu nếu có thay đổi
+            if (SoQuyChiTietDangXem is not null)
+            {
+                var refChiTiet = await _db.GetSoQuyChiTietAsync(SoQuyChiTietDangXem.MaPhieu);
+                if (refChiTiet is not null)
+                    SoQuyChiTietDangXem = refChiTiet;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Không mở được phiếu nhập {maPhieuNhap}: {ex.Message}";
+            SafeLog.WriteError($"Lỗi mở phiếu nhập {maPhieuNhap}", ex);
         }
     }
 

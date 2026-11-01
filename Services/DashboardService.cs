@@ -372,12 +372,14 @@ public sealed class DashboardService
             }
         }
 
-        var maxDoanhThu = diem.Count == 0 ? 0m : diem.Max(r => r.DoanhThu);
+        var maxDoanhThu = diem.Count == 0 ? 0m : Math.Max(0m, diem.Max(r => r.DoanhThu));
         var tyLeBeRong = diem.Count == 0 ? 0d : 100d / diem.Count;
 
         foreach (var item in diem)
         {
-            item.TyLeChieuCao = maxDoanhThu <= 0 ? 0 : (double)(item.DoanhThu / maxDoanhThu * 100m);
+            item.TyLeChieuCao = maxDoanhThu <= 0
+                ? 0
+                : Math.Clamp((double)(Math.Max(0m, item.DoanhThu) / maxDoanhThu * 100m), 0, 100);
             item.TyLeBeRong = tyLeBeRong;
             item.LaDiemCaoNhat = maxDoanhThu > 0 && item.DoanhThu == maxDoanhThu;
         }

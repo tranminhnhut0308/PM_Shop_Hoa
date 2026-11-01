@@ -100,7 +100,7 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
                 .ToList();
 
         LichSuGrid.ItemsSource = _visibleRecords;
-        TxtTongTien.Text = $"Tổng đã thanh toán: {_visibleRecords.Sum(record => record.SoTien):N0} đ";
+        TxtTongTien.Text = $"Tổng đã thanh toán: {_visibleRecords.Where(record => !record.DaHuy).Sum(record => record.SoTien):N0} đ";
         TxtTongGiaoDich.Text = $"Tổng số giao dịch: {_visibleRecords.Count:N0}";
     }
 
@@ -125,8 +125,19 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
                 .AppendLine($"Phương thức: {record.PhuongThucHienThi}")
                 .AppendLine($"Mã tham chiếu: {record.MaThamChieuHienThi}")
                 .AppendLine($"Người thực hiện: {record.NguoiThucHien}")
-                .AppendLine($"Ghi chú: {record.GhiChuHienThi}")
-                .AppendLine()
+                .AppendLine($"Ghi chú: {record.GhiChuHienThi}");
+
+            if (record.DaHuy)
+            {
+                detail.AppendLine()
+                      .AppendLine("--- THÔNG TIN HỦY GIAO DỊCH ---")
+                      .AppendLine("Trạng thái: ĐÃ HỦY")
+                      .AppendLine($"Người hủy: {record.NguoiHuy}")
+                      .AppendLine($"Thời gian hủy: {record.ThoiGianHuyText}")
+                      .AppendLine($"Lý do hủy: {record.LyDoHuy}");
+            }
+
+            detail.AppendLine()
                 .AppendLine("Phân bổ vào phiếu nhập (phiếu cũ trước):");
 
             foreach (var allocation in allocations)

@@ -67,6 +67,7 @@
                     <DataGridTextColumn Header="Đã thanh toán" Binding="{Binding SoTienText}" Width="140" />
                     <DataGridTextColumn Header="Công nợ sau" Binding="{Binding CongNoSauText}" Width="140" />
                     <DataGridTextColumn Header="Phương thức" Binding="{Binding PhuongThucHienThi}" Width="125" />
+                    <DataGridTextColumn Header="Trạng thái" Binding="{Binding TrangThaiHienThi}" Width="120" />
                     <DataGridTextColumn Header="Mã tham chiếu" Binding="{Binding MaThamChieuHienThi}" Width="145" />
                     <DataGridTextColumn Header="Người thực hiện" Binding="{Binding NguoiThucHien}" Width="145" />
                     <DataGridTextColumn Header="Ghi chú" Binding="{Binding GhiChuHienThi}" Width="*" />

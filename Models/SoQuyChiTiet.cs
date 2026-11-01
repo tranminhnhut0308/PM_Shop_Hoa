@@ -80,4 +80,49 @@ public class SoQuyChiTiet
     public string MauTrangThai => DaHuy ? "#D92D20" : "#667085";
 
     public string MauNenTrangThai => DaHuy ? "#FEF3F2" : "#F2F4F7";
+
+    // ================================================================
+    // THÔNG TIN CHỨNG TỪ LIÊN QUAN & CÔNG NỢ (ISSUE #52)
+    // ================================================================
+
+    /// <summary>Danh sách các chứng từ liên quan (hóa đơn bán hàng, phiếu nhập...)</summary>
+    public List<SoQuyChungTuLienQuan> DanhSachChungTuLienQuan { get; set; } = new();
+
+    public bool CoChungTuLienQuan => DanhSachChungTuLienQuan.Count > 0;
+
+    public bool CoNhieuChungTuLienQuan => DanhSachChungTuLienQuan.Count > 1;
+
+    /// <summary>Phiếu này là thanh toán công nợ (có thể nhiều chứng từ)</summary>
+    public bool LaThanhToanCongNo { get; set; }
+
+    /// <summary>Công nợ trước thanh toán (nếu là giao dịch thanh toán công nợ)</summary>
+    public decimal? CongNoTruoc { get; set; }
+
+    /// <summary>Công nợ sau thanh toán</summary>
+    public decimal? CongNoSau { get; set; }
+
+    public bool CoThongTinCongNo => CongNoTruoc.HasValue;
+
+    public string CongNoTruocHienThi => CongNoTruoc.HasValue ? $"{CongNoTruoc.Value:N0} đ" : "";
+
+    public string CongNoSauHienThi => CongNoSau.HasValue ? $"{CongNoSau.Value:N0} đ" : "";
+
+    /// <summary>Thuộc hóa đơn của khách lẻ (thanh toán đủ khi mua, không cho nợ)</summary>
+    public bool LaKhachLe { get; set; }
+
+    public string? MaHoaDonKhachLe { get; set; }
+
+    // ================================================================
+    // THÔNG TIN HỦY PHIẾU
+    // ================================================================
+
+    public string? NguoiHuy { get; set; }
+
+    public DateTime? ThoiGianHuy { get; set; }
+
+    public string ThoiGianHuyHienThi => ThoiGianHuy?.ToString("dd/MM/yyyy HH:mm") ?? "";
+
+    public string? LyDoHuy { get; set; }
+
+    public bool CoThongTinHuy => DaHuy && (!string.IsNullOrWhiteSpace(NguoiHuy) || !string.IsNullOrWhiteSpace(LyDoHuy) || ThoiGianHuy.HasValue);
 }

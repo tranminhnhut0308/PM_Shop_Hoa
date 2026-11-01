@@ -63,6 +63,7 @@
                     <DataGridTextColumn Header="Số tiền thanh toán" Binding="{Binding SoTienText}" Width="150" />
                     <DataGridTextColumn Header="Công nợ sau" Binding="{Binding CongNoSauText}" Width="145" />
                     <DataGridTextColumn Header="Phương thức" Binding="{Binding PhuongThucHienThi}" Width="125" />
+                    <DataGridTextColumn Header="Trạng thái" Binding="{Binding TrangThaiHienThi}" Width="120" />
                     <DataGridTextColumn Header="Người thực hiện" Binding="{Binding NguoiThucHien}" Width="150" />
                     <DataGridTextColumn Header="Ghi chú" Binding="{Binding GhiChuHienThi}" Width="*" />
                 </DataGrid.Columns>
@@ -70,6 +71,8 @@
 
             <StackPanel Grid.Row="4" Orientation="Horizontal"
                 HorizontalAlignment="Right" Spacing="10">
+                <Button Content="Xem chi tiết giao dịch" Padding="16,8"
+                    Click="OnDetailClick" />
                 <Button Content="Đóng" MinWidth="100" Padding="16,8"
                     Click="OnCloseClick" />
             </StackPanel>

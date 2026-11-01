@@ -623,69 +623,81 @@
 
           <!-- Vùng biểu đồ -->
           <Grid Grid.Row="3">
-            <!-- Đường trục đáy -->
-            <Border VerticalAlignment="Bottom" Height="1" Margin="0,0,0,22"
-                    Background="#E2ECE8" IsVisible="{Binding CoDuLieu}" />
-
-            <ScrollViewer Height="200" VerticalScrollBarVisibility="Disabled"
+            <ScrollViewer x:Name="ChartScrollViewer"
+                          Height="195"
+                          VerticalScrollBarVisibility="Disabled"
                           HorizontalScrollBarVisibility="Auto"
-                          Padding="0,4,0,2"
+                          Padding="4,6,4,4"
                           IsVisible="{Binding CoDuLieu}">
-              <ItemsControl ItemsSource="{Binding BieuDoDoanhThu}"
-                            VerticalAlignment="Bottom">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="6" />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
+              <Grid RowDefinitions="140,1,Auto"
+                    MinWidth="{Binding #ChartScrollViewer.Bounds.Width}"
+                    HorizontalAlignment="Left">
+                <!-- Đường trục đáy trải dài toàn bộ chiều rộng vùng vẽ -->
+                <Border Grid.Row="1" Height="1" Background="#D0DDD8" HorizontalAlignment="Stretch" />
 
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="models:TongQuanDiemDoanhThu">
-                    <StackPanel Width="{Binding BeRongCot, FallbackValue=55}"
-                                Margin="1,0"
-                                ToolTip.Tip="{Binding ToolTipDayDu}">
+                <!-- Các cột biểu đồ và nhãn trục hoành -->
+                <ItemsControl Grid.RowSpan="3"
+                              ItemsSource="{Binding BieuDoDoanhThu}"
+                              VerticalAlignment="Stretch">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="0" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
 
-                      <!-- Cột + Số liệu trên đầu cột -->
-                      <Grid Height="136">
-                        <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Spacing="2">
-                          <TextBlock Text="{Binding DoanhThuNganGon}"
-                                     FontSize="10"
-                                     FontWeight="Bold"
-                                     Foreground="#087F6E"
-                                     HorizontalAlignment="Center"
-                                     TextAlignment="Center"
-                                     IsVisible="{Binding CoDuLieu}" />
-                          <TextBlock Text="{Binding SoHoaDonNganGon}"
-                                     FontSize="9.5"
-                                     Foreground="#61736E"
-                                     HorizontalAlignment="Center"
-                                     TextAlignment="Center"
-                                     Margin="0,0,0,2"
-                                     IsVisible="{Binding CoDuLieu}" />
-                          <Border Height="{Binding ChieuCaoCot, FallbackValue=4}"
-                                  CornerRadius="4,4,0,0"
-                                  Background="{Binding MauCot}"
-                                  VerticalAlignment="Bottom"
-                                  HorizontalAlignment="Stretch"
-                                  Margin="3,0,3,0"
-                                  Opacity="0.95" />
-                        </StackPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="models:TongQuanDiemDoanhThu">
+                      <Grid RowDefinitions="140,1,Auto"
+                            Width="{Binding BeRongCot, FallbackValue=55}"
+                            ToolTip.Tip="{Binding ToolTipDayDu}">
+
+                        <!-- Cột + Số liệu trên đầu cột (Row 0: 140px, neo tại đáy) -->
+                        <Grid Grid.Row="0">
+                          <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Spacing="2">
+                            <TextBlock Text="{Binding DoanhThuNganGon}"
+                                       FontSize="10"
+                                       FontWeight="Bold"
+                                       Foreground="#087F6E"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center"
+                                       IsVisible="{Binding CoDoanhThu}" />
+                            <TextBlock Text="{Binding SoHoaDonNganGon}"
+                                       FontSize="9"
+                                       Foreground="#61736E"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center"
+                                       Margin="0,0,0,1"
+                                       IsVisible="{Binding CoDoanhThu}" />
+                            <Border Height="{Binding ChieuCaoCot, FallbackValue=0}"
+                                    CornerRadius="4,4,0,0"
+                                    Background="{Binding MauCot}"
+                                    VerticalAlignment="Bottom"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="4,0,4,0"
+                                    Opacity="0.95"
+                                    IsVisible="{Binding CoDoanhThu}" />
+                          </StackPanel>
+                        </Grid>
+
+                        <!-- Trục hoành khớp từng cột -->
+                        <Border Grid.Row="1" Height="1" Background="#D0DDD8" HorizontalAlignment="Stretch" />
+
+                        <!-- Nhãn dưới cột (Row 2: Auto) -->
+                        <TextBlock Grid.Row="2"
+                                   Text="{Binding Nhan}"
+                                   FontSize="10.5"
+                                   FontWeight="SemiBold"
+                                   Foreground="{Binding MauChuNhan}"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxLines="1"
+                                   Margin="2,6,2,2" />
                       </Grid>
-
-                      <!-- Nhãn dưới cột -->
-                      <TextBlock Text="{Binding Nhan}"
-                                 FontSize="10.5"
-                                 FontWeight="SemiBold"
-                                 Foreground="{Binding MauChuNhan}"
-                                 HorizontalAlignment="Center"
-                                 TextAlignment="Center"
-                                 TextTrimming="CharacterEllipsis"
-                                 MaxLines="1"
-                                 Margin="0,5,0,0" />
-                    </StackPanel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </Grid>
             </ScrollViewer>
           </Grid>
 

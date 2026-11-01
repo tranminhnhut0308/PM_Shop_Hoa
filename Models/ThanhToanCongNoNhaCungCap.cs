@@ -45,6 +45,15 @@ public sealed class ThanhToanCongNoNhaCungCap
     public string NguoiThucHien { get; set; } = "";
     public string? GhiChu { get; set; }
 
+    public string TrangThai { get; set; } = "HOAN_THANH";
+    public bool DaHuy => TrangThai.Equals("HUY", StringComparison.OrdinalIgnoreCase);
+    public string TrangThaiHienThi => DaHuy ? "Đã hủy" : "Hoàn thành";
+
+    public string? NguoiHuy { get; set; }
+    public DateTime? ThoiGianHuy { get; set; }
+    public string ThoiGianHuyText => ThoiGianHuy?.ToString("dd/MM/yyyy HH:mm") ?? "—";
+    public string? LyDoHuy { get; set; }
+
     public string ThoiGianText => ThoiGian.ToString("dd/MM/yyyy HH:mm");
     public string CongNoTruocText => $"{CongNoTruoc:N0} đ";
     public string SoTienText => $"{SoTien:N0} đ";

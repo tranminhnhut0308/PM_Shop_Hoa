@@ -778,24 +778,73 @@ public sealed partial class DatabaseService
                 }
 
                 // ============================================================
-                // 3. XỬ LÝ SỔ QUỸ: TẠO PHIẾU CHI HOÀN TIỀN (KHÔNG XÓA PHIẾU THU CŨ)
+                // 3. XỬ LÝ SỔ QUỸ VÀ CHỨNG TỪ THANH TOÁN (ISSUE #52 - PHẦN II, MỤC 8)
                 // ============================================================
+                await EnsurePhieuQuyCancelColumnsAsync();
+
+                // Hủy các phiếu thu liên quan phát sinh từ hóa đơn này
+                var soPhieuThuHuy = await connection.ExecuteAsync(
+                    """
+                    UPDATE phieu_chi
+                    SET trang_thai = 'HUY',
+                        thoi_gian_huy = @Now,
+                        nguoi_huy_id = @UserId,
+                        ly_do_huy = @LyDo
+                    WHERE (hoa_don_ban_hang_id = @HoaDonId OR ma_hoa_don = @MaHoaDon)
+                      AND ma_phieu_chi LIKE 'PT%'
+                      AND trang_thai = 'HOAN_THANH';
+                    """,
+                    new
+                    {
+                        HoaDonId = header.HoaDonId,
+                        MaHoaDon = header.MaHoaDon,
+                        Now = now,
+                        UserId = userId,
+                        LyDo = $"Hủy theo hóa đơn {header.MaHoaDon}: {lyDo}"
+                    },
+                    transaction);
+
+                // Cập nhật các bản ghi thanh toán của hóa đơn thành HUY
+                await connection.ExecuteAsync(
+                    """
+                    UPDATE thanh_toan
+                    SET trang_thai = 'HUY',
+                        thoi_gian_huy = @Now,
+                        nguoi_huy_id = @UserId,
+                        ly_do_huy = @LyDo
+                    WHERE hoa_don_id = @HoaDonId
+                      AND trang_thai = 'HOAN_THANH';
+                    """,
+                    new
+                    {
+                        HoaDonId = header.HoaDonId,
+                        Now = now,
+                        UserId = userId,
+                        LyDo = $"Hủy theo hóa đơn {header.MaHoaDon}: {lyDo}"
+                    },
+                    transaction);
+
                 if (header.KhachDaThanhToan > 0 && phuongAnTien == PhuongAnXuLyTienKhiHuy.HoanTienChoKhach)
                 {
-                    maPhieuChiHoan = await TaoPhieuChiHoanTienHuyHoaDonTrongGiaoDichAsync(
-                        connection,
-                        transaction,
-                        branchId,
-                        userId,
-                        header.MaHoaDon,
-                        header.TenKhachHang,
-                        header.KhachDaThanhToan,
-                        req.PhuongThucHoanTien,
-                        lyDo,
-                        now,
-                        coCotPhieuQuy,
-                        coCotLoaiPhieu,
-                        coCotExtraPhieuQuy);
+                    // Nếu phiếu thu đã được hủy thì Sổ quỹ đã loại trừ số tiền thu,
+                    // chỉ tạo phiếu chi hoàn tiền nếu không có phiếu thu nào bị hủy để tránh trừ quỹ 2 lần.
+                    if (soPhieuThuHuy == 0)
+                    {
+                        maPhieuChiHoan = await TaoPhieuChiHoanTienHuyHoaDonTrongGiaoDichAsync(
+                            connection,
+                            transaction,
+                            branchId,
+                            userId,
+                            header.MaHoaDon,
+                            header.TenKhachHang,
+                            header.KhachDaThanhToan,
+                            req.PhuongThucHoanTien,
+                            lyDo,
+                            now,
+                            coCotPhieuQuy,
+                            coCotLoaiPhieu,
+                            coCotExtraPhieuQuy);
+                    }
 
                     soTienHoanKhach = header.KhachDaThanhToan;
                 }

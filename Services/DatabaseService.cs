@@ -3524,12 +3524,16 @@ public sealed partial class DatabaseService
             ls.cong_no_sau AS CongNoSau,
             ls.phuong_thuc AS PhuongThuc,
             COALESCE(NULLIF(TRIM(nd.ho_ten), ''), nd.ten_dang_nhap, '') AS NguoiThucHien,
-            ls.ghi_chu AS GhiChu
+            ls.ghi_chu AS GhiChu,
+            ls.trang_thai AS TrangThai,
+            ls.thoi_gian_huy AS ThoiGianHuy,
+            ls.ly_do_huy AS LyDoHuy,
+            COALESCE(nd_huy.ho_ten, nd_huy.ten_dang_nhap, '') AS NguoiHuy
         FROM lich_su_thanh_toan_cong_no_khach_hang ls
         INNER JOIN khach_hang kh ON kh.id = ls.khach_hang_id
         LEFT JOIN nguoi_dung nd ON nd.id = ls.nguoi_thuc_hien_id
+        LEFT JOIN nguoi_dung nd_huy ON nd_huy.id = ls.nguoi_huy_id
         WHERE ls.khach_hang_id = @CustomerId
-          AND ls.trang_thai = 'HOAN_THANH'
           AND (@TuNgay IS NULL OR ls.thoi_gian >= @TuNgay)
           AND (@DenNgayExclusive IS NULL OR ls.thoi_gian < @DenNgayExclusive)
         ORDER BY ls.thoi_gian DESC, ls.id DESC;
@@ -7063,11 +7067,15 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
                     ls.phuong_thuc AS PhuongThuc,
                     ls.ma_tham_chieu AS MaThamChieu,
                     COALESCE(NULLIF(TRIM(nd.ho_ten), ''), nd.ten_dang_nhap, '') AS NguoiThucHien,
-                    ls.ghi_chu AS GhiChu
+                    ls.ghi_chu AS GhiChu,
+                    ls.trang_thai AS TrangThai,
+                    ls.thoi_gian_huy AS ThoiGianHuy,
+                    ls.ly_do_huy AS LyDoHuy,
+                    COALESCE(nd_huy.ho_ten, nd_huy.ten_dang_nhap, '') AS NguoiHuy
                 FROM lich_su_thanh_toan_cong_no_nha_cung_cap ls
                 LEFT JOIN nguoi_dung nd ON nd.id = ls.nguoi_thuc_hien_id
-                WHERE ls.trang_thai = 'HOAN_THANH'
-                  AND (@NhaCungCapId IS NULL OR ls.nha_cung_cap_id = @NhaCungCapId)
+                LEFT JOIN nguoi_dung nd_huy ON nd_huy.id = ls.nguoi_huy_id
+                WHERE (@NhaCungCapId IS NULL OR ls.nha_cung_cap_id = @NhaCungCapId)
                   AND (@TuNgay IS NULL OR ls.thoi_gian >= @TuNgay)
                   AND (@DenNgayExclusive IS NULL OR ls.thoi_gian < @DenNgayExclusive)
                 ORDER BY ls.thoi_gian DESC, ls.id DESC;
@@ -9151,6 +9159,25 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
         ).AsList();
 
         return (items, tongSoBanGhi);
+    }
+
+    /// <summary>
+    /// Đọc đầy đủ một phiếu nhập theo mã phiếu nhập (ma_phieu_nhap).
+    /// </summary>
+    public async Task<PhieuNhapHangDetail?> GetPhieuNhapHangDetailTheoMaAsync(string maPhieuNhap)
+    {
+        if (string.IsNullOrWhiteSpace(maPhieuNhap))
+            return null;
+
+        await using var connection = await OpenAsync();
+        var id = await connection.ExecuteScalarAsync<uint?>(
+            "SELECT id FROM phieu_nhap_hang WHERE ma_phieu_nhap = @Ma LIMIT 1;",
+            new { Ma = maPhieuNhap.Trim() });
+
+        if (id is null || id == 0)
+            return null;
+
+        return await GetPhieuNhapHangDetailAsync(id.Value);
     }
 
     /// <summary>
@@ -11249,91 +11276,23 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
     }
 
     /// <summary>
-    /// Lấy chi tiết một phiếu thu/chi để mở màn hình chi tiết.
-    /// Chỉ đọc đúng một dòng theo mã phiếu nên không ảnh hưởng hiệu năng.
+    /// Lấy chi tiết một phiếu thu/chi kèm toàn bộ chứng từ liên quan và thông tin công nợ (Issue #52).
     /// </summary>
     public async Task<SoQuyChiTiet?> GetSoQuyChiTietAsync(string maPhieu)
     {
-        if (string.IsNullOrWhiteSpace(maPhieu))
-            return null;
-
-        var coCotMoi = await EnsurePhieuQuyExtraColumnsAsync();
-
-        await using var connection = await OpenAsync();
-
-        var sql = $"""
-        SELECT
-            {LayCotChonSoQuy(coCotMoi)}
-        {SoQuyFrom}
-        WHERE pc.ma_phieu_chi = @MaPhieu
-        LIMIT 1;
-        """;
-
-        var row = await connection.QueryFirstOrDefaultAsync<SoQuyPhieuRow>(
-            sql,
-            new { MaPhieu = maPhieu.Trim() });
-
-        if (row is null)
-            return null;
-
-        var ma = row.MaPhieu ?? "";
-
-        return new SoQuyChiTiet
-        {
-            MaPhieu = ma,
-            LaThu = LaPhieuThu(row.LoaiPhieu, ma),
-            ThoiGian = row.ThoiGian,
-            NguoiNopNhan = row.NguoiNopNhan ?? "",
-            SoTien = ToDecimal(row.SoTien),
-            NoiDung = row.NoiDung ?? "",
-            GhiChu = row.GhiChu ?? "",
-            NguoiTao = row.NguoiTao ?? "",
-            TrangThai = row.TrangThai ?? "",
-            TenLoai = row.TenLoai ?? "",
-            NhomChiPhiId = row.NhomChiPhiId,
-            PhuongThuc = row.PhuongThuc ?? ""
-        };
+        return await GetSoQuyChiTietDayDuAsync(maPhieu);
     }
 
     /// <summary>
-    /// Hủy phiếu: chỉ chuyển sang trạng thái HUY khi phiếu đang HOAN_THANH.
-    /// Trả về số dòng được cập nhật (0 = phiếu không tồn tại hoặc đã hủy).
+    /// Hủy phiếu thu/chi: hoàn tác công nợ, số tiền thanh toán, trạng thái chứng từ và lưu vết kiểm toán (Issue #52).
     /// </summary>
     public async Task<int> HuyPhieuQuyAsync(string maPhieu)
     {
-        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CashBookCancel, "Bạn không có quyền hủy phiếu thu/chi.");
-        if (string.IsNullOrWhiteSpace(maPhieu))
-            return 0;
-
-        await using var connection = await OpenAsync();
-
-        const string sql = """
-        UPDATE phieu_chi
-        SET trang_thai = @TrangThaiHuy
-        WHERE ma_phieu_chi = @MaPhieu
-          AND trang_thai = @TrangThaiHoanThanh
-        LIMIT 1;
-        """;
-
-        var affected = await connection.ExecuteAsync(sql, new
-        {
-            MaPhieu = maPhieu.Trim(),
-            TrangThaiHuy = TrangThaiPhieuHuy,
-            TrangThaiHoanThanh = TrangThaiPhieuHoanThanh
-        });
-
-        if (affected > 0)
-        {
-            _ = LogSubAccountActivityAsync("Hủy sổ quỹ", "SO_QUY", null, maPhieu.Trim(), $"Hủy phiếu sổ quỹ {maPhieu.Trim()}");
-        }
-
-        return affected;
+        return await HuyPhieuQuyChiTietAsync(maPhieu, "Hủy từ sổ quỹ", Session.CurrentUser?.Id);
     }
 
     /// <summary>
-    /// Hủy nhiều phiếu cùng lúc trong một transaction: hoặc cả nhóm thành công,
-    /// hoặc không phiếu nào bị đổi. Dùng cho thao tác chọn nhiều trên danh sách.
-    /// Trả về số phiếu thực sự chuyển sang trạng thái hủy (những phiếu đã hủy trước đó không tính).
+    /// Hủy nhiều phiếu cùng lúc: hủy tuần tự từng phiếu đảm bảo hoàn tác tài chính toàn vẹn.
     /// </summary>
     public async Task<int> HuyNhieuPhieuQuyAsync(IReadOnlyCollection<string> maPhieus)
     {
@@ -11347,35 +11306,15 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
         if (danhSach.Count == 0)
             return 0;
 
-        await using var connection = await OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        int count = 0;
+        foreach (var ma in danhSach)
         {
-            var soDong = await connection.ExecuteAsync(
-                """
-                UPDATE phieu_chi
-                SET trang_thai = @TrangThaiHuy
-                WHERE trang_thai = @TrangThaiHoanThanh
-                  AND ma_phieu_chi IN @MaPhieus;
-                """,
-                new
-                {
-                    TrangThaiHuy = TrangThaiPhieuHuy,
-                    TrangThaiHoanThanh = TrangThaiPhieuHoanThanh,
-                    MaPhieus = danhSach.ToArray()
-                },
-                transaction);
-
-            await transaction.CommitAsync();
-
-            return soDong;
+            var affected = await HuyPhieuQuyChiTietAsync(ma, "Hủy nhiều phiếu từ sổ quỹ", Session.CurrentUser?.Id);
+            if (affected > 0)
+                count += affected;
         }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
+
+        return count;
     }
 
     /// <summary>
