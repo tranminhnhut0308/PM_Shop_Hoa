@@ -16,11 +16,26 @@ public sealed class ThuNoKhachHangKetQua
     /// <summary>Tổng số tiền thực thu được.</summary>
     public decimal TongDaThu { get; init; }
 
+    /// <summary>Công nợ của khách hàng trước khi thanh toán.</summary>
+    public decimal CongNoTruoc { get; init; }
+
     /// <summary>Công nợ còn lại của khách hàng sau khi thu.</summary>
     public decimal ConNoConLai { get; init; }
 
+    /// <summary>Công nợ còn lại của khách hàng sau khi thu (alias).</summary>
+    public decimal CongNoSau => ConNoConLai;
+
     /// <summary>Số hóa đơn được cấn trừ nợ trong lần thu này.</summary>
     public int SoHoaDonDaThu { get; init; }
+
+    /// <summary>Số hóa đơn được cấn trừ nợ trong lần thu này (alias).</summary>
+    public int SoHoaDonDuocPhanBo => SoHoaDonDaThu;
+
+    /// <summary>Mã giao dịch / phiếu thu chính ghi nhận lần thanh toán này.</summary>
+    public string MaGiaoDich { get; init; } = "";
+
+    /// <summary>Mã khách hàng.</summary>
+    public string MaKhachHang { get; init; } = "";
 
     /// <summary>Danh sách mã phiếu thu đã ghi vào sổ quỹ.</summary>
     public IReadOnlyList<string> MaPhieuThus { get; init; } = [];

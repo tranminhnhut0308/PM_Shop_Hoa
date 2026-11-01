@@ -16,6 +16,7 @@ public sealed class ThanhToanCongNoKhachHang
     public decimal SoTien { get; set; }
     public decimal CongNoSau { get; set; }
     public string PhuongThuc { get; set; } = "";
+    public string? MaThamChieu { get; set; }
     public string NguoiThucHien { get; set; } = "";
     public string? GhiChu { get; set; }
 
@@ -39,6 +40,7 @@ public sealed class ThanhToanCongNoKhachHang
         _ => string.IsNullOrWhiteSpace(PhuongThuc) ? "Chưa ghi nhận" : PhuongThuc
     };
 
+    public string MaThamChieuHienThi => string.IsNullOrWhiteSpace(MaThamChieu) ? "—" : MaThamChieu.Trim();
     public string CongNoTruocText => $"{CongNoTruoc:N0} đ";
     public string SoTienText => $"{SoTien:N0} đ";
     public string CongNoSauText => $"{CongNoSau:N0} đ";

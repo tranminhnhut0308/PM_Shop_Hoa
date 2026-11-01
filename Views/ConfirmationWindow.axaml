@@ -1,7 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ShopHoa.Views.ConfirmationWindow"
-        Width="440"
+        Width="520"
+        MinWidth="440"
+        MaxWidth="640"
         SizeToContent="WidthAndHeight"
         Title="Xác nhận"
         WindowStartupLocation="CenterOwner"
@@ -47,7 +49,8 @@
           BorderThickness="1"
           CornerRadius="14">
     <StackPanel Margin="24" Spacing="18">
-      <TextBlock Text="Thông báo"
+      <TextBlock x:Name="TitleTextBlock"
+                 Text="Thông báo"
                  FontSize="20"
                  FontWeight="Bold"
                  Foreground="#163F38"/>
@@ -57,11 +60,13 @@
               BorderThickness="1"
               CornerRadius="10"
               Padding="16,14">
-        <TextBlock x:Name="MessageTextBlock"
-                   TextWrapping="Wrap"
-                   FontSize="15"
-                   Foreground="#263B35"
-                   LineHeight="24"/>
+        <ScrollViewer MaxHeight="450" VerticalScrollBarVisibility="Auto">
+          <TextBlock x:Name="MessageTextBlock"
+                     TextWrapping="Wrap"
+                     FontSize="14"
+                     Foreground="#263B35"
+                     LineHeight="23"/>
+        </ScrollViewer>
       </Border>
 
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">

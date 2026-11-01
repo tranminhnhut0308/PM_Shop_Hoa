@@ -16,12 +16,11 @@
 
     <Style Selector="Border.bcMetric">
       <Setter Property="Background" Value="#FFFFFF" />
-      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="CornerRadius" Value="10" />
       <Setter Property="BorderBrush" Value="#E2ECE8" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="BoxShadow" Value="0 1 6 0 #10000000" />
-      <Setter Property="Padding" Value="14,11" />
-      <Setter Property="MinWidth" Value="168" />
+      <Setter Property="BoxShadow" Value="0 1 4 0 #0D000000" />
+      <Setter Property="Padding" Value="12,9" />
     </Style>
 
     <Style Selector="Border.bcRow">
@@ -84,10 +83,17 @@
     </Style>
 
     <Style Selector="TextBlock.bcMetricValue">
-      <Setter Property="FontSize" Value="17" />
+      <Setter Property="FontSize" Value="16" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Foreground" Value="#164B40" />
-      <Setter Property="Margin" Value="0,3,0,0" />
+      <Setter Property="Margin" Value="0,2,0,0" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.bcMetricSub">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Foreground" Value="#61736E" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
 
     <Style Selector="TextBlock.bcTableHead">
@@ -103,10 +109,10 @@
   </UserControl.Styles>
 
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Margin="18" Spacing="16">
+    <StackPanel Margin="16,14,16,16" Spacing="12">
 
       <!-- ============ THANH TIÊU ĐỀ + BỘ LỌC NGÀY ============ -->
-      <Border Classes="bcCard" Padding="16,13">
+      <Border Classes="bcCard" Padding="14,12">
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
           <StackPanel VerticalAlignment="Center">
             <TextBlock Text="BÁO CÁO CUỐI NGÀY"
@@ -184,78 +190,76 @@
         Background="#EAF9F5" BorderThickness="0" />
 
       <!-- ============ THẺ SỐ LIỆU BÁN HÀNG ============ -->
-      <StackPanel Spacing="9">
+      <StackPanel Spacing="8">
         <TextBlock Classes="bcSectionTitle" Text="1. BÁN HÀNG — hóa đơn trạng thái HOAN_THANH" />
 
-        <WrapPanel Orientation="Horizontal" ItemSpacing="10" LineSpacing="10">
-          <Border Classes="bcMetric">
-            <StackPanel>
-              <TextBlock Classes="bcMetricLabel" Text="Doanh thu (khách phải trả)" />
+        <Grid ColumnDefinitions="*,*,*,*,*,*,*" ColumnSpacing="8">
+          <Border Grid.Column="0" Classes="bcMetric">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="bcMetricLabel" Text="Doanh thu (khách trả)" />
               <TextBlock Classes="bcMetricValue" Text="{Binding TongKetBanHang.DoanhThuHienThi}" />
-              <TextBlock Classes="bcMuted" Margin="0,2,0,0"
-                Text="Tổng tiền hàng − giảm giá" />
+              <TextBlock Classes="bcMetricSub" Text="Tiền hàng − giảm giá" />
             </StackPanel>
           </Border>
 
-          <Border Classes="bcMetric">
-            <StackPanel>
+          <Border Grid.Column="1" Classes="bcMetric">
+            <StackPanel Spacing="2">
               <TextBlock Classes="bcMetricLabel" Text="Tổng tiền hàng" />
               <TextBlock Classes="bcMetricValue" Text="{Binding TongKetBanHang.TongTienHangHienThi}" />
+              <TextBlock Classes="bcMetricSub" Text="Chưa trừ giảm giá" />
             </StackPanel>
           </Border>
 
-          <Border Classes="bcMetric">
-            <StackPanel>
+          <Border Grid.Column="2" Classes="bcMetric">
+            <StackPanel Spacing="2">
               <TextBlock Classes="bcMetricLabel" Text="Giảm giá" />
               <TextBlock Classes="bcMetricValue" Text="{Binding TongKetBanHang.GiamGiaHienThi}" />
+              <TextBlock Classes="bcMetricSub" Text="Ưu đãi của ngày" />
             </StackPanel>
           </Border>
 
-          <Border Classes="bcMetric">
-            <StackPanel>
+          <Border Grid.Column="3" Classes="bcMetric">
+            <StackPanel Spacing="2">
               <TextBlock Classes="bcMetricLabel" Text="Đã thu" />
               <TextBlock Classes="bcMetricValue" Foreground="#087F6E"
                 Text="{Binding TongKetBanHang.DaThuHienThi}" />
-              <TextBlock Classes="bcMuted" Margin="0,2,0,0"
-                Text="Không gồm tiền thối" />
+              <TextBlock Classes="bcMetricSub" Text="Không gồm tiền thối" />
             </StackPanel>
           </Border>
 
-          <Border Classes="bcMetric">
-            <StackPanel>
+          <Border Grid.Column="4" Classes="bcMetric">
+            <StackPanel Spacing="2">
               <TextBlock Classes="bcMetricLabel" Text="Còn nợ" />
               <TextBlock Classes="bcMetricValue" Foreground="#C27803"
                 Text="{Binding TongKetBanHang.ConNoHienThi}" />
-              <TextBlock Classes="bcMuted" Margin="0,2,0,0"
+              <TextBlock Classes="bcMetricSub"
                 Text="{Binding TongKetBanHang.SoHoaDonConCongNoChuThich}" />
             </StackPanel>
           </Border>
 
-          <Border Classes="bcMetric">
-            <StackPanel>
+          <Border Grid.Column="5" Classes="bcMetric">
+            <StackPanel Spacing="2">
               <TextBlock Classes="bcMetricLabel" Text="Số hóa đơn" />
               <TextBlock Classes="bcMetricValue" Text="{Binding TongKetBanHang.SoHoaDonHienThi}" />
-              <TextBlock Classes="bcMuted" Margin="0,2,0,0"
+              <TextBlock Classes="bcMetricSub"
                 Text="{Binding TongKetBanHang.SoHoaDonDaThanhToanChuThich}" />
             </StackPanel>
           </Border>
 
-          <Border Classes="bcMetric">
-            <StackPanel>
+          <Border Grid.Column="6" Classes="bcMetric">
+            <StackPanel Spacing="2">
               <TextBlock Classes="bcMetricLabel" Text="Tiền thối" />
               <TextBlock Classes="bcMetricValue" Text="{Binding TongKetBanHang.TienThuaHienThi}" />
-              <TextBlock Classes="bcMuted" Margin="0,2,0,0"
-                Text="Không tính vào doanh thu" />
+              <TextBlock Classes="bcMetricSub" Text="Không tính vào doanh thu" />
             </StackPanel>
           </Border>
-        </WrapPanel>
+        </Grid>
       </StackPanel>
-
       <!-- ============ SỔ QUỸ + NHẬP HÀNG + KHÁCH HÀNG ============ -->
       <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
 
         <!-- Sổ quỹ -->
-        <Border Classes="bcCard" Padding="15">
+        <Border Classes="bcCard" Padding="14,12">
           <StackPanel Spacing="9">
             <TextBlock Classes="bcSectionTitle" Text="2. SỔ QUỸ" />
             <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
@@ -289,7 +293,7 @@
         </Border>
 
         <!-- Nhập hàng -->
-        <Border Grid.Column="1" Classes="bcCard" Padding="15">
+        <Border Grid.Column="1" Classes="bcCard" Padding="14,12">
           <StackPanel Spacing="9">
             <TextBlock Classes="bcSectionTitle" Text="3. NHẬP HÀNG" />
             <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
@@ -321,7 +325,7 @@
         </Border>
 
         <!-- Khách hàng -->
-        <Border Grid.Column="2" Classes="bcCard" Padding="15">
+        <Border Grid.Column="2" Classes="bcCard" Padding="14,12">
           <StackPanel Spacing="9">
             <TextBlock Classes="bcSectionTitle" Text="4. KHÁCH HÀNG" />
             <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
@@ -355,7 +359,7 @@
       </Grid>
 
       <!-- ============ BIỂU ĐỒ DOANH THU THEO GIỜ ============ -->
-      <Border Classes="bcCard" Padding="15">
+      <Border Classes="bcCard" Padding="14,12">
         <StackPanel Spacing="9">
           <Grid ColumnDefinitions="*,Auto">
             <StackPanel>
@@ -411,7 +415,7 @@
       <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
 
         <!-- Phương thức thanh toán -->
-        <Border Classes="bcCard" Padding="15">
+        <Border Classes="bcCard" Padding="14,12">
           <StackPanel Spacing="9">
             <TextBlock Classes="bcSectionTitle" Text="6. PHƯƠNG THỨC THANH TOÁN" />
             <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
@@ -450,7 +454,7 @@
         </Border>
 
         <!-- Top khách hàng -->
-        <Border Grid.Column="1" Classes="bcCard" Padding="15">
+        <Border Grid.Column="1" Classes="bcCard" Padding="14,12">
           <StackPanel Spacing="9">
             <TextBlock Classes="bcSectionTitle" Text="7. TOP KHÁCH HÀNG TRONG NGÀY" />
             <TextBlock Classes="bcSectionSub"
@@ -497,7 +501,7 @@
       </Grid>
 
       <!-- ============ TOP SẢN PHẨM ============ -->
-      <Border Classes="bcCard" Padding="15">
+      <Border Classes="bcCard" Padding="14,12">
         <StackPanel Spacing="9">
           <TextBlock Classes="bcSectionTitle" Text="8. TOP 10 SẢN PHẨM BÁN CHẠY" />
           <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
@@ -546,7 +550,7 @@
       </Border>
 
       <!-- ============ CÔNG NỢ KHÁCH HÀNG ============ -->
-      <Border Classes="bcCard" Padding="15">
+      <Border Classes="bcCard" Padding="14,12">
         <StackPanel Spacing="9">
           <Grid ColumnDefinitions="*,Auto">
             <StackPanel>
@@ -619,7 +623,7 @@
       </Border>
 
       <!-- ============ THU CHI ============ -->
-      <Border Classes="bcCard" Padding="15">
+      <Border Classes="bcCard" Padding="14,12">
         <StackPanel Spacing="9">
           <Grid ColumnDefinitions="*,Auto">
             <StackPanel>
@@ -693,7 +697,7 @@
       </Border>
 
       <!-- ============ CHỐT SỔ CUỐI NGÀY ============ -->
-      <Border Classes="bcCard" Padding="16" Background="#F0F9F7" BorderBrush="#087F6E" BorderThickness="1.5">
+      <Border Classes="bcCard" Padding="14,12" Background="#F0F9F7" BorderBrush="#087F6E" BorderThickness="1.5">
         <StackPanel Spacing="10">
           <TextBlock Text="CHỐT SỔ CUỐI NGÀY" FontSize="16" FontWeight="Bold" Foreground="#087F6E" />
           <Grid ColumnDefinitions="200,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="12">

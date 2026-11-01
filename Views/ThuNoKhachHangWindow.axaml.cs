@@ -60,47 +60,62 @@ public partial class ThuNoKhachHangWindow : Window
 
     private void OnConfirmClick(object? sender, RoutedEventArgs e)
     {
-        var soTien = TienThuBox.Value;
+        var btn = sender as Button;
+        if (btn != null) btn.IsEnabled = false;
 
-        if (soTien <= 0)
+        try
         {
-            HienLoi("Số tiền thu phải lớn hơn 0.");
-            return;
+            var soTien = TienThuBox.Value;
+
+            if (soTien <= 0)
+            {
+                HienLoi("Số tiền thanh toán phải lớn hơn 0.");
+                if (btn != null) btn.IsEnabled = true;
+                return;
+            }
+
+            if (soTien > _conNo)
+            {
+                HienLoi($"Số tiền thanh toán ({soTien.ToString("N0", CultureInfo.InvariantCulture)} đ) "
+                    + $"vượt quá công nợ hiện tại ({_conNo.ToString("N0", CultureInfo.InvariantCulture)} đ).");
+                if (btn != null) btn.IsEnabled = true;
+                return;
+            }
+
+            if (NgayThanhToanPicker.SelectedDate is not { } ngay ||
+                !TimeSpan.TryParseExact(
+                    GioThanhToanBox.Text?.Trim(),
+                    @"hh\:mm",
+                    CultureInfo.InvariantCulture,
+                    out var gio))
+            {
+                HienLoi("Vui lòng chọn ngày và nhập giờ thanh toán hợp lệ theo định dạng HH:mm.");
+                if (btn != null) btn.IsEnabled = true;
+                return;
+            }
+
+            var nguoiThucHienId = CboNguoiThu.SelectedItem is SoQuyLuaChonItem nguoiThu
+                && uint.TryParse(nguoiThu.GiaTri, out var selectedId)
+                    ? selectedId
+                    : _nguoiThucHienIdMacDinh;
+
+            var ketQua = new ThuNoKhachHangYeuCau
+            {
+                SoTien = soTien,
+                PhuongThuc = (CboPhuongThuc.SelectedItem as PhuongThucOption)?.Ma ?? "TIEN_MAT",
+                MaThamChieu = string.IsNullOrWhiteSpace(TxtMaThamChieu.Text) ? null : TxtMaThamChieu.Text.Trim(),
+                GhiChu = string.IsNullOrWhiteSpace(TxtGhiChu.Text) ? null : TxtGhiChu.Text.Trim(),
+                ThoiGian = ngay.Date.Add(gio),
+                NguoiThucHienId = nguoiThucHienId
+            };
+
+            Close(ketQua);
         }
-
-        if (soTien > _conNo)
+        catch
         {
-            HienLoi($"Số tiền thu ({soTien.ToString("N0", CultureInfo.InvariantCulture)} đ) "
-                + $"vượt quá công nợ còn lại ({_conNo.ToString("N0", CultureInfo.InvariantCulture)} đ).");
-            return;
+            if (btn != null) btn.IsEnabled = true;
+            throw;
         }
-
-        if (NgayThanhToanPicker.SelectedDate is not { } ngay ||
-            !TimeSpan.TryParseExact(
-                GioThanhToanBox.Text?.Trim(),
-                @"hh\:mm",
-                CultureInfo.InvariantCulture,
-                out var gio))
-        {
-            HienLoi("Vui lòng chọn ngày và nhập giờ thanh toán hợp lệ theo định dạng HH:mm.");
-            return;
-        }
-
-        var nguoiThucHienId = CboNguoiThu.SelectedItem is SoQuyLuaChonItem nguoiThu
-            && uint.TryParse(nguoiThu.GiaTri, out var selectedId)
-                ? selectedId
-                : _nguoiThucHienIdMacDinh;
-
-        var ketQua = new ThuNoKhachHangYeuCau
-        {
-            SoTien = soTien,
-            PhuongThuc = (CboPhuongThuc.SelectedItem as PhuongThucOption)?.Ma ?? "TIEN_MAT",
-            GhiChu = string.IsNullOrWhiteSpace(TxtGhiChu.Text) ? null : TxtGhiChu.Text.Trim(),
-            ThoiGian = ngay.Date.Add(gio),
-            NguoiThucHienId = nguoiThucHienId
-        };
-
-        Close(ketQua);
     }
 
     private void OnCancelClick(object? sender, RoutedEventArgs e)
@@ -110,9 +125,9 @@ public partial class ThuNoKhachHangWindow : Window
 
     private void CapNhatConNoSauThu()
     {
-        var conNoSauThu = _conNo - TienThuBox.Value;
+        var conNoSauThu = Math.Max(0m, _conNo - TienThuBox.Value);
         TxtConNoSauThu.Text = $"{conNoSauThu:N0} đ";
-        TxtConNoSauThu.Foreground = conNoSauThu < 0
+        TxtConNoSauThu.Foreground = conNoSauThu > 0
             ? Avalonia.Media.Brush.Parse("#D64545")
             : Avalonia.Media.Brush.Parse("#087F6E");
     }

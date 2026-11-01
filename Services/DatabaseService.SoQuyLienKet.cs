@@ -55,8 +55,9 @@ public sealed partial class DatabaseService
             await EnsureColumnExistsAsync(connection, "thanh_toan_nha_cung_cap", "thoi_gian_huy", "datetime DEFAULT NULL");
             await EnsureColumnExistsAsync(connection, "thanh_toan_nha_cung_cap", "ly_do_huy", "text DEFAULT NULL");
 
-            // 4. lich_su_thanh_toan_cong_no_khach_hang: nguoi_huy_id, thoi_gian_huy, ly_do_huy
+            // 4. lich_su_thanh_toan_cong_no_khach_hang: nguoi_huy_id, thoi_gian_huy, ly_do_huy, ma_tham_chieu
             await EnsureBangLichSuThanhToanKhachHangAsync();
+            await EnsureColumnExistsAsync(connection, "lich_su_thanh_toan_cong_no_khach_hang", "ma_tham_chieu", "varchar(150) DEFAULT NULL");
             await EnsureColumnExistsAsync(connection, "lich_su_thanh_toan_cong_no_khach_hang", "nguoi_huy_id", "int(10) unsigned DEFAULT NULL");
             await EnsureColumnExistsAsync(connection, "lich_su_thanh_toan_cong_no_khach_hang", "thoi_gian_huy", "datetime DEFAULT NULL");
             await EnsureColumnExistsAsync(connection, "lich_su_thanh_toan_cong_no_khach_hang", "ly_do_huy", "text DEFAULT NULL");
@@ -1118,7 +1119,9 @@ public sealed partial class DatabaseService
             tt.so_tien AS SoTien
         FROM thanh_toan tt
         INNER JOIN hoa_don_ban_hang hd ON hd.id = tt.hoa_don_id
-        WHERE (tt.ma_giao_dich = @MaGiaoDich OR tt.ghi_chu LIKE CONCAT('%[Phiếu thu ', @MaGiaoDich, ']%'))
+        WHERE (tt.ma_giao_dich = @MaGiaoDich
+            OR tt.ghi_chu LIKE CONCAT('%[Phiếu thu ', @MaGiaoDich, ']%')
+            OR tt.ghi_chu LIKE CONCAT('%', @MaGiaoDich, '%'))
         ORDER BY hd.thoi_gian_ban, hd.id;
         """;
 

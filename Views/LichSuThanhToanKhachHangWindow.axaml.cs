@@ -1,4 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using ClosedXML.Excel;
@@ -71,6 +77,14 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         await NapDuLieuAsync();
     }
 
+    private async void OnLamMoiClick(object? sender, RoutedEventArgs e)
+    {
+        TuNgayPicker.SelectedDate = null;
+        DenNgayPicker.SelectedDate = null;
+        TimKiemBox.Text = "";
+        await NapDuLieuAsync();
+    }
+
     private void LocTheoTuKhoa()
     {
         var keyword = TimKiemBox.Text?.Trim();
@@ -78,6 +92,7 @@ public partial class LichSuThanhToanKhachHangWindow : Window
             ? _records
             : _records.Where(record =>
                 record.MaGiaoDich.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                || (!string.IsNullOrEmpty(record.MaThamChieu) && record.MaThamChieu.Contains(keyword, StringComparison.OrdinalIgnoreCase))
                 || record.PhuongThucHienThi.Contains(keyword, StringComparison.OrdinalIgnoreCase)
                 || record.NguoiThucHien.Contains(keyword, StringComparison.OrdinalIgnoreCase)
                 || (record.GhiChu?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false))
@@ -86,6 +101,11 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         LichSuGrid.ItemsSource = _visibleRecords;
         TxtTongTien.Text = $"Tổng đã thanh toán: {_visibleRecords.Where(record => !record.DaHuy).Sum(record => record.SoTien):N0} đ";
         TxtTongGiaoDich.Text = $"Tổng số giao dịch: {_visibleRecords.Count:N0}";
+    }
+
+    private void OnGridDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        OnDetailClick(sender, e);
     }
 
     private async void OnDetailClick(object? sender, RoutedEventArgs e)
@@ -101,43 +121,63 @@ public partial class LichSuThanhToanKhachHangWindow : Window
             TxtTrangThai.Text = "";
             var allocations = await _database.GetPhanBoThanhToanKhachHangAsync(record.MaGiaoDich);
 
-            var detail = new System.Text.StringBuilder()
-                .AppendLine($"Mã giao dịch: {record.MaGiaoDich}")
-                .AppendLine($"Khách hàng: {_customerCode} - {_customerName}")
-                .AppendLine($"Thời gian: {record.ThoiGianText}")
-                .AppendLine($"Công nợ trước: {record.CongNoTruoc:N0} đ")
-                .AppendLine($"Số tiền thanh toán: {record.SoTien:N0} đ")
-                .AppendLine($"Công nợ sau: {record.CongNoSau:N0} đ")
-                .AppendLine($"Phương thức: {record.PhuongThucHienThi}")
-                .AppendLine($"Người thực hiện: {record.NguoiThucHien}")
-                .AppendLine($"Ghi chú: {record.GhiChuHienThi}");
+            var detail = new StringBuilder();
+            detail.AppendLine("══════════ THÔNG TIN GIAO DỊCH ══════════");
+            detail.AppendLine($"Mã giao dịch / Phiếu thu: {record.MaGiaoDich}");
+            detail.AppendLine("Loại giao dịch: Thu nợ khách hàng (Thanh toán công nợ)");
+            detail.AppendLine($"Khách hàng: {_customerCode} - {_customerName}");
+            detail.AppendLine($"Thời gian: {record.ThoiGianText}");
+            detail.AppendLine($"Phương thức thanh toán: {record.PhuongThucHienThi}");
+            detail.AppendLine($"Mã tham chiếu / chứng từ: {record.MaThamChieuHienThi}");
+            detail.AppendLine($"Người thực hiện: {record.NguoiThucHien}");
+            detail.AppendLine($"Ghi chú: {record.GhiChuHienThi}");
+            detail.AppendLine();
+
+            detail.AppendLine("══════════ TÌNH TRẠNG CÔNG NỢ ══════════");
+            detail.AppendLine($"Công nợ trước thanh toán: {record.CongNoTruoc:N0} đ");
+            detail.AppendLine($"Số tiền thanh toán:       {record.SoTien:N0} đ");
+            detail.AppendLine($"Công nợ sau thanh toán:   {record.CongNoSau:N0} đ");
+            detail.AppendLine();
 
             if (record.DaHuy)
             {
-                detail.AppendLine()
-                      .AppendLine("--- THÔNG TIN HỦY GIAO DỊCH ---")
-                      .AppendLine("Trạng thái: ĐÃ HỦY")
-                      .AppendLine($"Người hủy: {record.NguoiHuy}")
-                      .AppendLine($"Thời gian hủy: {record.ThoiGianHuyText}")
-                      .AppendLine($"Lý do hủy: {record.LyDoHuy}");
+                detail.AppendLine("══════════ THÔNG TIN HỦY GIAO DỊCH ══════════");
+                detail.AppendLine("Trạng thái: ĐÃ HỦY (Đã hoàn tác công nợ)");
+                detail.AppendLine($"Người hủy: {record.NguoiHuy}");
+                detail.AppendLine($"Thời gian hủy: {record.ThoiGianHuyText}");
+                detail.AppendLine($"Lý do hủy: {record.LyDoHuy}");
+                detail.AppendLine();
+            }
+            else
+            {
+                detail.AppendLine("Trạng thái: Hoàn thành");
+                detail.AppendLine($"Liên kết Sổ quỹ: Phiếu thu {record.MaGiaoDich} (Đã ghi vào sổ quỹ)");
+                detail.AppendLine();
             }
 
-            detail.AppendLine()
-                  .AppendLine("Phân bổ vào hóa đơn bán hàng:");
-
-            foreach (var allocation in allocations)
-                detail.AppendLine($"• {allocation.MaHoaDon}: {allocation.SoTien:N0} đ");
-
-            var allocatedTotal = allocations.Sum(a => a.SoTien);
-            if (record.SoTien > allocatedTotal)
-                detail.AppendLine($"• Thu công nợ tổng không gắn hóa đơn: {record.SoTien - allocatedTotal:N0} đ");
-            if (allocations.Count == 0 && record.SoTien <= allocatedTotal)
-                detail.Append("Không có dữ liệu phân bổ hóa đơn cho giao dịch này.");
+            detail.AppendLine("══════════ PHÂN BỔ VÀO HÓA ĐƠN BÁN HÀNG ══════════");
+            if (allocations.Count > 0)
+            {
+                for (int i = 0; i < allocations.Count; i++)
+                {
+                    var a = allocations[i];
+                    detail.AppendLine($"  {i + 1}. Hóa đơn {a.MaHoaDon}: {a.SoTien:N0} đ");
+                }
+                var allocatedTotal = allocations.Sum(a => a.SoTien);
+                detail.AppendLine($"Tổng tiền đã phân bổ: {allocatedTotal:N0} đ ({allocations.Count} hóa đơn)");
+                if (record.SoTien > allocatedTotal)
+                {
+                    detail.AppendLine($"Số tiền thanh toán chưa gắn hóa đơn: {record.SoTien - allocatedTotal:N0} đ");
+                }
+            }
+            else
+            {
+                detail.AppendLine("Không có dữ liệu phân bổ hóa đơn cho giao dịch này (thu công nợ tổng).");
+            }
 
             var dialog = new ConfirmationWindow(
                 "Chi tiết giao dịch thanh toán khách hàng",
                 detail.ToString(),
-                "Đóng",
                 "Đóng");
             await dialog.ShowDialog<bool>(this);
         }
@@ -169,7 +209,7 @@ public partial class LichSuThanhToanKhachHangWindow : Window
             {
                 "Mã giao dịch", "Mã khách hàng", "Ngày giờ", "Công nợ trước",
                 "Số tiền thanh toán", "Công nợ sau", "Phương thức",
-                "Người thực hiện", "Ghi chú"
+                "Mã tham chiếu", "Trạng thái", "Người thực hiện", "Ghi chú"
             };
 
             for (var index = 0; index < headers.Length; index++)
@@ -186,8 +226,10 @@ public partial class LichSuThanhToanKhachHangWindow : Window
                 sheet.Cell(row, 5).Value = record.SoTien;
                 sheet.Cell(row, 6).Value = record.CongNoSau;
                 sheet.Cell(row, 7).Value = record.PhuongThucHienThi;
-                sheet.Cell(row, 8).Value = record.NguoiThucHien;
-                sheet.Cell(row, 9).Value = record.GhiChu ?? "";
+                sheet.Cell(row, 8).Value = record.MaThamChieuHienThi;
+                sheet.Cell(row, 9).Value = record.TrangThaiHienThi;
+                sheet.Cell(row, 10).Value = record.NguoiThucHien;
+                sheet.Cell(row, 11).Value = record.GhiChu ?? "";
             }
 
             sheet.Row(1).Style.Font.Bold = true;

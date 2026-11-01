@@ -114,12 +114,13 @@ public sealed partial class MainWindowViewModel
         try
         {
             var ketQuaThu = await _db.ThuNoKhachHangAsync(
-                khachHangId,
-                ketQua.SoTien,
-                ketQua.PhuongThuc,
-                ketQua.GhiChu,
-                ketQua.ThoiGian,
-                ketQua.NguoiThucHienId);
+                khachHangId: khachHangId,
+                soTien: ketQua.SoTien,
+                phuongThucThanhToan: ketQua.PhuongThuc,
+                maThamChieu: ketQua.MaThamChieu,
+                ghiChu: ketQua.GhiChu,
+                thoiGianThanhToan: ketQua.ThoiGian,
+                nguoiThucHienId: ketQua.NguoiThucHienId);
 
             // Nạp lại danh sách để số nợ/tổng bán của dòng khớp database.
             await LoadCustomersAsync();
@@ -138,13 +139,17 @@ public sealed partial class MainWindowViewModel
             await Task.WhenAll(LoadInvoicesAsync(), TaiLaiSoQuyAsync());
             _ = LamMoiTongQuanNeuDangMoAsync();
 
-            var thongBaoPhieu = ketQuaThu.MaPhieuThus.Count == 0
-                ? ""
-                : $" Đã ghi phiếu thu {string.Join(", ", ketQuaThu.MaPhieuThus)} vào sổ quỹ.";
-
             StatusMessage =
-                $"Đã thu {ketQuaThu.TongDaThu:N0} đ của {ketQuaThu.TenKhachHang}. "
-                + $"Còn nợ {ketQuaThu.ConNoConLai:N0} đ.{thongBaoPhieu}";
+                $"Đã thanh toán {ketQuaThu.TongDaThu:N0} đ cho {ketQuaThu.TenKhachHang}. "
+                + $"Còn nợ {ketQuaThu.ConNoConLai:N0} đ.";
+            await ShowMessageAsync(
+                "Thanh toán thành công",
+                $"Đã thanh toán {ketQuaThu.TongDaThu:N0} đ cho "
+                + $"{ketQuaThu.MaKhachHang} - {ketQuaThu.TenKhachHang}.\n"
+                + $"Công nợ trước: {ketQuaThu.CongNoTruoc:N0} đ.\n"
+                + $"Công nợ còn lại: {ketQuaThu.ConNoConLai:N0} đ.\n"
+                + $"Đã phân bổ vào {ketQuaThu.SoHoaDonDuocPhanBo:N0} hóa đơn.\n"
+                + $"Mã giao dịch / phiếu thu: {ketQuaThu.MaGiaoDich} (ghi sổ quỹ một lần).");
         }
         catch (Exception ex)
         {

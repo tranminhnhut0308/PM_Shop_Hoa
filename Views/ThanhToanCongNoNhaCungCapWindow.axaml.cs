@@ -45,40 +45,54 @@ public partial class ThanhToanCongNoNhaCungCapWindow : Window
 
     private void OnConfirmClick(object? sender, RoutedEventArgs e)
     {
-        var amount = TienThanhToanBox.Value;
-        if (amount <= 0)
-        {
-            HienLoi("Số tiền thanh toán phải lớn hơn 0.");
-            return;
-        }
+        var btn = sender as Button;
+        if (btn != null) btn.IsEnabled = false;
 
-        if (amount > _conNo)
+        try
         {
-            HienLoi($"Số tiền thanh toán ({amount:N0} đ) vượt quá công nợ hiện tại ({_conNo:N0} đ).");
-            return;
-        }
+            var amount = TienThanhToanBox.Value;
+            if (amount <= 0)
+            {
+                HienLoi("Số tiền thanh toán phải lớn hơn 0.");
+                if (btn != null) btn.IsEnabled = true;
+                return;
+            }
 
-        if (NgayThanhToanPicker.SelectedDate is not { } date
-            || !TimeSpan.TryParseExact(
-                GioThanhToanBox.Text?.Trim(),
-                @"hh\:mm",
-                CultureInfo.InvariantCulture,
-                out var time))
-        {
-            HienLoi("Vui lòng chọn ngày và nhập giờ hợp lệ theo định dạng HH:mm.");
-            return;
-        }
+            if (amount > _conNo)
+            {
+                HienLoi($"Số tiền thanh toán ({amount:N0} đ) vượt quá công nợ hiện tại ({_conNo:N0} đ).");
+                if (btn != null) btn.IsEnabled = true;
+                return;
+            }
 
-        Close(new ThanhToanCongNoNhaCungCapYeuCau
+            if (NgayThanhToanPicker.SelectedDate is not { } date
+                || !TimeSpan.TryParseExact(
+                    GioThanhToanBox.Text?.Trim(),
+                    @"hh\:mm",
+                    CultureInfo.InvariantCulture,
+                    out var time))
+            {
+                HienLoi("Vui lòng chọn ngày và nhập giờ hợp lệ theo định dạng HH:mm.");
+                if (btn != null) btn.IsEnabled = true;
+                return;
+            }
+
+            Close(new ThanhToanCongNoNhaCungCapYeuCau
+            {
+                SoTien = amount,
+                PhuongThuc = (CboPhuongThuc.SelectedItem as PhuongThucOption)?.Ma ?? "TIEN_MAT",
+                MaThamChieu = string.IsNullOrWhiteSpace(TxtMaThamChieu.Text)
+                    ? null
+                    : TxtMaThamChieu.Text.Trim(),
+                GhiChu = string.IsNullOrWhiteSpace(TxtGhiChu.Text) ? null : TxtGhiChu.Text.Trim(),
+                ThoiGian = date.Date.Add(time)
+            });
+        }
+        catch
         {
-            SoTien = amount,
-            PhuongThuc = (CboPhuongThuc.SelectedItem as PhuongThucOption)?.Ma ?? "TIEN_MAT",
-            MaThamChieu = string.IsNullOrWhiteSpace(TxtMaThamChieu.Text)
-                ? null
-                : TxtMaThamChieu.Text.Trim(),
-            GhiChu = string.IsNullOrWhiteSpace(TxtGhiChu.Text) ? null : TxtGhiChu.Text.Trim(),
-            ThoiGian = date.Date.Add(time)
-        });
+            if (btn != null) btn.IsEnabled = true;
+            throw;
+        }
     }
 
     private void OnCancelClick(object? sender, RoutedEventArgs e) => Close(null);

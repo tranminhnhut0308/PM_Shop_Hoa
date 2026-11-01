@@ -2889,7 +2889,6 @@ public sealed partial class DatabaseService
                     FROM hoa_don_ban_hang hdcn
                     WHERE hdcn.khach_hang_id = {idExpression}
                       AND hdcn.trang_thai_hoa_don = 'HOAN_THANH'
-                      AND hdcn.cong_no_da_ghi_nhan = 1
                 ),
                 0
             )
@@ -3089,7 +3088,6 @@ public sealed partial class DatabaseService
                     FROM phieu_nhap_hang p_cn
                     WHERE p_cn.nha_cung_cap_id = {idExpression}
                       AND p_cn.trang_thai NOT IN ('LUU_TAM', 'HUY')
-                      AND p_cn.cong_no_da_ghi_nhan = 1
                 ),
                 0
             )
@@ -3512,6 +3510,7 @@ public sealed partial class DatabaseService
         DateTime? denNgayExclusive = null)
     {
         await EnsureBangLichSuThanhToanKhachHangAsync();
+        await EnsurePhieuQuyCancelColumnsAsync();
 
         const string sql = """
         SELECT
@@ -3523,6 +3522,7 @@ public sealed partial class DatabaseService
             ls.so_tien AS SoTien,
             ls.cong_no_sau AS CongNoSau,
             ls.phuong_thuc AS PhuongThuc,
+            COALESCE(ls.ma_tham_chieu, '') AS MaThamChieu,
             COALESCE(NULLIF(TRIM(nd.ho_ten), ''), nd.ten_dang_nhap, '') AS NguoiThucHien,
             ls.ghi_chu AS GhiChu,
             ls.trang_thai AS TrangThai,
@@ -5631,6 +5631,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
         UPDATE hoa_don_ban_hang
         SET khach_da_thanh_toan = @DaTra,
             con_no = @ConNo,
+            cong_no_da_ghi_nhan = 1,
             trang_thai_thanh_toan = @TrangThai,
             ngay_cap_nhat = @ThoiGian
         WHERE id = @Id;
@@ -5654,10 +5655,10 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
         const string insertTtSql = """
         INSERT INTO thanh_toan
         (ma_thanh_toan, hoa_don_id, khach_hang_id, so_tien, phuong_thuc,
-         thoi_gian, nguoi_thuc_hien_id, ghi_chu)
+         thoi_gian, nguoi_thuc_hien_id, ghi_chu, ma_giao_dich)
         VALUES
         (@MaThanhToan, @HoaDonId, @KhachHangId, @SoTien, @PhuongThuc,
-         @ThoiGian, @NguoiThucHienId, @GhiChu);
+         @ThoiGian, @NguoiThucHienId, @GhiChu, @MaGiaoDich);
         """;
 
         await connection.ExecuteAsync(
@@ -5673,7 +5674,8 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
                 NguoiThucHienId = userId,
                 GhiChu = BlankToNull(maPhieuThuGop is null
                     ? ghiChu
-                    : $"{ghiChu?.Trim()} [Phiếu thu {maPhieuThuGop}]".Trim())
+                    : $"{ghiChu?.Trim()} [Phiếu thu {maPhieuThuGop}]".Trim()),
+                MaGiaoDich = maPhieuThuGop
             },
             transaction);
 
@@ -5796,6 +5798,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
         uint khachHangId,
         decimal soTien,
         string? phuongThucThanhToan = null,
+        string? maThamChieu = null,
         string? ghiChu = null,
         DateTime? thoiGianThanhToan = null,
         uint? nguoiThucHienId = null)
@@ -5814,6 +5817,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
         var now = thoiGianThanhToan ?? DateTime.Now;
         var userId = nguoiThucHienId ?? Session.CurrentUser?.Id;
         await EnsureBangLichSuThanhToanKhachHangAsync();
+        await EnsurePhieuQuyCancelColumnsAsync();
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
         var coCotLienKet = await EnsurePhieuQuyHoaDonColumnsAsync();
 
@@ -5827,6 +5831,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
             const string khachSql = """
             SELECT
                 id             AS Id,
+                ma_khach_hang  AS MaKhachHang,
                 ten_khach_hang AS TenKhachHang,
                 chi_nhanh_id   AS ChiNhanhId
             FROM khach_hang
@@ -5863,8 +5868,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
             WHERE khach_hang_id = @KhachHangId
               AND con_no > 0
               AND trang_thai_hoa_don = 'HOAN_THANH'
-              AND cong_no_da_ghi_nhan = 1
-            ORDER BY thoi_gian_ban ASC, id ASC
+            ORDER BY COALESCE(thoi_gian_ban, ngay_tao, NOW()) ASC, id ASC
             FOR UPDATE;
             """;
 
@@ -6009,10 +6013,10 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
             const string insertPaymentHistorySql = """
             INSERT INTO lich_su_thanh_toan_cong_no_khach_hang
             (khach_hang_id, ma_giao_dich, so_tien, cong_no_truoc, cong_no_sau,
-             thoi_gian, phuong_thuc, ghi_chu, nguoi_thuc_hien_id, trang_thai)
+             thoi_gian, phuong_thuc, ma_tham_chieu, ghi_chu, nguoi_thuc_hien_id, trang_thai)
             VALUES
             (@KhachHangId, @MaGiaoDich, @SoTien, @CongNoTruoc, @CongNoSau,
-             @ThoiGian, @PhuongThuc, @GhiChu, @NguoiThucHienId, 'HOAN_THANH');
+             @ThoiGian, @PhuongThuc, @MaThamChieu, @GhiChu, @NguoiThucHienId, 'HOAN_THANH');
             """;
 
             await connection.ExecuteAsync(
@@ -6026,6 +6030,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
                     CongNoSau = Math.Max(0m, conNoHienTai - tongDaThu),
                     ThoiGian = now,
                     PhuongThuc = ChuanHoaPhuongThuc(phuongThucThanhToan),
+                    MaThamChieu = BlankToNull(maThamChieu),
                     GhiChu = BlankToNull(ghiChu),
                     NguoiThucHienId = userId
                 },
@@ -6045,10 +6050,13 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
             return new ThuNoKhachHangKetQua
             {
                 KhachHangId = khachHangId,
+                MaKhachHang = khach.MaKhachHang ?? "",
                 TenKhachHang = tenKhach ?? "",
                 TongDaThu = tongDaThu,
+                CongNoTruoc = conNoHienTai,
                 ConNoConLai = Math.Max(0m, conNoHienTai - tongDaThu),
                 SoHoaDonDaThu = soHoaDon,
+                MaGiaoDich = maPhieuThu,
                 MaPhieuThus = [maPhieuThu]
             };
         }
@@ -6195,6 +6203,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
     private sealed class KhachHangCongNoRow
     {
         public uint Id { get; set; }
+        public string MaKhachHang { get; set; } = "";
         public string TenKhachHang { get; set; } = "";
         public uint? ChiNhanhId { get; set; }
     }
@@ -6794,9 +6803,8 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
                     FROM phieu_nhap_hang p
                     WHERE p.nha_cung_cap_id = @NhaCungCapId
                       AND p.con_no > 0
-                      AND p.cong_no_da_ghi_nhan = 1
                       AND p.trang_thai NOT IN ('LUU_TAM', 'HUY')
-                    ORDER BY p.thoi_gian_nhap ASC, p.id ASC
+                    ORDER BY COALESCE(p.thoi_gian_nhap, p.ngay_tao, NOW()) ASC, p.id ASC
                     FOR UPDATE;
                     """;
 
@@ -6876,6 +6884,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
                             UPDATE phieu_nhap_hang
                             SET da_thanh_toan = @DaThanhToan,
                                 con_no = @ConNo,
+                                cong_no_da_ghi_nhan = 1,
                                 ngay_cap_nhat = @ThoiGian
                             WHERE id = @Id;
                             """,
@@ -6900,10 +6909,10 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
                             """
                             INSERT INTO thanh_toan_nha_cung_cap
                             (ma_thanh_toan, nha_cung_cap_id, phieu_nhap_id, so_tien, phuong_thuc,
-                             thoi_gian, nguoi_thuc_hien_id, ghi_chu)
+                             thoi_gian, nguoi_thuc_hien_id, ghi_chu, ma_giao_dich)
                             VALUES
                             (@MaThanhToan, @NhaCungCapId, @PhieuNhapId, @SoTien, @PhuongThuc,
-                             @ThoiGian, @NguoiThucHienId, @GhiChu);
+                             @ThoiGian, @NguoiThucHienId, @GhiChu, @MaGiaoDich);
                             """,
                             new
                             {
@@ -6914,7 +6923,8 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
                                 PhuongThuc = method,
                                 ThoiGian = now,
                                 NguoiThucHienId = userId,
-                                GhiChu = allocationNote
+                                GhiChu = allocationNote,
+                                MaGiaoDich = maPhieuChi
                             },
                             transaction);
 
@@ -7101,8 +7111,8 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
                     t.so_tien AS SoTien
                 FROM thanh_toan_nha_cung_cap t
                 INNER JOIN phieu_nhap_hang p ON p.id = t.phieu_nhap_id
-                WHERE t.ghi_chu LIKE CONCAT('%[Giao dịch ', @MaGiaoDich, ']%')
-                ORDER BY p.thoi_gian_nhap, p.id;
+                WHERE (t.ma_giao_dich = @MaGiaoDich OR t.ghi_chu LIKE CONCAT('%', @MaGiaoDich, '%'))
+                ORDER BY COALESCE(p.thoi_gian_nhap, p.ngay_tao, NOW()), p.id;
                 """;
 
                 await using var connection = await OpenAsync();

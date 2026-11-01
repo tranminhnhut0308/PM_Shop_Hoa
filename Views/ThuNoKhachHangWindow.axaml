@@ -3,11 +3,11 @@
     xmlns:controls="using:ShopHoa.Controls"
     xmlns:models="using:ShopHoa.Models"
     x:Class="ShopHoa.Views.ThuNoKhachHangWindow"
-    Title="Thu công nợ khách hàng"
+    Title="Thanh toán công nợ khách hàng"
     Width="560"
-    Height="720"
+    Height="750"
     MinWidth="500"
-    MinHeight="640"
+    MinHeight="660"
     CanResize="True"
     WindowStartupLocation="CenterOwner"
     Background="#F4F7F6">
@@ -41,7 +41,7 @@
         BorderThickness="1"
         Margin="12"
         Padding="24">
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*"
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*"
             RowSpacing="10">
 
             <!-- TIÊU ĐỀ -->
@@ -51,9 +51,9 @@
                         HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="Thanh toán công nợ" FontSize="18" FontWeight="Bold"
+                    <TextBlock Text="Thanh toán công nợ khách hàng" FontSize="18" FontWeight="Bold"
                         Foreground="#163F38" />
-                    <TextBlock Text="Phân bổ tự động vào các hóa đơn cũ trước"
+                    <TextBlock Text="Ưu tiên phân bổ vào hóa đơn cũ nhất còn nợ"
                         FontSize="12" Foreground="#61736E" />
                 </StackPanel>
             </StackPanel>
@@ -84,7 +84,7 @@
                             Foreground="#D64545" FontSize="14" />
                     </Grid>
                     <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Text="Công nợ còn lại sau thanh toán" Foreground="#61736E" FontSize="13" />
+                        <TextBlock Text="Công nợ sau thanh toán" Foreground="#61736E" FontSize="13" />
                         <TextBlock x:Name="TxtConNoSauThu" Grid.Column="1" FontWeight="Bold"
                             Foreground="#087F6E" FontSize="14" />
                     </Grid>
@@ -105,6 +105,7 @@
                 <ComboBox x:Name="CboPhuongThuc" HorizontalAlignment="Stretch" Height="38" />
             </StackPanel>
 
+            <!-- THỜI GIAN -->
             <StackPanel Grid.Row="4" Spacing="4">
                 <TextBlock Text="Thời gian thanh toán" FontWeight="SemiBold"
                     Foreground="#163F38" FontSize="13" />
@@ -116,8 +117,17 @@
                 </Grid>
             </StackPanel>
 
+            <!-- MÃ THAM CHIẾU -->
             <StackPanel Grid.Row="5" Spacing="4">
-                <TextBlock Text="Người thu" FontWeight="SemiBold"
+                <TextBlock Text="Mã tham chiếu / chứng từ" FontWeight="SemiBold"
+                    Foreground="#163F38" FontSize="13" />
+                <TextBox x:Name="TxtMaThamChieu" MaxLength="150" Height="38"
+                    VerticalContentAlignment="Center" Watermark="Mã giao dịch ngân hàng hoặc chứng từ (không bắt buộc)" />
+            </StackPanel>
+
+            <!-- NGƯỜI THỰC HIỆN -->
+            <StackPanel Grid.Row="6" Spacing="4">
+                <TextBlock Text="Người thực hiện" FontWeight="SemiBold"
                     Foreground="#163F38" FontSize="13" />
                 <ComboBox x:Name="CboNguoiThu" HorizontalAlignment="Stretch" Height="38">
                     <ComboBox.ItemTemplate>
@@ -129,24 +139,24 @@
             </StackPanel>
 
             <!-- GHI CHÚ -->
-            <StackPanel Grid.Row="6" Spacing="4">
+            <StackPanel Grid.Row="7" Spacing="4">
                 <TextBlock Text="Ghi chú" FontWeight="SemiBold" Foreground="#163F38"
                     FontSize="13" />
                 <TextBox x:Name="TxtGhiChu" AcceptsReturn="True" TextWrapping="Wrap"
-                    MinHeight="48" MaxHeight="72" Watermark="Ghi chú lần thu nợ (không bắt buộc)..." />
+                    MinHeight="48" MaxHeight="72" Watermark="Ghi chú (không bắt buộc)..." />
             </StackPanel>
 
             <!-- LỖI -->
-            <TextBlock Grid.Row="7" x:Name="TxtLoi" Foreground="#D92D20" FontWeight="SemiBold"
+            <TextBlock Grid.Row="8" x:Name="TxtLoi" Foreground="#D92D20" FontWeight="SemiBold"
                 FontSize="12" TextWrapping="Wrap" IsVisible="False" />
 
             <!-- NÚT -->
-            <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right"
+            <StackPanel Grid.Row="9" Orientation="Horizontal" HorizontalAlignment="Right"
                 VerticalAlignment="Bottom" Spacing="10">
                 <Button Content="Hủy" Classes="cancelButton" Width="100" Height="40"
                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                     Click="OnCancelClick" />
-                <Button Content="✓ Thanh toán" Classes="actionButton" Width="140" Height="40"
+                <Button x:Name="BtnConfirm" Content="✓ Xác nhận thanh toán" Classes="actionButton" Width="190" Height="40"
                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                     Click="OnConfirmClick" />
             </StackPanel>

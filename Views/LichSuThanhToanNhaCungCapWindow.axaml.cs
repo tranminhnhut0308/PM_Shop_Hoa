@@ -1,5 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using ClosedXML.Excel;
@@ -12,11 +17,13 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
 {
     private readonly DatabaseService _database;
     private readonly uint? _initialSupplierId;
+    private readonly string _supplierCode;
+    private readonly string _supplierName;
     private IReadOnlyList<ThanhToanCongNoNhaCungCap> _records = [];
     private IReadOnlyList<ThanhToanCongNoNhaCungCap> _visibleRecords = [];
 
     public LichSuThanhToanNhaCungCapWindow()
-        : this(new DatabaseService(), null, "")
+        : this(new DatabaseService(), null, "", "Nhà cung cấp")
     {
     }
 
@@ -24,14 +31,26 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
         DatabaseService database,
         uint? initialSupplierId,
         string supplierName)
+        : this(database, initialSupplierId, "", supplierName)
+    {
+    }
+
+    public LichSuThanhToanNhaCungCapWindow(
+        DatabaseService database,
+        uint? initialSupplierId,
+        string supplierCode,
+        string supplierName)
     {
         _database = database;
         _initialSupplierId = initialSupplierId;
+        _supplierCode = supplierCode;
+        _supplierName = supplierName;
 
         InitializeComponent();
-        TxtNhaCungCap.Text = string.IsNullOrWhiteSpace(supplierName)
-            ? "Lọc theo nhà cung cấp, khoảng ngày và nội dung giao dịch."
-            : supplierName;
+        TxtNhaCungCap.Text = string.IsNullOrWhiteSpace(supplierCode)
+            ? (string.IsNullOrWhiteSpace(supplierName) ? "Tất cả nhà cung cấp" : supplierName)
+            : $"{supplierCode} - {supplierName}";
+
         LichSuGrid.ItemsSource = Array.Empty<ThanhToanCongNoNhaCungCap>();
         Loaded += async (_, _) => await NapDuLieuAsync();
         TimKiemBox.TextChanged += (_, _) => LocTheoTuKhoa();
@@ -86,6 +105,18 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
     private async void OnFilterClick(object? sender, RoutedEventArgs e)
         => await NapDuLieuAsync();
 
+    private async void OnLamMoiClick(object? sender, RoutedEventArgs e)
+    {
+        TuNgayPicker.SelectedDate = null;
+        DenNgayPicker.SelectedDate = null;
+        TimKiemBox.Text = "";
+        if (CboNhaCungCap.ItemsSource is List<NhaCungCapThanhToanLuaChon> options && options.Count > 0)
+        {
+            CboNhaCungCap.SelectedItem = options.FirstOrDefault(option => option.Id == _initialSupplierId) ?? options[0];
+        }
+        await NapDuLieuAsync();
+    }
+
     private void LocTheoTuKhoa()
     {
         var keyword = TimKiemBox.Text?.Trim();
@@ -95,13 +126,20 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
                 record.MaGiaoDich.Contains(keyword, StringComparison.OrdinalIgnoreCase)
                 || record.MaNhaCungCap.Contains(keyword, StringComparison.OrdinalIgnoreCase)
                 || record.TenNhaCungCap.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                || (record.MaThamChieu?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (!string.IsNullOrEmpty(record.MaThamChieu) && record.MaThamChieu.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                || record.PhuongThucHienThi.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                || record.NguoiThucHien.Contains(keyword, StringComparison.OrdinalIgnoreCase)
                 || (record.GhiChu?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false))
                 .ToList();
 
         LichSuGrid.ItemsSource = _visibleRecords;
         TxtTongTien.Text = $"Tổng đã thanh toán: {_visibleRecords.Where(record => !record.DaHuy).Sum(record => record.SoTien):N0} đ";
         TxtTongGiaoDich.Text = $"Tổng số giao dịch: {_visibleRecords.Count:N0}";
+    }
+
+    private void OnGridDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        OnDetailClick(sender, e);
     }
 
     private async void OnDetailClick(object? sender, RoutedEventArgs e)
@@ -114,45 +152,67 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
 
         try
         {
+            TxtTrangThai.Text = "";
             var allocations = await _database.GetPhanBoThanhToanNhaCungCapAsync(record.MaGiaoDich);
-            var detail = new StringBuilder()
-                .AppendLine($"Mã giao dịch: {record.MaGiaoDich}")
-                .AppendLine($"Nhà cung cấp: {record.MaNhaCungCap} - {record.TenNhaCungCap}")
-                .AppendLine($"Thời gian: {record.ThoiGianText}")
-                .AppendLine($"Công nợ trước: {record.CongNoTruoc:N0} đ")
-                .AppendLine($"Số tiền thanh toán: {record.SoTien:N0} đ")
-                .AppendLine($"Công nợ sau: {record.CongNoSau:N0} đ")
-                .AppendLine($"Phương thức: {record.PhuongThucHienThi}")
-                .AppendLine($"Mã tham chiếu: {record.MaThamChieuHienThi}")
-                .AppendLine($"Người thực hiện: {record.NguoiThucHien}")
-                .AppendLine($"Ghi chú: {record.GhiChuHienThi}");
+
+            var detail = new StringBuilder();
+            detail.AppendLine("══════════ THÔNG TIN GIAO DỊCH ══════════");
+            detail.AppendLine($"Mã giao dịch / Phiếu chi: {record.MaGiaoDich}");
+            detail.AppendLine("Loại giao dịch: Trả nợ nhà cung cấp (Thanh toán công nợ)");
+            detail.AppendLine($"Nhà cung cấp: {record.MaNhaCungCap} - {record.TenNhaCungCap}");
+            detail.AppendLine($"Đơn vị nhận: {record.DonViNhan}");
+            detail.AppendLine($"Thời gian: {record.ThoiGianText}");
+            detail.AppendLine($"Phương thức thanh toán: {record.PhuongThucHienThi}");
+            detail.AppendLine($"Mã tham chiếu / chứng từ: {record.MaThamChieuHienThi}");
+            detail.AppendLine($"Người thực hiện: {record.NguoiThucHien}");
+            detail.AppendLine($"Ghi chú: {record.GhiChuHienThi}");
+            detail.AppendLine();
+
+            detail.AppendLine("══════════ TÌNH TRẠNG CÔNG NỢ ══════════");
+            detail.AppendLine($"Công nợ trước thanh toán: {record.CongNoTruoc:N0} đ");
+            detail.AppendLine($"Số tiền thanh toán:       {record.SoTien:N0} đ");
+            detail.AppendLine($"Công nợ sau thanh toán:   {record.CongNoSau:N0} đ");
+            detail.AppendLine();
 
             if (record.DaHuy)
             {
-                detail.AppendLine()
-                      .AppendLine("--- THÔNG TIN HỦY GIAO DỊCH ---")
-                      .AppendLine("Trạng thái: ĐÃ HỦY")
-                      .AppendLine($"Người hủy: {record.NguoiHuy}")
-                      .AppendLine($"Thời gian hủy: {record.ThoiGianHuyText}")
-                      .AppendLine($"Lý do hủy: {record.LyDoHuy}");
+                detail.AppendLine("══════════ THÔNG TIN HỦY GIAO DỊCH ══════════");
+                detail.AppendLine("Trạng thái: ĐÃ HỦY (Đã hoàn tác công nợ)");
+                detail.AppendLine($"Người hủy: {record.NguoiHuy}");
+                detail.AppendLine($"Thời gian hủy: {record.ThoiGianHuyText}");
+                detail.AppendLine($"Lý do hủy: {record.LyDoHuy}");
+                detail.AppendLine();
+            }
+            else
+            {
+                detail.AppendLine("Trạng thái: Hoàn thành");
+                detail.AppendLine($"Liên kết Sổ quỹ: Phiếu chi {record.MaGiaoDich} (Đã ghi vào sổ quỹ)");
+                detail.AppendLine();
             }
 
-            detail.AppendLine()
-                .AppendLine("Phân bổ vào phiếu nhập (phiếu cũ trước):");
-
-            foreach (var allocation in allocations)
-                detail.AppendLine($"• {allocation.MaPhieuNhap}: {allocation.SoTien:N0} đ");
-
-            var allocatedTotal = allocations.Sum(allocation => allocation.SoTien);
-            if (record.SoTien > allocatedTotal)
-                detail.AppendLine($"• Công nợ không gắn phiếu nhập: {record.SoTien - allocatedTotal:N0} đ");
-            if (allocations.Count == 0 && record.SoTien <= allocatedTotal)
-                detail.Append("Không có dữ liệu phân bổ phiếu nhập cho giao dịch này.");
+            detail.AppendLine("══════════ PHÂN BỔ VÀO PHIẾU NHẬP HÀNG ══════════");
+            if (allocations.Count > 0)
+            {
+                for (int i = 0; i < allocations.Count; i++)
+                {
+                    var a = allocations[i];
+                    detail.AppendLine($"  {i + 1}. Phiếu nhập {a.MaPhieuNhap}: {a.SoTien:N0} đ");
+                }
+                var allocatedTotal = allocations.Sum(a => a.SoTien);
+                detail.AppendLine($"Tổng tiền đã phân bổ: {allocatedTotal:N0} đ ({allocations.Count} phiếu nhập)");
+                if (record.SoTien > allocatedTotal)
+                {
+                    detail.AppendLine($"Số tiền thanh toán chưa gắn phiếu nhập: {record.SoTien - allocatedTotal:N0} đ");
+                }
+            }
+            else
+            {
+                detail.AppendLine("Không có dữ liệu phân bổ phiếu nhập cho giao dịch này (trả nợ tổng).");
+            }
 
             var dialog = new ConfirmationWindow(
-                "Chi tiết giao dịch thanh toán",
+                "Chi tiết giao dịch thanh toán nhà cung cấp",
                 detail.ToString(),
-                "Đóng",
                 "Đóng");
             await dialog.ShowDialog<bool>(this);
         }
@@ -183,7 +243,7 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
             {
                 "Mã giao dịch", "Ngày giờ", "Mã nhà cung cấp", "Tên nhà cung cấp",
                 "Đơn vị nhận", "Công nợ trước", "Số tiền thanh toán", "Công nợ sau",
-                "Phương thức", "Mã tham chiếu", "Người thực hiện", "Ghi chú"
+                "Phương thức", "Mã tham chiếu", "Trạng thái", "Người thực hiện", "Ghi chú"
             };
             for (var index = 0; index < headers.Length; index++)
                 sheet.Cell(1, index + 1).Value = headers[index];
@@ -202,8 +262,9 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
                 sheet.Cell(row, 8).Value = record.CongNoSau;
                 sheet.Cell(row, 9).Value = record.PhuongThucHienThi;
                 sheet.Cell(row, 10).Value = record.MaThamChieu ?? "";
-                sheet.Cell(row, 11).Value = record.NguoiThucHien;
-                sheet.Cell(row, 12).Value = record.GhiChu ?? "";
+                sheet.Cell(row, 11).Value = record.TrangThaiHienThi;
+                sheet.Cell(row, 12).Value = record.NguoiThucHien;
+                sheet.Cell(row, 13).Value = record.GhiChu ?? "";
             }
 
             sheet.Row(1).Style.Font.Bold = true;
