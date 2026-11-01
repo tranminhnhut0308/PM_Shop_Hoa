@@ -529,6 +529,6 @@ public sealed class BaoCaoCuoiNgayDuLieu
         || SoQuyTongHop.SoPhieuChi > 0
         || NhapHang.SoPhieu > 0;
 
-    /// <summary>Tên file xuất Excel theo yêu cầu: BaoCaoCuoiNgay_yyyyMMdd.xlsx</summary>
-    public string TenFileXuat() => $"BaoCaoCuoiNgay_{Ngay:yyyyMMdd}.xlsx";
+    /// <summary>Tên file xuất Excel theo yêu cầu: BaoCaoCuoiNgay_yyyyMMdd_HHmmss.xlsx</summary>
+    public string TenFileXuat() => ShopHoa.Helpers.ReportFileNamingHelper.TaoTenFileCuoiNgay();
 }

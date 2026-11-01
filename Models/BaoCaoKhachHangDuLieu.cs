@@ -60,7 +60,7 @@ public sealed class BaoCaoKhachHangTongHopKy
         $"Khoảng thời gian: {TuNgay:dd/MM/yyyy} - {DenNgay:dd/MM/yyyy}";
 
     /// <summary>Tên file gợi ý khi xuất Excel báo cáo khách hàng.</summary>
-    public string TenFileXuat() => $"BaoCaoKhachHang_{TuNgay:yyyyMMdd}_{DenNgay:yyyyMMdd}.xlsx";
+    public string TenFileXuat() => ShopHoa.Helpers.ReportFileNamingHelper.TaoTenFileKhachHang();
 }
 
 /// <summary>

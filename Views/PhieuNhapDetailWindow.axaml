@@ -4,9 +4,9 @@
   x:Class="ShopHoa.Views.PhieuNhapDetailWindow"
   x:DataType="models:PhieuNhapHangDetail"
   Title="{Binding TieuDe}"
-  Width="980"
+  Width="1040"
   Height="820"
-  MinWidth="820"
+  MinWidth="860"
   MinHeight="620"
   WindowStartupLocation="CenterOwner"
   Background="#F4FAF8">
@@ -178,7 +178,7 @@
           BorderBrush="#D5EAE3"
           BorderThickness="0,0,0,1"
           Padding="16,11">
-          <Grid ColumnDefinitions="45,110,*,65,65,110,95,120"
+          <Grid ColumnDefinitions="40,95,*,55,55,100,85,110"
             ColumnSpacing="8">
             <TextBlock Classes="table-header" Text="STT" />
             <TextBlock Grid.Column="1" Classes="table-header" Text="MÃ HÀNG" />
@@ -204,7 +204,7 @@
                 <Border BorderBrush="#EEF3F1"
                   BorderThickness="0,0,0,1"
                   Padding="16,9">
-                  <Grid ColumnDefinitions="45,110,*,65,65,110,95,120"
+                  <Grid ColumnDefinitions="40,95,*,55,55,100,85,110"
                     ColumnSpacing="8"
                     VerticalAlignment="Center">
                     <TextBlock Text="{Binding Index}"

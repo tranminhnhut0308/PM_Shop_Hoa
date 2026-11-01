@@ -4,9 +4,9 @@
   x:Class="ShopHoa.Views.InvoiceWindow"
   x:DataType="models:HoaDonBanHangReceipt"
   Title="Hóa đơn bán hàng"
-  Width="700"
+  Width="760"
   Height="800"
-  MinWidth="580"
+  MinWidth="640"
   MinHeight="620"
   Background="#FFFFFF">
   <Window.Styles>
@@ -261,7 +261,7 @@
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="models:HoaDonBanHangReceiptItem">
             <Grid ColumnDefinitions="*,Auto,60,100,120" Margin="0,6" ColumnSpacing="6">
-              <TextBlock Text="{Binding TenSanPham}" TextWrapping="Wrap" Foreground="#263B35" />
+              <TextBlock Text="{Binding TenSanPham}" TextWrapping="Wrap" ToolTip.Tip="{Binding TenSanPham}" Foreground="#263B35" />
               <TextBlock Grid.Column="1" Text="{Binding DonViTinh}"
                 HorizontalAlignment="Right" Foreground="#61736E" />
               <TextBlock Grid.Column="2" Text="{Binding SoLuong, StringFormat={}{0:N0}}"

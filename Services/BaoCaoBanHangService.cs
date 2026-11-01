@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using Dapper;
 using MySqlConnector;
 using ShopHoa.Models;
@@ -43,6 +43,26 @@ public sealed class BaoCaoBanHangService
         var topKhachHang = await TaiTopKhachHangAsync(conn, tu, denKeTiep, token);
         var nhomHang = await TaiNhomHangAsync(conn, tu, denKeTiep, token);
         var phuongThuc = await TaiPhuongThucThanhToanAsync(conn, tu, denKeTiep, token);
+
+        // Tổng hợp bổ sung cho các nhóm chỉ số 2, 3, 4, 5
+        tongHop.TienMat = phuongThuc.Where(p => p.PhuongThuc == "TIEN_MAT").Sum(p => p.SoTien);
+        tongHop.ChuyenKhoan = phuongThuc.Where(p => p.PhuongThuc != "TIEN_MAT" && (p.PhuongThuc.Contains("CHUYEN_KHOAN") || p.PhuongThuc.Contains("NGAN_HANG") || p.PhuongThuc.Contains("QR"))).Sum(p => p.SoTien);
+        tongHop.TienKhac = phuongThuc.Where(p => p.PhuongThuc != "TIEN_MAT" && !p.PhuongThuc.Contains("CHUYEN_KHOAN") && !p.PhuongThuc.Contains("NGAN_HANG") && !p.PhuongThuc.Contains("QR")).Sum(p => p.SoTien);
+
+        // Tổng số lượng sản phẩm bán ra thực tế
+        string sqlTongSp = @"
+SELECT COALESCE(SUM(ct.so_luong), 0)
+FROM chi_tiet_hoa_don_ban_hang ct
+INNER JOIN hoa_don_ban_hang hd ON hd.id = ct.hoa_don_id
+WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+  AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep;";
+        tongHop.TongSanPhamBanRa = await conn.ExecuteScalarAsync<decimal>(new CommandDefinition(sqlTongSp, new { TuNgay = tu, DenKeTiep = denKeTiep }, cancellationToken: token));
+
+        tongHop.SanPhamDoanhThuCaoNhat = topSanPham.OrderByDescending(p => p.DoanhThu).FirstOrDefault()?.SanPham ?? "Không có";
+        tongHop.SanPhamSoLuongNhieuNhat = topSanPham.OrderByDescending(p => p.SoLuongBan).FirstOrDefault()?.SanPham ?? "Không có";
+        tongHop.NhomHangDoanhThuCaoNhat = nhomHang.OrderByDescending(n => n.DoanhThu).FirstOrDefault()?.NhomHang ?? "Không có";
+        tongHop.KhachHangDoanhThuCaoNhat = topKhachHang.OrderByDescending(k => k.TongMua).FirstOrDefault()?.KhachHang ?? "Không có";
+        tongHop.KhachHangCongNoCaoNhat = topKhachHang.Where(k => k.CongNo > 0).OrderByDescending(k => k.CongNo).FirstOrDefault()?.KhachHang ?? "Không có";
 
         return new BaoCaoBanHangDuLieu
         {
@@ -101,7 +121,12 @@ SELECT
   COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.thu_khac ELSE 0 END), 0) AS ThuKhac,
   COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu,
   COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThu,
-  COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo
+  COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo,
+  COALESCE(SUM(CASE WHEN hd.con_no <= 0 THEN 1 ELSE 0 END), 0) AS SoHoaDonDaThanhToan,
+  COALESCE(SUM(CASE WHEN hd.con_no > 0 AND hd.khach_da_thanh_toan > 0 THEN 1 ELSE 0 END), 0) AS SoHoaDonThanhToanMotPhan,
+  COALESCE(SUM(CASE WHEN hd.con_no > 0 AND hd.khach_da_thanh_toan = 0 THEN 1 ELSE 0 END), 0) AS SoHoaDonChuaThanhToan,
+  COUNT(DISTINCT CASE WHEN hd.khach_hang_id IS NOT NULL AND hd.khach_hang_id > 0 THEN hd.khach_hang_id END) AS SoKhachHang,
+  COUNT(DISTINCT CASE WHEN hd.cong_no_da_ghi_nhan = 1 AND hd.con_no > 0 AND hd.khach_hang_id IS NOT NULL AND hd.khach_hang_id > 0 THEN hd.khach_hang_id END) AS SoKhachHangCoCongNo
 FROM hoa_don_ban_hang hd
 WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
   AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep;

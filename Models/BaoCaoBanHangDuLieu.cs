@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 
 namespace ShopHoa.Models;
 
@@ -9,10 +9,10 @@ public sealed class BaoCaoBanHangPhuongThucRow
     public int SoGiaoDich { get; set; }
     public decimal SoTien { get; set; }
 
-    /// <summary>Tỉ lệ số tiền của dòng này so với tổng các dòng (0..100).</summary>
+    /// <summary>T? l? s? ti?n c?a d�ng n�y so v?i t?ng c�c d�ng (0..100).</summary>
     public double TyLePhanTram { get; set; }
 
-    public string SoTienHienThi => SoTien.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string SoTienHienThi => SoTien.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
     public string SoGiaoDichHienThi => SoGiaoDich.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
     public string TyLePhanTramHienThi => TyLePhanTram.ToString("N1", CultureInfo.GetCultureInfo("vi-VN")) + "%";
 }
@@ -26,44 +26,44 @@ public sealed class BaoCaoBanHangDiemThoiGian
     public decimal DoanhThu { get; set; }
     public int SoHoaDon { get; set; }
 
-    /// <summary>Số tiền đã thu trong điểm thời gian này (dùng cho tooltip biểu đồ).</summary>
+    /// <summary>S? ti?n d� thu trong di?m th?i gian n�y (d�ng cho tooltip bi?u d?).</summary>
     public decimal DaThu { get; set; }
 
-    /// <summary>Công nợ phát sinh trong điểm thời gian này (dùng cho tooltip biểu đồ).</summary>
+    /// <summary>C�ng n? ph�t sinh trong di?m th?i gian n�y (d�ng cho tooltip bi?u d?).</summary>
     public decimal CongNo { get; set; }
 
-    /// <summary>Tỉ lệ chiều cao cột so với điểm cao nhất trong khoảng (0..100).</summary>
+    /// <summary>T? l? chi?u cao c?t so v?i di?m cao nh?t trong kho?ng (0..100).</summary>
     public double TyLeChieuCao { get; set; }
 
-    /// <summary>Bề rộng cột (0..100) — mọi cột trong biểu đồ rộng đều nhau.</summary>
+    /// <summary>B? r?ng c?t (0..100) � m?i c?t trong bi?u d? r?ng d?u nhau.</summary>
     public double TyLeBeRong { get; set; } = 100;
 
-    /// <summary>Chiều cao tối đa của vùng vẽ cột (px) — XAML lấy hằng này làm mốc.</summary>
+    /// <summary>Chi?u cao t?i da c?a v�ng v? c?t (px) � XAML l?y h?ng n�y l�m m?c.</summary>
     public const double ChieuCaoToiDa = 190;
 
-    /// <summary>Bề rộng tối đa của một cột (px) để cột không giãn quá rộng.</summary>
+    /// <summary>B? r?ng t?i da c?a m?t c?t (px) d? c?t kh�ng gi�n qu� r?ng.</summary>
     public const double BeRongToiDa = 72;
 
-    /// <summary>Chiều cao cột tính bằng pixel để XAML bind thẳng, không cần converter.</summary>
+    /// <summary>Chi?u cao c?t t�nh b?ng pixel d? XAML bind th?ng, kh�ng c?n converter.</summary>
     public double ChieuCaoCot => DoanhThu <= 0 ? 0 : Math.Max(3, TyLeChieuCao / 100d * ChieuCaoToiDa);
 
-    /// <summary>Bề rộng cột (px); nhiều điểm thì cuộn ngang trong vùng biểu đồ.</summary>
+    /// <summary>B? r?ng c?t (px); nhi?u di?m th� cu?n ngang trong v�ng bi?u d?.</summary>
     public double BeRongCot => Math.Max(55, Math.Min(BeRongToiDa, TyLeBeRong / 100d * BeRongToiDa));
 
-    public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string DaThuHienThi => DaThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string SoHoaDonHienThi => SoHoaDon.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " hóa đơn";
+    public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string DaThuHienThi => DaThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string SoHoaDonHienThi => SoHoaDon.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " h�a don";
 
-    /// <summary>Ngày đầy đủ hiển thị trên dòng đầu tooltip (kèm giờ nếu biểu đồ chia theo giờ).</summary>
+    /// <summary>Ng�y d?y d? hi?n th? tr�n d�ng d?u tooltip (k�m gi? n?u bi?u d? chia theo gi?).</summary>
     public string NgayDayDu => ThoiGian.ToString(NhanXet.Contains(':') ? "dd/MM/yyyy HH:00" : "dd/MM/yyyy");
 
     public string ToolTip =>
         $"{NgayDayDu}\n" +
         $"Doanh thu: {DoanhThuHienThi}\n" +
-        $"Số hóa đơn: {SoHoaDonHienThi}\n" +
-        $"Đã thu: {DaThuHienThi}\n" +
-        $"Công nợ: {CongNoHienThi}";
+        $"S? h�a don: {SoHoaDonHienThi}\n" +
+        $"�� thu: {DaThuHienThi}\n" +
+        $"C�ng n?: {CongNoHienThi}";
 }
 
 
@@ -80,12 +80,12 @@ public sealed class BaoCaoBanHangBangRow
     public decimal DaThu { get; set; }
     public decimal CongNo { get; set; }
     public string SoHoaDonHienThi => SoHoaDon.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
-    public string TongTienHangHienThi => TongTienHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string GiamGiaHienThi => GiamGia.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string ThuKhacHienThi => ThuKhac.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string DaThuHienThi => DaThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string TongTienHangHienThi => TongTienHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string GiamGiaHienThi => GiamGia.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string ThuKhacHienThi => ThuKhac.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string DaThuHienThi => DaThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
 }
 
 
@@ -104,12 +104,12 @@ public sealed class BaoCaoBanHangChiTietHoaDon
     public decimal CongNo { get; set; }
     public string TrangThai { get; set; } = string.Empty;
     public string ThoiGianHienThi => ThoiGianBan.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-    public string TongTienHangHienThi => TongTienHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string GiamGiaHienThi => GiamGia.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string ThuKhacHienThi => ThuKhac.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string DaThuHienThi => DaThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string TongTienHangHienThi => TongTienHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string GiamGiaHienThi => GiamGia.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string ThuKhacHienThi => ThuKhac.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string DaThuHienThi => DaThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
 }
 
 
@@ -121,7 +121,7 @@ public sealed class BaoCaoBanHangTopSanPham
     public decimal SoLuongBan { get; set; }
     public decimal DoanhThu { get; set; }
     public string SoLuongBanHienThi => SoLuongBan.ToString("N3", CultureInfo.GetCultureInfo("vi-VN"));
-    public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
 }
 
 
@@ -135,9 +135,9 @@ public sealed class BaoCaoBanHangTopKhachHang
     public decimal DaThanhToan { get; set; }
     public decimal CongNo { get; set; }
     public string SoHoaDonHienThi => SoHoaDon.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
-    public string TongMuaHienThi => TongMua.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string DaThanhToanHienThi => DaThanhToan.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string TongMuaHienThi => TongMua.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string DaThanhToanHienThi => DaThanhToan.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
+    public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
 }
 
 
@@ -149,11 +149,11 @@ public sealed class BaoCaoBanHangNhomHang
     public decimal SoLuongBan { get; set; }
     public decimal DoanhThu { get; set; }
 
-    /// <summary>Tỉ lệ doanh thu của nhóm so với tổng (0..100).</summary>
+    /// <summary>T? l? doanh thu c?a nh�m so v?i t?ng (0..100).</summary>
     public double TyLePhanTram { get; set; }
 
     public string SoLuongBanHienThi => SoLuongBan.ToString("N3", CultureInfo.GetCultureInfo("vi-VN"));
-    public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
     public string TyLePhanTramHienThi => TyLePhanTram.ToString("N1", CultureInfo.GetCultureInfo("vi-VN")) + "%";
 }
 
@@ -171,6 +171,28 @@ public sealed class BaoCaoBanHangTongHop
     public decimal DaThu { get; set; }
     public decimal CongNo { get; set; }
     public decimal GiaTriDonTrungBinh => SoHoaDon <= 0 ? 0m : DoanhThu / SoHoaDon;
+
+    // Nhóm 2: Thống kê thanh toán
+    public decimal TienMat { get; set; }
+    public decimal ChuyenKhoan { get; set; }
+    public decimal TienKhac { get; set; }
+    public decimal TongThanhToan => TienMat + ChuyenKhoan + TienKhac;
+    public int SoHoaDonDaThanhToan { get; set; }
+    public int SoHoaDonThanhToanMotPhan { get; set; }
+    public int SoHoaDonChuaThanhToan { get; set; }
+
+    // Nhóm 3: Thống kê công nợ & khách hàng
+    public int SoKhachHang { get; set; }
+    public int SoKhachHangCoCongNo { get; set; }
+    public string KhachHangDoanhThuCaoNhat { get; set; } = string.Empty;
+    public string KhachHangCongNoCaoNhat { get; set; } = string.Empty;
+
+    // Nhóm 4: Thống kê sản phẩm & nhóm hàng
+    public decimal TongSanPhamBanRa { get; set; }
+    public string SanPhamDoanhThuCaoNhat { get; set; } = string.Empty;
+    public string SanPhamSoLuongNhieuNhat { get; set; } = string.Empty;
+    public string NhomHangDoanhThuCaoNhat { get; set; } = string.Empty;
+
     public string SoHoaDonHienThi => SoHoaDon.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
     public string TongTienHangHienThi => TongTienHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string GiamGiaHienThi => GiamGia.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
@@ -179,7 +201,20 @@ public sealed class BaoCaoBanHangTongHop
     public string DaThuHienThi => DaThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string GiaTriDonTrungBinhHienThi => GiaTriDonTrungBinh.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string TenFileXuat() => $"BaoCaoBanHang_{TuNgay:yyyyMMdd}_{DenNgay:yyyyMMdd}.xlsx";
+
+    public string TienMatHienThi => TienMat.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string ChuyenKhoanHienThi => ChuyenKhoan.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string TienKhacHienThi => TienKhac.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string TongThanhToanHienThi => TongThanhToan.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+
+    public string SoHoaDonDaThanhToanHienThi => SoHoaDonDaThanhToan.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+    public string SoHoaDonThanhToanMotPhanHienThi => SoHoaDonThanhToanMotPhan.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+    public string SoHoaDonChuaThanhToanHienThi => SoHoaDonChuaThanhToan.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+    public string SoKhachHangHienThi => SoKhachHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+    public string SoKhachHangCoCongNoHienThi => SoKhachHangCoCongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+    public string TongSanPhamBanRaHienThi => TongSanPhamBanRa.ToString("N2", CultureInfo.GetCultureInfo("vi-VN"));
+
+    public string TenFileXuat() => ShopHoa.Helpers.ReportFileNamingHelper.TaoTenFileBanHang();
 }
 
 

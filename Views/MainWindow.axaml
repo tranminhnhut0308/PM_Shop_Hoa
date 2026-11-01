@@ -2006,7 +2006,8 @@
                               Click="OnThemSanPhamBanHangClicked">
                         <StackPanel Spacing="1" VerticalAlignment="Center">
                           <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold"
-                                     Foreground="#163F38" TextTrimming="CharacterEllipsis" FontSize="13" />
+                                     Foreground="#163F38" TextTrimming="CharacterEllipsis" FontSize="13"
+                                     ToolTip.Tip="{Binding TenSanPham}" />
                           <StackPanel Orientation="Horizontal" Spacing="10">
                             <TextBlock Text="{Binding GiaBan, StringFormat={}{0:N0} đ}"
                                        Foreground="#087F6E" FontWeight="Bold" FontSize="12" />
@@ -2050,7 +2051,8 @@
                         <StackPanel Grid.Column="0" Spacing="3">
                           <TextBlock Text="{Binding SanPham.TenSanPham}"
                                      FontWeight="SemiBold" Foreground="#163F38"
-                                     FontSize="13" TextTrimming="CharacterEllipsis" />
+                                     FontSize="13" TextTrimming="CharacterEllipsis"
+                                     ToolTip.Tip="{Binding SanPham.TenSanPham}" />
                           <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                             <TextBlock Text="Đơn giá:" FontSize="11.5" Foreground="#667A74" VerticalAlignment="Center" />
                             <TextBox Width="92" Height="24" Padding="6,2"
@@ -2553,7 +2555,8 @@
                               FontSize="13"
                               VerticalAlignment="Center"
                               TextWrapping="NoWrap"
-                              TextTrimming="CharacterEllipsis" />
+                              TextTrimming="CharacterEllipsis"
+                              ToolTip.Tip="{Binding TenSanPham}" />
 
                             <!-- GIÁ BÁN: hiển thị + ô sửa nhanh tại chỗ -->
                             <Grid Grid.Column="3"
@@ -5042,7 +5045,7 @@
                               Padding="10,0">
 
                               <Grid ColumnDefinitions="50,140,*,160,108,150,130,60"
-                                Height="52">
+                                MinHeight="52">
 
                                 <!-- STT -->
                                 <TextBlock Text="{Binding Index}"
@@ -5065,7 +5068,8 @@
                                   Foreground="#344054"
                                   FontSize="13"
                                   VerticalAlignment="Center"
-                                  TextTrimming="CharacterEllipsis" />
+                                  TextWrapping="Wrap"
+                                  ToolTip.Tip="{Binding TenSanPham}" />
 
                                 <!-- ĐVT: hiển thị sẵn nếu hàng đã có ĐVT, hoặc cho chọn/thêm trực tiếp nếu hàng chưa có ĐVT -->
                                 <Grid Grid.Column="3"

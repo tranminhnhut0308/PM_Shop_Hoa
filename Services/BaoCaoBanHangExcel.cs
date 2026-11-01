@@ -52,46 +52,108 @@ public static class BaoCaoBanHangExcel
             nguoiXuat,
             tongSoCot: 3);
 
-        var dong = dongHeader;
-        var oNhom = ws.Cell(dong, 1);
-        oNhom.Value = "CHỈ SỐ BÁN HÀNG CHÍNH";
-        oNhom.Style.Font.Bold = true;
-        oNhom.Style.Font.FontSize = 12;
-        oNhom.Style.Font.FontColor = XLColor.FromHtml(ExcelHelper.MauChuDao);
-        dong++;
+        // Hàng tiêu đề bảng 3 cột chuẩn theo Issue #47
+        string[] tieuDeBang = ["Chỉ tiêu", "Giá trị", "Ghi chú"];
+        ExcelHelper.GhiTieuDeCot(ws, dongHeader, tieuDeBang);
 
-        (string Label, object Value, bool LaTien)[] kpis =
-        [
-            ("Số hóa đơn bán hàng", t.SoHoaDon, false),
-            ("Tổng tiền hàng", t.TongTienHang, true),
-            ("Tổng giảm giá", t.GiamGia, true),
-            ("Thu khác", t.ThuKhac, true),
-            ("Doanh thu bán hàng (Tiền hàng − Giảm giá + Thu khác)", t.DoanhThu, true),
-            ("Tổng tiền đã thu", t.DaThu, true),
-            ("Tổng công nợ phát sinh còn lại", t.CongNo, true),
-            ("Giá trị đơn hàng trung bình", t.GiaTriDonTrungBinh, true)
-        ];
+        var dong = dongHeader + 1;
 
-        foreach (var (lbl, val, laTien) in kpis)
+        void GhiDongPhanNhom(string tenNhom)
         {
-            var cellLbl = ws.Cell(dong, 1);
-            cellLbl.Value = lbl;
-            cellLbl.Style.Font.Bold = lbl.Contains("Doanh thu") || lbl.Contains("Số hóa đơn");
-            cellLbl.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-            cellLbl.Style.Border.OutsideBorderColor = XLColor.FromHtml(ExcelHelper.MauVien);
-
-            var cellVal = ws.Cell(dong, 2);
-            if (laTien)
-                ExcelHelper.GhiO_Tien(cellVal, Convert.ToDecimal(val));
-            else
-                ExcelHelper.GhiO_Chu(cellVal, val, XLAlignmentHorizontalValues.Right);
-
-            cellVal.Style.Font.Bold = cellLbl.Style.Font.Bold;
+            var range = ws.Range(dong, 1, dong, 3);
+            range.Merge();
+            range.Value = tenNhom;
+            range.Style.Font.Bold = true;
+            range.Style.Font.FontSize = 11;
+            range.Style.Font.FontColor = XLColor.FromHtml(ExcelHelper.MauChuDao);
+            range.Style.Fill.BackgroundColor = XLColor.FromHtml(ExcelHelper.MauNenNhe);
+            range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            range.Style.Border.OutsideBorderColor = XLColor.FromHtml(ExcelHelper.MauVien);
+            range.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            ws.Row(dong).Height = 22;
             dong++;
         }
 
-        ws.Column(1).Width = 50;
-        ws.Column(2).Width = 22;
+        void GhiChiTieu(string chiTieu, object giaTri, bool laTien, string ghiChu = "", bool inDam = false)
+        {
+            var c1 = ws.Cell(dong, 1);
+            c1.Value = chiTieu;
+            c1.Style.Font.Bold = inDam;
+            c1.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            c1.Style.Border.OutsideBorderColor = XLColor.FromHtml(ExcelHelper.MauVien);
+
+            var c2 = ws.Cell(dong, 2);
+            if (laTien)
+                ExcelHelper.GhiO_Tien(c2, Convert.ToDecimal(giaTri));
+            else if (giaTri is int or long)
+            {
+                c2.Value = Convert.ToInt64(giaTri);
+                c2.Style.NumberFormat.Format = ExcelHelper.DinhDangTien;
+                c2.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                c2.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                c2.Style.Border.OutsideBorderColor = XLColor.FromHtml(ExcelHelper.MauVien);
+            }
+            else if (giaTri is decimal or double or float)
+            {
+                c2.Value = Convert.ToDecimal(giaTri);
+                c2.Style.NumberFormat.Format = ExcelHelper.DinhDangSoLuong;
+                c2.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                c2.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                c2.Style.Border.OutsideBorderColor = XLColor.FromHtml(ExcelHelper.MauVien);
+            }
+            else
+            {
+                ExcelHelper.GhiO_Chu(c2, giaTri, XLAlignmentHorizontalValues.Right);
+            }
+            c2.Style.Font.Bold = inDam;
+
+            var c3 = ws.Cell(dong, 3);
+            ExcelHelper.GhiO_Chu(c3, ghiChu, XLAlignmentHorizontalValues.Left);
+            c3.Style.Font.Italic = true;
+            c3.Style.Font.FontColor = XLColor.FromHtml("#6E827C");
+
+            dong++;
+        }
+
+        // NHÓM 1: CHỈ SỐ BÁN HÀNG CHÍNH
+        GhiDongPhanNhom("I. CHỈ SỐ BÁN HÀNG CHÍNH");
+        GhiChiTieu("Số hóa đơn bán hàng", t.SoHoaDon, false, "Hóa đơn hoàn thành", true);
+        GhiChiTieu("Tổng tiền hàng", t.TongTienHang, true, "Tổng giá trị niêm yết");
+        GhiChiTieu("Tổng giảm giá", t.GiamGia, true, "Chiết khấu/khuyến mãi");
+        GhiChiTieu("Thu khác", t.ThuKhac, true, "Phụ thu tính vào doanh thu");
+        GhiChiTieu("Doanh thu bán hàng", t.DoanhThu, true, "Tiền hàng − Giảm giá + Thu khác", true);
+        GhiChiTieu("Tổng tiền đã thu", t.DaThu, true, "Khách đã thanh toán");
+        GhiChiTieu("Tổng công nợ phát sinh", t.CongNo, true, "Còn nợ trên hóa đơn");
+        GhiChiTieu("Giá trị đơn hàng trung bình", t.GiaTriDonTrungBinh, true, "Doanh thu / Số hóa đơn", true);
+
+        // NHÓM 2: THỐNG KÊ THANH TOÁN
+        GhiDongPhanNhom("II. THỐNG KÊ THANH TOÁN");
+        GhiChiTieu("Tiền mặt đã thu", t.TienMat, true, "Thu trực tiếp tiền mặt");
+        GhiChiTieu("Chuyển khoản đã thu", t.ChuyenKhoan, true, "Ngân hàng, QR");
+        GhiChiTieu("Phương thức khác", t.TienKhac, true, "Ví, thẻ, v.v.");
+        GhiChiTieu("Tổng tiền thanh toán", t.TongThanhToan, true, "Tổng các phương thức", true);
+        GhiChiTieu("Số hóa đơn đã thanh toán đủ", t.SoHoaDonDaThanhToan, false, "Đã trả 100%");
+        GhiChiTieu("Số hóa đơn thanh toán một phần", t.SoHoaDonThanhToanMotPhan, false, "Còn nợ một phần");
+        GhiChiTieu("Số hóa đơn chưa thanh toán", t.SoHoaDonChuaThanhToan, false, "Chưa trả tiền");
+
+        // NHÓM 3: THỐNG KÊ CÔNG NỢ & KHÁCH HÀNG
+        GhiDongPhanNhom("III. THỐNG KÊ CÔNG NỢ & KHÁCH HÀNG");
+        GhiChiTieu("Công nợ phát sinh trong kỳ", t.CongNo, true, "Công nợ hóa đơn mới");
+        GhiChiTieu("Số khách hàng phát sinh mua hàng", t.SoKhachHang, false, "Khách hàng có hồ sơ");
+        GhiChiTieu("Số khách hàng đang có công nợ", t.SoKhachHangCoCongNo, false, "Khách còn nợ trong kỳ");
+        GhiChiTieu("Khách hàng có doanh số cao nhất", string.IsNullOrWhiteSpace(t.KhachHangDoanhThuCaoNhat) ? "Không có" : t.KhachHangDoanhThuCaoNhat, false, "");
+        GhiChiTieu("Khách hàng có công nợ cao nhất", string.IsNullOrWhiteSpace(t.KhachHangCongNoCaoNhat) ? "Không có" : t.KhachHangCongNoCaoNhat, false, "");
+
+        // NHÓM 4: THỐNG KÊ HÀNG HÓA BÁN RA
+        GhiDongPhanNhom("IV. THỐNG KÊ HÀNG HÓA BÁN RA");
+        GhiChiTieu("Tổng số lượng sản phẩm đã bán", t.TongSanPhamBanRa, false, "Số lượng thực tế");
+        GhiChiTieu("Sản phẩm có doanh thu cao nhất", string.IsNullOrWhiteSpace(t.SanPhamDoanhThuCaoNhat) ? "Không có" : t.SanPhamDoanhThuCaoNhat, false, "");
+        GhiChiTieu("Sản phẩm có số lượng bán nhiều nhất", string.IsNullOrWhiteSpace(t.SanPhamSoLuongNhieuNhat) ? "Không có" : t.SanPhamSoLuongNhieuNhat, false, "");
+        GhiChiTieu("Nhóm hàng có doanh thu cao nhất", string.IsNullOrWhiteSpace(t.NhomHangDoanhThuCaoNhat) ? "Không có" : t.NhomHangDoanhThuCaoNhat, false, "");
+
+        ws.Column(1).Width = 42;
+        ws.Column(2).Width = 24;
+        ws.Column(3).Width = 36;
         ws.ShowGridLines = true;
     }
 

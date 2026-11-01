@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
 using ShopHoa.Services;
 
@@ -408,36 +409,28 @@ public partial class BaoCaoBanHangViewModel : ObservableObject
     {
         try
         {
-            var cuaSo = Avalonia.Application.Current?.ApplicationLifetime
-                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lt
-                ? lt.MainWindow
-                : null;
+            DangTai = true;
+            ThongBaoLoi = string.Empty;
 
-            if (cuaSo is null)
-                return;
+            var tenBaoCao = $"Báo cáo bán hàng ({TuNgay:dd/MM/yyyy} - {DenNgay:dd/MM/yyyy})";
+            var tenFile = ReportExportService.TaoTenFile("BaoCaoBanHang");
+            var soDong = BangItems.Count > 0 ? BangItems.Count : DuLieu.TongHop.SoHoaDon;
 
-            using (var wb = BaoCaoBanHangExcel.TaoWorkbook(DuLieu))
-            {
-                var file = await cuaSo.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
-                {
-                    Title = "Xuất Excel báo cáo bán hàng",
-                    FileTypeChoices = new[]
-                    {
-                        new Avalonia.Platform.Storage.FilePickerFileType("Excel") { Patterns = new[] { "*.xlsx" } }
-                    },
-                    SuggestedFileName = DuLieu.TongHop.TenFileXuat()
-                });
-
-                if (file is not null)
-                {
-                    await using var stream = await file.OpenWriteAsync();
-                    wb.SaveAs(stream);
-                }
-            }
+            await ReportExportService.ExportReportAsync(
+                ownerWindow: null,
+                reportTitle: tenBaoCao,
+                suggestedFileName: tenFile,
+                generateWorkbook: () => BaoCaoBanHangExcel.TaoWorkbook(DuLieu),
+                recordCount: soDong);
         }
         catch (Exception ex)
         {
+            SafeLog.WriteError("Loi xuat Excel bao cao ban hang", ex);
             ThongBaoLoi = "Không xuất được file Excel: " + ex.Message;
+        }
+        finally
+        {
+            DangTai = false;
         }
     }
 

@@ -349,6 +349,132 @@
         </Border>
       </Grid>
 
+      <!-- ============ BẢNG PHÂN TÍCH CHỈ SỐ THEO NHÓM NGHIỆP VỤ ============ -->
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+        <!-- NHÓM THANH TOÁN -->
+        <Border Classes="bcCard" Padding="14,12">
+          <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="bcSectionTitle" Text="Thống kê thanh toán" />
+              <TextBlock Grid.Column="1" Text="{Binding TongHop.TongThanhToanHienThi}"
+                FontWeight="Bold" Foreground="#087F6E" FontSize="13" />
+            </Grid>
+            <Border Height="1" Background="#EEF4F2" />
+
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+              <Border Background="#F7FAF9" CornerRadius="8" Padding="10,8">
+                <StackPanel Spacing="2">
+                  <TextBlock Classes="bcMuted" Text="Tiền mặt" FontSize="11" />
+                  <TextBlock Text="{Binding TongHop.TienMatHienThi}" FontWeight="SemiBold"
+                    Foreground="#164B40" FontSize="12.5" />
+                </StackPanel>
+              </Border>
+              <Border Grid.Column="1" Background="#F7FAF9" CornerRadius="8" Padding="10,8">
+                <StackPanel Spacing="2">
+                  <TextBlock Classes="bcMuted" Text="Chuyển khoản" FontSize="11" />
+                  <TextBlock Text="{Binding TongHop.ChuyenKhoanHienThi}" FontWeight="SemiBold"
+                    Foreground="#164B40" FontSize="12.5" />
+                </StackPanel>
+              </Border>
+              <Border Grid.Column="2" Background="#F7FAF9" CornerRadius="8" Padding="10,8">
+                <StackPanel Spacing="2">
+                  <TextBlock Classes="bcMuted" Text="Phương thức khác" FontSize="11" />
+                  <TextBlock Text="{Binding TongHop.TienKhacHienThi}" FontWeight="SemiBold"
+                    Foreground="#164B40" FontSize="12.5" />
+                </StackPanel>
+              </Border>
+            </Grid>
+
+            <!-- Trạng thái thanh toán của hóa đơn -->
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8" Margin="0,2,0,0">
+              <Border BorderBrush="#E4EDEA" BorderThickness="1" CornerRadius="8" Padding="10,6">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Đã trả đủ" Classes="bcMuted" FontSize="11" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding TongHop.SoHoaDonDaThanhToanHienThi, StringFormat='{}{0} HĐ'}"
+                    FontWeight="SemiBold" Foreground="#087F6E" FontSize="11.5" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+              <Border Grid.Column="1" BorderBrush="#E4EDEA" BorderThickness="1" CornerRadius="8" Padding="10,6">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Trả một phần" Classes="bcMuted" FontSize="11" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding TongHop.SoHoaDonThanhToanMotPhanHienThi, StringFormat='{}{0} HĐ'}"
+                    FontWeight="SemiBold" Foreground="#D97706" FontSize="11.5" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+              <Border Grid.Column="2" BorderBrush="#E4EDEA" BorderThickness="1" CornerRadius="8" Padding="10,6">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Chưa thanh toán" Classes="bcMuted" FontSize="11" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding TongHop.SoHoaDonChuaThanhToanHienThi, StringFormat='{}{0} HĐ'}"
+                    FontWeight="SemiBold" Foreground="#D97706" FontSize="11.5" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- NHÓM CÔNG NỢ, KHÁCH HÀNG & HÀNG HÓA -->
+        <Border Grid.Column="1" Classes="bcCard" Padding="14,12">
+          <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="bcSectionTitle" Text="Tổng quan công nợ &amp; sản phẩm" />
+              <TextBlock Grid.Column="1" Text="{Binding TongHop.TongSanPhamBanRaHienThi, StringFormat='{}{0} SP đã bán'}"
+                FontWeight="SemiBold" Foreground="#164B40" FontSize="12.5" />
+            </Grid>
+            <Border Height="1" Background="#EEF4F2" />
+
+            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,*" RowSpacing="6" ColumnSpacing="8">
+              <!-- Hàng 1: Khách hàng mua & Khách nợ -->
+              <Border Background="#F7FAF9" CornerRadius="8" Padding="10,6">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Khách phát sinh mua:" Classes="bcMuted" FontSize="11" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding TongHop.SoKhachHangHienThi, StringFormat='{}{0} khách'}"
+                    FontWeight="SemiBold" Foreground="#164B40" FontSize="11.5" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+              <Border Grid.Column="1" Background="#F7FAF9" CornerRadius="8" Padding="10,6">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Khách đang nợ:" Classes="bcMuted" FontSize="11" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding TongHop.SoKhachHangCoCongNoHienThi, StringFormat='{}{0} khách'}"
+                    FontWeight="SemiBold" Foreground="#D97706" FontSize="11.5" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+
+              <!-- Hàng 2: Khách doanh số cao nhất & Khách nợ cao nhất -->
+              <Border Grid.Row="1" Grid.Column="0" BorderBrush="#E4EDEA" BorderThickness="1" CornerRadius="8" Padding="10,6">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="Top doanh số khách hàng" Classes="bcMuted" FontSize="10.5" />
+                  <TextBlock Text="{Binding TongHop.KhachHangDoanhThuCaoNhat}" FontWeight="SemiBold"
+                    Foreground="#087F6E" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </Border>
+              <Border Grid.Row="1" Grid.Column="1" BorderBrush="#E4EDEA" BorderThickness="1" CornerRadius="8" Padding="10,6">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="Khách hàng nợ cao nhất" Classes="bcMuted" FontSize="10.5" />
+                  <TextBlock Text="{Binding TongHop.KhachHangCongNoCaoNhat}" FontWeight="SemiBold"
+                    Foreground="#D97706" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </Border>
+
+              <!-- Hàng 3: Sản phẩm doanh số cao nhất & Nhóm hàng dẫn đầu -->
+              <Border Grid.Row="2" Grid.Column="0" BorderBrush="#E4EDEA" BorderThickness="1" CornerRadius="8" Padding="10,6">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="Sản phẩm doanh thu cao nhất" Classes="bcMuted" FontSize="10.5" />
+                  <TextBlock Text="{Binding TongHop.SanPhamDoanhThuCaoNhat}" FontWeight="SemiBold"
+                    Foreground="#164B40" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </Border>
+              <Border Grid.Row="2" Grid.Column="1" BorderBrush="#E4EDEA" BorderThickness="1" CornerRadius="8" Padding="10,6">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="Nhóm hàng doanh thu cao nhất" Classes="bcMuted" FontSize="10.5" />
+                  <TextBlock Text="{Binding TongHop.NhomHangDoanhThuCaoNhat}" FontWeight="SemiBold"
+                    Foreground="#164B40" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </Border>
+            </Grid>
+          </StackPanel>
+        </Border>
+      </Grid>
+
       <!-- ============ 3. BIỂU ĐỒ DOANH THU ============ -->
       <Border Classes="bcCard" Padding="16,13">
         <StackPanel Spacing="8">
