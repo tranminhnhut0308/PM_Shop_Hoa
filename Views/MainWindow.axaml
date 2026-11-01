@@ -1965,12 +1965,15 @@
               <ListBox ItemsSource="{Binding ProductSearchResults}"
                        SelectedIndex="{Binding SaleSearchSelectedIndex, Mode=TwoWay}"
                        IsVisible="{Binding HienThiKetQuaTimKiemBanHang}"
+                       Focusable="False"
+                       SelectionChanged="OnSaleSearchResultSelectionChanged"
                        Background="Transparent"
                        BorderThickness="0"
                        Padding="0"
                        ScrollViewer.VerticalScrollBarVisibility="Auto">
                 <ListBox.Styles>
                   <Style Selector="ListBoxItem">
+                    <Setter Property="Focusable" Value="False" />
                     <Setter Property="Padding" Value="0" />
                     <Setter Property="Margin" Value="0,0,0,6" />
                     <Setter Property="CornerRadius" Value="8" />
@@ -1999,7 +2002,8 @@
 
                       <Button Grid.Column="1" Classes="productSearchItem"
                               Command="{Binding ElementName=RootWindow, Path=DataContext.ThemVaoGioHangCommand}"
-                              CommandParameter="{Binding}">
+                              CommandParameter="{Binding}"
+                              Click="OnThemSanPhamBanHangClicked">
                         <StackPanel Spacing="1" VerticalAlignment="Center">
                           <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold"
                                      Foreground="#163F38" TextTrimming="CharacterEllipsis" FontSize="13" />
@@ -4855,12 +4859,15 @@
 
                   <ListBox ItemsSource="{Binding PhieuNhapProductSuggestions}"
                     SelectedIndex="{Binding PhieuNhapSearchSelectedIndex, Mode=TwoWay}"
+                    Focusable="False"
+                    SelectionChanged="OnImportSearchResultSelectionChanged"
                     Background="Transparent"
                     BorderThickness="0"
                     Padding="0"
                     ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListBox.Styles>
                       <Style Selector="ListBoxItem">
+                        <Setter Property="Focusable" Value="False" />
                         <Setter Property="Padding" Value="0" />
                         <Setter Property="BorderThickness" Value="0" />
                         <Setter Property="Background" Value="Transparent" />
@@ -4881,7 +4888,8 @@
                           BorderThickness="0"
                           Padding="10,7"
                           Command="{Binding ElementName=RootWindow, Path=DataContext.ThemSanPhamVaoPhieuNhapCommand}"
-                          CommandParameter="{Binding}">
+                          CommandParameter="{Binding}"
+                          Click="OnThemSanPhamNhapHangClicked">
                           <Grid ColumnDefinitions="Auto,*,Auto"
                             ColumnSpacing="10">
 

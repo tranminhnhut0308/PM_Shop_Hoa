@@ -3552,6 +3552,8 @@ public partial class MainWindowViewModel : ObservableObject
             ProductSearchResults.Add(product);
 
         _saleSearchKeywordDaTim = search;
+        SaleSearchSelectedIndex = ProductSearchResults.Count > 0 ? 0 : -1;
+        IsSaleSearchResultsClosed = false;
         OnPropertyChanged(nameof(IsSaleSearchEmpty));
     }
 
@@ -5576,6 +5578,8 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         _phieuNhapKeywordDaTim = keyword;
+        PhieuNhapSearchSelectedIndex = PhieuNhapProductSuggestions.Count > 0 ? 0 : -1;
+        IsPhieuNhapSuggestionsClosed = false;
         OnPropertyChanged(nameof(HasPhieuNhapSuggestions));
     }
 

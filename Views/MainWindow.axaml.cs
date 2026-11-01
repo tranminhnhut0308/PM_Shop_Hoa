@@ -39,6 +39,38 @@ public partial class MainWindow : Window
 
         AddHandler(KeyDownEvent, OnGlobalKeyDown, RoutingStrategies.Tunnel);
 
+        viewModel.PropertyChanged += (sender, e) =>
+        {
+            if (e.PropertyName == nameof(MainWindowViewModel.IsSalesPanelVisible))
+            {
+                if (viewModel.IsSalesPanelVisible)
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => FocusControl("SaleSearchBox"), Avalonia.Threading.DispatcherPriority.Loaded);
+                }
+            }
+            else if (e.PropertyName == nameof(MainWindowViewModel.ActiveSaleCartTab))
+            {
+                if (viewModel.IsSalesPanelVisible)
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => FocusControl("SaleSearchBox"), Avalonia.Threading.DispatcherPriority.Loaded);
+                }
+            }
+            else if (e.PropertyName == nameof(MainWindowViewModel.IsNhapHangFormVisible))
+            {
+                if (viewModel.IsNhapHangFormVisible)
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => FocusControl("ImportProductSearchBox"), Avalonia.Threading.DispatcherPriority.Loaded);
+                }
+            }
+            else if (e.PropertyName == nameof(MainWindowViewModel.SelectedMenu))
+            {
+                if (viewModel.SelectedMenu == "Nhập hàng" && viewModel.IsNhapHangFormVisible)
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => FocusControl("ImportProductSearchBox"), Avalonia.Threading.DispatcherPriority.Loaded);
+                }
+            }
+        };
+
         this.Opened += async (_, _) =>
         {
             await viewModel.InitializeAsync();
@@ -1312,6 +1344,9 @@ public partial class MainWindow : Window
         if (sender is not TextBox textBox || DataContext is not MainWindowViewModel viewModel)
             return;
 
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            return;
+
         switch (e.Key)
         {
             case Key.Down:
@@ -1378,13 +1413,14 @@ public partial class MainWindow : Window
                     // 3. Debounce chưa xong: tìm ngay rồi mới quyết định.
                     await viewModel.TimKiemHoaBanNgayAsync(keyword);
 
-                    if (viewModel.ProductSearchResults.Count == 1)
+                    if (viewModel.ProductSearchResults.Count > 0)
                     {
-                        sanPham = viewModel.ProductSearchResults[0];
+                        sanPham = viewModel.SaleSearchSelectedProduct
+                                  ?? viewModel.ProductSearchResults[0];
                     }
                     else
                     {
-                        // Nhiều kết quả: chỉ hiển thị danh sách để người dùng chọn.
+                        // Nhiều kết quả rỗng: không làm gì
                         return;
                     }
                 }
@@ -1510,13 +1546,13 @@ public partial class MainWindow : Window
                     // 3. Debounce chưa xong: tìm ngay rồi mới quyết định.
                     await viewModel.TimKiemSanPhamNhapNgayAsync(keyword);
 
-                    if (viewModel.PhieuNhapProductSuggestions.Count == 1)
+                    if (viewModel.PhieuNhapProductSuggestions.Count > 0)
                     {
-                        sanPham = viewModel.PhieuNhapProductSuggestions[0];
+                        sanPham = viewModel.PhieuNhapSelectedProduct
+                                  ?? viewModel.PhieuNhapProductSuggestions[0];
                     }
                     else
                     {
-                        // Nhiều kết quả: chỉ hiển thị danh sách để người dùng chọn.
                         return;
                     }
                 }
@@ -1550,6 +1586,80 @@ public partial class MainWindow : Window
         {
             _dangThemSanPhamNhapHang = false;
         }
+    }
+
+    private void OnSaleSearchResultSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ListBox listBox && listBox.SelectedItem != null)
+        {
+            listBox.ScrollIntoView(listBox.SelectedItem);
+        }
+    }
+
+    private void OnImportSearchResultSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ListBox listBox && listBox.SelectedItem != null)
+        {
+            listBox.ScrollIntoView(listBox.SelectedItem);
+        }
+    }
+
+    private void OnThemSanPhamBanHangClicked(object? sender, RoutedEventArgs e)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var textBox = this.FindControl<TextBox>("SaleSearchBox");
+            if (textBox != null)
+            {
+                _boQuaTimKiemBanHang = true;
+                try
+                {
+                    if (DataContext is MainWindowViewModel vm)
+                    {
+                        vm.SaleSearchText = string.Empty;
+                        vm.HuyTimKiemBanHang();
+                        vm.DongKetQuaTimKiemBanHang();
+                        vm.ProductSearchResults.Clear();
+                    }
+                    textBox.Text = string.Empty;
+                }
+                finally
+                {
+                    _boQuaTimKiemBanHang = false;
+                }
+                textBox.Focus();
+                textBox.CaretIndex = 0;
+            }
+        }, Avalonia.Threading.DispatcherPriority.Input);
+    }
+
+    private void OnThemSanPhamNhapHangClicked(object? sender, RoutedEventArgs e)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var textBox = this.FindControl<TextBox>("ImportProductSearchBox");
+            if (textBox != null)
+            {
+                _boQuaTimKiemNhapHang = true;
+                try
+                {
+                    if (DataContext is MainWindowViewModel vm)
+                    {
+                        vm.ImportProductSearch = string.Empty;
+                        vm.HuyTimKiemSanPhamNhap();
+                        vm.DongGoiYPhieuNhap();
+                        vm.PhieuNhapProductSuggestions.Clear();
+                    }
+                    textBox.Text = string.Empty;
+                }
+                finally
+                {
+                    _boQuaTimKiemNhapHang = false;
+                }
+                textBox.Focus();
+                textBox.CaretIndex = 0;
+            }
+        }, Avalonia.Threading.DispatcherPriority.Input);
     }
 
     private void OnImportSupplierSearchKeyDown(object? sender, KeyEventArgs e)
