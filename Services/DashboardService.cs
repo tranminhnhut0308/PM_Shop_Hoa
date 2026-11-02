@@ -133,14 +133,22 @@ public sealed class DashboardService
         var taskTopHang = TaiTopHangBanChayAsync(xepHangTopHang, tuNgay, denKeTiep, token);
         var taskTopKhach = TaiTopKhachHangAsync(tuNgay, denKeTiep, token);
         var taskHoatDongSub = laAdmin ? TaiHoatDongTaiKhoanConAsync(token) : Task.FromResult(new List<TongQuanHoatDongTaiKhoanCon>());
+        var taskThongTinGanNhat = TaiThongTinGiaoDichGanNhatAsync(homNay, token);
 
-        await Task.WhenAll(taskBanHangTheoKy, taskBieuDo, taskTopHang, taskTopKhach, taskHoatDongSub);
+        await Task.WhenAll(taskBanHangTheoKy, taskBieuDo, taskTopHang, taskTopKhach, taskHoatDongSub, taskThongTinGanNhat);
 
         var banHang = await taskBanHangTheoKy;
         var (tongDoanhThu, tongSoHoaDon, bieuDo) = await taskBieuDo;
         var topHang = await taskTopHang;
         var topKhach = await taskTopKhach;
         var hoatDongSub = await taskHoatDongSub;
+        var thongTinGanNhat = await taskThongTinGanNhat;
+
+        ketQua.NgayGiaoDichGanNhat = thongTinGanNhat.NgayGanNhat;
+        ketQua.MaHoaDonGanNhat = thongTinGanNhat.MaHoaDon;
+        ketQua.TongTienHoaDonGanNhat = thongTinGanNhat.TongTien;
+        ketQua.SoHoaDonThangTruoc = thongTinGanNhat.SoHoaDonThangTruoc;
+        ketQua.DoanhThuThangTruoc = thongTinGanNhat.DoanhThuThangTruoc;
 
         ketQua.DoanhThuHomNay = banHang.DoanhThu;
         ketQua.SoHoaDonHomNay = banHang.SoHoaDon;
@@ -850,5 +858,46 @@ public sealed class DashboardService
 
         return await connection.QuerySingleAsync<TongQuanThongKeKho>(
             new CommandDefinition(sql, cancellationToken: token));
+    }
+
+    /// <summary>
+    /// Lấy mốc thời gian bán hàng gần nhất và tổng số đơn của tháng trước
+    /// để Dashboard thông báo và hỗ trợ người dùng chuyển nhanh khi kỳ đang chọn chưa có đơn.
+    /// </summary>
+    private async Task<(DateTime? NgayGanNhat, string? MaHoaDon, decimal TongTien, int SoHoaDonThangTruoc, decimal DoanhThuThangTruoc)> TaiThongTinGiaoDichGanNhatAsync(
+        DateTime homNay,
+        CancellationToken token)
+    {
+        await using var connection = await _taoKetNoi();
+
+        const string sqlGanNhat = """
+        SELECT thoi_gian_ban AS NgayGanNhat, ma_hoa_don AS MaHoaDon, COALESCE(khach_can_tra, 0) AS TongTien
+        FROM hoa_don_ban_hang
+        WHERE trang_thai_hoa_don = 'HOAN_THANH'
+        ORDER BY thoi_gian_ban DESC, id DESC
+        LIMIT 1;
+        """;
+
+        var ganNhat = await connection.QueryFirstOrDefaultAsync<(DateTime NgayGanNhat, string MaHoaDon, decimal TongTien)>(
+            new CommandDefinition(sqlGanNhat, cancellationToken: token));
+
+        var dauThangTruoc = new DateTime(homNay.Year, homNay.Month, 1).AddMonths(-1);
+        var dauThangNay = new DateTime(homNay.Year, homNay.Month, 1);
+
+        const string sqlThangTruoc = """
+        SELECT
+            COUNT(*) AS SoHoaDon,
+            COALESCE(SUM(CASE WHEN doanh_so_da_ghi_nhan = 1 THEN khach_can_tra ELSE 0 END), 0) AS DoanhThu
+        FROM hoa_don_ban_hang
+        WHERE trang_thai_hoa_don = 'HOAN_THANH'
+          AND thoi_gian_ban >= @DauThangTruoc
+          AND thoi_gian_ban < @DauThangNay;
+        """;
+
+        var thangTruoc = await connection.QuerySingleOrDefaultAsync<(int SoHoaDon, decimal DoanhThu)>(
+            new CommandDefinition(sqlThangTruoc, new { DauThangTruoc = dauThangTruoc, DauThangNay = dauThangNay }, cancellationToken: token));
+
+        DateTime? ngay = ganNhat.NgayGanNhat == default ? null : ganNhat.NgayGanNhat;
+        return (ngay, ganNhat.MaHoaDon, ganNhat.TongTien, thangTruoc.SoHoaDon, thangTruoc.DoanhThu);
     }
 }

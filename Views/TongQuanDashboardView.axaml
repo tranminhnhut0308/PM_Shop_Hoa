@@ -365,6 +365,38 @@
         </Grid>
       </Border>
 
+      <!-- BANNER THÔNG TIN VÀ CHUYỂN NHANH KHI KỲ ĐANG CHỌN CHƯA CÓ DỮ LIỆU -->
+      <Border Classes="tqCard" Background="#F0F8FF" BorderBrush="#BEE3F8"
+        BorderThickness="1" CornerRadius="12" Padding="14,12"
+        IsVisible="{Binding HienThiBannerChuaCoDuLieu}">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+          <Border Width="38" Height="38" CornerRadius="19" Background="#E1EFFE"
+            VerticalAlignment="Center">
+            <TextBlock Text="💡" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+            <TextBlock Text="Chưa có dữ liệu phát sinh trong kỳ này"
+              FontWeight="Bold" FontSize="13" Foreground="#1E429F" />
+            <TextBlock Text="{Binding NoiDungBannerChuaCoDuLieu}"
+              FontSize="12" Foreground="#3F83F8" TextWrapping="Wrap" />
+          </StackPanel>
+          <WrapPanel Grid.Column="2" Orientation="Horizontal" ItemSpacing="8" LineSpacing="6"
+            VerticalAlignment="Center" HorizontalAlignment="Right">
+            <Button Classes="toolbar-action" Height="32" Padding="10,0" FontSize="11.5"
+              IsVisible="{Binding CoTheXemThangTruoc}"
+              Content="{Binding NhanNutThangTruocGoiY}"
+              Command="{Binding ChuyenSangThangTruocCommand}" />
+            <Button Classes="toolbar-action" Height="32" Padding="10,0" FontSize="11.5"
+              Content="📅 Xem 7 ngày qua"
+              Command="{Binding ChuyenSangBayNgayCommand}" />
+            <Button Classes="toolbar-primary" Height="32" Padding="10,0" FontSize="11.5"
+              IsVisible="{Binding CoTheXemNgayGanNhat}"
+              Content="{Binding NhanNutNgayGanNhatGoiY}"
+              Command="{Binding ChuyenSangNgayGanNhatCommand}" />
+          </WrapPanel>
+        </Grid>
+      </Border>
+
       <!-- 5 THẺ KẾT QUẢ BÁN HÀNG THEO KỲ ĐANG CHỌN -->
       <Grid ColumnDefinitions="*,*,*,*,*" ColumnSpacing="10">
         <Border Classes="tqMetric" Padding="16">
@@ -703,12 +735,22 @@
 
           <Border Grid.Row="3" IsVisible="{Binding HienThiTrangThaiBieuDo}" Background="#F7FAF9"
               BorderBrush="#E2ECE8" BorderThickness="1" CornerRadius="10"
-              Padding="12" HorizontalAlignment="Stretch">
-              <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+              Padding="14" HorizontalAlignment="Stretch">
+              <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
                 <TextBlock Text="{Binding TrangThaiBieuDo}" FontWeight="SemiBold"
-                  Foreground="#4B5D57" HorizontalAlignment="Center" />
+                  Foreground="#4B5D57" HorizontalAlignment="Center" TextAlignment="Center" />
+                <WrapPanel Orientation="Horizontal" ItemSpacing="8" HorizontalAlignment="Center"
+                  IsVisible="{Binding HienThiBannerChuaCoDuLieu}">
+                  <Button Classes="toolbar-action" Height="30" Padding="10,0" FontSize="11"
+                    IsVisible="{Binding CoTheXemThangTruoc}"
+                    Content="{Binding NhanNutThangTruocGoiY}"
+                    Command="{Binding ChuyenSangThangTruocCommand}" />
+                  <Button Classes="toolbar-action" Height="30" Padding="10,0" FontSize="11"
+                    Content="ðŸ“… Xem 7 ngÃ y qua"
+                    Command="{Binding ChuyenSangBayNgayCommand}" />
+                </WrapPanel>
               </StackPanel>
-            </Border>
+          </Border>
         </Grid>
       </Border>
 

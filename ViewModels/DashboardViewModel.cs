@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -224,7 +224,63 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     public string TrangThaiBieuDo => BieuDoDoanhThu.Any(d => d.SoHoaDon > 0)
         ? "Các hóa đơn chưa ghi nhận được thống kê riêng ở phần dữ liệu bên trên; biểu đồ này chỉ hiển thị doanh thu chính thức."
-        : "Chưa có phát sinh trong khoảng đã chọn. Hãy thử chọn khoảng thời gian khác.";
+        : NgayGiaoDichGanNhat.HasValue
+            ? $"Chưa có giao dịch bán hàng trong {KhoangThoiGianHienThi} ({ThoiGianHienThi}). Giao dịch gần nhất vào ngày {NgayGiaoDichGanNhat.Value:dd/MM/yyyy}."
+            : "Chưa có phát sinh trong khoảng đã chọn. Hãy thử chọn khoảng thời gian khác.";
+
+    // --- Thông tin phát hiện giao dịch gần nhất (phục vụ gợi ý khi kỳ chọn chưa có dữ liệu) ---
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HienThiBannerChuaCoDuLieu))]
+    [NotifyPropertyChangedFor(nameof(NoiDungBannerChuaCoDuLieu))]
+    [NotifyPropertyChangedFor(nameof(NhanNutThangTruocGoiY))]
+    [NotifyPropertyChangedFor(nameof(CoTheXemThangTruoc))]
+    [NotifyPropertyChangedFor(nameof(CoTheXemNgayGanNhat))]
+    [NotifyPropertyChangedFor(nameof(NhanNutNgayGanNhatGoiY))]
+    [NotifyPropertyChangedFor(nameof(TrangThaiBieuDo))]
+    private DateTime? ngayGiaoDichGanNhat;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NoiDungBannerChuaCoDuLieu))]
+    private string? maHoaDonGanNhat;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NoiDungBannerChuaCoDuLieu))]
+    private decimal tongTienHoaDonGanNhat;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NhanNutThangTruocGoiY))]
+    [NotifyPropertyChangedFor(nameof(CoTheXemThangTruoc))]
+    private int soHoaDonThangTruoc;
+
+    [ObservableProperty]
+    private decimal doanhThuThangTruoc;
+
+    public bool HienThiBannerChuaCoDuLieu =>
+        !DangTai && !CoLoi && SoHoaDonHomNayHienThi == "0" && NgayGiaoDichGanNhat.HasValue;
+
+    public string NoiDungBannerChuaCoDuLieu =>
+        $"Chưa phát sinh giao dịch bán hàng trong {KhoangThoiGianHienThi} ({ThoiGianHienThi}). Giao dịch gần nhất ghi nhận lúc {NgayGiaoDichGanNhat:HH:mm dd/MM/yyyy}{(string.IsNullOrWhiteSpace(MaHoaDonGanNhat) ? "" : $" (HĐ {MaHoaDonGanNhat}: {TongTienHoaDonGanNhat:N0} đ)") }.";
+
+    public bool CoTheXemThangTruoc =>
+        KhoangThoiGian != TongQuanKhoangThoiGian.ThangTruoc && SoHoaDonThangTruoc > 0;
+
+    public string NhanNutThangTruocGoiY
+    {
+        get
+        {
+            var thangTruocDate = DateTime.Now.Date.AddMonths(-1);
+            return $"📅 Xem Tháng {thangTruocDate.Month:D2}/{thangTruocDate.Year} ({SoHoaDonThangTruoc:N0} hóa đơn)";
+        }
+    }
+
+    public bool CoTheXemNgayGanNhat =>
+        NgayGiaoDichGanNhat.HasValue &&
+        (KhoangThoiGian != TongQuanKhoangThoiGian.TuDien || TuNgayTuChon != NgayGiaoDichGanNhat.Value.Date);
+
+    public string NhanNutNgayGanNhatGoiY =>
+        NgayGiaoDichGanNhat.HasValue
+            ? $"📅 Xem ngày {NgayGiaoDichGanNhat.Value:dd/MM/yyyy}"
+            : "Xem ngÃ y gáº§n nháº¥t";
 
     /// <summary>Nội dung mô tả khoảng đang xem, hiển thị trên đầu thẻ doanh thu.</summary>
     [ObservableProperty]
@@ -526,6 +582,18 @@ public sealed partial class DashboardViewModel : ObservableObject
         DoDanhSachMoi(TopHangBanChay, duLieu.TopHangBanChay);
         DoDanhSachMoi(TopKhachHang, duLieu.TopKhachHang);
 
+        NgayGiaoDichGanNhat = duLieu.NgayGiaoDichGanNhat;
+        MaHoaDonGanNhat = duLieu.MaHoaDonGanNhat;
+        TongTienHoaDonGanNhat = duLieu.TongTienHoaDonGanNhat;
+        SoHoaDonThangTruoc = duLieu.SoHoaDonThangTruoc;
+        DoanhThuThangTruoc = duLieu.DoanhThuThangTruoc;
+        OnPropertyChanged(nameof(HienThiBannerChuaCoDuLieu));
+        OnPropertyChanged(nameof(NoiDungBannerChuaCoDuLieu));
+        OnPropertyChanged(nameof(CoTheXemThangTruoc));
+        OnPropertyChanged(nameof(NhanNutThangTruocGoiY));
+        OnPropertyChanged(nameof(CoTheXemNgayGanNhat));
+        OnPropertyChanged(nameof(NhanNutNgayGanNhatGoiY));
+
         _tatCaHoatDongTaiKhoanCon = duLieu.HoatDongTaiKhoanCon;
 
         var dsTaiKhoan = new List<string> { "Tất cả nhân viên" };
@@ -656,6 +724,31 @@ public sealed partial class DashboardViewModel : ObservableObject
         DungKhoangTuDien = true;
         KhoangThoiGian = TongQuanKhoangThoiGian.TuDien;
 
+        await TaiDuLieuAsync();
+    }
+
+    [RelayCommand]
+    private async Task ChuyenSangThangTruocAsync()
+    {
+        await ChonKhoangThoiGianAsync(TongQuanKhoangThoiGian.ThangTruoc);
+    }
+
+    [RelayCommand]
+    private async Task ChuyenSangBayNgayAsync()
+    {
+        await ChonKhoangThoiGianAsync(TongQuanKhoangThoiGian.BayNgay);
+    }
+
+    [RelayCommand]
+    private async Task ChuyenSangNgayGanNhatAsync()
+    {
+        if (!NgayGiaoDichGanNhat.HasValue)
+            return;
+
+        TuNgayTuChon = NgayGiaoDichGanNhat.Value.Date;
+        DenNgayTuChon = NgayGiaoDichGanNhat.Value.Date;
+        DungKhoangTuDien = true;
+        KhoangThoiGian = TongQuanKhoangThoiGian.TuDien;
         await TaiDuLieuAsync();
     }
 }

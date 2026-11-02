@@ -286,6 +286,13 @@ public sealed class TongQuanDuLieu
 
     public decimal ConNoChuaGhiNhan { get; set; }
 
+    // --- Thông tin giao dịch gần nhất & kỳ trước (hỗ trợ hiển thị khi kỳ chọn chưa có dữ liệu) ---
+    public DateTime? NgayGiaoDichGanNhat { get; set; }
+    public string? MaHoaDonGanNhat { get; set; }
+    public decimal TongTienHoaDonGanNhat { get; set; }
+    public int SoHoaDonThangTruoc { get; set; }
+    public decimal DoanhThuThangTruoc { get; set; }
+
     // --- Biểu đồ doanh thu theo bộ lọc đang chọn ---
     public decimal TongDoanhThuKyChon { get; set; }
 
