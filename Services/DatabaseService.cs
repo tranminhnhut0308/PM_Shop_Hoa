@@ -274,18 +274,23 @@ public sealed partial class DatabaseService
     /// <c>san_pham</c>, chỉ sau đó mới áp dụng LIMIT, nên sản phẩm nằm ngoài phần đang
     /// hiển thị vẫn tìm ra được (không lấy sẵn một phần rồi mới lọc).
     /// </summary>
-    public async Task<IReadOnlyList<SanPham>> GetSanPhamAsync(string? search = null)
-        => (await GetSanPhamPagedAsync(search, 1, SoDongSanPhamToiDa)).Items;
+    /// <summary>
+    /// Tìm kiếm và lấy danh sách hàng hóa cho màn hình bán hàng, màn hình hàng hóa.
+    /// Có hỗ trợ lọc trực tiếp theo nhóm hàng và từ khóa để tối ưu hiệu năng tại database.
+    /// </summary>
+    public async Task<IReadOnlyList<SanPham>> GetSanPhamAsync(string? search = null, uint? nhomSanPhamId = null)
+        => (await GetSanPhamPagedAsync(search, 1, SoDongSanPhamToiDa, nhomSanPhamId)).Items;
 
     /// <summary>
-    /// Lấy một trang hàng hóa kèm tổng số bản ghi khớp từ khóa.
+    /// Lấy một trang hàng hóa kèm tổng số bản ghi khớp từ khóa và nhóm sản phẩm.
     /// Tổng số bản ghi được đếm trên toàn database nên không phụ thuộc số dòng của trang,
     /// dùng cho phân trang và cho thông điệp "Tìm thấy N sản phẩm".
     /// </summary>
     public async Task<(IReadOnlyList<SanPham> Items, int TongSoBanGhi)> GetSanPhamPagedAsync(
         string? search,
         int page,
-        int pageSize)
+        int pageSize,
+        uint? nhomSanPhamId = null)
     {
         var keyword = (search ?? "").Trim();
         var safePage = page < 1 ? 1 : page;
@@ -297,7 +302,6 @@ public sealed partial class DatabaseService
         // Từ khóa được tách thành từng từ, mỗi từ phải xuất hiện trong một trong các
         // cột tìm kiếm (AND giữa các từ). Nhờ vậy gõ "Hồng mua bên" vẫn ra sản phẩm
         // "hồng ( mua bên VL )" dù hai từ không nối liền nhau.
-        // Không có từ khóa thì không thêm điều kiện nào để MySQL đọc bảng như bình thường.
         var parameters = new DynamicParameters();
 
         var dieuKien = TaoDieuKienTimKiemSanPham(
@@ -307,11 +311,26 @@ public sealed partial class DatabaseService
             "sp.ma_vach",
             "sp.ten_san_pham");
 
-        // Luôn lọc bỏ sản phẩm đã ẩn khỏi danh sách (trang_thai = 0). Điều kiện này
-        // cũng áp cho câu COUNT nên tổng số bản ghi luôn khớp với danh sách hiển thị.
-        var whereSql = dieuKien.Length == 0
-            ? "WHERE sp.trang_thai = 1"
-            : "WHERE sp.trang_thai = 1 AND " + dieuKien;
+        var whereParts = new List<string> { "sp.trang_thai = 1" };
+        if (dieuKien.Length > 0)
+        {
+            whereParts.Add(dieuKien);
+        }
+
+        if (nhomSanPhamId.HasValue && nhomSanPhamId.Value > 0)
+        {
+            if (nhomSanPhamId.Value == 999999)
+            {
+                whereParts.Add("(sp.nhom_san_pham_id IS NULL OR sp.nhom_san_pham_id = 0)");
+            }
+            else
+            {
+                whereParts.Add("sp.nhom_san_pham_id = @NhomSanPhamId");
+                parameters.Add("NhomSanPhamId", nhomSanPhamId.Value);
+            }
+        }
+
+        var whereSql = "WHERE " + string.Join(" AND ", whereParts);
 
         // Khớp chính xác mã hàng / mã vạch thì đưa lên đầu, tên hàng bắt đầu bằng
         // từ khóa thì kế sau, còn lại sắp theo tên hàng. Điều kiện này so sánh trên
@@ -459,7 +478,7 @@ public sealed partial class DatabaseService
     /// </summary>
     private static readonly (string CoDau, string KhongDau)[] BangChuanHoaTiengViet =
     [
-        ("đ", "d"), ("Đ", "D"),
+        ("đ", "d"), ("Đ", "d"),
         ("á", "a"), ("à", "a"), ("ả", "a"), ("ã", "a"), ("ạ", "a"),
         ("â", "a"), ("ấ", "a"), ("ầ", "a"), ("ẩ", "a"), ("ẫ", "a"), ("ậ", "a"),
         ("ă", "a"), ("ắ", "a"), ("ằ", "a"), ("ẳ", "a"), ("ẵ", "a"), ("ặ", "a"),
@@ -527,10 +546,8 @@ public sealed partial class DatabaseService
 
             if (char.IsWhiteSpace(character))
                 builder.Append(' ');
-            else if (character == 'đ')
+            else if (character is 'đ' or 'Đ')
                 builder.Append('d');
-            else if (character == 'Đ')
-                builder.Append('D');
             else
                 builder.Append(char.ToLowerInvariant(character));
         }
@@ -609,8 +626,8 @@ public sealed partial class DatabaseService
         if (tokens.Length == 0)
             return "";
 
-        var maHang = BieuThucChuanHoaSql(cotMaHang);
-        var maVach = BieuThucChuanHoaSql(cotMaVach);
+        var maHang = $"COALESCE(LOWER({cotMaHang}), '')";
+        var maVach = $"COALESCE(LOWER({cotMaVach}), '')";
         var tenHang = BieuThucChuanHoaSql(cotTenHang);
 
         var dieuKien = new List<string>(tokens.Length);
@@ -7527,8 +7544,8 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
             canhBao.Add(
                 $"\"{item.SanPham.TenSanPham}\" chưa có số tồn trong kho, tồn sau khi bán = {tonSau:N0}.");
         else if (tonSau < 0)
-            canhBao.Add(
-                $"\"{item.SanPham.TenSanPham}\" bán vượt tồn kho (còn {tonTruoc:N0}, bán {item.SoLuong:N0}).");
+            throw new InvalidOperationException(
+                $"Sản phẩm \"{item.SanPham.TenSanPham}\" không đủ tồn kho để thanh toán (tồn kho thực tế: {tonTruoc:N0}, yêu cầu bán: {item.SoLuong:N0}). Giao dịch đã hủy.");
 
         await connection.ExecuteAsync(
             upsertTonSql,

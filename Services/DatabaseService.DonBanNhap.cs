@@ -166,4 +166,27 @@ public sealed partial class DatabaseService
             """,
             new { CartId = cartId, HoaDonId = hoaDonId, UserId = Session.CurrentUser?.Id ?? 0u });
     }
+
+    /// <summary>
+    /// Lấy số lượng tồn kho thực tế mới nhất từ database cho một sản phẩm tại chi nhánh hiện tại.
+    /// Dùng để kiểm tra tồn kho tại thời điểm thanh toán tránh bán vượt tồn giữa nhiều đơn hàng.
+    /// </summary>
+    public async Task<decimal> LayTonKhoThucTeAsync(uint sanPhamId)
+    {
+        if (sanPhamId == 0)
+            return 0m;
+
+        var branchId = Session.CurrentUser?.ChiNhanhId ?? 1;
+        await using var connection = await OpenAsync();
+
+        return await connection.ExecuteScalarAsync<decimal>(
+            """
+            SELECT COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0)
+            FROM san_pham sp
+            LEFT JOIN ton_kho tk ON tk.san_pham_id = sp.id AND tk.chi_nhanh_id = @ChiNhanhId
+            WHERE sp.id = @SanPhamId
+            LIMIT 1;
+            """,
+            new { SanPhamId = sanPhamId, ChiNhanhId = branchId });
+    }
 }

@@ -49,11 +49,26 @@ public sealed class SaleCartDraftState
     public decimal DiscountAmount { get; set; }
     public decimal TienKhachDua { get; set; }
     public string PhuongThucThanhToan { get; set; } = "Tiền mặt";
+    public decimal Subtotal { get; set; }
+    public decimal TotalAmount { get; set; }
 
     public uint? HoaDonGocBiHuyId { get; set; }
     public string? MaHoaDonGocBiHuy { get; set; }
 
-    public DateTime NgayTao { get; set; } = DateTime.Now;
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public DateTime UpdatedAt { get; set; } = DateTime.Now;
+
+    public DateTime NgayTao
+    {
+        get => CreatedAt;
+        set => CreatedAt = value;
+    }
+
+    public DateTime NgayCapNhat
+    {
+        get => UpdatedAt;
+        set => UpdatedAt = value;
+    }
 
     public List<SaleCartDraftLine> Lines { get; set; } = new();
 
@@ -121,7 +136,8 @@ public sealed partial class SaleCartTab : ObservableObject
     {
         SoThuTu = State.SoThuTu;
         TenKhachHang = string.IsNullOrWhiteSpace(State.TenKhachHang) ? "Khách lẻ" : State.TenKhachHang;
-        SoLuongSanPham = State.Lines.Count;
+        var totalQty = (int)Math.Round(State.Lines.Sum(l => l.SoLuong));
+        SoLuongSanPham = totalQty > 0 ? totalQty : State.Lines.Count;
         var subtotal = 0m;
         foreach (var line in State.Lines)
             subtotal += line.ThanhTien;
@@ -131,5 +147,7 @@ public sealed partial class SaleCartTab : ObservableObject
             : Math.Clamp(State.DiscountInput, 0, subtotal);
 
         TongTien = Math.Max(0m, subtotal - discount);
+        State.Subtotal = subtotal;
+        State.TotalAmount = TongTien;
     }
 }

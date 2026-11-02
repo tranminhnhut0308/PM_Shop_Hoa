@@ -1889,7 +1889,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         // Mỗi khi người dùng chọn một mục trong ComboBox, tự động gọi hàm làm mới danh sách
         _ = RefreshProductsAsync();
-        _ = TimKiemHoaBanAsync();
+        _ = TimKiemHoaBanNgayAsync();
     }
 
     [ObservableProperty]
@@ -3478,13 +3478,13 @@ public partial class MainWindowViewModel : ObservableObject
         {
             // Debounce 250ms khi gõ liên tục
             await Task.Delay(250, cts.Token);
-            if (cts.Token.IsCancellationRequested || IsSaleSearchResultsClosed)
+            if (cts.Token.IsCancellationRequested)
                 return;
 
             var search = (keyword ?? SaleSearchText ?? "").Trim();
             var products = await LaySanPhamChoBanHangAsync(search);
 
-            if (cts.Token.IsCancellationRequested || IsSaleSearchResultsClosed)
+            if (cts.Token.IsCancellationRequested)
                 return;
 
             ApDungKetQuaTimKiemBanHang(products, search);
@@ -3513,25 +3513,27 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task<IReadOnlyList<SanPham>> LaySanPhamChoBanHangAsync(string search)
     {
-        var products = await _db.GetSanPhamAsync(search);
+        uint? nhomId = SelectedNhomSanPham?.Id > 0 ? SelectedNhomSanPham.Id : null;
+        var products = await _db.GetSanPhamAsync(search, nhomId);
 
-        // Lọc theo nhóm sản phẩm nếu có
-        if (SelectedNhomSanPham != null && SelectedNhomSanPham.Id > 0)
+        // Lọc theo nhóm sản phẩm nếu có (hỗ trợ trường hợp Id đặc biệt hoặc fallback)
+        if (nhomId.HasValue)
         {
-            if (SelectedNhomSanPham.Id == 999999)
+            if (nhomId.Value == 999999)
             {
                 products = products.Where(p => p.NhomSanPhamId == null || p.NhomSanPhamId == 0).ToList();
             }
             else
             {
-                products = products.Where(p => p.NhomSanPhamId == SelectedNhomSanPham.Id).ToList();
+                products = products.Where(p => p.NhomSanPhamId == nhomId.Value).ToList();
             }
         }
 
-        // Sắp xếp ưu tiên chính xác theo ProductSearchHelper
+        // Đảm bảo chỉ trả về các sản phẩm thực sự khớp từ khóa và sắp xếp theo độ ưu tiên
         if (!string.IsNullOrWhiteSpace(search))
         {
             products = products
+                .Where(p => ProductSearchHelper.KhopTimKiem(search, p.MaSanPham, p.MaVach, p.TenSanPham))
                 .OrderBy(p => ProductSearchHelper.TinhDiemUuTien(search, p.MaSanPham, p.MaVach, p.TenSanPham))
                 .ThenBy(p => p.TenSanPham)
                 .ToList();
@@ -3560,11 +3562,10 @@ public partial class MainWindowViewModel : ObservableObject
             : null;
 
     public bool HienThiKetQuaTimKiemBanHang =>
-        !IsSaleSearchResultsClosed && ProductSearchResults.Count > 0;
+        ProductSearchResults.Count > 0;
 
     public bool HienThiThongBaoKhongTimThayBanHang =>
-        !IsSaleSearchResultsClosed
-        && ProductSearchResults.Count == 0
+        ProductSearchResults.Count == 0
         && !string.IsNullOrWhiteSpace(SaleSearchText);
 
     public bool KetQuaBanHangKhopTuKhoa(string? keyword) =>
@@ -3722,14 +3723,7 @@ public partial class MainWindowViewModel : ObservableObject
         // TẢI DANH SÁCH SẢN PHẨM KHI MỞ BÁN HÀNG
         try
         {
-            var products = await _db.GetSanPhamAsync(SaleSearchText);
-
-            _saleSearchKeywordDaTim = (SaleSearchText ?? "").Trim();
-            IsSaleSearchResultsClosed = false;
-
-            ProductSearchResults.Clear();
-            foreach (var product in products)
-                ProductSearchResults.Add(product);
+            await TimKiemHoaBanNgayAsync(SaleSearchText);
         }
         catch (Exception ex)
         {
@@ -3959,6 +3953,7 @@ public partial class MainWindowViewModel : ObservableObject
             SaleSubtotal - SaleDiscountAmount);
 
         RecalculatePayment();
+        ScheduleSaleCartAutoSave();
     }
 
     // ============================================================
@@ -6119,6 +6114,26 @@ public partial class MainWindowViewModel : ObservableObject
             StatusMessage =
                 $"Số lượng của \"{soLuongSai.SanPham.TenSanPham}\" phải lớn hơn 0.";
             return;
+        }
+
+        // Kiểm tra tồn kho thực tế từ Database tại thời điểm thanh toán để tránh bán vượt tồn
+        // (đặc biệt khi nhiều tab đơn hàng cùng chứa sản phẩm hoặc sản phẩm vừa bán ở máy/đơn khác)
+        foreach (var item in SaleCart)
+        {
+            var tonThucTe = await _db.LayTonKhoThucTeAsync(item.SanPham.Id);
+            item.SanPham.TonKho = tonThucTe;
+            item.SanPham.TonKhoExcel = tonThucTe;
+
+            if (item.SoLuong > tonThucTe)
+            {
+                item.SoLuong = Math.Max(1, tonThucTe);
+                RecalculateSaleTotal();
+
+                StatusMessage =
+                    $"⚠️ Sản phẩm '{item.SanPham.TenSanPham}' hiện chỉ còn tồn {tonThucTe:N0} trong kho. " +
+                    "Đã điều chỉnh số lượng. Kiểm tra lại rồi bấm Thanh toán.";
+                return;
+            }
         }
 
         var vuotTon = SaleCart.FirstOrDefault(x => x.SoLuong > x.SanPham.TonKho);

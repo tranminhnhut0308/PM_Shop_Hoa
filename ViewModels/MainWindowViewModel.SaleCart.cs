@@ -187,6 +187,10 @@ public sealed partial class MainWindowViewModel
         state.DiscountInput = SaleDiscountInput;
         state.DiscountAmount = SaleDiscountAmount;
         state.TienKhachDua = TienKhachDua;
+        state.PhuongThucThanhToan = "Tiền mặt";
+        state.Subtotal = SaleSubtotal;
+        state.TotalAmount = SaleTotal;
+        state.UpdatedAt = DateTime.Now;
         state.HoaDonGocBiHuyId = _hoaDonGocBiHuyId > 0 ? (uint)_hoaDonGocBiHuyId : null;
         state.MaHoaDonGocBiHuy = _maHoaDonGocBiHuy;
 
@@ -310,7 +314,8 @@ public sealed partial class MainWindowViewModel
 
         // Cập nhật tóm tắt tab đang active ngay lập tức để header hiển thị đúng
         ActiveSaleCartTab.TenKhachHang = string.IsNullOrWhiteSpace(SaleCustomerName) ? "Khách lẻ" : SaleCustomerName;
-        ActiveSaleCartTab.SoLuongSanPham = SaleCart.Count;
+        var totalQty = (int)Math.Round(SaleCart.Sum(i => i.SoLuong));
+        ActiveSaleCartTab.SoLuongSanPham = totalQty > 0 ? totalQty : SaleCart.Count;
         ActiveSaleCartTab.TongTien = SaleTotal;
 
         _saleCartDirty = true;
@@ -369,6 +374,32 @@ public sealed partial class MainWindowViewModel
         }
     }
 
+    /// <summary>
+    /// Lưu draft riêng cho một tab cụ thể (dùng khi chuyển tab hoặc tạo tab mới để không nhầm dữ liệu).
+    /// </summary>
+    public async Task<bool> LuuDraftCuaTabAsync(SaleCartTab tab)
+    {
+        if (tab is null || !_saleCartSessionReady)
+            return true;
+
+        var state = tab.State;
+        var json = JsonSerializer.Serialize(state);
+        var seq = ++_saleCartSeq;
+        var empty = state.IsEmpty;
+        var tongTien = tab.TongTien;
+
+        try
+        {
+            await GhiDonBanNhapAsync(state, json, seq, empty, tongTien);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Lỗi lưu nháp đơn bán " + state.CartId, ex);
+            return false;
+        }
+    }
+
     private async Task GhiDonBanNhapAsync(SaleCartDraftState state, string json, long seq, bool empty, decimal tongTien)
     {
         await _saleCartSaveLock.WaitAsync();
@@ -414,8 +445,13 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        // Lưu giỏ hàng đang mở trước khi chuyển sang giỏ mới
-        _ = FlushSaleCartDraftAsync();
+        // Chụp đồng bộ dữ liệu của đơn hiện tại trước khi tạo đơn mới
+        if (ActiveSaleCartTab is { } oldTab)
+        {
+            ChupDonBanDangMo(oldTab);
+            _saleCartDirty = false;
+            _ = LuuDraftCuaTabAsync(oldTab);
+        }
 
         var soThuTu = SaleCartTabs.Count == 0 ? 1 : SaleCartTabs.Max(t => t.State.SoThuTu) + 1;
         var tab = TaoCartTab(new SaleCartDraftState { SoThuTu = soThuTu });
@@ -435,8 +471,14 @@ public sealed partial class MainWindowViewModel
         if (!SaleCartTabs.Contains(tab))
             return;
 
-        // Chụp giỏ hàng cũ và nạp giỏ hàng mới
-        _ = FlushSaleCartDraftAsync();
+        // Chụp đồng bộ dữ liệu của đơn hiện tại trước khi chuyển đổi
+        if (ActiveSaleCartTab is { } oldTab)
+        {
+            ChupDonBanDangMo(oldTab);
+            _saleCartDirty = false;
+            _ = LuuDraftCuaTabAsync(oldTab);
+        }
+
         KichHoatCartTab(tab);
     }
 
@@ -454,9 +496,9 @@ public sealed partial class MainWindowViewModel
         {
             var confirmed = await ShowConfirmationAsync(
                 "Đóng giỏ hàng",
-                $"Đóng \"{tab.TieuDe}\"? Dữ liệu chưa thanh toán của giỏ hàng này sẽ bị xóa.",
-                "Đóng giỏ hàng",
-                "Hủy");
+                $"Đóng \"{tab.TieuDe}\"? Dữ liệu chưa thanh toán của giỏ hàng này sẽ bị hủy.",
+                "Hủy đơn này",
+                "Tiếp tục đơn");
 
             if (!confirmed)
                 return;

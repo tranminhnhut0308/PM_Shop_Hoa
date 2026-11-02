@@ -350,6 +350,26 @@
       <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
     </Style>
 
+    <Style Selector="Button.cartAddTabBtn">
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="BorderBrush" Value="#0A8C78" />
+      <Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.cartAddTabBtn /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="BorderBrush" Value="#0A8C78" />
+      <Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="Button.cartAddTabBtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#E6F7F3" />
+      <Setter Property="BorderBrush" Value="#076B5C" />
+    </Style>
+
 
     <Style Selector="Border.card">
       <Setter Property="Background" Value="White" />
@@ -1874,49 +1894,61 @@
           <!-- Hàng 2: Thanh Tab nhiều đơn hàng (Multi-cart Tabs) -->
           <Border Background="#F4F7F6" CornerRadius="10" Padding="6,4" BorderBrush="#D8E5E0" BorderThickness="1">
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-              <ItemsControl ItemsSource="{Binding SaleCartTabs}">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="6" />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="models:SaleCartTab">
-                    <Border Classes="cartTabItem" Classes.active="{Binding IsActive}" Margin="0,0,6,0">
-                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" VerticalAlignment="Center">
-                        <Button Background="Transparent"
-                                BorderThickness="0"
-                                Padding="0"
-                                HorizontalAlignment="Stretch"
-                                VerticalAlignment="Stretch"
-                                HorizontalContentAlignment="Left"
-                                Cursor="Hand"
-                                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChuyenDonBanCommand}"
-                                CommandParameter="{Binding}">
-                          <StackPanel Spacing="2">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                              <TextBlock Text="{Binding TieuDe}" Classes="cartTitle" FontSize="12.5" />
-                              <Border Classes="cartBadge" CornerRadius="8" Padding="5,1"
-                                      IsVisible="{Binding CoSanPham}">
-                                <TextBlock Text="{Binding SoLuongSanPham}" FontSize="10" FontWeight="Bold" />
-                              </Border>
+              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <ItemsControl ItemsSource="{Binding SaleCartTabs}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="6" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="models:SaleCartTab">
+                      <Border Classes="cartTabItem" Classes.active="{Binding IsActive}" Margin="0,0,6,0">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" VerticalAlignment="Center">
+                          <Button Background="Transparent"
+                                  BorderThickness="0"
+                                  Padding="0"
+                                  HorizontalAlignment="Stretch"
+                                  VerticalAlignment="Stretch"
+                                  HorizontalContentAlignment="Left"
+                                  Cursor="Hand"
+                                  Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChuyenDonBanCommand}"
+                                  CommandParameter="{Binding}">
+                            <StackPanel Spacing="2">
+                              <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="{Binding TieuDe}" Classes="cartTitle" FontSize="12.5" />
+                                <Border Classes="cartBadge" CornerRadius="8" Padding="5,1"
+                                        IsVisible="{Binding CoSanPham}">
+                                  <TextBlock Text="{Binding SoLuongSanPham}" FontSize="10" FontWeight="Bold" />
+                                </Border>
+                              </StackPanel>
+                              <TextBlock Text="{Binding MoTaNgan}" Classes="cartSub" FontSize="10.5" MaxWidth="170" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
-                            <TextBlock Text="{Binding MoTaNgan}" Classes="cartSub" FontSize="10.5" MaxWidth="170" TextTrimming="CharacterEllipsis" />
-                          </StackPanel>
-                        </Button>
+                          </Button>
 
-                        <Button Grid.Column="1"
-                                Classes="cartCloseBtn"
-                                Content="✕"
-                                ToolTip.Tip="Đóng giỏ hàng này (Ctrl+W)"
-                                VerticalAlignment="Center"
-                                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).DongDonBanCommand}"
-                                CommandParameter="{Binding}" />
-                      </Grid>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
+                          <Button Grid.Column="1"
+                                  Classes="cartCloseBtn"
+                                  Content="✕"
+                                  ToolTip.Tip="Đóng hoặc hủy đơn này (Ctrl+W)"
+                                  VerticalAlignment="Center"
+                                  Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).DongDonBanCommand}"
+                                  CommandParameter="{Binding}" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Nút + Tạo đơn theo phong cách POS KiotViet -->
+                <Button Classes="cartAddTabBtn"
+                        Command="{Binding TaoDonBanMoiCommand}"
+                        ToolTip.Tip="Tạo thêm đơn hàng mới (Ctrl+N)">
+                  <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                    <TextBlock Text="＋" FontWeight="Bold" FontSize="14" Foreground="#0A8C78" VerticalAlignment="Center" />
+                    <TextBlock Text="Tạo đơn" FontWeight="SemiBold" FontSize="12" Foreground="#0A8C78" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
             </ScrollViewer>
           </Border>
         </Grid>

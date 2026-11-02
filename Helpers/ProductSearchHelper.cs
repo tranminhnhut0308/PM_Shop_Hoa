@@ -114,19 +114,51 @@ public static class ProductSearchHelper
     }
 
     /// <summary>
+    /// Kiểm tra xem sản phẩm có khớp với từ khóa tìm kiếm hay không.
+    /// Nếu từ khóa rỗng -> luôn true.
+    /// Nếu có từ khóa -> tất cả token từ khóa phải có mặt trong tên, mã hàng hoặc mã vạch (AND tokens).
+    /// </summary>
+    public static bool KhopTimKiem(
+        string? rawKeyword,
+        string? maHang,
+        string? maVach,
+        string? tenHang)
+    {
+        if (string.IsNullOrWhiteSpace(rawKeyword))
+            return true;
+
+        var tokens = TachTuKhoa(rawKeyword);
+        if (tokens.Length == 0)
+            return true;
+
+        var normMa = ChuanHoa(maHang);
+        var normVach = ChuanHoa(maVach);
+        var normTen = ChuanHoa(tenHang);
+
+        foreach (var token in tokens)
+        {
+            if (!normTen.Contains(token, StringComparison.OrdinalIgnoreCase) &&
+                !normMa.Contains(token, StringComparison.OrdinalIgnoreCase) &&
+                !normVach.Contains(token, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Chấm điểm độ ưu tiên sắp xếp cho một sản phẩm trong bộ nhớ C#.
     /// Điểm càng nhỏ thì độ ưu tiên càng cao (0 là cao nhất).
     /// Thứ bậc:
-    /// 1. Khớp chính xác mã hàng (Điểm 10)
-    /// 2. Khớp chính xác mã vạch (Điểm 20)
-    /// 3. Khớp chính xác tên sản phẩm (Điểm 30)
-    /// 4. Tên sản phẩm bắt đầu bằng từ khóa (Điểm 40)
-    /// 5. Mã hàng hoặc mã vạch bắt đầu bằng từ khóa (Điểm 50)
-    /// 6. Tên sản phẩm chứa nguyên cụm từ khóa (Điểm 60)
-    ///    - Nếu xuất hiện tại ranh giới từ (word boundary): Điểm 60
-    ///    - Nếu là chuỗi con giữa từ: Điểm 65
-    /// 7. Khớp tất cả các từ trong từ khóa (Điểm 70..80 tùy số từ liền kề)
-    /// 8. Khớp một phần hoặc mặc định (Điểm 100)
+    /// 1. Khớp chính xác toàn bộ tên sản phẩm (Điểm 10), khớp mã hàng (Điểm 12), khớp mã vạch (Điểm 15)
+    /// 2. Khớp chính xác một phần tên sản phẩm:
+    ///    - Tên sản phẩm bắt đầu bằng cụm từ khóa (Điểm 30)
+    ///    - Cụm từ khóa xuất hiện nguyên vẹn trong tên (ranh giới từ: Điểm 40, chuỗi con: Điểm 50)
+    ///    - Mã hàng hoặc mã vạch bắt đầu bằng từ khóa (Điểm 45)
+    /// 3. Khớp đầy đủ các từ khóa nhưng khác thứ tự (Điểm 60)
+    /// 4. Khớp một phần từ khóa (Điểm 80)
     /// </summary>
     public static int TinhDiemUuTien(
         string? rawKeyword,
@@ -142,29 +174,25 @@ public static class ProductSearchHelper
         var normVach = ChuanHoa(maVach);
         var normTen = ChuanHoa(tenHang);
 
-        // 1. Khớp chính xác mã hàng
-        if (normMa == normQuery)
-            return 10;
-
-        // 2. Khớp chính xác mã vạch
-        if (!string.IsNullOrEmpty(normVach) && normVach == normQuery)
-            return 20;
-
-        // 3. Khớp chính xác tên sản phẩm
+        // 1. Khớp chính xác toàn bộ tên sản phẩm hoặc mã
         if (normTen == normQuery)
+            return 10;
+        if (normMa == normQuery)
+            return 12;
+        if (!string.IsNullOrEmpty(normVach) && normVach == normQuery)
+            return 15;
+
+        // 2. Khớp chính xác một phần tên sản phẩm (bắt đầu bằng cụm từ khóa)
+        if (normTen.StartsWith(normQuery, StringComparison.OrdinalIgnoreCase))
             return 30;
 
-        // 4. Tên sản phẩm bắt đầu bằng cụm từ khóa
-        if (normTen.StartsWith(normQuery, StringComparison.OrdinalIgnoreCase))
-            return 40;
-
-        // 5. Mã hàng hoặc mã vạch bắt đầu bằng từ khóa
+        // Mã hàng hoặc mã vạch bắt đầu bằng từ khóa
         if (normMa.StartsWith(normQuery, StringComparison.OrdinalIgnoreCase))
-            return 50;
+            return 45;
         if (!string.IsNullOrEmpty(normVach) && normVach.StartsWith(normQuery, StringComparison.OrdinalIgnoreCase))
-            return 55;
+            return 48;
 
-        // 6. Khớp nguyên cụm từ trong tên sản phẩm
+        // Cụm từ khóa xuất hiện nguyên vẹn trong tên sản phẩm
         var idx = normTen.IndexOf(normQuery, StringComparison.OrdinalIgnoreCase);
         if (idx >= 0)
         {
@@ -174,13 +202,13 @@ public static class ProductSearchHelper
             var isWordBoundaryEnd = endIdx == normTen.Length || char.IsWhiteSpace(normTen[endIdx]);
 
             if (isWordBoundaryStart && isWordBoundaryEnd)
-                return 60; // Khớp nguyên từ hoàn chỉnh (ví dụ từ "pháp" trong "Hồng Đỏ Pháp")
+                return 40; // Khớp nguyên từ hoàn chỉnh (ví dụ từ "pháp" trong "Hồng Đỏ Pháp")
             if (isWordBoundaryStart)
-                return 62; // Bắt đầu từ một từ
-            return 65;     // Chuỗi con
+                return 42; // Bắt đầu từ một từ
+            return 50;     // Chuỗi con
         }
 
-        // 7. Khớp tất cả các từ trong từ khóa (AND tokens)
+        // 3. Khớp tất cả các từ trong từ khóa nhưng khác thứ tự (AND tokens)
         var tokens = TachTuKhoa(rawKeyword);
         if (tokens.Length > 1)
         {
@@ -188,7 +216,8 @@ public static class ProductSearchHelper
             foreach (var token in tokens)
             {
                 if (!normTen.Contains(token, StringComparison.OrdinalIgnoreCase) &&
-                    !normMa.Contains(token, StringComparison.OrdinalIgnoreCase))
+                    !normMa.Contains(token, StringComparison.OrdinalIgnoreCase) &&
+                    !normVach.Contains(token, StringComparison.OrdinalIgnoreCase))
                 {
                     allMatch = false;
                     break;
@@ -196,7 +225,21 @@ public static class ProductSearchHelper
             }
 
             if (allMatch)
-                return 70;
+                return 60;
+        }
+
+        // 4. Khớp một phần từ khóa
+        if (tokens.Length > 0)
+        {
+            foreach (var token in tokens)
+            {
+                if (normTen.Contains(token, StringComparison.OrdinalIgnoreCase) ||
+                    normMa.Contains(token, StringComparison.OrdinalIgnoreCase) ||
+                    normVach.Contains(token, StringComparison.OrdinalIgnoreCase))
+                {
+                    return 80;
+                }
+            }
         }
 
         return 100;

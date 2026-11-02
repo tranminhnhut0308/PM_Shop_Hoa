@@ -11,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
 using ShopHoa.Services;
 using ShopHoa.ViewModels;
@@ -21,7 +22,6 @@ public partial class MainWindow : Window
     private bool _formattingDiscount;
     private bool _formattingCash;
     private HelpWindow? _helpWindow;
-    private bool _boQuaTimKiemBanHang;
     private bool _boQuaTimKiemNhapHang;
     private bool _dangThemSanPhamBanHang;
     private bool _dangThemSanPhamNhapHang;
@@ -164,10 +164,6 @@ public partial class MainWindow : Window
     private void OnSaleSearchTextChanged(object? sender, TextChangedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel viewModel)
-            return;
-
-        // Bỏ qua thay đổi do chính chương trình xóa ô tìm kiếm sau khi thêm hàng.
-        if (_boQuaTimKiemBanHang)
             return;
 
         var text = (sender as TextBox)?.Text ?? string.Empty;
@@ -1366,10 +1362,11 @@ public partial class MainWindow : Window
                 return;
 
             case Key.Escape:
-                if (viewModel.HienThiKetQuaTimKiemBanHang
-                    || viewModel.HienThiThongBaoKhongTimThayBanHang)
+                if (!string.IsNullOrWhiteSpace(textBox.Text))
                 {
-                    viewModel.DongKetQuaTimKiemBanHang();
+                    textBox.Text = string.Empty;
+                    viewModel.SaleSearchText = string.Empty;
+                    _ = viewModel.TimKiemHoaBanNgayAsync(string.Empty);
                     e.Handled = true;
                 }
                 return;
@@ -1433,24 +1430,9 @@ public partial class MainWindow : Window
             if (!daThem)
                 return;
 
-            // Xóa ô tìm kiếm, đóng danh sách để Enter kế tiếp không thêm trùng.
-            _boQuaTimKiemBanHang = true;
-            try
-            {
-                viewModel.SaleSearchText = string.Empty;
-                textBox.Text = string.Empty;
-            }
-            finally
-            {
-                _boQuaTimKiemBanHang = false;
-            }
-
-            viewModel.HuyTimKiemBanHang();
-            viewModel.DongKetQuaTimKiemBanHang();
-            viewModel.ProductSearchResults.Clear();
-
-            textBox.Focus();
-            textBox.CaretIndex = 0;
+            // Giữ nguyên danh sách sản phẩm bên trái và từ khóa tìm kiếm theo yêu cầu.
+            // Chọn toàn bộ text trong ô tìm kiếm để người dùng có thể quét barcode mới hoặc gõ từ khóa mới ngay lập tức.
+            textBox.SelectAll();
         }
         finally
         {
@@ -1616,31 +1598,9 @@ public partial class MainWindow : Window
 
     private void OnThemSanPhamBanHangClicked(object? sender, RoutedEventArgs e)
     {
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-        {
-            var textBox = this.FindControl<TextBox>("SaleSearchBox");
-            if (textBox != null)
-            {
-                _boQuaTimKiemBanHang = true;
-                try
-                {
-                    if (DataContext is MainWindowViewModel vm)
-                    {
-                        vm.SaleSearchText = string.Empty;
-                        vm.HuyTimKiemBanHang();
-                        vm.DongKetQuaTimKiemBanHang();
-                        vm.ProductSearchResults.Clear();
-                    }
-                    textBox.Text = string.Empty;
-                }
-                finally
-                {
-                    _boQuaTimKiemBanHang = false;
-                }
-                textBox.Focus();
-                textBox.CaretIndex = 0;
-            }
-        }, Avalonia.Threading.DispatcherPriority.Input);
+        // Khi chọn sản phẩm để thêm vào giỏ hàng:
+        // Đã có ThemVaoGioHangCommand xử lý thêm/tăng số lượng trong giỏ hàng.
+        // Giữ nguyên danh sách sản phẩm bên trái, vị trí cuộn và nội dung ô tìm kiếm.
     }
 
     private void OnThemSanPhamNhapHangClicked(object? sender, RoutedEventArgs e)
@@ -1727,5 +1687,21 @@ public partial class MainWindow : Window
         tb.Text = v == Math.Truncate(v)
             ? ((long)v).ToString()
             : v.ToString("0.##");
+    }
+
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        if (DataContext is MainWindowViewModel vm && vm.HasPendingSaleCartDraft)
+        {
+            try
+            {
+                vm.FlushSaleCartDraftAsync(force: true).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                ShopHoa.Helpers.SafeLog.WriteError("Lỗi lưu nháp đơn bán khi đóng ứng dụng", ex);
+            }
+        }
     }
 }
