@@ -53,6 +53,9 @@ public sealed partial class PhieuNhapHang : ObservableObject
 
     public string? MaDatHangNhap { get; set; }
 
+    /// <summary>Đã từng có người chỉnh sửa thông tin phiếu nhập.</summary>
+    public bool CoLichSuThayDoi { get; set; }
+
     /// <summary>
     /// Phương thức thanh toán khi nhập hàng:
     /// TIEN_MAT = Tiền mặt (Quỹ tiền mặt),

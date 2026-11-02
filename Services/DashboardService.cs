@@ -29,12 +29,12 @@ public sealed class DashboardService
     }
 
     /// <summary>
-    /// Khoảng thời gian được tính ở C# rồi truyền mốc <c>TuNgay</c>/<c>DenNgay</c>
-    /// (khoảng nửa vờng, luôn kín) xuống SQL. Nhờ vậy chỉ có đúng một dạng điều kiện
-    /// thời gian duy nhất cho mọi truy vấn, dễ kiểm chứng và không phụ thuộc
-    /// múi giờ của database.
+    /// Khoảng thời gian được tính ở C# rồi truyền mốc <c>TuNgay</c>/<c>DenKeTiep</c>
+    /// (khoảng nửa mở: TuNgay &lt;= thoi_gian &lt; DenKeTiep) xuống SQL.
+    /// Nhờ vậy chỉ có đúng một dạng điều kiện thời gian duy nhất cho mọi truy vấn,
+    /// bảo đảm không bỏ sót giao dịch và không phụ thuộc múi giờ của database.
     /// </summary>
-    public static (DateTime TuNgay, DateTime DenNgay) TinhKhoang(
+    public static (DateTime TuNgay, DateTime DenKeTiep, DateTime DenNgayHienThi) TinhKhoang(
         string khoangThoiGian,
         DateTime? tuNgayTuChon,
         DateTime? denNgayTuChon,
@@ -44,27 +44,42 @@ public sealed class DashboardService
 
         return khoangThoiGian switch
         {
-            TongQuanKhoangThoiGian.BayNgay => (dauNgay.AddDays(-6), dauNgay.AddDays(1).AddTicks(-1)),
+            TongQuanKhoangThoiGian.BayNgay => (
+                dauNgay.AddDays(-6),
+                dauNgay.AddDays(1),
+                dauNgay),
 
             TongQuanKhoangThoiGian.ThangNay => (
                 new DateTime(homNay.Year, homNay.Month, 1),
-                dauNgay.AddDays(1).AddTicks(-1)),
+                new DateTime(homNay.Year, homNay.Month, 1).AddMonths(1),
+                new DateTime(homNay.Year, homNay.Month, 1).AddMonths(1).AddDays(-1)),
 
             TongQuanKhoangThoiGian.ThangTruoc => (
                 new DateTime(homNay.Year, homNay.Month, 1).AddMonths(-1),
-                new DateTime(homNay.Year, homNay.Month, 1).AddTicks(-1)),
+                new DateTime(homNay.Year, homNay.Month, 1),
+                new DateTime(homNay.Year, homNay.Month, 1).AddDays(-1)),
 
             TongQuanKhoangThoiGian.NamNay => (
                 new DateTime(homNay.Year, 1, 1),
-                dauNgay.AddDays(1).AddTicks(-1)),
+                new DateTime(homNay.Year + 1, 1, 1),
+                new DateTime(homNay.Year, 12, 31)),
 
-            TongQuanKhoangThoiGian.TuDien => (
-                (tuNgayTuChon ?? dauNgay).Date,
-                (denNgayTuChon ?? dauNgay).Date.AddDays(1).AddTicks(-1)),
+            TongQuanKhoangThoiGian.TuDien => TinhKhoangTuDien(tuNgayTuChon, denNgayTuChon, dauNgay),
 
             // Mặc định = Hôm nay
-            _ => (dauNgay, dauNgay.AddDays(1).AddTicks(-1))
+            _ => (dauNgay, dauNgay.AddDays(1), dauNgay)
         };
+    }
+
+    private static (DateTime TuNgay, DateTime DenKeTiep, DateTime DenNgayHienThi) TinhKhoangTuDien(
+        DateTime? tuNgayTuChon,
+        DateTime? denNgayTuChon,
+        DateTime dauNgay)
+    {
+        var tu = (tuNgayTuChon ?? dauNgay).Date;
+        var den = (denNgayTuChon ?? dauNgay).Date;
+        if (tu > den) (tu, den) = (den, tu);
+        return (tu, den.AddDays(1), den);
     }
 
     /// <summary>
@@ -103,18 +118,20 @@ public sealed class DashboardService
         bool laAdmin = false,
         CancellationToken token = default)
     {
-        var (tuNgay, denNgay) = TinhKhoang(khoangThoiGian, tuNgayTuChon, denNgayTuChon, homNay);
+        var (tuNgay, denKeTiep, denNgayHienThi) = TinhKhoang(khoangThoiGian, tuNgayTuChon, denNgayTuChon, homNay);
 
         var ketQua = new TongQuanDuLieu
         {
-            ThoiGianHienThi = $"{TongQuanDuLieu.NgayHienThi(tuNgay)} – {TongQuanDuLieu.NgayHienThi(denNgay)}"
+            ThoiGianHienThi = tuNgay == denNgayHienThi
+                ? TongQuanDuLieu.NgayHienThi(tuNgay)
+                : $"{TongQuanDuLieu.NgayHienThi(tuNgay)} – {TongQuanDuLieu.NgayHienThi(denNgayHienThi)}"
         };
 
-        // Các nhóm độc lập: chạy song song, tất cả đều lọc theo đúng khoảng [tuNgay, denNgay] đang chọn.
-        var taskBanHangTheoKy = TaiSoLieuBanHangHomNayAsync(tuNgay, denNgay, token);
-        var taskBieuDo = TaiBieuDoDoanhThuAsync(chieuDoanhThu, tuNgay, denNgay, token);
-        var taskTopHang = TaiTopHangBanChayAsync(xepHangTopHang, tuNgay, denNgay, token);
-        var taskTopKhach = TaiTopKhachHangAsync(tuNgay, denNgay, token);
+        // Các nhóm độc lập: chạy song song, tất cả đều lọc theo khoảng nửa mở [tuNgay, denKeTiep).
+        var taskBanHangTheoKy = TaiSoLieuBanHangHomNayAsync(tuNgay, denKeTiep, token);
+        var taskBieuDo = TaiBieuDoDoanhThuAsync(chieuDoanhThu, tuNgay, denKeTiep, denNgayHienThi, token);
+        var taskTopHang = TaiTopHangBanChayAsync(xepHangTopHang, tuNgay, denKeTiep, token);
+        var taskTopKhach = TaiTopKhachHangAsync(tuNgay, denKeTiep, token);
         var taskHoatDongSub = laAdmin ? TaiHoatDongTaiKhoanConAsync(token) : Task.FromResult(new List<TongQuanHoatDongTaiKhoanCon>());
 
         await Task.WhenAll(taskBanHangTheoKy, taskBieuDo, taskTopHang, taskTopKhach, taskHoatDongSub);
@@ -138,7 +155,7 @@ public sealed class DashboardService
         ketQua.TongDoanhThuKyChon = tongDoanhThu;
         ketQua.TongSoHoaDonKyChon = tongSoHoaDon;
         ketQua.BieuDoDoanhThu = bieuDo;
-        DienPhanTichTheoChieu(ketQua, chieuDoanhThu, tuNgay, denNgay, tongDoanhThu, tongSoHoaDon, bieuDo);
+        DienPhanTichTheoChieu(ketQua, chieuDoanhThu, tuNgay, denNgayHienThi, tongDoanhThu, tongSoHoaDon, bieuDo);
 
         ketQua.HoatDongTaiKhoanCon = hoatDongSub;
         ketQua.TopHangBanChay = topHang;
@@ -162,7 +179,7 @@ public sealed class DashboardService
         decimal DaThuChuaGhiNhan,
         decimal ConNoChuaGhiNhan)> TaiSoLieuBanHangHomNayAsync(
         DateTime tuNgay,
-        DateTime denNgay,
+        DateTime denKeTiep,
         CancellationToken token)
     {
         await using var connection = await _taoKetNoi();
@@ -180,7 +197,7 @@ public sealed class DashboardService
         FROM hoa_don_ban_hang hd
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
           AND hd.thoi_gian_ban >= @TuNgay
-          AND hd.thoi_gian_ban <= @DenNgay;
+          AND hd.thoi_gian_ban < @DenKeTiep;
         """;
 
         var row = await connection.QuerySingleAsync<(
@@ -197,7 +214,7 @@ public sealed class DashboardService
                 new
                 {
                     TuNgay = tuNgay,
-                    DenNgay = denNgay
+                    DenKeTiep = denKeTiep
                 },
                 cancellationToken: token));
 
@@ -211,7 +228,8 @@ public sealed class DashboardService
     private async Task<(decimal TongDoanhThu, int TongSoHoaDon, List<TongQuanDiemDoanhThu> Diem)> TaiBieuDoDoanhThuAsync(
         string chieu,
         DateTime tuNgay,
-        DateTime denNgay,
+        DateTime denKeTiep,
+        DateTime denNgayHienThi,
         CancellationToken token)
     {
         await using var connection = await _taoKetNoi();
@@ -234,7 +252,7 @@ public sealed class DashboardService
         FROM hoa_don_ban_hang hd
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
           AND hd.thoi_gian_ban >= @TuNgay
-          AND hd.thoi_gian_ban <= @DenNgay
+          AND hd.thoi_gian_ban < @DenKeTiep
         GROUP BY Bucket
         ORDER BY Bucket
         LIMIT {gioiHanDiem};
@@ -251,7 +269,7 @@ public sealed class DashboardService
                     new
                     {
                         TuNgay = tuNgay,
-                        DenNgay = denNgay
+                        DenKeTiep = denKeTiep
                     },
                     cancellationToken: token))
         ).AsList();
@@ -280,7 +298,7 @@ public sealed class DashboardService
                 diem.Add(new TongQuanDiemDoanhThu
                 {
                     Nhan = $"{gio:D2}:00",
-                    NhanDayDu = $"Khung giờ {gio:D2}:00 – {gio:D2}:59 ({TongQuanDuLieu.NgayHienThi(tuNgay)} – {TongQuanDuLieu.NgayHienThi(denNgay)})",
+                    NhanDayDu = $"Khung giờ {gio:D2}:00 – {gio:D2}:59 ({TongQuanDuLieu.NgayHienThi(tuNgay)} – {TongQuanDuLieu.NgayHienThi(denNgayHienThi)})",
                     DoanhThu = val.DoanhThu,
                     SoHoaDon = val.SoHoaDon,
                     BeRongCotTuyChinh = 46
@@ -307,7 +325,7 @@ public sealed class DashboardService
                 diem.Add(new TongQuanDiemDoanhThu
                 {
                     Nhan = tenThu,
-                    NhanDayDu = $"{tenThu} (trong kỳ {TongQuanDuLieu.NgayHienThi(tuNgay)} – {TongQuanDuLieu.NgayHienThi(denNgay)})",
+                    NhanDayDu = $"{tenThu} (trong kỳ {TongQuanDuLieu.NgayHienThi(tuNgay)} – {TongQuanDuLieu.NgayHienThi(denNgayHienThi)})",
                     DoanhThu = val.DoanhThu,
                     SoHoaDon = val.SoHoaDon,
                     BeRongCotTuyChinh = 82
@@ -316,8 +334,8 @@ public sealed class DashboardService
         }
         else
         {
-            // Theo ngày: hiển thị đầy đủ các ngày trong khoảng (tối đa 62 ngày liên tục),
-            // nếu khoảng dài hơn (như Năm nay) thì hiển thị các ngày có phát sinh + ngày đầu/cuối kỳ.
+            // Theo ngày: hiển thị đầy đủ các ngày liên tục trong khoảng (kể cả các ngày 0đ),
+            // bảo đảm không bỏ sót ngày đầu hoặc ngày cuối và trục thời gian liền mạch.
             var mapNgay = new Dictionary<DateTime, (decimal DoanhThu, int SoHoaDon)>();
             foreach (var r in hangDuLieu)
             {
@@ -327,11 +345,11 @@ public sealed class DashboardService
                 mapNgay[ngay] = (r.TongDoanhThu, r.SoHoaDon);
             }
 
-            var soNgay = Math.Max(1, (int)(denNgay.Date - tuNgay.Date).TotalDays + 1);
-            if (soNgay <= 62)
+            var soNgay = Math.Max(1, (int)(denNgayHienThi.Date - tuNgay.Date).TotalDays + 1);
+            if (soNgay <= 366)
             {
                 var beRong = soNgay == 1 ? 110 : (soNgay <= 7 ? 74 : (soNgay <= 16 ? 56 : 46));
-                for (var d = tuNgay.Date; d <= denNgay.Date; d = d.AddDays(1))
+                for (var d = tuNgay.Date; d <= denNgayHienThi.Date; d = d.AddDays(1))
                 {
                     mapNgay.TryGetValue(d, out var val);
                     var tenThu = TenThuTrongTuan(d.DayOfWeek);
@@ -351,8 +369,8 @@ public sealed class DashboardService
                 if (danhSachNgay.Count == 0)
                 {
                     danhSachNgay.Add(tuNgay.Date);
-                    if (denNgay.Date != tuNgay.Date)
-                        danhSachNgay.Add(denNgay.Date);
+                    if (denNgayHienThi.Date != tuNgay.Date)
+                        danhSachNgay.Add(denNgayHienThi.Date);
                 }
 
                 var beRong = danhSachNgay.Count <= 7 ? 74 : (danhSachNgay.Count <= 16 ? 56 : 48);
@@ -391,7 +409,7 @@ public sealed class DashboardService
         TongQuanDuLieu ketQua,
         string chieu,
         DateTime tuNgay,
-        DateTime denNgay,
+        DateTime denNgayHienThi,
         decimal tongDoanhThu,
         int tongSoHoaDon,
         List<TongQuanDiemDoanhThu> bieuDo)
@@ -452,7 +470,7 @@ public sealed class DashboardService
         }
         else
         {
-            var soNgayTrongKy = Math.Max(1, (int)(denNgay.Date - tuNgay.Date).TotalDays + 1);
+            var soNgayTrongKy = Math.Max(1, (int)(denNgayHienThi.Date - tuNgay.Date).TotalDays + 1);
             ketQua.TieuDeDiemCaoNhat = "NGÀY CAO ĐIỂM NHẤT";
             if (diemMax is not null)
             {
@@ -538,8 +556,8 @@ public sealed class DashboardService
                     nk.thoi_gian AS ThoiGian
                 FROM nhat_ky_hoat_dong nk
                 LEFT JOIN nguoi_dung nd ON nk.nguoi_dung_id = nd.id
-                WHERE LOWER(COALESCE(nk.ten_dang_nhap, nd.ten_dang_nhap, '')) != 'admin'
-                  AND (nk.vai_tro IS NULL OR LOWER(nk.vai_tro) NOT LIKE '%quan_tri%')
+                WHERE LOWER(COALESCE(nk.ten_dang_nhap, nd.ten_dang_nhap, '')) NOT LIKE '%admin%'
+                  AND (nk.vai_tro IS NULL OR (LOWER(nk.vai_tro) NOT LIKE '%quan_tri%' AND LOWER(nk.vai_tro) NOT LIKE '%admin%'))
 
                 UNION ALL
 
@@ -563,8 +581,8 @@ public sealed class DashboardService
                 FROM hoa_don_ban_hang hd
                 INNER JOIN nguoi_dung nd ON hd.nguoi_ban_id = nd.id
                 LEFT JOIN khach_hang kh ON hd.khach_hang_id = kh.id
-                WHERE LOWER(nd.ten_dang_nhap) != 'admin'
-                  AND nd.id NOT IN (SELECT ndvt2.nguoi_dung_id FROM nguoi_dung_vai_tro ndvt2 JOIN vai_tro vt2 ON vt2.id = ndvt2.vai_tro_id WHERE vt2.ma_vai_tro = 'QUAN_TRI')
+                WHERE LOWER(nd.ten_dang_nhap) NOT LIKE '%admin%'
+                  AND nd.id NOT IN (SELECT ndvt2.nguoi_dung_id FROM nguoi_dung_vai_tro ndvt2 JOIN vai_tro vt2 ON vt2.id = ndvt2.vai_tro_id WHERE UPPER(vt2.ma_vai_tro) IN ('QUAN_TRI', 'ADMIN') OR LOWER(vt2.ten_vai_tro) LIKE '%quản trị%' OR LOWER(vt2.ten_vai_tro) LIKE '%admin%')
                   AND hd.ma_hoa_don NOT IN (SELECT COALESCE(ma_chung_tu, '') FROM nhat_ky_hoat_dong WHERE ma_chung_tu IS NOT NULL)
 
                 UNION ALL
@@ -589,8 +607,8 @@ public sealed class DashboardService
                 FROM phieu_nhap_hang pn
                 INNER JOIN nguoi_dung nd ON pn.nguoi_nhap_id = nd.id
                 LEFT JOIN nha_cung_cap ncc ON pn.nha_cung_cap_id = ncc.id
-                WHERE LOWER(nd.ten_dang_nhap) != 'admin'
-                  AND nd.id NOT IN (SELECT ndvt2.nguoi_dung_id FROM nguoi_dung_vai_tro ndvt2 JOIN vai_tro vt2 ON vt2.id = ndvt2.vai_tro_id WHERE vt2.ma_vai_tro = 'QUAN_TRI')
+                WHERE LOWER(nd.ten_dang_nhap) NOT LIKE '%admin%'
+                  AND nd.id NOT IN (SELECT ndvt2.nguoi_dung_id FROM nguoi_dung_vai_tro ndvt2 JOIN vai_tro vt2 ON vt2.id = ndvt2.vai_tro_id WHERE UPPER(vt2.ma_vai_tro) IN ('QUAN_TRI', 'ADMIN') OR LOWER(vt2.ten_vai_tro) LIKE '%quản trị%' OR LOWER(vt2.ten_vai_tro) LIKE '%admin%')
                   AND pn.ma_phieu_nhap NOT IN (SELECT COALESCE(ma_chung_tu, '') FROM nhat_ky_hoat_dong WHERE ma_chung_tu IS NOT NULL)
 
                 UNION ALL
@@ -614,8 +632,8 @@ public sealed class DashboardService
                     pc.thoi_gian_chi AS ThoiGian
                 FROM phieu_chi pc
                 INNER JOIN nguoi_dung nd ON pc.nguoi_thuc_hien_id = nd.id
-                WHERE LOWER(nd.ten_dang_nhap) != 'admin'
-                  AND nd.id NOT IN (SELECT ndvt2.nguoi_dung_id FROM nguoi_dung_vai_tro ndvt2 JOIN vai_tro vt2 ON vt2.id = ndvt2.vai_tro_id WHERE vt2.ma_vai_tro = 'QUAN_TRI')
+                WHERE LOWER(nd.ten_dang_nhap) NOT LIKE '%admin%'
+                  AND nd.id NOT IN (SELECT ndvt2.nguoi_dung_id FROM nguoi_dung_vai_tro ndvt2 JOIN vai_tro vt2 ON vt2.id = ndvt2.vai_tro_id WHERE UPPER(vt2.ma_vai_tro) IN ('QUAN_TRI', 'ADMIN') OR LOWER(vt2.ten_vai_tro) LIKE '%quản trị%' OR LOWER(vt2.ten_vai_tro) LIKE '%admin%')
                   AND pc.ma_phieu_chi NOT IN (SELECT COALESCE(ma_chung_tu, '') FROM nhat_ky_hoat_dong WHERE ma_chung_tu IS NOT NULL)
             ) AS hoat_dong_sub
             ORDER BY ThoiGian DESC
@@ -636,11 +654,13 @@ public sealed class DashboardService
 
     /// <summary>
     /// Top 10 hàng bán chạy — GROUP BY ở tầng database, chỉ trả về đúng 10 dòng.
+    /// Lấy từ chi tiết hóa đơn hợp lệ (trạng thái HOAN_THANH, đã ghi nhận doanh số),
+    /// không tính hóa đơn hủy/nháp.
     /// </summary>
     private async Task<List<TongQuanHangTop>> TaiTopHangBanChayAsync(
         string xepHang,
         DateTime tuNgay,
-        DateTime denNgay,
+        DateTime denKeTiep,
         CancellationToken token)
     {
         await using var connection = await _taoKetNoi();
@@ -655,21 +675,23 @@ public sealed class DashboardService
 
         var sql = $"""
         SELECT
-            ct.san_pham_id AS Id,
-            COALESCE(NULLIF(TRIM(ct.ten_san_pham), ''), 'Sản phẩm đã xoá') AS Ten,
-            COALESCE(NULLIF(TRIM(ct.ma_san_pham), ''), '-') AS TenPhu,
+            COALESCE(ct.san_pham_id, 0) AS Id,
+            COALESCE(NULLIF(TRIM(sp.ten_san_pham), ''), NULLIF(TRIM(ct.ten_san_pham), ''), 'Sản phẩm đã xoá') AS Ten,
+            COALESCE(NULLIF(TRIM(sp.ma_san_pham), ''), NULLIF(TRIM(ct.ma_san_pham), ''), '-') AS TenPhu,
             COALESCE(SUM(ct.so_luong), 0) AS SoLuong,
             COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu,
             COALESCE({cotSapXep}, 0) AS GiaTriXepHang
         FROM chi_tiet_hoa_don_ban_hang ct
         INNER JOIN hoa_don_ban_hang hd
             ON hd.id = ct.hoa_don_id
+        LEFT JOIN san_pham sp
+            ON sp.id = ct.san_pham_id
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
           AND hd.doanh_so_da_ghi_nhan = 1
           AND hd.thoi_gian_ban >= @TuNgay
-          AND hd.thoi_gian_ban <= @DenNgay
-        GROUP BY ct.san_pham_id, Ten, TenPhu
-        ORDER BY {cotSapXep} DESC, ct.ten_san_pham ASC
+          AND hd.thoi_gian_ban < @DenKeTiep
+        GROUP BY COALESCE(ct.san_pham_id, 0), Ten, TenPhu
+        ORDER BY {cotSapXep} DESC, Ten ASC
         LIMIT 10;
         """;
 
@@ -680,7 +702,7 @@ public sealed class DashboardService
                     new
                     {
                         TuNgay = tuNgay,
-                        DenNgay = denNgay
+                        DenKeTiep = denKeTiep
                     },
                     cancellationToken: token))
         ).AsList();
@@ -710,21 +732,21 @@ public sealed class DashboardService
     }
 
     /// <summary>
-    /// Top 10 khách hàng theo doanh thu đã ghi nhận. Nhóm "khách lẻ"
-    /// gộp các hóa đơn không gắn khách hàng, không tạo khách hàng ảo.
+    /// Top 10 khách hàng theo doanh thu đã ghi nhận. Gom tất cả hóa đơn
+    /// khách lẻ vãng lai thành một dòng "Khách lẻ" duy nhất.
     /// </summary>
     private async Task<List<TongQuanHangTop>> TaiTopKhachHangAsync(
         DateTime tuNgay,
-        DateTime denNgay,
+        DateTime denKeTiep,
         CancellationToken token)
     {
         await using var connection = await _taoKetNoi();
 
         const string sql = """
         SELECT
-            COALESCE(kh.id, 0) AS Id,
-            COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS Ten,
-            COALESCE(kh.ma_khach_hang, 'Khách lẻ') AS TenPhu,
+            CASE WHEN hd.khach_hang_id IS NULL OR hd.khach_hang_id = 0 THEN 0 ELSE kh.id END AS Id,
+            CASE WHEN hd.khach_hang_id IS NULL OR hd.khach_hang_id = 0 THEN 'Khách lẻ' ELSE COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') END AS Ten,
+            CASE WHEN hd.khach_hang_id IS NULL OR hd.khach_hang_id = 0 THEN 'Khách vãng lai' ELSE COALESCE(NULLIF(TRIM(kh.ma_khach_hang), ''), '-') END AS TenPhu,
             COUNT(*) AS SoHoaDon,
             COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu
         FROM hoa_don_ban_hang hd
@@ -732,8 +754,8 @@ public sealed class DashboardService
         WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
           AND hd.doanh_so_da_ghi_nhan = 1
           AND hd.thoi_gian_ban >= @TuNgay
-          AND hd.thoi_gian_ban <= @DenNgay
-        GROUP BY kh.id, Ten, TenPhu
+          AND hd.thoi_gian_ban < @DenKeTiep
+        GROUP BY Id, Ten, TenPhu
         ORDER BY DoanhThu DESC, Ten ASC
         LIMIT 10;
         """;
@@ -745,7 +767,7 @@ public sealed class DashboardService
                     new
                     {
                         TuNgay = tuNgay,
-                        DenNgay = denNgay
+                        DenKeTiep = denKeTiep
                     },
                     cancellationToken: token))
         ).AsList();
@@ -773,9 +795,12 @@ public sealed class DashboardService
     }
 
     /// <summary>
-    /// Thống kê kho. "Sắp hết"/"hết hàng" lấy đúng quy tắc đang dùng ở tab Hàng hóa:
-    /// tồn &lt;= 0 là hết hàng, tồn &lt;= ngưỡng tồn tối thiểu là sắp hết.
-    /// Giá trị tồn kho lấy từ <c>ton_kho.so_luong_ton * gia_von_binh_quan</c>.
+    /// Thống kê kho đồng bộ với hệ thống quản lý kho và báo cáo hàng hóa:
+    /// - Tổng mặt hàng: các sản phẩm đang kinh doanh (trang_thai = 1).
+    /// - Hết hàng: tồn &lt;= 0 (tính cả mặt hàng chưa phát sinh bản ghi kho).
+    /// - Sắp hết: tồn &gt; 0 và &lt;= tồn tối thiểu (có cấu hình ton_toi_thieu &gt; 0).
+    /// - Giá trị tồn kho = Tổng (Số lượng tồn quy đổi × Giá vốn đơn vị cơ sở),
+    ///   xử lý an toàn với NULL, âm, và hệ số quy đổi đơn vị tính.
     /// </summary>
     private async Task<TongQuanThongKeKho> TaiThongKeKhoAsync(CancellationToken token)
     {
@@ -785,18 +810,42 @@ public sealed class DashboardService
         SELECT
             (SELECT COUNT(*) FROM san_pham WHERE trang_thai = 1) AS TongSoHangHoa,
             (SELECT COUNT(*)
-             FROM ton_kho tk
-             INNER JOIN san_pham sp ON sp.id = tk.san_pham_id
-             WHERE tk.so_luong_ton > 0
-               AND tk.so_luong_ton <= sp.ton_toi_thieu) AS HangSapHet,
+             FROM san_pham sp
+             LEFT JOIN (
+                 SELECT san_pham_id, SUM(so_luong_ton) AS so_luong_ton
+                 FROM ton_kho
+                 GROUP BY san_pham_id
+             ) tk ON tk.san_pham_id = sp.id
+             WHERE sp.trang_thai = 1
+               AND COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) > 0
+               AND COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) <= sp.ton_toi_thieu
+               AND sp.ton_toi_thieu > 0) AS HangSapHet,
             (SELECT COUNT(*)
-             FROM ton_kho tk
-             INNER JOIN san_pham sp ON sp.id = tk.san_pham_id
-             WHERE tk.so_luong_ton <= 0) AS HangHetHang,
+             FROM san_pham sp
+             LEFT JOIN (
+                 SELECT san_pham_id, SUM(so_luong_ton) AS so_luong_ton
+                 FROM ton_kho
+                 GROUP BY san_pham_id
+             ) tk ON tk.san_pham_id = sp.id
+             WHERE sp.trang_thai = 1
+               AND COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) <= 0) AS HangHetHang,
             (SELECT COUNT(*) FROM khach_hang WHERE trang_thai = 1) AS TongSoKhachHang,
             (SELECT COUNT(*) FROM nha_cung_cap WHERE trang_thai = 1) AS TongSoNhaCungCap,
-            (SELECT COALESCE(SUM(tk.so_luong_ton * tk.gia_von_binh_quan), 0)
-             FROM ton_kho tk) AS GiaTriTonKho;
+            (SELECT COALESCE(SUM(
+                CASE 
+                    WHEN COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) > 0 
+                    THEN (COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) * COALESCE(NULLIF(sp.quy_doi, 0), 1)) 
+                         * COALESCE(NULLIF(tk.gia_von_binh_quan, 0), sp.gia_von, 0)
+                    ELSE 0 
+                END
+             ), 0)
+             FROM san_pham sp
+             LEFT JOIN (
+                 SELECT san_pham_id, SUM(so_luong_ton) AS so_luong_ton, MAX(gia_von_binh_quan) AS gia_von_binh_quan
+                 FROM ton_kho
+                 GROUP BY san_pham_id
+             ) tk ON tk.san_pham_id = sp.id
+             WHERE sp.trang_thai = 1) AS GiaTriTonKho;
         """;
 
         return await connection.QuerySingleAsync<TongQuanThongKeKho>(

@@ -235,11 +235,18 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string saleSearchText = "";
     [ObservableProperty] private int saleSearchSelectedIndex = -1;
     [ObservableProperty] private bool isSaleSearchResultsClosed;
+    [ObservableProperty] private bool isSearchingSaleProducts;
     [ObservableProperty] private bool isSalesPanelVisible;
 
     partial void OnSaleSearchTextChanged(string value)
     {
         OnPropertyChanged(nameof(IsSaleSearchEmpty));
+        OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayBanHang));
+        _ = TimKiemHoaBanAsync(value);
+    }
+
+    partial void OnIsSearchingSaleProductsChanged(bool value)
+    {
         OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayBanHang));
     }
 
@@ -3466,9 +3473,32 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    private long _saleSearchSeq;
+
     [RelayCommand]
-    private async Task TimKiemHoaBanAsync(string? keyword = null)
+    public async Task TimKiemHoaBanAsync(string? keyword = null)
     {
+        await ThucHienTimKiemHoaBanAsync(keyword, debounceMs: 250);
+    }
+
+    /// <summary>Tìm ngay, bỏ qua debounce, dùng khi nhấn Enter hoặc bấm nút Tìm.</summary>
+    public async Task TimKiemHoaBanNgayAsync(string? keyword = null)
+    {
+        await ThucHienTimKiemHoaBanAsync(keyword, debounceMs: 0);
+    }
+
+    [RelayCommand]
+    private async Task MoLaiVaTimKiemHoaBanAsync(string? keyword = null)
+    {
+        MoLaiKetQuaTimKiemBanHang();
+        await TimKiemHoaBanNgayAsync(keyword);
+    }
+
+
+    private async Task ThucHienTimKiemHoaBanAsync(string? keyword, int debounceMs)
+    {
+        var seq = ++_saleSearchSeq;
+
         _saleSearchCts?.Cancel();
         _saleSearchCts?.Dispose();
         var cts = new CancellationTokenSource();
@@ -3476,45 +3506,48 @@ public partial class MainWindowViewModel : ObservableObject
 
         try
         {
-            // Debounce 250ms khi gõ liên tục
-            await Task.Delay(250, cts.Token);
-            if (cts.Token.IsCancellationRequested)
-                return;
+            if (debounceMs > 0)
+            {
+                await Task.Delay(debounceMs, cts.Token);
+                if (cts.Token.IsCancellationRequested || seq != _saleSearchSeq)
+                    return;
+            }
+
+            IsSearchingSaleProducts = true;
+            OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayBanHang));
 
             var search = (keyword ?? SaleSearchText ?? "").Trim();
-            var products = await LaySanPhamChoBanHangAsync(search);
+            var products = await LaySanPhamChoBanHangAsync(search, cts.Token);
 
-            if (cts.Token.IsCancellationRequested)
+            if (cts.Token.IsCancellationRequested || seq != _saleSearchSeq)
                 return;
 
             ApDungKetQuaTimKiemBanHang(products, search);
         }
         catch (OperationCanceledException)
         {
-            // Đã bị hủy do người dùng gõ tiếp
+            // Bị hủy do người dùng tiếp tục gõ từ khóa mới
         }
         catch (Exception ex)
         {
-            StatusMessage = "Lỗi tìm kiếm sản phẩm: " + ex.Message;
+            if (seq == _saleSearchSeq)
+                StatusMessage = "Lỗi tìm kiếm sản phẩm: " + ex.Message;
+        }
+        finally
+        {
+            if (seq == _saleSearchSeq)
+            {
+                IsSearchingSaleProducts = false;
+                OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayBanHang));
+            }
         }
     }
 
-    /// <summary>Tìm ngay, bỏ qua debounce, dùng khi nhấn Enter hoặc bấm nút Tìm.</summary>
-    public async Task TimKiemHoaBanNgayAsync(string? keyword = null)
-    {
-        _saleSearchCts?.Cancel();
-
-        var search = (keyword ?? SaleSearchText ?? "").Trim();
-        var products = await LaySanPhamChoBanHangAsync(search);
-
-        IsSaleSearchResultsClosed = false;
-        ApDungKetQuaTimKiemBanHang(products, search);
-    }
-
-    private async Task<IReadOnlyList<SanPham>> LaySanPhamChoBanHangAsync(string search)
+    private async Task<IReadOnlyList<SanPham>> LaySanPhamChoBanHangAsync(string search, CancellationToken cancellationToken = default)
     {
         uint? nhomId = SelectedNhomSanPham?.Id > 0 ? SelectedNhomSanPham.Id : null;
-        var products = await _db.GetSanPhamAsync(search, nhomId);
+
+        var products = await _db.TimKiemSanPhamBanHangAsync(search, nhomId, limit: 50, cancellationToken: cancellationToken);
 
         // Lọc theo nhóm sản phẩm nếu có (hỗ trợ trường hợp Id đặc biệt hoặc fallback)
         if (nhomId.HasValue)
@@ -3552,6 +3585,8 @@ public partial class MainWindowViewModel : ObservableObject
         SaleSearchSelectedIndex = ProductSearchResults.Count > 0 ? 0 : -1;
         IsSaleSearchResultsClosed = false;
         OnPropertyChanged(nameof(IsSaleSearchEmpty));
+        OnPropertyChanged(nameof(HienThiKetQuaTimKiemBanHang));
+        OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayBanHang));
     }
 
     public bool IsSaleSearchEmpty => ProductSearchResults.Count == 0 && !string.IsNullOrWhiteSpace(SaleSearchText);
@@ -3565,7 +3600,8 @@ public partial class MainWindowViewModel : ObservableObject
         ProductSearchResults.Count > 0;
 
     public bool HienThiThongBaoKhongTimThayBanHang =>
-        ProductSearchResults.Count == 0
+        !IsSearchingSaleProducts
+        && ProductSearchResults.Count == 0
         && !string.IsNullOrWhiteSpace(SaleSearchText);
 
     public bool KetQuaBanHangKhopTuKhoa(string? keyword) =>
@@ -3602,12 +3638,6 @@ public partial class MainWindowViewModel : ObservableObject
         _saleSearchCts?.Cancel();
     }
 
-    [RelayCommand]
-    private async Task MoLaiVaTimKiemHoaBanAsync(string? keyword = null)
-    {
-        MoLaiKetQuaTimKiemBanHang();
-        await TimKiemHoaBanNgayAsync(keyword);
-    }
 
     /// <summary>
     /// Trả về sản phẩm khớp chính xác mã hàng hoặc mã vạch (duy nhất).
@@ -5039,7 +5069,7 @@ public partial class MainWindowViewModel : ObservableObject
                 return;
             }
 
-            var window = new PhieuNhapDetailWindow(detail, ThanhToanTuChiTietPhieuNhapAsync);
+            var window = new PhieuNhapDetailWindow(detail, ThanhToanTuChiTietPhieuNhapAsync, ChinhSuaTuChiTietPhieuNhapAsync);
             await window.ShowDialog(OwnerWindow);
         }
         catch (Exception ex)
@@ -6682,6 +6712,114 @@ public partial class MainWindowViewModel : ObservableObject
             await ShowMessageAsync("Không thanh toán được công nợ", ex.Message, owner);
             SafeLog.WriteError("Loi thanh toan phieu nhap", ex);
             return null;
+        }
+    }
+
+    private async Task<PhieuNhapHangDetail?> ChinhSuaTuChiTietPhieuNhapAsync(
+        PhieuNhapHangDetail detail,
+        Window parentWindow)
+    {
+        var owner = parentWindow ?? OwnerWindow;
+        if (owner is null || detail.PhieuNhapId == 0)
+            return null;
+
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.PurchasesEdit,
+                "Bạn không có quyền chỉnh sửa phiếu nhập hàng."))
+        {
+            return null;
+        }
+
+        try
+        {
+            var request = await _db.GetPhieuNhapDeChinhSuaAsync(detail.PhieuNhapId);
+            if (request is null)
+            {
+                await ShowMessageAsync("Lỗi", "Không tìm thấy dữ liệu phiếu nhập để chỉnh sửa.", owner);
+                return null;
+            }
+
+            var products = await _db.GetSanPhamAsync();
+            var suppliers = await _db.GetSupplierOptionsAsync();
+
+            var editor = new PhieuNhapEditorWindow(request, _db, products, suppliers);
+            var result = await editor.ShowDialog<bool>(owner);
+
+            if (result)
+            {
+                _baoCaoPhieuNhapLoaded = false;
+                _ = RefreshProductsAsync();
+                _ = LoadSupplierPageAsync();
+                _ = LoadBaoCaoPhieuNhapAsync();
+                _ = LamMoiTongQuanNeuDangMoAsync();
+
+                StatusMessage = $"✅ Đã cập nhật thành công phiếu nhập {detail.MaPhieuNhap}.";
+
+                await ShowMessageAsync(
+                    "Thành công",
+                    $"Đã cập nhật phiếu nhập {detail.MaPhieuNhap}.\nTồn kho, công nợ và lịch sử thay đổi đã được ghi nhận.",
+                    owner);
+
+                return await _db.GetPhieuNhapHangDetailAsync(detail.PhieuNhapId);
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi chinh sua phieu nhap", ex);
+            await ShowMessageAsync("Lỗi", $"Không thể chỉnh sửa phiếu nhập: {ex.Message}", owner);
+            return null;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ChinhSuaPhieuNhapAsync(PhieuNhapHang? item)
+    {
+        if (item is null || item.Id == 0 || OwnerWindow is null)
+            return;
+
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.PurchasesEdit,
+                "Bạn không có quyền chỉnh sửa phiếu nhập hàng."))
+        {
+            return;
+        }
+
+        try
+        {
+            var request = await _db.GetPhieuNhapDeChinhSuaAsync(item.Id);
+            if (request is null)
+            {
+                await ShowMessageAsync("Lỗi", "Không tìm thấy dữ liệu phiếu nhập để chỉnh sửa.");
+                return;
+            }
+
+            var products = await _db.GetSanPhamAsync();
+            var suppliers = await _db.GetSupplierOptionsAsync();
+
+            var editor = new PhieuNhapEditorWindow(request, _db, products, suppliers);
+            var result = await editor.ShowDialog<bool>(OwnerWindow);
+
+            if (result)
+            {
+                _baoCaoPhieuNhapLoaded = false;
+                _ = RefreshProductsAsync();
+                _ = LoadSupplierPageAsync();
+                await LoadBaoCaoPhieuNhapAsync();
+                _ = LamMoiTongQuanNeuDangMoAsync();
+
+                StatusMessage = $"✅ Đã cập nhật thành công phiếu nhập {item.MaPhieuNhap}.";
+
+                await ShowMessageAsync(
+                    "Thành công",
+                    $"Đã cập nhật phiếu nhập {item.MaPhieuNhap}.\nTồn kho, công nợ và lịch sử thay đổi đã được ghi nhận.");
+            }
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi chinh sua phieu nhap", ex);
+            await ShowMessageAsync("Lỗi", $"Không thể chỉnh sửa phiếu nhập: {ex.Message}");
         }
     }
 

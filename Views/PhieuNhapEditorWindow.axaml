@@ -1,0 +1,438 @@
+<Window xmlns="https://github.com/avaloniaui"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:models="using:ShopHoa.Models"
+  xmlns:views="using:ShopHoa.Views"
+  x:Class="ShopHoa.Views.PhieuNhapEditorWindow"
+  Title="Chỉnh sửa phiếu nhập hàng"
+  Width="1260"
+  Height="780"
+  MinWidth="1100"
+  MinHeight="640"
+  WindowStartupLocation="CenterOwner"
+  Background="#F8FAF9">
+
+  <Window.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="#263B35" />
+    </Style>
+    <Style Selector="TextBlock.section-title">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="#173F38" />
+    </Style>
+    <Style Selector="TextBlock.field-label">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#61736E" />
+      <Setter Property="Margin" Value="0,0,0,6" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox:focus">
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="AutoCompleteBox">
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="Background" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="DatePicker">
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="NumericUpDown.numeric-cell">
+      <Setter Property="Height" Value="32" />
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="NumericUpDown.amount-input">
+      <Setter Property="Height" Value="36" />
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="TextAlignment" Value="Right" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox.reason-input">
+      <Setter Property="MinHeight" Value="80" />
+      <Setter Property="MaxHeight" Value="160" />
+      <Setter Property="AcceptsReturn" Value="True" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="VerticalContentAlignment" Value="Top" />
+    </Style>
+    <Style Selector="DataGrid">
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="RowHeight" Value="44" />
+      <Setter Property="GridLinesVisibility" Value="Horizontal" />
+      <Setter Property="HorizontalGridLinesBrush" Value="#EEF3F1" />
+    </Style>
+    <Style Selector="DataGridColumnHeader">
+      <Setter Property="Background" Value="#F7FAF9" />
+      <Setter Property="Foreground" Value="#52645E" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Padding" Value="8,10" />
+    </Style>
+    <Style Selector="DataGridCell">
+      <Setter Property="Padding" Value="4,6" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.btn-save">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="MinHeight" Value="42" />
+      <Setter Property="MinWidth" Value="150" />
+      <Setter Property="Padding" Value="20,10" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.btn-save:pointerover">
+      <Setter Property="Background" Value="#056B5D" />
+    </Style>
+    <Style Selector="Button.btn-save:disabled">
+      <Setter Property="Background" Value="#9BC9BE" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.btn-cancel">
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="Foreground" Value="#344054" />
+      <Setter Property="BorderBrush" Value="#D0D5DD" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="MinHeight" Value="42" />
+      <Setter Property="MinWidth" Value="110" />
+      <Setter Property="Padding" Value="20,10" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.btn-cancel:pointerover">
+      <Setter Property="Background" Value="#F2F4F7" />
+    </Style>
+    <Style Selector="Button.btn-remove-item">
+      <Setter Property="Background" Value="#FEE2E2" />
+      <Setter Property="Foreground" Value="#DC2626" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.btn-remove-item:pointerover">
+      <Setter Property="Background" Value="#FECACA" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12" Margin="20">
+
+    <!-- 1. HEADER -->
+    <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="18,14">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+        <StackPanel Spacing="4">
+          <TextBlock Text="Chỉnh sửa phiếu nhập hàng" FontSize="20" FontWeight="Bold" Foreground="#163F38" />
+          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <TextBlock Text="Mã phiếu:" FontSize="12" Foreground="#61736E" VerticalAlignment="Center" />
+            <TextBlock x:Name="TxtMaPhieuNhap" FontSize="14" FontWeight="Bold" Foreground="#087F6E" VerticalAlignment="Center" />
+            <Border Background="#EEF7F4" BorderBrush="#CDE7E0" BorderThickness="1" CornerRadius="4" Padding="8,2">
+              <TextBlock Text="Mã phiếu cố định" FontSize="11" Foreground="#4B6B63" />
+            </Border>
+          </StackPanel>
+        </StackPanel>
+
+        <Border Grid.Column="1" Background="#E8F6F1" CornerRadius="8" Padding="14,8" VerticalAlignment="Center">
+          <TextBlock Text="Đã nhập hàng" FontSize="12" FontWeight="SemiBold" Foreground="#087F6E" />
+        </Border>
+      </Grid>
+    </Border>
+
+    <!-- 2. THÔNG TIN CHUNG -->
+    <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="16,14">
+      <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
+        <TextBlock Text="THÔNG TIN PHIẾU NHẬP" Classes="section-title" />
+        <Grid Grid.Row="1" ColumnDefinitions="240,14,*,14,200,14,180">
+          <StackPanel Grid.Column="0">
+            <TextBlock Text="Ngày nhập hàng" Classes="field-label" />
+            <DatePicker x:Name="DpThoiGianNhap" Height="38" />
+          </StackPanel>
+
+          <StackPanel Grid.Column="2">
+            <TextBlock Text="Nhà cung cấp (*)" Classes="field-label" />
+            <AutoCompleteBox x:Name="AcbNhaCungCap"
+                             Height="38"
+                             FilterMode="Contains"
+                             Watermark="🔍 Tìm mã hoặc tên nhà cung cấp..." />
+          </StackPanel>
+
+          <StackPanel Grid.Column="4">
+            <TextBlock Text="Số hóa đơn đầu vào" Classes="field-label" />
+            <TextBox x:Name="TxtSoHoaDon" Height="38" Watermark="Số HĐ đầu vào..." />
+          </StackPanel>
+
+          <StackPanel Grid.Column="6">
+            <TextBlock Text="Phương thức TT" Classes="field-label" />
+            <ComboBox x:Name="CbbPhuongThuc" Height="38" HorizontalAlignment="Stretch">
+              <ComboBoxItem Content="Tiền mặt" IsSelected="True" />
+              <ComboBoxItem Content="Chuyển khoản" />
+            </ComboBox>
+          </StackPanel>
+        </Grid>
+      </Grid>
+    </Border>
+
+    <!-- 3. BẢNG HÀNG HÓA VÀ THANH TOÁN -->
+    <Grid Grid.Row="2" ColumnDefinitions="*,16,350">
+
+      <!-- CỘT TRÁI: DANH SÁCH SẢN PHẨM -->
+      <Border Grid.Column="0" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="16">
+        <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="DANH SÁCH HÀNG HÓA" Classes="section-title" />
+            <TextBlock Grid.Column="1" Text="Có thể sửa số lượng, đơn giá và xóa hoặc thêm mặt hàng" FontSize="11" Foreground="#8A9A95" VerticalAlignment="Center" />
+          </Grid>
+
+          <!-- THANH THÊM SẢN PHẨM -->
+          <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <AutoCompleteBox x:Name="AcbSanPham"
+                             Height="38"
+                             FilterMode="Contains"
+                             Watermark="🔍 Tìm kiếm sản phẩm theo tên, mã hoặc mã vạch để thêm vào phiếu..." />
+            <Button Grid.Column="1" Content="+ Thêm sản phẩm"
+                    Background="#087F6E" Foreground="White" FontWeight="SemiBold"
+                    CornerRadius="6" Padding="14,7" MinHeight="38"
+                    VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                    Click="BtnThemSanPham_OnClick" />
+          </Grid>
+
+          <!-- BẢNG GRID DÒNG HÀNG -->
+          <Border Grid.Row="2" BorderBrush="#EEF3F1" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+            <DataGrid x:Name="GridItems" AutoGenerateColumns="False" CanUserReorderColumns="False"
+                      CanUserResizeColumns="True" CanUserSortColumns="False"
+                      HeadersVisibility="Column"
+                      Background="White"
+                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                      x:DataType="models:PhieuNhapItemEditModel">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Mã SP" Binding="{Binding MaSanPham}" IsReadOnly="True"
+                                    Width="0.9*" MinWidth="80" x:DataType="models:PhieuNhapItemEditModel" />
+
+                <DataGridTemplateColumn Header="Tên sản phẩm" Width="2.2*" MinWidth="140">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
+                      <TextBlock Text="{Binding TenSanPham}"
+                                 VerticalAlignment="Center"
+                                 TextTrimming="CharacterEllipsis"
+                                 ToolTip.Tip="{Binding TenSanPham}" />
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="ĐVT" Width="0.6*" MinWidth="50">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
+                      <TextBlock Text="{Binding DonViTinh}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="Số lượng" Width="0.95*" MinWidth="85">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
+                      <NumericUpDown Classes="numeric-cell"
+                                     Value="{Binding SoLuong, Mode=TwoWay}"
+                                     Minimum="0.001" Maximum="99999" Increment="1"
+                                     FormatString="0.###"
+                                     ShowButtonSpinner="False"
+                                     TextAlignment="Center"
+                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="Đơn giá nhập" Width="1.15*" MinWidth="105">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
+                      <NumericUpDown Classes="numeric-cell"
+                                     Value="{Binding DonGiaNhap, Mode=TwoWay}"
+                                     Minimum="0" Maximum="999999999" Increment="1000"
+                                     FormatString="N0"
+                                     ShowButtonSpinner="False"
+                                     TextAlignment="Right"
+                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="Giảm giá" Width="0.95*" MinWidth="85">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
+                      <NumericUpDown Classes="numeric-cell"
+                                     Value="{Binding GiamGia, Mode=TwoWay}"
+                                     Minimum="0" Maximum="999999999" Increment="1000"
+                                     FormatString="N0"
+                                     ShowButtonSpinner="False"
+                                     TextAlignment="Right"
+                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="Thành tiền" Width="1.2*" MinWidth="105">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
+                      <TextBlock Text="{Binding ThanhTien, StringFormat={}{0:N0} đ}"
+                                 FontWeight="SemiBold"
+                                 HorizontalAlignment="Right"
+                                 VerticalAlignment="Center" />
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="Xóa" Width="0.45*" MinWidth="42">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
+                      <Button Content="✕" Classes="btn-remove-item"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                              Click="BtnXoaItem_OnClick"
+                              ToolTip.Tip="Xóa mặt hàng này khỏi phiếu nhập" />
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+              </DataGrid.Columns>
+            </DataGrid>
+          </Border>
+
+          <!-- GHI CHÚ PHIẾU -->
+          <Grid Grid.Row="3" ColumnDefinitions="Auto,*" ColumnSpacing="8" VerticalAlignment="Center">
+            <TextBlock Text="Ghi chú phiếu:" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="#61736E" />
+            <TextBox Grid.Column="1" x:Name="TxtGhiChu" Height="38" Watermark="Ghi chú thêm cho phiếu nhập..." />
+          </Grid>
+        </Grid>
+      </Border>
+
+      <!-- CỘT PHẢI: CHI PHÍ, THANH TOÁN & LÝ DO CHỈNH SỬA -->
+      <Border Grid.Column="2" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="16">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="12">
+            <TextBlock Text="TỔNG TIỀN &amp; THANH TOÁN" Classes="section-title" FontSize="14" />
+
+            <Border Background="#F8FBFA" BorderBrush="#E8F0ED" BorderThickness="1" CornerRadius="8" Padding="12">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Tiền hàng" Foreground="#61736E" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" x:Name="TxtTongTienHang" FontWeight="SemiBold" Text="0 đ"
+                             HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+
+                <Grid ColumnDefinitions="*,140" ColumnSpacing="8">
+                  <TextBlock Text="Chi phí khác" Foreground="#61736E" VerticalAlignment="Center" />
+                  <NumericUpDown Grid.Column="1" x:Name="NumChiPhiKhac" Classes="amount-input"
+                                 Minimum="0" Maximum="999999999" Increment="5000"
+                                 FormatString="N0" ValueChanged="OnCalculationInputsChanged" />
+                </Grid>
+
+                <Grid ColumnDefinitions="*,140" ColumnSpacing="8">
+                  <TextBlock Text="Giảm giá phiếu" Foreground="#61736E" VerticalAlignment="Center" />
+                  <NumericUpDown Grid.Column="1" x:Name="NumGiamGia" Classes="amount-input"
+                                 Minimum="0" Maximum="999999999" Increment="5000"
+                                 FormatString="N0" ValueChanged="OnCalculationInputsChanged" />
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <!-- TỔNG TIỀN NHẬP -->
+            <Border Background="#EAF7F3" BorderBrush="#BFE3D9" BorderThickness="1" CornerRadius="8" Padding="12">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Tổng tiền nhập" FontWeight="Bold" Foreground="#173F38" FontSize="13" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" x:Name="TxtTongTienNhap" FontWeight="Bold" Foreground="#087F6E"
+                           FontSize="17" Text="0 đ" HorizontalAlignment="Right" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+
+            <!-- ĐÃ THANH TOÁN -->
+            <Border Background="#F8FBFA" BorderBrush="#E8F0ED" BorderThickness="1" CornerRadius="8" Padding="12">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,140" ColumnSpacing="8">
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="Đã thanh toán" Foreground="#61736E" FontWeight="SemiBold" />
+                    <TextBlock Text="Tiền đã trả NCC" FontSize="10" Foreground="#9CA3AF" />
+                  </StackPanel>
+                  <NumericUpDown Grid.Column="1" x:Name="NumDaThanhToan" Classes="amount-input"
+                                 Minimum="0" Maximum="999999999" Increment="10000"
+                                 FormatString="N0" ValueChanged="OnCalculationInputsChanged" />
+                </Grid>
+
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Còn nợ NCC" FontWeight="Bold" Foreground="#9A3412" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" x:Name="TxtConNo" FontWeight="Bold" Foreground="#B45309"
+                             FontSize="15" Text="0 đ" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <Separator Background="#EEF3F1" Margin="0,2" />
+
+            <!-- LÝ DO CHỈNH SỬA (BẮT BUỘC) -->
+            <StackPanel Spacing="6">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="Lý do chỉnh sửa" FontWeight="Bold" Foreground="#B45309" FontSize="12" />
+                <TextBlock Text="*" Foreground="#DC2626" FontWeight="Bold" />
+              </StackPanel>
+              <TextBox x:Name="TxtLyDoChinhSua" Classes="reason-input"
+                       Watermark="Bắt buộc: ghi rõ lý do sửa phiếu nhập (ví dụ: điều chỉnh số lượng hoa bị dập, NCC chiết khấu thêm, sửa đơn giá...)" />
+            </StackPanel>
+
+            <TextBlock x:Name="TxtError" Foreground="#DC2626" FontSize="12" TextWrapping="Wrap" IsVisible="False" />
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <!-- 4. FOOTER: GHI CHÚ VÀ NÚT BẤM -->
+    <Border Grid.Row="3" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="16,12">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" VerticalAlignment="Center">
+          <TextBlock Text="ℹ️" FontSize="14" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1"
+                     Text="Khi lưu thay đổi, hệ thống sẽ tự động cập nhật tồn kho theo độ chênh lệch số lượng, đồng bộ công nợ NCC, sổ quỹ và lưu vết kiểm toán vào lịch sử thay đổi."
+                     FontSize="11.5" Foreground="#61736E" FontStyle="Italic" TextWrapping="Wrap" MaxLines="2" />
+        </Grid>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Button x:Name="BtnHuy" Content="Hủy bỏ" Classes="btn-cancel" Click="BtnHuy_OnClick" />
+          <Button x:Name="BtnLuu" Content="💾 Lưu thay đổi" Classes="btn-save" Click="BtnLuu_OnClick" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+  </Grid>
+</Window>

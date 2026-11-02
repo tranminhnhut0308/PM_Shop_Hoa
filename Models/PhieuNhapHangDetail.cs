@@ -72,6 +72,15 @@ public sealed class PhieuNhapHangDetail
     /// </summary>
     public List<PhieuNhapHangPaymentItem> Payments { get; set; } = [];
 
+    /// <summary>
+    /// Lịch sử chỉnh sửa thay đổi phiếu nhập (bảng lich_su_chinh_sua_phieu_nhap).
+    /// </summary>
+    public List<LichSuChinhSuaPhieuNhap> EditHistory { get; set; } = [];
+
+    public bool CoLichSuThayDoi => EditHistory.Count > 0;
+
+    public string SoLanChinhSuaText => $"Đã chỉnh sửa {EditHistory.Count} lần";
+
     // ============================================================
     // TỔNG TIỀN: tính lại từ chính các dòng chi tiết đã đọc,
     // đúng quy tắc nghiệp vụ hiện tại (tổng thành tiền từng dòng).

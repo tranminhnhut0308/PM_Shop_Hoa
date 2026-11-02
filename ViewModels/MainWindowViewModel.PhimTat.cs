@@ -76,7 +76,7 @@ public sealed partial class MainWindowViewModel
         if (IsSalesPanelVisible)
         {
             MoLaiKetQuaTimKiemBanHang();
-            await TimKiemHoaBanAsync();
+            await TimKiemHoaBanAsync(null);
             StatusMessage = "Đã làm mới kết quả tìm hàng hóa.";
             return;
         }

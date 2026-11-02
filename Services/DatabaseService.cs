@@ -282,6 +282,111 @@ public sealed partial class DatabaseService
         => (await GetSanPhamPagedAsync(search, 1, SoDongSanPhamToiDa, nhomSanPhamId)).Items;
 
     /// <summary>
+    /// Tìm kiếm sản phẩm trực tiếp từ database cho Live Search bán hàng.
+    /// Giới hạn 50 kết quả (hoặc tùy chọn), bỏ qua COUNT(*), hỗ trợ CancellationToken
+    /// để hủy truy vấn ngay tại database khi người dùng tiếp tục gõ.
+    /// </summary>
+    public async Task<IReadOnlyList<SanPham>> TimKiemSanPhamBanHangAsync(
+        string? search,
+        uint? nhomSanPhamId = null,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var keyword = (search ?? "").Trim();
+        var safeLimit = limit <= 0 ? 50 : Math.Min(limit, 200);
+
+        await using var connection = await OpenAsync();
+
+        var parameters = new DynamicParameters();
+        var dieuKien = TaoDieuKienTimKiemSanPham(
+            parameters,
+            keyword,
+            "sp.ma_san_pham",
+            "sp.ma_vach",
+            "sp.ten_san_pham");
+
+        var whereParts = new List<string> { "sp.trang_thai = 1" };
+        if (dieuKien.Length > 0)
+        {
+            whereParts.Add(dieuKien);
+        }
+
+        if (nhomSanPhamId.HasValue && nhomSanPhamId.Value > 0)
+        {
+            if (nhomSanPhamId.Value == 999999)
+            {
+                whereParts.Add("(sp.nhom_san_pham_id IS NULL OR sp.nhom_san_pham_id = 0)");
+            }
+            else
+            {
+                whereParts.Add("sp.nhom_san_pham_id = @NhomSanPhamId");
+                parameters.Add("NhomSanPhamId", nhomSanPhamId.Value);
+            }
+        }
+
+        var whereSql = "WHERE " + string.Join(" AND ", whereParts);
+
+        var orderSql = dieuKien.Length == 0
+            ? "ORDER BY sp.ten_san_pham, sp.id"
+            : TaoDieuKienSapXepTimKiemSanPham(
+                keyword,
+                "sp.ma_san_pham",
+                "sp.ma_vach",
+                "sp.ten_san_pham");
+
+        parameters.Add("Limit", safeLimit);
+
+        var sql = $"""
+            SELECT
+                sp.id AS Id,
+                sp.ma_san_pham AS MaSanPham,
+                sp.ma_vach AS MaVach,
+                COALESCE(NULLIF(TRIM(sp.ten_san_pham), ''), sp.ma_san_pham) AS TenSanPham,
+                sp.nhom_san_pham_id AS NhomSanPhamId,
+                sp.don_vi_tinh_id AS DonViTinhId,
+                sp.thuong_hieu_id AS ThuongHieuId,
+                sp.gia_ban AS GiaBan,
+                sp.gia_von AS GiaVon,
+                COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) AS TonKho,
+                COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) AS TonKhoExcel,
+                sp.ton_toi_thieu AS TonToiThieu,
+                sp.ton_toi_da AS TonToiDa,
+                COALESCE(sp.khach_dat, 0) AS KhachDat,
+                sp.ngay_tao AS NgayTao,
+                sp.du_kien_het_hang AS DuKienHetHang,
+                dvt.ten_don_vi AS DonViTinh,
+                COALESCE(nsp.ten_nhom, NULLIF(TRIM(sp.nhom_hang_3_cap_excel), '')) AS NhomSanPham,
+                COALESCE(NULLIF(TRIM(sp.loai_hang_excel), ''), 'Hàng hóa') AS LoaiHang,
+                COALESCE(NULLIF(TRIM(sp.nhom_hang_3_cap_excel), ''), nsp.ten_nhom) AS NhomHangBaCap,
+                sp.vi_tri_kho AS ViTriKho,
+                sp.dang_kinh_doanh AS DuocBanTrucTiep,
+                sp.trang_thai AS DangKinhDoanh,
+                sp.mo_ta AS MoTa,
+                sp.ghi_chu AS GhiChu,
+                sp.hinh_anh AS HinhAnh
+            FROM san_pham sp
+            LEFT JOIN (
+                SELECT san_pham_id, SUM(so_luong_ton) AS so_luong_ton
+                FROM ton_kho
+                GROUP BY san_pham_id
+            ) tk ON tk.san_pham_id = sp.id
+            LEFT JOIN don_vi_tinh dvt ON dvt.id = sp.don_vi_tinh_id
+            LEFT JOIN nhom_san_pham nsp ON nsp.id = sp.nhom_san_pham_id
+            {whereSql}
+            {orderSql}
+            LIMIT @Limit;
+            """;
+
+        var cmd = new CommandDefinition(sql, parameters, cancellationToken: cancellationToken);
+        var products = (await connection.QueryAsync<SanPham>(cmd)).AsList();
+
+        if (products.Count > 0 || !string.IsNullOrWhiteSpace(keyword))
+            return products;
+
+        return (await GetSanPhamTuBangImportAsync(connection, keyword, 0, safeLimit)).Items;
+    }
+
+    /// <summary>
     /// Lấy một trang hàng hóa kèm tổng số bản ghi khớp từ khóa và nhóm sản phẩm.
     /// Tổng số bản ghi được đếm trên toàn database nên không phụ thuộc số dòng của trang,
     /// dùng cho phân trang và cho thông điệp "Tìm thấy N sản phẩm".
@@ -9097,6 +9202,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
 
         var offset = (page - 1) * pageSize;
         var keyword = (search ?? "").Trim();
+        await EnsureLichSuChinhSuaPhieuNhapTableAsync();
         var hasPhuongThuc = await EnsurePhieuNhapPhuongThucColumnAsync();
         var extraSelect = hasPhuongThuc
             ? ",\n            COALESCE(p.phuong_thuc_thanh_toan, 'TIEN_MAT') AS PhuongThucThanhToan"
@@ -9152,7 +9258,8 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
         p.da_thanh_toan AS DaThanhToan,
         p.con_no AS ConNo,
         p.trang_thai AS TrangThai,
-        p.ghi_chu AS GhiChu{extraSelect}
+        p.ghi_chu AS GhiChu{extraSelect},
+        EXISTS (SELECT 1 FROM lich_su_chinh_sua_phieu_nhap ls WHERE ls.phieu_nhap_id = p.id) AS CoLichSuThayDoi
     FROM phieu_nhap_hang p
     LEFT JOIN nha_cung_cap ncc
         ON ncc.id = p.nha_cung_cap_id
@@ -9320,6 +9427,16 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
             // chi tiết phiếu, chỉ không có lịch sử thanh toán chi tiết.
             SafeLog.WriteError("Khong doc duoc lich su thanh toan phieu nhap", ex);
             header.Payments = [];
+        }
+
+        try
+        {
+            header.EditHistory = await GetLichSuChinhSuaPhieuNhapAsync(phieuNhapId);
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Khong doc duoc lich su chinh sua phieu nhap", ex);
+            header.EditHistory = [];
         }
 
         return header;

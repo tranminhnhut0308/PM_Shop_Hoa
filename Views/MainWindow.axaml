@@ -1957,14 +1957,20 @@
         <Grid Grid.Row="1" Grid.Column="0" RowDefinitions="Auto,Auto,*" RowSpacing="7">
 
           <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="6">
-            <Border CornerRadius="8" BorderBrush="#D8E5E0" BorderThickness="1">
-              <TextBox x:Name="SaleSearchBox"
-                       Watermark="🔍 Tìm tên, mã hoa..."
-                       Text="{Binding SaleSearchText, Mode=TwoWay}"
-                       Padding="10,7"
-                       TextChanged="OnSaleSearchTextChanged"
-                       KeyDown="OnSaleSearchKeyDown" />
-            </Border>
+            <Grid Grid.Column="0">
+              <Border CornerRadius="8" BorderBrush="#D8E5E0" BorderThickness="1">
+                <TextBox x:Name="SaleSearchBox"
+                         Watermark="🔍 Tìm tên, mã hoa, mã vạch..."
+                         Text="{Binding SaleSearchText, Mode=TwoWay}"
+                         Padding="10,7"
+                         TextChanged="OnSaleSearchTextChanged"
+                         KeyDown="OnSaleSearchKeyDown" />
+              </Border>
+              <ProgressBar Height="2" IsIndeterminate="True"
+                           Foreground="#0A8C78" Background="Transparent"
+                           VerticalAlignment="Bottom" Margin="4,0,4,2"
+                           IsVisible="{Binding IsSearchingSaleProducts}" />
+            </Grid>
             <Button Grid.Column="1" Classes="toolbar-primary" Content="Tìm"
                     Command="{Binding MoLaiVaTimKiemHoaBanCommand}"
                     CommandParameter="{Binding SaleSearchText}" />
@@ -1985,6 +1991,15 @@
           <Border Grid.Row="2" Padding="6" CornerRadius="10"
                   BorderBrush="#D8E5E0" BorderThickness="1" Background="#F7FAF9">
             <Grid>
+              <!-- Thông báo đang tìm kiếm khi danh sách trống -->
+              <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8"
+                          IsVisible="{Binding IsSearchingSaleProducts}">
+                <ProgressBar IsIndeterminate="True" Width="120" Height="3" Foreground="#0A8C78" />
+                <TextBlock Text="Đang tìm kiếm sản phẩm..."
+                           Foreground="#0A8C78" FontWeight="SemiBold" FontSize="12"
+                           HorizontalAlignment="Center" />
+              </StackPanel>
+
               <!-- Thông báo khi tìm kiếm không thấy sản phẩm -->
               <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6"
                           IsVisible="{Binding HienThiThongBaoKhongTimThayBanHang}">
@@ -2036,10 +2051,16 @@
                               Command="{Binding ElementName=RootWindow, Path=DataContext.ThemVaoGioHangCommand}"
                               CommandParameter="{Binding}"
                               Click="OnThemSanPhamBanHangClicked">
-                        <StackPanel Spacing="1" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold"
-                                     Foreground="#163F38" TextTrimming="CharacterEllipsis" FontSize="13"
-                                     ToolTip.Tip="{Binding TenSanPham}" />
+                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Border Background="#E6F4F1" CornerRadius="4" Padding="4,1"
+                                    IsVisible="{Binding MaSanPham, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                              <TextBlock Text="{Binding MaSanPham}" FontSize="11" FontWeight="Bold" Foreground="#0A8C78" />
+                            </Border>
+                            <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold"
+                                       Foreground="#163F38" TextTrimming="CharacterEllipsis" FontSize="13"
+                                       ToolTip.Tip="{Binding TenSanPham}" />
+                          </StackPanel>
                           <StackPanel Orientation="Horizontal" Spacing="10">
                             <TextBlock Text="{Binding GiaBan, StringFormat={}{0:N0} đ}"
                                        Foreground="#087F6E" FontWeight="Bold" FontSize="12" />
@@ -6983,22 +7004,34 @@
                         ColumnSpacing="10"
                         VerticalAlignment="Center">
 
-                        <Button Grid.Column="0"
-                          Background="Transparent"
-                          BorderThickness="0"
-                          Padding="0"
-                          Margin="0"
-                          Cursor="Hand"
-                          HorizontalContentAlignment="Left"
-                          VerticalContentAlignment="Center"
-                          ToolTip.Tip="Xem chi tiết phiếu nhập"
-                          Command="{Binding ElementName=RootWindow, Path=DataContext.XemChiTietPhieuNhapCommand}"
-                          CommandParameter="{Binding}">
-                          <TextBlock Text="{Binding MaPhieuNhap}"
-                            FontWeight="SemiBold"
-                            Foreground="#087F6E"
-                            VerticalAlignment="Center" />
-                        </Button>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                          <Button
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            Margin="0"
+                            Cursor="Hand"
+                            HorizontalContentAlignment="Left"
+                            VerticalContentAlignment="Center"
+                            ToolTip.Tip="Xem chi tiết phiếu nhập"
+                            Command="{Binding ElementName=RootWindow, Path=DataContext.XemChiTietPhieuNhapCommand}"
+                            CommandParameter="{Binding}">
+                            <TextBlock Text="{Binding MaPhieuNhap}"
+                              FontWeight="SemiBold"
+                              Foreground="#087F6E"
+                              VerticalAlignment="Center" />
+                          </Button>
+                          <Border IsVisible="{Binding CoLichSuThayDoi}"
+                            Background="#FFF7E8"
+                            BorderBrush="#FED7AA"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="3,1"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Phiếu nhập này đã từng được chỉnh sửa">
+                            <TextBlock Text="Đã sửa" FontSize="9" FontWeight="SemiBold" Foreground="#B45309" />
+                          </Border>
+                        </StackPanel>
 
                         <TextBlock Grid.Column="1"
                           Text="{Binding ThoiGianNhapText}"
@@ -7104,6 +7137,20 @@
                                 VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
+                          <Button
+                            Classes="toolbar-action"
+                            Content="✏"
+                            FontSize="12"
+                            Width="30"
+                            Height="32"
+                            Padding="0"
+                            Margin="0"
+                            IsVisible="{Binding ElementName=RootWindow, Path=DataContext.CanEditPurchase}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Chỉnh sửa phiếu nhập"
+                            Command="{Binding ElementName=RootWindow, Path=DataContext.ChinhSuaPhieuNhapCommand}"
+                            CommandParameter="{Binding}" />
                           <Button
                             Classes="toolbar-action"
                             Content="🖨"
