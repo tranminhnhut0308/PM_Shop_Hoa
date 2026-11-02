@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using ShopHoa.Helpers;
@@ -39,14 +40,27 @@ public partial class PhieuNhapEditorWindow : Window
         _suppliers = suppliers;
         _items = new ObservableCollection<PhieuNhapItemEditModel>(_request.Items);
 
-        // Header
+        // 1. Header
         TxtMaPhieuNhap.Text = _request.MaPhieuNhap;
 
-        // Ngày nhập
+        // 2. Ngày nhập
         DpThoiGianNhap.SelectedDate = _request.ThoiGianNhap;
 
-        // Nhà cung cấp
+        // 3. Nhà cung cấp
         AcbNhaCungCap.ItemsSource = _suppliers;
+        AcbNhaCungCap.ItemFilter = (search, item) =>
+        {
+            if (string.IsNullOrWhiteSpace(search))
+                return true;
+            if (item is SupplierOption s)
+            {
+                return (!string.IsNullOrEmpty(s.DisplayText) && s.DisplayText.Contains(search, StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrEmpty(s.TenNhaCungCap) && s.TenNhaCungCap.Contains(search, StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrEmpty(s.MaNhaCungCap) && s.MaNhaCungCap.Contains(search, StringComparison.OrdinalIgnoreCase));
+            }
+            return false;
+        };
+
         var selectedSupplier = _suppliers.FirstOrDefault(s => s.Id == _request.NhaCungCapId);
         if (selectedSupplier != null)
         {
@@ -54,24 +68,45 @@ public partial class PhieuNhapEditorWindow : Window
             AcbNhaCungCap.Text = selectedSupplier.DisplayText;
         }
 
-        // Thông tin khác
+        // 4. Số HĐ đầu vào & Ghi chú
         TxtSoHoaDon.Text = _request.SoHoaDonDauVao ?? "";
         TxtGhiChu.Text = _request.GhiChu ?? "";
 
-        // Phương thức thanh toán
+        // 5. Phương thức thanh toán
+        CbbPhuongThuc.ItemsSource = new[] { "Tiền mặt", "Chuyển khoản" };
         var pt = _request.PhuongThucThanhToan?.ToUpperInvariant() ?? "TIEN_MAT";
-        CbbPhuongThuc.SelectedIndex = pt.Contains("CHUYEN_KHOAN") || pt.Contains("NGAN_HANG") ? 1 : 0;
+        CbbPhuongThuc.SelectedIndex = (pt.Contains("CHUYEN_KHOAN") || pt.Contains("NGAN_HANG") || pt.Contains("BANK")) ? 1 : 0;
 
-        // Số tiền
+        // 6. Số tiền
         NumChiPhiKhac.Value = _request.ChiPhiKhac;
         NumGiamGia.Value = _request.GiamGia;
         NumDaThanhToan.Value = _request.DaThanhToan;
 
-        // Bảng hàng hóa
+        // 7. Bảng hàng hóa
         GridItems.ItemsSource = _items;
 
-        // Gợi ý sản phẩm
+        // 8. Gợi ý sản phẩm
         AcbSanPham.ItemsSource = _allProducts;
+        AcbSanPham.ItemFilter = (search, item) =>
+        {
+            if (string.IsNullOrWhiteSpace(search))
+                return true;
+            if (item is SanPham sp)
+            {
+                return (!string.IsNullOrEmpty(sp.TenSanPham) && sp.TenSanPham.Contains(search, StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrEmpty(sp.MaSanPham) && sp.MaSanPham.Contains(search, StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrEmpty(sp.MaVach) && sp.MaVach.Contains(search, StringComparison.OrdinalIgnoreCase));
+            }
+            return false;
+        };
+
+        AcbSanPham.KeyDown += (s, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter)
+            {
+                BtnThemSanPham_OnClick(s, e);
+            }
+        };
 
         // Lắng nghe thay đổi dòng hàng
         foreach (var item in _items)
@@ -81,6 +116,16 @@ public partial class PhieuNhapEditorWindow : Window
         _items.CollectionChanged += (_, _) => CapNhatTongTien();
 
         CapNhatTongTien();
+
+        // Đảm bảo cột phải luôn cuộn lên đầu khi mở cửa sổ
+        Loaded += (_, _) =>
+        {
+            if (SvRightPanel != null)
+            {
+                SvRightPanel.Offset = Vector.Zero;
+            }
+            AcbSanPham.Focus();
+        };
     }
 
     private void Item_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -156,7 +201,7 @@ public partial class PhieuNhapEditorWindow : Window
                 SanPhamId = selectedProduct.Id,
                 MaSanPham = selectedProduct.MaSanPham,
                 TenSanPham = selectedProduct.TenSanPham,
-                DonViTinh = selectedProduct.DonViTinh ?? "",
+                DonViTinh = string.IsNullOrWhiteSpace(selectedProduct.DonViTinh) ? (selectedProduct.TenDonViTinh ?? "Bó") : selectedProduct.DonViTinh,
                 DonViTinhId = selectedProduct.DonViTinhId,
                 SoLuong = 1,
                 DonGiaNhap = selectedProduct.GiaVon,

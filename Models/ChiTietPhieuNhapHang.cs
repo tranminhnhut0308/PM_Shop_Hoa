@@ -76,6 +76,11 @@ public partial class ChiTietPhieuNhapHang : ObservableObject
         DonViTinhOptions = donViTinhOptions;
         ChoPhepChonDonViTinh = (product.DonViTinhId is null or 0)
                                && string.IsNullOrWhiteSpace(product.DonViTinh);
+        if (ChoPhepChonDonViTinh && donViTinhOptions != null && donViTinhOptions.Count > 0)
+        {
+            SelectedDonViTinh = System.Linq.Enumerable.FirstOrDefault(donViTinhOptions, x => string.Equals(x.Name, "Bó", System.StringComparison.OrdinalIgnoreCase))
+                                ?? System.Linq.Enumerable.FirstOrDefault(donViTinhOptions);
+        }
     }
 
     public void CapNhatSanPham(SanPham sanPham)

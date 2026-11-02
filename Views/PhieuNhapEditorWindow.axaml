@@ -4,12 +4,17 @@
   xmlns:views="using:ShopHoa.Views"
   x:Class="ShopHoa.Views.PhieuNhapEditorWindow"
   Title="Chỉnh sửa phiếu nhập hàng"
-  Width="1260"
+  Width="1280"
   Height="780"
-  MinWidth="1100"
+  MinWidth="1120"
   MinHeight="640"
   WindowStartupLocation="CenterOwner"
   Background="#F8FAF9">
+
+  <Window.Resources>
+    <!-- Tránh DatePicker bị ép min-width 296px của theme Fluent làm tràn khung -->
+    <x:Double x:Key="DatePickerThemeMinWidth">0</x:Double>
+  </Window.Resources>
 
   <Window.Styles>
     <Style Selector="TextBlock">
@@ -36,7 +41,7 @@
     </Style>
     <Style Selector="TextBox:focus">
       <Setter Property="BorderBrush" Value="#087F6E" />
-      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderThickness" Value="1.5" />
     </Style>
     <Style Selector="AutoCompleteBox">
       <Setter Property="MinHeight" Value="38" />
@@ -46,6 +51,10 @@
     </Style>
     <Style Selector="DatePicker">
       <Setter Property="MinHeight" Value="38" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="BorderBrush" Value="#D8E5E0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Background" Value="#FFFFFF" />
       <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
     <Style Selector="ComboBox">
@@ -67,9 +76,9 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="NumericUpDown.amount-input">
-      <Setter Property="Height" Value="36" />
-      <Setter Property="MinHeight" Value="36" />
-      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="Padding" Value="8,2" />
       <Setter Property="CornerRadius" Value="6" />
       <Setter Property="BorderBrush" Value="#D8E5E0" />
       <Setter Property="Background" Value="#FFFFFF" />
@@ -77,8 +86,8 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="TextBox.reason-input">
-      <Setter Property="MinHeight" Value="80" />
-      <Setter Property="MaxHeight" Value="160" />
+      <Setter Property="MinHeight" Value="65" />
+      <Setter Property="MaxHeight" Value="90" />
       <Setter Property="AcceptsReturn" Value="True" />
       <Setter Property="TextWrapping" Value="Wrap" />
       <Setter Property="VerticalContentAlignment" Value="Top" />
@@ -86,7 +95,7 @@
     <Style Selector="DataGrid">
       <Setter Property="Background" Value="#FFFFFF" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="RowHeight" Value="44" />
+      <Setter Property="RowHeight" Value="42" />
       <Setter Property="GridLinesVisibility" Value="Horizontal" />
       <Setter Property="HorizontalGridLinesBrush" Value="#EEF3F1" />
     </Style>
@@ -95,10 +104,11 @@
       <Setter Property="Foreground" Value="#52645E" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="FontSize" Value="12" />
-      <Setter Property="Padding" Value="8,10" />
+      <Setter Property="Padding" Value="6,10" />
+      <Setter Property="SeparatorBrush" Value="#E2E8E6" />
     </Style>
     <Style Selector="DataGridCell">
-      <Setter Property="Padding" Value="4,6" />
+      <Setter Property="Padding" Value="4,4" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.btn-save">
@@ -153,10 +163,10 @@
     </Style>
   </Window.Styles>
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12" Margin="20">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12" Margin="18,14">
 
     <!-- 1. HEADER -->
-    <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="18,14">
+    <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="18,13">
       <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
         <StackPanel Spacing="4">
           <TextBlock Text="Chỉnh sửa phiếu nhập hàng" FontSize="20" FontWeight="Bold" Foreground="#163F38" />
@@ -176,13 +186,15 @@
     </Border>
 
     <!-- 2. THÔNG TIN CHUNG -->
-    <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="16,14">
+    <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="16,13">
       <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
         <TextBlock Text="THÔNG TIN PHIẾU NHẬP" Classes="section-title" />
-        <Grid Grid.Row="1" ColumnDefinitions="240,14,*,14,200,14,180">
+        <Grid Grid.Row="1" ColumnDefinitions="250,14,*,14,180,14,160">
           <StackPanel Grid.Column="0">
             <TextBlock Text="Ngày nhập hàng" Classes="field-label" />
-            <DatePicker x:Name="DpThoiGianNhap" Height="38" />
+            <DatePicker x:Name="DpThoiGianNhap" Height="38"
+                        DayFormat="d" MonthFormat="MM" YearFormat="yyyy"
+                        HorizontalAlignment="Stretch" />
           </StackPanel>
 
           <StackPanel Grid.Column="2">
@@ -190,6 +202,7 @@
             <AutoCompleteBox x:Name="AcbNhaCungCap"
                              Height="38"
                              FilterMode="Contains"
+                             ValueMemberBinding="{Binding DisplayText, DataType=models:SupplierOption}"
                              Watermark="🔍 Tìm mã hoặc tên nhà cung cấp..." />
           </StackPanel>
 
@@ -200,17 +213,14 @@
 
           <StackPanel Grid.Column="6">
             <TextBlock Text="Phương thức TT" Classes="field-label" />
-            <ComboBox x:Name="CbbPhuongThuc" Height="38" HorizontalAlignment="Stretch">
-              <ComboBoxItem Content="Tiền mặt" IsSelected="True" />
-              <ComboBoxItem Content="Chuyển khoản" />
-            </ComboBox>
+            <ComboBox x:Name="CbbPhuongThuc" Height="38" HorizontalAlignment="Stretch" />
           </StackPanel>
         </Grid>
       </Grid>
     </Border>
 
     <!-- 3. BẢNG HÀNG HÓA VÀ THANH TOÁN -->
-    <Grid Grid.Row="2" ColumnDefinitions="*,16,350">
+    <Grid Grid.Row="2" ColumnDefinitions="*,16,360">
 
       <!-- CỘT TRÁI: DANH SÁCH SẢN PHẨM -->
       <Border Grid.Column="0" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="16">
@@ -225,7 +235,21 @@
             <AutoCompleteBox x:Name="AcbSanPham"
                              Height="38"
                              FilterMode="Contains"
-                             Watermark="🔍 Tìm kiếm sản phẩm theo tên, mã hoặc mã vạch để thêm vào phiếu..." />
+                             ValueMemberBinding="{Binding TenSanPham, DataType=models:SanPham}"
+                             Watermark="🔍 Tìm kiếm sản phẩm theo tên, mã hoặc mã vạch để thêm vào phiếu...">
+              <AutoCompleteBox.ItemTemplate>
+                <DataTemplate x:DataType="models:SanPham">
+                  <Grid ColumnDefinitions="*,Auto" Margin="4,2">
+                    <StackPanel Spacing="2">
+                      <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold" Foreground="#163F38" />
+                      <TextBlock Text="{Binding MaSanPham, StringFormat='Mã SP: {0}'}" FontSize="11" Foreground="#61736E" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding GiaVon, StringFormat={}{0:N0} đ}" Foreground="#087F6E"
+                               FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0,0,0" />
+                  </Grid>
+                </DataTemplate>
+              </AutoCompleteBox.ItemTemplate>
+            </AutoCompleteBox>
             <Button Grid.Column="1" Content="+ Thêm sản phẩm"
                     Background="#087F6E" Foreground="White" FontWeight="SemiBold"
                     CornerRadius="6" Padding="14,7" MinHeight="38"
@@ -243,9 +267,9 @@
                       x:DataType="models:PhieuNhapItemEditModel">
               <DataGrid.Columns>
                 <DataGridTextColumn Header="Mã SP" Binding="{Binding MaSanPham}" IsReadOnly="True"
-                                    Width="0.9*" MinWidth="80" x:DataType="models:PhieuNhapItemEditModel" />
+                                    Width="95" MinWidth="85" x:DataType="models:PhieuNhapItemEditModel" />
 
-                <DataGridTemplateColumn Header="Tên sản phẩm" Width="2.2*" MinWidth="140">
+                <DataGridTemplateColumn Header="Tên sản phẩm" Width="*" MinWidth="160">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
                       <TextBlock Text="{Binding TenSanPham}"
@@ -256,15 +280,15 @@
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="ĐVT" Width="0.6*" MinWidth="50">
+                <DataGridTemplateColumn Header="ĐVT" Width="60" MinWidth="50">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
-                      <TextBlock Text="{Binding DonViTinh}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding DonViTinh, FallbackValue='—'}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Số lượng" Width="0.95*" MinWidth="85">
+                <DataGridTemplateColumn Header="Số lượng" Width="100" MinWidth="90">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
                       <NumericUpDown Classes="numeric-cell"
@@ -278,7 +302,7 @@
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Đơn giá nhập" Width="1.15*" MinWidth="105">
+                <DataGridTemplateColumn Header="Đơn giá nhập" Width="125" MinWidth="110">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
                       <NumericUpDown Classes="numeric-cell"
@@ -292,7 +316,7 @@
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Giảm giá" Width="0.95*" MinWidth="85">
+                <DataGridTemplateColumn Header="Giảm giá" Width="100" MinWidth="85">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
                       <NumericUpDown Classes="numeric-cell"
@@ -306,18 +330,19 @@
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Thành tiền" Width="1.2*" MinWidth="105">
+                <DataGridTemplateColumn Header="Thành tiền" Width="120" MinWidth="105">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
                       <TextBlock Text="{Binding ThanhTien, StringFormat={}{0:N0} đ}"
                                  FontWeight="SemiBold"
                                  HorizontalAlignment="Right"
-                                 VerticalAlignment="Center" />
+                                 VerticalAlignment="Center"
+                                 Padding="0,0,4,0" />
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Xóa" Width="0.45*" MinWidth="42">
+                <DataGridTemplateColumn Header="" Width="44" MinWidth="40">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
                       <Button Content="✕" Classes="btn-remove-item"
@@ -340,28 +365,29 @@
       </Border>
 
       <!-- CỘT PHẢI: CHI PHÍ, THANH TOÁN & LÝ DO CHỈNH SỬA -->
-      <Border Grid.Column="2" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="16">
-        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-          <StackPanel Spacing="12">
-            <TextBlock Text="TỔNG TIỀN &amp; THANH TOÁN" Classes="section-title" FontSize="14" />
+      <Border Grid.Column="2" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="14">
+        <ScrollViewer x:Name="SvRightPanel" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="10">
+            <TextBlock Text="TỔNG TIỀN &amp; THANH TOÁN" Classes="section-title" FontSize="13.5" Margin="2,0,0,2" />
 
-            <Border Background="#F8FBFA" BorderBrush="#E8F0ED" BorderThickness="1" CornerRadius="8" Padding="12">
-              <StackPanel Spacing="10">
+            <!-- TIỀN HÀNG, CHI PHÍ, GIẢM GIÁ -->
+            <Border Background="#F8FBFA" BorderBrush="#E8F0ED" BorderThickness="1" CornerRadius="8" Padding="12,10">
+              <StackPanel Spacing="8">
                 <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Text="Tiền hàng" Foreground="#61736E" VerticalAlignment="Center" />
+                  <TextBlock Text="Tiền hàng" Foreground="#61736E" VerticalAlignment="Center" FontSize="12.5" />
                   <TextBlock Grid.Column="1" x:Name="TxtTongTienHang" FontWeight="SemiBold" Text="0 đ"
-                             HorizontalAlignment="Right" VerticalAlignment="Center" />
+                             HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="13" />
                 </Grid>
 
-                <Grid ColumnDefinitions="*,140" ColumnSpacing="8">
-                  <TextBlock Text="Chi phí khác" Foreground="#61736E" VerticalAlignment="Center" />
+                <Grid ColumnDefinitions="*,135" ColumnSpacing="8">
+                  <TextBlock Text="Chi phí khác" Foreground="#61736E" VerticalAlignment="Center" FontSize="12.5" />
                   <NumericUpDown Grid.Column="1" x:Name="NumChiPhiKhac" Classes="amount-input"
                                  Minimum="0" Maximum="999999999" Increment="5000"
                                  FormatString="N0" ValueChanged="OnCalculationInputsChanged" />
                 </Grid>
 
-                <Grid ColumnDefinitions="*,140" ColumnSpacing="8">
-                  <TextBlock Text="Giảm giá phiếu" Foreground="#61736E" VerticalAlignment="Center" />
+                <Grid ColumnDefinitions="*,135" ColumnSpacing="8">
+                  <TextBlock Text="Giảm giá phiếu" Foreground="#61736E" VerticalAlignment="Center" FontSize="12.5" />
                   <NumericUpDown Grid.Column="1" x:Name="NumGiamGia" Classes="amount-input"
                                  Minimum="0" Maximum="999999999" Increment="5000"
                                  FormatString="N0" ValueChanged="OnCalculationInputsChanged" />
@@ -369,21 +395,21 @@
               </StackPanel>
             </Border>
 
-            <!-- TỔNG TIỀN NHẬP -->
-            <Border Background="#EAF7F3" BorderBrush="#BFE3D9" BorderThickness="1" CornerRadius="8" Padding="12">
+            <!-- TỔNG TIỀN NHẬP (HIGHLIGHT GREEN) -->
+            <Border Background="#EAF7F3" BorderBrush="#BFE3D9" BorderThickness="1" CornerRadius="8" Padding="12,10">
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Text="Tổng tiền nhập" FontWeight="Bold" Foreground="#173F38" FontSize="13" VerticalAlignment="Center" />
                 <TextBlock Grid.Column="1" x:Name="TxtTongTienNhap" FontWeight="Bold" Foreground="#087F6E"
-                           FontSize="17" Text="0 đ" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                           FontSize="18" Text="0 đ" HorizontalAlignment="Right" VerticalAlignment="Center" />
               </Grid>
             </Border>
 
-            <!-- ĐÃ THANH TOÁN -->
-            <Border Background="#F8FBFA" BorderBrush="#E8F0ED" BorderThickness="1" CornerRadius="8" Padding="12">
-              <StackPanel Spacing="10">
-                <Grid ColumnDefinitions="*,140" ColumnSpacing="8">
-                  <StackPanel Spacing="2" VerticalAlignment="Center">
-                    <TextBlock Text="Đã thanh toán" Foreground="#61736E" FontWeight="SemiBold" />
+            <!-- ĐÃ THANH TOÁN & CÒN NỢ NCC -->
+            <Border Background="#F8FBFA" BorderBrush="#E8F0ED" BorderThickness="1" CornerRadius="8" Padding="12,10">
+              <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="*,135" ColumnSpacing="8">
+                  <StackPanel Spacing="1" VerticalAlignment="Center">
+                    <TextBlock Text="Đã thanh toán" Foreground="#61736E" FontWeight="SemiBold" FontSize="12" />
                     <TextBlock Text="Tiền đã trả NCC" FontSize="10" Foreground="#9CA3AF" />
                   </StackPanel>
                   <NumericUpDown Grid.Column="1" x:Name="NumDaThanhToan" Classes="amount-input"
@@ -391,10 +417,12 @@
                                  FormatString="N0" ValueChanged="OnCalculationInputsChanged" />
                 </Grid>
 
+                <Border Height="1" Background="#EEF3F1" Margin="0,2" />
+
                 <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Text="Còn nợ NCC" FontWeight="Bold" Foreground="#9A3412" VerticalAlignment="Center" />
+                  <TextBlock Text="Còn nợ NCC" FontWeight="Bold" Foreground="#9A3412" VerticalAlignment="Center" FontSize="12.5" />
                   <TextBlock Grid.Column="1" x:Name="TxtConNo" FontWeight="Bold" Foreground="#B45309"
-                             FontSize="15" Text="0 đ" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                             FontSize="16" Text="0 đ" HorizontalAlignment="Right" VerticalAlignment="Center" />
                 </Grid>
               </StackPanel>
             </Border>
@@ -402,7 +430,7 @@
             <Separator Background="#EEF3F1" Margin="0,2" />
 
             <!-- LÝ DO CHỈNH SỬA (BẮT BUỘC) -->
-            <StackPanel Spacing="6">
+            <StackPanel Spacing="5">
               <StackPanel Orientation="Horizontal" Spacing="4">
                 <TextBlock Text="Lý do chỉnh sửa" FontWeight="Bold" Foreground="#B45309" FontSize="12" />
                 <TextBlock Text="*" Foreground="#DC2626" FontWeight="Bold" />

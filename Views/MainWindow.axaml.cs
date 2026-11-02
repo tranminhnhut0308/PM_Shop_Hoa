@@ -22,7 +22,6 @@ public partial class MainWindow : Window
     private bool _formattingDiscount;
     private bool _formattingCash;
     private HelpWindow? _helpWindow;
-    private bool _boQuaTimKiemNhapHang;
     private bool _dangThemSanPhamBanHang;
     private bool _dangThemSanPhamNhapHang;
 
@@ -254,10 +253,6 @@ public partial class MainWindow : Window
             return;
 
         if (sender is not TextBox textBox)
-            return;
-
-        // Bỏ qua thay đổi do chính chương trình xóa ô tìm kiếm sau khi thêm hàng.
-        if (_boQuaTimKiemNhapHang)
             return;
 
         viewModel.ImportProductSearch = textBox.Text ?? string.Empty;
@@ -1555,24 +1550,7 @@ public partial class MainWindow : Window
 
             viewModel.ThemSanPhamVaoPhieuNhapCommand.Execute(sanPham);
 
-            // Xóa ô tìm kiếm, đóng danh sách để Enter kế tiếp không thêm trùng.
-            _boQuaTimKiemNhapHang = true;
-            try
-            {
-                viewModel.ImportProductSearch = string.Empty;
-                textBox.Text = string.Empty;
-            }
-            finally
-            {
-                _boQuaTimKiemNhapHang = false;
-            }
-
-            viewModel.HuyTimKiemSanPhamNhap();
-            viewModel.DongGoiYPhieuNhap();
-            viewModel.PhieuNhapProductSuggestions.Clear();
-
-            textBox.Focus();
-            textBox.CaretIndex = 0;
+            textBox.SelectAll();
         }
         finally
         {
@@ -1605,31 +1583,9 @@ public partial class MainWindow : Window
 
     private void OnThemSanPhamNhapHangClicked(object? sender, RoutedEventArgs e)
     {
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-        {
-            var textBox = this.FindControl<TextBox>("ImportProductSearchBox");
-            if (textBox != null)
-            {
-                _boQuaTimKiemNhapHang = true;
-                try
-                {
-                    if (DataContext is MainWindowViewModel vm)
-                    {
-                        vm.ImportProductSearch = string.Empty;
-                        vm.HuyTimKiemSanPhamNhap();
-                        vm.DongGoiYPhieuNhap();
-                        vm.PhieuNhapProductSuggestions.Clear();
-                    }
-                    textBox.Text = string.Empty;
-                }
-                finally
-                {
-                    _boQuaTimKiemNhapHang = false;
-                }
-                textBox.Focus();
-                textBox.CaretIndex = 0;
-            }
-        }, Avalonia.Threading.DispatcherPriority.Input);
+        // Khi chọn sản phẩm để thêm vào phiếu nhập:
+        // Đã có ThemSanPhamVaoPhieuNhapCommand xử lý thêm/tăng số lượng trong bảng hàng nhập.
+        // Giữ nguyên danh sách sản phẩm bên trái, vị trí cuộn và nội dung ô tìm kiếm.
     }
 
     private void OnImportSupplierSearchKeyDown(object? sender, KeyEventArgs e)
