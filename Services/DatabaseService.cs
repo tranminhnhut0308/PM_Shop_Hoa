@@ -9371,7 +9371,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
         SELECT
             ct.ma_san_pham  AS MaSanPham,
             ct.ten_san_pham AS TenSanPham,
-            dvt.ten_don_vi  AS DonViTinh,
+            COALESCE(NULLIF(TRIM(ct.don_vi_tinh_excel), ''), dvt.ten_don_vi, '') AS DonViTinh,
             ct.so_luong     AS SoLuong,
             ct.don_gia_nhap AS DonGiaNhap,
             ct.giam_gia     AS GiamGia,

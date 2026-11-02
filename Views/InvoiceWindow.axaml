@@ -89,8 +89,8 @@
           HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
           FontSize="18" FontWeight="Bold" Foreground="#163F38" />
 
-        <TextBlock Text="{Binding ThongTinTiem.DiaChi}"
-          IsVisible="{Binding ThongTinTiem.DiaChi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+        <TextBlock Text="{Binding ThongTinTiem.DiaChiHienThi}"
+          IsVisible="{Binding ThongTinTiem.DiaChiHienThi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
           HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
           FontSize="12" Foreground="#61736E" />
 
@@ -103,7 +103,7 @@
           HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
           FontSize="12" Foreground="#61736E" />
 
-        <TextBlock Text="{Binding ThongTinTiem.NganHangHienThi, StringFormat='NH: {0}'}"
+        <TextBlock Text="{Binding ThongTinTiem.StkHienThi}"
           IsVisible="{Binding ThongTinTiem.CoThongTinNganHang}"
           HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
           FontSize="12" Foreground="#61736E" />
@@ -120,6 +120,8 @@
           IsVisible="{Binding ThongTinTiem.MaSoThueHienThi, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
           HorizontalAlignment="Center" FontSize="12" Foreground="#61736E" />
       </StackPanel>
+
+      <Border Height="1" Background="#CBD5E1" Margin="0,4,0,6" />
 
       <TextBlock Text="HÓA ĐƠN BÁN HÀNG" HorizontalAlignment="Center" FontSize="22"
         FontWeight="Bold" Foreground="#163F38" />
@@ -229,14 +231,12 @@
         IsVisible="{Binding MaPhieuThu, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
         HorizontalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="#087F6E" Margin="0,2,0,0" />
 
-      <Border BorderBrush="#D8E5E0" BorderThickness="0,0,0,1" Margin="0,8,0,4" />
+      <Border Height="1" Background="#CBD5E1" Margin="0,8,0,6" />
       <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
         <TextBlock Text="Khách hàng:" FontWeight="SemiBold" Foreground="#61736E" />
         <TextBlock Grid.Column="1" Text="{Binding TenKhachHang}" Foreground="#263B35" />
-        <TextBlock Grid.Row="1" Text="Số điện thoại:" FontWeight="SemiBold" Foreground="#61736E"
-          IsVisible="{Binding HienThiSoDienThoaiKhachHang}" Margin="0,2,0,0" />
-        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SoDienThoaiHienThi}" Foreground="#263B35"
-          IsVisible="{Binding HienThiSoDienThoaiKhachHang}" Margin="0,2,0,0" />
+        <TextBlock Grid.Row="1" Text="SĐT khách:" FontWeight="SemiBold" Foreground="#61736E" Margin="0,2,0,0" />
+        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SoDienThoaiHienThi}" Foreground="#263B35" Margin="0,2,0,0" />
         <TextBlock Grid.Row="2" Text="Địa chỉ:" FontWeight="SemiBold" Foreground="#61736E"
           IsVisible="{Binding HienThiDiaChiKhachHang}" Margin="0,2,0,0" />
         <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DiaChiHienThi}" Foreground="#263B35" TextWrapping="Wrap"
@@ -244,6 +244,7 @@
         <TextBlock Grid.Row="3" Text="Nhân viên:" FontWeight="SemiBold" Foreground="#61736E" Margin="0,2,0,0" />
         <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TenNhanVien}" Foreground="#263B35" Margin="0,2,0,0" />
       </Grid>
+      <Border Height="1" Background="#CBD5E1" Margin="0,8,0,4" />
 
       <Grid ColumnDefinitions="*,Auto,60,100,120" Margin="0,12,0,0" ColumnSpacing="6">
         <TextBlock Text="Sản phẩm" FontWeight="Bold" Foreground="#163F38" />
@@ -275,7 +276,7 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
-      <Border BorderBrush="#D8E5E0"
+      <Border BorderBrush="#CBD5E1"
         BorderThickness="0,1,0,0"
         Margin="0,8,0,0"
         Padding="0,10,0,0">
@@ -354,6 +355,8 @@
         </StackPanel>
       </Border>
 
+      <Border Height="1" Background="#CBD5E1" Margin="0,6,0,2" />
+
       <Border IsVisible="{Binding CoGhiChu}"
         Background="#FFF9ED"
         BorderBrush="#F0E0BB"
@@ -412,7 +415,7 @@
 
       <!-- QR CODE CUỐI HÓA ĐƠN -->
       <Border IsVisible="{Binding ThongTinTiem.CoQrInHoaDon}"
-        BorderBrush="#D8E5E0" BorderThickness="0,1,0,0"
+        BorderBrush="#CBD5E1" BorderThickness="0,1,0,0"
         Margin="0,14,0,0" Padding="0,12,0,0">
         <StackPanel Spacing="4">
           <Image Source="{Binding ThongTinTiem.QrBitmap}"

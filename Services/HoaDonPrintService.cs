@@ -69,7 +69,7 @@ public static class HoaDonPrintService
         sb.Append(".title{text-align:center;font-size:16px;font-weight:700;letter-spacing:1px;margin:2mm 0 1mm;}");
         sb.Append(".k58 .title{font-size:13px;}.ka4 .title{font-size:19px;}");
         sb.Append(".subtitle{text-align:center;font-size:11.5px;color:#555;}");
-        sb.Append(".sep{border:0;border-top:1px dashed #b9b9b9;margin:2.4mm 0;}");
+        sb.Append(".sep{border:0;border-top:1px dashed #444;margin:2.8mm 0;}");
         sb.Append("table{border-collapse:collapse;width:100%;}");
         sb.Append("table.info td{padding:1px 0;vertical-align:top;font-size:12px;}");
         sb.Append(".k58 table.info td{font-size:10.5px;}");
@@ -128,10 +128,10 @@ public static class HoaDonPrintService
         if (!string.IsNullOrWhiteSpace(tiem.TenTiem))
             sb.Append("<div class=\"store-name\">").Append(Enc(tiem.TenTiem.Trim())).Append("</div>");
 
-        DongThongTin(sb, tiem.DiaChi);
+        DongThongTin(sb, tiem.DiaChiHienThi);
         DongThongTin(sb, tiem.DienThoaiZaloHienThi);
         DongThongTin(sb, tiem.CoFacebook ? tiem.FacebookHienThi : "");
-        DongThongTin(sb, tiem.CoThongTinNganHang ? $"NH: {tiem.NganHangHienThi}" : "");
+        DongThongTin(sb, tiem.CoThongTinNganHang ? tiem.StkHienThi : "");
         DongThongTin(sb, tiem.Email);
         DongThongTin(sb, tiem.WebsiteHienThi);
         DongThongTin(sb, tiem.MaSoThueHienThi);
@@ -167,8 +167,7 @@ public static class HoaDonPrintService
         DongInfo(sb, "Khách hàng",
             string.IsNullOrWhiteSpace(receipt.TenKhachHang) ? "Khách lẻ" : receipt.TenKhachHang);
 
-        if (receipt.HienThiSoDienThoaiKhachHang)
-            DongInfo(sb, "Điện thoại", receipt.SoDienThoaiHienThi);
+        DongInfo(sb, "SĐT khách", receipt.SoDienThoaiHienThi);
 
         if (receipt.HienThiDiaChiKhachHang)
             DongInfo(sb, "Địa chỉ", receipt.DiaChiHienThi);
@@ -274,6 +273,7 @@ public static class HoaDonPrintService
 
         if (!string.IsNullOrWhiteSpace(receipt.GhiChu))
         {
+            sb.Append("<hr class=\"sep\">");
             sb.Append("<div class=\"note\"><b>Ghi chú:</b> ")
               .Append(Enc(receipt.GhiChu)).Append("</div>");
         }

@@ -128,16 +128,25 @@ public sealed partial class ThongTinTiem : ObservableObject
     /// <summary>QR được bật và có ảnh — dùng cho bản xem trước trên màn hình.</summary>
     public bool CoQrInHoaDon => HienThiQr && CoQr;
 
-    /// <summary>
-    /// Lời cảm ơn cuối hóa đơn. Người dùng xoá hết thì lấy mặc định thay vì
-    /// để hóa đơn trống mất dòng kết.
-    /// </summary>
+    /// <summary>Lời cảm ơn cuối hóa đơn. Người dùng xoá hết thì lấy mặc định thay vì để hóa đơn trống mất dòng kết.</summary>
     public string LoiCamOnHienThi =>
         string.IsNullOrWhiteSpace(LoiCamOn) ? "Cảm ơn quý khách!" : LoiCamOn.Trim();
 
-    /// <summary>Số điện thoại kèm tiền tố "ĐT:" đúng như cách in ra hóa đơn.</summary>
+    /// <summary>Địa chỉ kèm tiền tố "ĐC:" đúng như cách in ra hóa đơn.</summary>
+    public string DiaChiHienThi
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(DiaChi))
+                return "";
+            var dc = DiaChi.Trim();
+            return dc.StartsWith("ĐC:", StringComparison.OrdinalIgnoreCase) ? dc : $"ĐC: {dc}";
+        }
+    }
+
+    /// <summary>Số điện thoại kèm tiền tố "SĐT:" đúng như cách in ra hóa đơn.</summary>
     public string SoDienThoaiHienThi =>
-        string.IsNullOrWhiteSpace(SoDienThoai) ? "" : $"ĐT: {SoDienThoai.Trim()}";
+        string.IsNullOrWhiteSpace(SoDienThoai) ? "" : $"SĐT: {SoDienThoai.Trim()}";
 
     /// <summary>Dòng điện thoại + Zalo gộp lại cho gọn trên hóa đơn.</summary>
     public string DienThoaiZaloHienThi
@@ -151,19 +160,30 @@ public sealed partial class ThongTinTiem : ObservableObject
                 return "";
 
             if (sdt.Length > 0 && zalo.Length > 0)
-                return $"ĐT/Zalo: {sdt} - {zalo}";
+                return $"Sđt/zalo: {sdt} - {zalo}";
 
-            return sdt.Length > 0 ? $"ĐT: {sdt}" : $"Zalo: {zalo}";
+            return sdt.Length > 0 ? $"Sđt: {sdt}" : $"Zalo: {zalo}";
         }
     }
 
-    public string FacebookHienThi =>
-        string.IsNullOrWhiteSpace(Facebook) ? "" : $"Facebook: {Facebook.Trim()}";
+    public string FacebookHienThi
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Facebook))
+                return "";
+            var fb = Facebook.Trim();
+            if (fb.StartsWith("Face:", StringComparison.OrdinalIgnoreCase) ||
+                fb.StartsWith("Facebook:", StringComparison.OrdinalIgnoreCase))
+                return fb;
+            return $"Face: {fb}";
+        }
+    }
 
     public bool CoFacebook =>
         HienThiFacebook && !string.IsNullOrWhiteSpace(Facebook);
 
-    public string NganHangHienThi
+    public string NganHangChiTiet
     {
         get
         {
@@ -182,8 +202,23 @@ public sealed partial class ThongTinTiem : ObservableObject
         }
     }
 
+    public string StkHienThi
+    {
+        get
+        {
+            var chiTiet = NganHangChiTiet;
+            if (string.IsNullOrWhiteSpace(chiTiet))
+                return "";
+            return chiTiet.StartsWith("Stk:", StringComparison.OrdinalIgnoreCase)
+                ? chiTiet
+                : $"Stk: {chiTiet}";
+        }
+    }
+
+    public string NganHangHienThi => StkHienThi;
+
     public bool CoThongTinNganHang =>
-        HienThiNganHang && !string.IsNullOrWhiteSpace(NganHangHienThi);
+        HienThiNganHang && !string.IsNullOrWhiteSpace(NganHangChiTiet);
 
     /// <summary>Mã số thuế kèm nhãn, rỗng nếu người dùng chưa nhập.</summary>
     public string MaSoThueHienThi =>

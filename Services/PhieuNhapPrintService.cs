@@ -62,8 +62,10 @@ public static class PhieuNhapPrintService
 
         foreach (var dong in new[]
                  {
-                     tiem.DiaChi,
-                     tiem.SoDienThoaiHienThi,
+                     tiem.DiaChiHienThi,
+                     tiem.DienThoaiZaloHienThi,
+                     tiem.CoFacebook ? tiem.FacebookHienThi : "",
+                     tiem.CoThongTinNganHang ? tiem.StkHienThi : "",
                      tiem.Email,
                      tiem.WebsiteHienThi,
                      tiem.MaSoThueHienThi
@@ -123,9 +125,6 @@ public static class PhieuNhapPrintService
             DongTien(sb, "Đã thanh toán", detail.DaThanhToan);
         DongTien(sb, "Công nợ", detail.ConNo, detail.ConNo > 0 ? "debt" : "");
         sb.Append("</div>");
-
-        sb.Append("<div class=\"muted\" style=\"margin-top:6px;\">Trạng thái: ")
-          .Append(Enc(detail.TrangThaiHienThi)).Append("</div>");
 
         if (detail.CoGhiChu)
         {

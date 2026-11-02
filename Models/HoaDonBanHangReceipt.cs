@@ -32,10 +32,9 @@ public sealed class HoaDonBanHangReceipt
     public bool InKemThongTin { get; set; }
 
     /// <summary>
-    /// Số điện thoại khách hàng chỉ hiện khi thực sự có dữ liệu — không in dòng
-    /// trống hay chữ "Chưa có" lên hóa đơn.
+    /// Số điện thoại khách hàng: luôn hiển thị dòng SĐT của khách trên hóa đơn theo yêu cầu.
     /// </summary>
-    public bool HienThiSoDienThoaiKhachHang => !string.IsNullOrWhiteSpace(SoDienThoai);
+    public bool HienThiSoDienThoaiKhachHang => true;
 
     /// <summary>
     /// Địa chỉ khách hàng chỉ hiện khi có dữ liệu và người dùng không tắt trong
@@ -45,10 +44,9 @@ public sealed class HoaDonBanHangReceipt
         ThongTinTiem.HienThiDiaChiKhachHang && !string.IsNullOrWhiteSpace(DiaChi);
 
     /// <summary>Giữ tên cũ cho giao diện xem trước: có ít nhất một dòng liên hệ.</summary>
-    public bool HienThiThongTinLienHe =>
-        HienThiSoDienThoaiKhachHang || HienThiDiaChiKhachHang;
+    public bool HienThiThongTinLienHe => true;
 
-    public string SoDienThoaiHienThi => string.IsNullOrWhiteSpace(SoDienThoai) ? "" : SoDienThoai.Trim();
+    public string SoDienThoaiHienThi => string.IsNullOrWhiteSpace(SoDienThoai) ? "—" : SoDienThoai.Trim();
     public string DiaChiHienThi => string.IsNullOrWhiteSpace(DiaChi) ? "" : DiaChi.Trim();
 
     /// <summary>Ghi chú riêng của hóa đơn (yêu cầu riêng của khách...).</summary>
