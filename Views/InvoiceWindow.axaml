@@ -476,10 +476,6 @@
           Classes="btn-pay-debt" IsVisible="False"
           Click="ThanhToanCongNoButton_OnClick"
           ToolTip.Tip="Thu công nợ cho hóa đơn này" />
-        <Button x:Name="CancelInvoiceButton" Content="🚫 Hủy hóa đơn"
-          Classes="btn-cancel-invoice"
-          Click="CancelInvoiceButton_OnClick"
-          ToolTip.Tip="Hủy hóa đơn này và hoàn tác tồn kho / công nợ / sổ quỹ hoặc tạo lại đơn mới" />
         <Button x:Name="PrintButton" Content="🖨 In" Classes="btn-print"
           Click="PrintButton_OnClick" />
         <Button Content="Đóng" Classes="btn-close"

@@ -47,7 +47,6 @@ public partial class InvoiceWindow : Window
         DataContext = receipt;
         CapNhatNutThanhToan(receipt);
         PrintButton.IsVisible = !receipt.LaHoaDonTongHop;
-        CancelInvoiceButton.IsVisible = !receipt.LaHoaDonDaHuy && DatabaseService.CoQuyenHuyHoaDonHienTai();
         EditInvoiceButton.IsVisible = !receipt.LaHoaDonDaHuy;
         HistoryInvoiceButton.IsVisible = true;
     }
