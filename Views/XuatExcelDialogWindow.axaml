@@ -1,0 +1,220 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ShopHoa.ViewModels"
+        x:Class="ShopHoa.Views.XuatExcelDialogWindow"
+        x:DataType="vm:XuatExcelDialogViewModel"
+        Title="{Binding TieuDe}"
+        Width="640"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        RequestedThemeVariant="Light"
+        Background="#F4F7F6">
+
+  <Window.Styles>
+    <Style Selector="Button">
+      <Setter Property="Padding" Value="14,8" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style Selector="Button.primary:pointerover">
+      <Setter Property="Background" Value="#056B5D" />
+    </Style>
+
+    <Style Selector="Button.secondary">
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="Foreground" Value="#263B35" />
+      <Setter Property="BorderBrush" Value="#C9DCD6" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style Selector="Button.secondary:pointerover">
+      <Setter Property="Background" Value="#E8F5F1" />
+      <Setter Property="BorderBrush" Value="#8CCFC0" />
+    </Style>
+
+    <Style Selector="Button.preset">
+      <Setter Property="Background" Value="#F0FDF4" />
+      <Setter Property="Foreground" Value="#166534" />
+      <Setter Property="BorderBrush" Value="#BBF7D0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+
+    <Style Selector="Button.preset:pointerover">
+      <Setter Property="Background" Value="#DCFCE7" />
+      <Setter Property="BorderBrush" Value="#86EFAC" />
+    </Style>
+
+    <Style Selector="RadioButton">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="#1F2937" />
+    </Style>
+  </Window.Styles>
+
+  <Border Margin="16"
+          Background="#FFFFFF"
+          BorderBrush="#D7E7E2"
+          BorderThickness="1"
+          CornerRadius="14"
+          BoxShadow="0 4 16 0 #12000000">
+    <StackPanel Margin="24" Spacing="16">
+      <!-- HEADER DIALOG -->
+      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+        <Border Width="40" Height="40" CornerRadius="20" Background="#EAF9F5"
+                VerticalAlignment="Center">
+          <TextBlock Text="📊" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+          <TextBlock Text="{Binding TieuDe}"
+                     FontSize="17"
+                     FontWeight="Bold"
+                     Foreground="#164B40" />
+          <TextBlock Text="{Binding PhanHe, StringFormat='Tùy chỉnh phạm vi và định dạng báo cáo cho phân hệ {0}'}"
+                     FontSize="12"
+                     Foreground="#6B7280" />
+        </StackPanel>
+      </Grid>
+
+      <!-- 1. LOẠI BÁO CÁO -->
+      <Border Background="#F9FAFB"
+              BorderBrush="#E5E7EB"
+              BorderThickness="1"
+              CornerRadius="10"
+              Padding="16,12">
+        <StackPanel Spacing="10">
+          <TextBlock Text="1. CHỌN LOẠI BÁO CÁO"
+                     FontSize="12"
+                     FontWeight="Bold"
+                     Foreground="#087F6E" />
+          <StackPanel Spacing="8">
+            <RadioButton GroupName="LoaiBaoCao"
+                         IsChecked="{Binding IsBaoCaoDayDu}"
+                         Content="Xuất đầy đủ 3 Sheet (Khuyên dùng: Tổng quan + Chi tiết mặt hàng + Tổng hợp theo sản phẩm)"
+                         FontWeight="SemiBold" />
+            <RadioButton GroupName="LoaiBaoCao"
+                         IsChecked="{Binding IsBaoCaoTongQuan}"
+                         Content="Báo cáo tổng quan (Mỗi chứng từ 1 dòng: số lượng, tổng tiền, thanh toán, công nợ...)" />
+            <RadioButton GroupName="LoaiBaoCao"
+                         IsChecked="{Binding IsBaoCaoChiTiet}"
+                         Content="Báo cáo chi tiết mặt hàng (Mỗi mặt hàng trong từng chứng từ 1 dòng: mã, tên, ĐVT, số lượng, đơn giá...)" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- 2. KHOẢNG THỜI GIAN -->
+      <Border Background="#F9FAFB"
+              BorderBrush="#E5E7EB"
+              BorderThickness="1"
+              CornerRadius="10"
+              Padding="16,12">
+        <StackPanel Spacing="10">
+          <TextBlock Text="2. KHOẢNG THỜI GIAN"
+                     FontSize="12"
+                     FontWeight="Bold"
+                     Foreground="#087F6E" />
+
+          <!-- Các nút preset nhanh -->
+          <WrapPanel Orientation="Horizontal">
+            <Button Classes="preset" Content="Hôm nay" Command="{Binding ChonHomNayCommand}" Margin="0,0,6,6" />
+            <Button Classes="preset" Content="Hôm qua" Command="{Binding ChonHomQuaCommand}" Margin="0,0,6,6" />
+            <Button Classes="preset" Content="7 ngày qua" Command="{Binding Chon7NgayQuaCommand}" Margin="0,0,6,6" />
+            <Button Classes="preset" Content="Tháng này" Command="{Binding ChonThangNayCommand}" Margin="0,0,6,6" />
+            <Button Classes="preset" Content="Tháng trước" Command="{Binding ChonThangTruocCommand}" Margin="0,0,6,6" />
+            <Button Classes="preset" Content="Năm nay" Command="{Binding ChonNamNayCommand}" Margin="0,0,6,6" />
+          </WrapPanel>
+
+          <!-- Ô chọn Từ ngày - Đến ngày -->
+          <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="10" VerticalAlignment="Center">
+            <StackPanel Grid.Column="0" Spacing="4">
+              <TextBlock Text="Từ ngày" FontSize="11" Foreground="#4B5563" />
+              <DatePicker SelectedDate="{Binding TuNgay}" HorizontalAlignment="Stretch" />
+            </StackPanel>
+
+            <TextBlock Grid.Column="1" Text="→" FontSize="16" VerticalAlignment="Bottom" Margin="0,0,0,8" Foreground="#9CA3AF" />
+
+            <StackPanel Grid.Column="2" Spacing="4">
+              <TextBlock Text="Đến ngày" FontSize="11" Foreground="#4B5563" />
+              <DatePicker SelectedDate="{Binding DenNgay}" HorizontalAlignment="Stretch" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- 3. PHẠM VI DỮ LIỆU & BỘ LỌC -->
+      <Border Background="#F9FAFB"
+              BorderBrush="#E5E7EB"
+              BorderThickness="1"
+              CornerRadius="10"
+              Padding="16,12">
+        <StackPanel Spacing="10">
+          <TextBlock Text="3. PHẠM VI DỮ LIỆU"
+                     FontSize="12"
+                     FontWeight="Bold"
+                     Foreground="#087F6E" />
+          <StackPanel Spacing="8">
+            <RadioButton GroupName="PhamViLoc"
+                         IsChecked="{Binding IsTheoBoLocHienTai}"
+                         Content="Xuất theo bộ lọc đang áp dụng trên màn hình"
+                         FontWeight="SemiBold" />
+            <TextBlock Text="{Binding ThongTinBoLocHienTai, StringFormat='   Tiêu chí: {0}'}"
+                       FontSize="12"
+                       Foreground="#4B5563"
+                       Margin="12,0,0,0" />
+
+            <RadioButton GroupName="PhamViLoc"
+                         IsChecked="{Binding IsToanBoKhoangThoiGian}"
+                         Content="Xuất toàn bộ dữ liệu trong khoảng thời gian (Bỏ qua các bộ lọc tìm kiếm)" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- 4. TÓM TẮT PHẠM VI XUẤT -->
+      <Border Background="#EFF6FF"
+              BorderBrush="#BFDBFE"
+              BorderThickness="1"
+              CornerRadius="8"
+              Padding="14,10">
+        <StackPanel Spacing="4">
+          <TextBlock Text="ℹ TÓM TẮT PHẠM VI XUẤT:"
+                     FontSize="11"
+                     FontWeight="Bold"
+                     Foreground="#1E40AF" />
+          <TextBlock Text="{Binding ThongTinTomTat}"
+                     FontSize="12"
+                     Foreground="#1E3A8A"
+                     TextWrapping="Wrap"
+                     LineHeight="18" />
+        </StackPanel>
+      </Border>
+
+      <!-- CÁC NÚT HÀNH ĐỘNG -->
+      <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12" Margin="0,8,0,0">
+        <Button Grid.Column="1"
+                Classes="secondary"
+                Content="Hủy bỏ"
+                Width="120"
+                Command="{Binding HuyCommand}" />
+
+        <Button Grid.Column="2"
+                Classes="primary"
+                Content="Xuất Excel"
+                Width="140"
+                Command="{Binding XacNhanCommand}" />
+      </Grid>
+    </StackPanel>
+  </Border>
+</Window>

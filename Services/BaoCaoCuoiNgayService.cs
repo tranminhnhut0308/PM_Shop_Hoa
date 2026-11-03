@@ -120,16 +120,16 @@ public sealed class BaoCaoCuoiNgayService
         const string sql = """
         SELECT
             COUNT(*)                                          AS SoHoaDon,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang ELSE 0 END), 0) AS TongTienHang,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.giam_gia ELSE 0 END), 0)      AS GiamGia,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThu,
-            COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS ConNo,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.thu_khac ELSE 0 END), 0)     AS TienThua,
-            COALESCE(SUM(hd.trang_thai_thanh_toan = 'DA_THANH_TOAN'), 0) AS SoHoaDonDaThanhToan,
-            COALESCE(SUM(hd.cong_no_da_ghi_nhan = 1 AND hd.trang_thai_thanh_toan <> 'DA_THANH_TOAN'), 0) AS SoHoaDonConCongNo
+            COALESCE(SUM(hd.tong_tien_hang), 0)               AS TongTienHang,
+            COALESCE(SUM(hd.giam_gia), 0)                     AS GiamGia,
+            COALESCE(SUM(hd.khach_can_tra), 0)                AS DoanhThu,
+            COALESCE(SUM(hd.khach_da_thanh_toan), 0)          AS DaThu,
+            COALESCE(SUM(hd.con_no), 0)                       AS ConNo,
+            COALESCE(SUM(hd.thu_khac), 0)                     AS TienThua,
+            COALESCE(SUM(hd.con_no <= 0), 0)                  AS SoHoaDonDaThanhToan,
+            COALESCE(SUM(hd.con_no > 0), 0)                   AS SoHoaDonConCongNo
         FROM hoa_don_ban_hang hd
-        WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+        WHERE hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
           AND hd.thoi_gian_ban >= @DauNgay
           AND hd.thoi_gian_ban < @NgayKeTiep;
         """;
@@ -184,10 +184,10 @@ public sealed class BaoCaoCuoiNgayService
         const string sql = """
         SELECT
             HOUR(hd.thoi_gian_ban)       AS Gio,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu,
+            COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu,
             COUNT(*)                     AS SoHoaDon
         FROM hoa_don_ban_hang hd
-        WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+        WHERE hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
           AND hd.thoi_gian_ban >= @DauNgay
           AND hd.thoi_gian_ban < @NgayKeTiep
         GROUP BY HOUR(hd.thoi_gian_ban);
@@ -318,11 +318,11 @@ public sealed class BaoCaoCuoiNgayService
             COALESCE(NULLIF(TRIM(ct.ten_san_pham), ''), 'Sản phẩm đã xoá') AS Ten,
             COALESCE(NULLIF(TRIM(ct.ma_san_pham), ''), '-')                  AS MaSanPham,
             COALESCE(SUM(ct.so_luong), 0)                                     AS SoLuong,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu
+            COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu
         FROM chi_tiet_hoa_don_ban_hang ct
         INNER JOIN hoa_don_ban_hang hd
             ON hd.id = ct.hoa_don_id
-        WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+        WHERE hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
           AND hd.thoi_gian_ban >= @DauNgay
           AND hd.thoi_gian_ban < @NgayKeTiep
         GROUP BY ct.san_pham_id, Ten, MaSanPham
@@ -390,16 +390,16 @@ public sealed class BaoCaoCuoiNgayService
         FROM (
             SELECT
                 hd.khach_hang_id,
-                COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS TongGiaTriMua,
+                COALESCE(SUM(hd.khach_can_tra), 0) AS TongGiaTriMua,
                 (
                     SELECT COUNT(*)
                     FROM hoa_don_ban_hang truoc
                     WHERE truoc.khach_hang_id = hd.khach_hang_id
-                      AND truoc.trang_thai_hoa_don = 'HOAN_THANH'
+                      AND truoc.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
                       AND truoc.thoi_gian_ban < @DauNgay
                 ) AS DaMuaTruocDo
             FROM hoa_don_ban_hang hd
-            WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+            WHERE hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
               AND hd.thoi_gian_ban >= @DauNgay
               AND hd.thoi_gian_ban < @NgayKeTiep
               AND hd.khach_hang_id IS NOT NULL
@@ -417,12 +417,12 @@ public sealed class BaoCaoCuoiNgayService
             COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS Ten,
             COALESCE(NULLIF(TRIM(kh.ma_khach_hang), ''), '')          AS MaKhachHang,
             COUNT(*)                        AS SoHoaDon,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS TongMua,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThanhToan,
-            COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS ConNo
+            COALESCE(SUM(hd.khach_can_tra), 0) AS TongMua,
+            COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThanhToan,
+            COALESCE(SUM(hd.con_no), 0) AS ConNo
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
-        WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+        WHERE hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
           AND hd.thoi_gian_ban >= @DauNgay
           AND hd.thoi_gian_ban < @NgayKeTiep
         GROUP BY hd.khach_hang_id,
@@ -490,13 +490,13 @@ public sealed class BaoCaoCuoiNgayService
             COUNT(*)                                   AS SoHoaDon,
             COALESCE(SUM(hd.khach_can_tra), 0)         AS TongCongNoPhatSinh,
             COALESCE(SUM(hd.khach_da_thanh_toan), 0)   AS TongDaTra,
-            COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS TongConNo,
-            COALESCE(SUM(hd.cong_no_da_ghi_nhan = 1 AND hd.trang_thai_thanh_toan <> 'DA_THANH_TOAN'), 0) AS SoHoaDonConNo
+            COALESCE(SUM(hd.con_no), 0)                AS TongConNo,
+            COALESCE(SUM(hd.con_no > 0), 0)            AS SoHoaDonConNo
         FROM hoa_don_ban_hang hd
-        WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+        WHERE hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
           AND hd.thoi_gian_ban >= @DauNgay
           AND hd.thoi_gian_ban < @NgayKeTiep
-          AND hd.cong_no_da_ghi_nhan = 1;
+          AND hd.con_no > 0;
         """;
 
         var thamSo = new { DauNgay = dauNgay, NgayKeTiep = ngayKeTiep };
@@ -514,14 +514,14 @@ public sealed class BaoCaoCuoiNgayService
             hd.thu_khac                                    AS ThuKhac,
             hd.khach_can_tra                               AS DoanhThu,
             hd.khach_da_thanh_toan                         AS DaTra,
-            CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END AS ConNo,
+            hd.con_no                                      AS ConNo,
             COALESCE(hd.trang_thai_thanh_toan, '')          AS TrangThai
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
-        WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+        WHERE hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
           AND hd.thoi_gian_ban >= @DauNgay
           AND hd.thoi_gian_ban < @NgayKeTiep
-          AND hd.cong_no_da_ghi_nhan = 1
+          AND hd.con_no > 0
         ORDER BY hd.thoi_gian_ban DESC, hd.ma_hoa_don DESC;
         """;
 
@@ -693,7 +693,7 @@ public sealed class BaoCaoCuoiNgayService
             COALESCE(SUM(pn.da_thanh_toan), 0)     AS DaThanhToan,
             COALESCE(SUM(pn.con_no), 0)            AS ConNo
         FROM phieu_nhap_hang pn
-        WHERE pn.trang_thai <> 'HUY'
+        WHERE pn.trang_thai NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
           AND pn.thoi_gian_nhap >= @DauNgay
           AND pn.thoi_gian_nhap < @NgayKeTiep;
         """;

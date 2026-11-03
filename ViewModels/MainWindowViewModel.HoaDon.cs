@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -544,7 +544,10 @@ public sealed partial class MainWindowViewModel
     }
 
     /// <summary>
-    /// Xuất toàn bộ danh sách hóa đơn khớp bộ lọc và từ khóa hiện tại ra file Excel (.xlsx).
+    /// Xuất danh sách hóa đơn theo Issue #63:
+    /// - Hiển thị cửa sổ lựa chọn (Tổng quan / Chi tiết / Đầy đủ 3 sheet)
+    /// - Tùy chọn khoảng thời gian và phạm vi bộ lọc
+    /// - Định dạng chuyên nghiệp qua ReportExportService và ClosedXML
     /// </summary>
     [RelayCommand]
     private async Task XuatFileHoaDonAsync()
@@ -554,123 +557,102 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        if (OwnerWindow is null)
+        var cuaSo = OwnerWindow ?? ReportExportService.LayCuaSoChinh();
+        if (cuaSo is null)
             return;
 
-        var tenFileMacDinh = $"DanhSachHoaDon_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+        // Tổng hợp mô tả bộ lọc hiện tại trên giao diện
+        var moTaLoc = new List<string>();
+        if (!string.IsNullOrWhiteSpace(InvoiceSearch))
+            moTaLoc.Add($"Từ khóa: \"{InvoiceSearch.Trim()}\"");
+        if (SelectedInvoiceCustomer?.Id != null)
+            moTaLoc.Add($"Khách hàng: {SelectedInvoiceCustomer.DisplayText}");
+        if (!string.IsNullOrWhiteSpace(SelectedInvoicePaymentStatus) && SelectedInvoicePaymentStatus != "Tất cả")
+            moTaLoc.Add($"Thanh toán: {SelectedInvoicePaymentStatus}");
+        if (!string.IsNullOrWhiteSpace(SelectedInvoiceStatus) && SelectedInvoiceStatus != "Tất cả")
+            moTaLoc.Add($"Trạng thái: {SelectedInvoiceStatus}");
 
-        var file = await OwnerWindow.StorageProvider.SaveFilePickerAsync(
-            new FilePickerSaveOptions
-            {
-                Title = "Xuất danh sách hóa đơn",
-                SuggestedFileName = tenFileMacDinh,
-                DefaultExtension = "xlsx",
-                ShowOverwritePrompt = true,
-                FileTypeChoices =
-                [
-                    new FilePickerFileType("Excel (*.xlsx)")
-                    {
-                        Patterns = ["*.xlsx"]
-                    }
-                ]
-            });
+        var moTaBoLocHienTai = moTaLoc.Count > 0 ? string.Join(", ", moTaLoc) : "Không áp dụng lọc";
 
-        if (file is null)
+        // Mở cửa sổ lựa chọn xuất Excel
+        var yeuCau = await XuatExcelDialogWindow.ShowDialogAsync(
+            cuaSo,
+            "Tùy chọn xuất Excel - Hóa đơn",
+            "Hóa đơn bán hàng",
+            InvoiceFilterStartDate?.Date,
+            InvoiceFilterEndDate?.Date,
+            moTaBoLocHienTai);
+
+        if (yeuCau is null)
         {
-            StatusMessage = "Bạn đã hủy xuất file.";
+            StatusMessage = "Bạn đã hủy xuất file hóa đơn.";
             return;
         }
 
         try
         {
-            StatusMessage = "Đang xuất danh sách hóa đơn...";
+            StatusMessage = "Đang tải dữ liệu hóa đơn để xuất Excel...";
 
-            var ttThanhToan = SelectedInvoicePaymentStatus switch
+            var (tongQuans, chiTiets, tongHops) = await _db.GetHoaDonXuatExcelDataAsync(
+                yeuCau,
+                searchKeyword: InvoiceSearch,
+                khachHangId: SelectedInvoiceCustomer?.Id,
+                trangThaiThanhToan: SelectedInvoicePaymentStatus,
+                trangThaiHoaDon: SelectedInvoiceStatus);
+
+            var tongSoBanGhi = yeuCau.LoaiBaoCao switch
             {
-                "Đã thanh toán" => "DA_THANH_TOAN",
-                "Thanh toán một phần" => "THANH_TOAN_MOT_PHAN",
-                "Chưa thanh toán" => "CHUA_THANH_TOAN",
-                _ => null
+                LoaiBaoCaoXuat.TongQuan => tongQuans.Count,
+                LoaiBaoCaoXuat.ChiTiet => chiTiets.Count,
+                _ => tongQuans.Count
             };
 
-            var ttHoaDon = SelectedInvoiceStatus switch
-            {
-                "Hoàn thành" => "HOAN_THANH",
-                "Đã hủy" => "DA_HUY",
-                _ => null
-            };
-
-            var khId = SelectedInvoiceCustomer?.Id;
-
-            // Lấy toàn bộ hóa đơn theo đúng điều kiện tìm kiếm, ngày và trạng thái đang lọc (không giới hạn dòng)
-            var danhSach = await _db.GetHoaDonAsync(
-                search: InvoiceSearch,
-                ngayLoc: null,
-                limit: null,
-                trangThaiLoc: null,
-                tuNgay: InvoiceFilterStartDate?.Date,
-                denNgay: InvoiceFilterEndDate?.Date,
-                trangThaiThanhToan: ttThanhToan,
-                trangThaiHoaDon: ttHoaDon,
-                khachHangId: khId);
-
-            if (danhSach.Count == 0)
+            if (tongSoBanGhi == 0)
             {
                 await ShowMessageAsync(
-                    "Xuất file thất bại",
-                    "Không có hóa đơn nào khớp điều kiện đang xem nên không thể xuất file.");
-
-                StatusMessage = "Không có dữ liệu để xuất.";
+                    "Xuất file",
+                    "Không tìm thấy dữ liệu hóa đơn nào khớp với khoảng thời gian và phạm vi đã chọn.");
+                StatusMessage = "Không có dữ liệu hóa đơn để xuất.";
                 return;
             }
 
-            var moTaLoc = new List<string>();
-            if (InvoiceFilterStartDate.HasValue && InvoiceFilterEndDate.HasValue)
+            var tenLoai = yeuCau.LoaiBaoCao switch
             {
-                if (InvoiceFilterStartDate.Value.Date == InvoiceFilterEndDate.Value.Date)
-                    moTaLoc.Add($"Ngày: {InvoiceFilterStartDate.Value:dd/MM/yyyy}");
-                else
-                    moTaLoc.Add($"Từ ngày {InvoiceFilterStartDate.Value:dd/MM/yyyy} đến {InvoiceFilterEndDate.Value:dd/MM/yyyy}");
-            }
-            else if (InvoiceFilterStartDate.HasValue)
+                LoaiBaoCaoXuat.TongQuan => "TongQuan",
+                LoaiBaoCaoXuat.ChiTiet => "ChiTiet",
+                _ => "DayDu"
+            };
+
+            var tenTieuDe = yeuCau.LoaiBaoCao switch
             {
-                moTaLoc.Add($"Từ ngày: {InvoiceFilterStartDate.Value:dd/MM/yyyy}");
-            }
-            else if (InvoiceFilterEndDate.HasValue)
-            {
-                moTaLoc.Add($"Đến ngày: {InvoiceFilterEndDate.Value:dd/MM/yyyy}");
-            }
+                LoaiBaoCaoXuat.TongQuan => "Báo cáo tổng quan hóa đơn",
+                LoaiBaoCaoXuat.ChiTiet => "Báo cáo chi tiết mặt hàng bán",
+                _ => "Báo cáo đầy đủ hóa đơn bán hàng"
+            };
 
-            if (!string.IsNullOrWhiteSpace(SelectedInvoicePaymentStatus) && SelectedInvoicePaymentStatus != "Tất cả")
-                moTaLoc.Add($"Thanh toán: {SelectedInvoicePaymentStatus}");
-            if (!string.IsNullOrWhiteSpace(SelectedInvoiceStatus) && SelectedInvoiceStatus != "Tất cả")
-                moTaLoc.Add($"Trạng thái HĐ: {SelectedInvoiceStatus}");
-            if (SelectedInvoiceCustomer?.Id != null)
-                moTaLoc.Add($"Khách hàng: {SelectedInvoiceCustomer.DisplayText}");
+            var tenFileGoiY = $"HoaDon_{tenLoai}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            var ghiChuLoc = $"{yeuCau.MoTaKhoangThoiGian} | {yeuCau.MoTaBoLoc}";
 
-            if (!string.IsNullOrWhiteSpace(InvoiceSearch))
-                moTaLoc.Add($"Từ khóa: \"{InvoiceSearch.Trim()}\"");
-
-            var ghiChuLoc = moTaLoc.Count > 0 ? string.Join(", ", moTaLoc) : null;
-
-            await using var stream = await file.OpenWriteAsync();
-
-            await Task.Run(() =>
-            {
-                using var workbook = HoaDonExcel.TaoWorkbook(danhSach, DateTime.Now, ghiChuLoc);
-                workbook.SaveAs(stream);
-            });
-
-            StatusMessage = $"✅ Đã xuất {danhSach.Count:N0} hóa đơn ra file {file.Name}.";
-
-            await ShowMessageAsync(
-                "Xuất file thành công",
-                $"Đã xuất {danhSach.Count:N0} hóa đơn.\n\nFile:\n{file.Name}");
+            await ReportExportService.ExportReportAsync(
+                cuaSo,
+                tenTieuDe,
+                tenFileGoiY,
+                () => HoaDonExcel.TaoWorkbookMoi(
+                    tongQuans,
+                    chiTiets,
+                    tongHops,
+                    yeuCau.LoaiBaoCao,
+                    DateTime.Now,
+                    ghiChuLoc,
+                    "VỰA HOA NHÀ HUY",
+                    Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap ?? "Hệ thống"),
+                recordCount: tongSoBanGhi,
+                statusCallback: msg => StatusMessage = msg,
+                reportPeriod: yeuCau.MoTaKhoangThoiGian);
         }
         catch (Exception ex)
         {
             StatusMessage = "Xuất file thất bại: " + ex.Message;
-
             await ShowMessageAsync(
                 "Xuất file thất bại",
                 $"Không thể xuất danh sách hóa đơn.\n\nChi tiết lỗi:\n{ex.Message}");

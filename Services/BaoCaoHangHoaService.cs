@@ -152,7 +152,7 @@ ORDER BY 1;",
         public string? TimKiem { get; init; }
 
         public string Where =>
-            @"hd.trang_thai_hoa_don = 'HOAN_THANH'
+            @"hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
   AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep"
             + (LoaiHang is null ? "" : "\n  AND TRIM(sp.loai_hang_excel) = @LoaiHang")
             + (NhomId > 0 ? "\n  AND sp.nhom_san_pham_id = @NhomId"
@@ -187,8 +187,8 @@ SELECT
 FROM (
   SELECT
     COALESCE(SUM(ct.so_luong), 0) AS SoLuongBan,
-    COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu,
-    COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.gia_von * ct.so_luong ELSE 0 END), 0) AS GiaVon
+    COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu,
+    COALESCE(SUM(ct.gia_von * ct.so_luong), 0) AS GiaVon
   " + DieuKien.From + @"
   WHERE " + dk.Where + @"
   GROUP BY " + nhomGroup + @"
@@ -201,7 +201,7 @@ FROM (
         string sqlGiamGia = @"
 SELECT COALESCE(SUM(giam_gia), 0)
 FROM hoa_don_ban_hang hd
-WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+WHERE hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
   AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep;
 ";
         r.TongGiamGia = await conn.ExecuteScalarAsync<decimal>(
@@ -256,8 +256,8 @@ SELECT
   " + chonTen + @",
   COALESCE(MIN(dvt.ten_don_vi), '') AS DonViTinh,
   COALESCE(SUM(ct.so_luong), 0) AS SoLuongBan,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.gia_von * ct.so_luong ELSE 0 END), 0) AS GiaVon
+  COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu,
+  COALESCE(SUM(ct.gia_von * ct.so_luong), 0) AS GiaVon
 " + DieuKien.From + @"
 LEFT JOIN don_vi_tinh dvt ON dvt.id = sp.don_vi_tinh_id
 WHERE " + dk.Where + @"
@@ -278,7 +278,7 @@ SELECT
   COALESCE(NULLIF(TRIM(n.ten_nhom), ''), 'Chưa phân nhóm') AS TenNhom,
   " + demMa + @" AS SoMaHang,
   COALESCE(SUM(ct.so_luong), 0) AS SoLuongBan,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu
+  COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu
 " + DieuKien.From + @"
 LEFT JOIN nhom_san_pham n ON n.id = sp.nhom_san_pham_id
 WHERE " + dk.Where + @"
@@ -300,8 +300,8 @@ SELECT
   " + chonTen + @",
   COALESCE(NULLIF(TRIM(n.ten_nhom), ''), 'Chưa phân nhóm') AS NhomHang,
   COALESCE(SUM(ct.so_luong), 0) AS SoLuongBan,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.thanh_tien ELSE 0 END), 0) AS DoanhThu,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN ct.gia_von * ct.so_luong ELSE 0 END), 0) AS GiaVon
+  COALESCE(SUM(ct.thanh_tien), 0) AS DoanhThu,
+  COALESCE(SUM(ct.gia_von * ct.so_luong), 0) AS GiaVon
 " + DieuKien.From + @"
 LEFT JOIN nhom_san_pham n ON n.id = sp.nhom_san_pham_id
 WHERE " + dk.Where + @"

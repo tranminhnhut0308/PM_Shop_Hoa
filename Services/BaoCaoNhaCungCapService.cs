@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using Dapper;
 using MySqlConnector;
 using ShopHoa.Models;
@@ -101,7 +101,7 @@ public sealed class BaoCaoNhaCungCapService
         SELECT COUNT(*)
         FROM phieu_nhap_hang p
         WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
-          AND p.trang_thai != 'LUU_TAM' AND p.trang_thai != 'HUY';
+          AND p.trang_thai NOT IN ('DA_HUY', 'HUY', 'LUU_TAM');
         """;
 
         var soPhieuTrongKy = await conn.ExecuteScalarAsync<int>(
@@ -209,8 +209,7 @@ public sealed class BaoCaoNhaCungCapService
             SELECT SUM(p_cn.con_no)
             FROM phieu_nhap_hang p_cn
             WHERE p_cn.nha_cung_cap_id = ncc.id
-              AND p_cn.trang_thai NOT IN ('LUU_TAM', 'HUY')
-              AND p_cn.cong_no_da_ghi_nhan = 1
+              AND p_cn.trang_thai NOT IN ('LUU_TAM', 'HUY', 'DA_HUY')
         ), 0))";
 
         if (dk.CoCotKiotViet)
@@ -257,7 +256,7 @@ public sealed class BaoCaoNhaCungCapService
         SELECT
             COUNT(DISTINCT ncc.id) AS TongNhaCungCap,
             COUNT(p.id) AS SoPhieuNhap,
-            COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) AS TongTienNhap,
+            COALESCE(SUM(p.tong_tien_nhap), 0) AS TongTienNhap,
             COALESCE(SUM(p.giam_gia), 0) AS GiamGia,
             COALESCE(SUM(p.chi_phi_khac), 0) AS ChiPhiKhac,
             COALESCE(SUM({tienTraHangExpr}), 0) AS TienTraHang,
@@ -266,10 +265,10 @@ public sealed class BaoCaoNhaCungCapService
             COALESCE(SUM(p.con_no), 0) AS CongNoPhatSinh,
             COUNT(DISTINCT CASE WHEN p.con_no > 0 THEN ncc.id END) AS SoNccConNo
         FROM phieu_nhap_hang p
-        INNER JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
+        LEFT JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
         WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
-          AND p.trang_thai != 'LUU_TAM' AND p.trang_thai != 'HUY'
-          AND ncc.trang_thai = 1
+          AND p.trang_thai NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
+          AND (ncc.trang_thai = 1 OR ncc.id IS NULL)
           {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")};
         """;
 
@@ -297,12 +296,12 @@ public sealed class BaoCaoNhaCungCapService
         }
 
         var sql = $"""
-        SELECT COUNT(DISTINCT ncc.id)
+        SELECT COUNT(DISTINCT p.nha_cung_cap_id)
         FROM phieu_nhap_hang p
-        INNER JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
+        LEFT JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
         WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
-          AND p.trang_thai != 'LUU_TAM' AND p.trang_thai != 'HUY'
-          AND ncc.trang_thai = 1
+          AND p.trang_thai NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
+          AND (ncc.trang_thai = 1 OR ncc.id IS NULL)
           {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")};
         """;
 
@@ -364,21 +363,21 @@ public sealed class BaoCaoNhaCungCapService
             COALESCE(ncc.so_dien_thoai, '') AS SoDienThoai,
             COUNT(p.id) AS SoPhieuNhap,
             COALESCE(SUM(ct.tong_sl), 0) AS TongSoLuongNhap,
-            COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) AS TongTienNhap,
+            COALESCE(SUM(p.tong_tien_nhap), 0) AS TongTienNhap,
             {tienTraHangExpr} AS TienTraHang,
-            (COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) - {tienTraHangExpr}) AS GiaTriNhapHang,
+            (COALESCE(SUM(p.tong_tien_nhap), 0) - {tienTraHangExpr}) AS GiaTriNhapHang,
             COALESCE(SUM(p.da_thanh_toan), 0) AS DaThanhToan,
             {congNoExpr} AS CongNo
         FROM phieu_nhap_hang p
-        INNER JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
+        LEFT JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
         LEFT JOIN (
             SELECT phieu_nhap_id, SUM(so_luong) AS tong_sl
             FROM chi_tiet_phieu_nhap_hang
             GROUP BY phieu_nhap_id
         ) ct ON ct.phieu_nhap_id = p.id
         WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
-          AND p.trang_thai != 'LUU_TAM' AND p.trang_thai != 'HUY'
-          AND ncc.trang_thai = 1
+          AND p.trang_thai NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
+          AND (ncc.trang_thai = 1 OR ncc.id IS NULL)
           {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")}
         GROUP BY ncc.id, ncc.ma_nha_cung_cap, ncc.ten_nha_cung_cap, ncc.so_dien_thoai
         ORDER BY {orderBy}, ncc.id
@@ -441,21 +440,21 @@ public sealed class BaoCaoNhaCungCapService
             COALESCE(ncc.so_dien_thoai, '') AS SoDienThoai,
             COUNT(p.id) AS SoPhieuNhap,
             COALESCE(SUM(ct.tong_sl), 0) AS TongSoLuongNhap,
-            COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) AS TongTienNhap,
+            COALESCE(SUM(p.tong_tien_nhap), 0) AS TongTienNhap,
             {tienTraHangExpr} AS TienTraHang,
-            (COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) - {tienTraHangExpr}) AS GiaTriNhapHang,
+            (COALESCE(SUM(p.tong_tien_nhap), 0) - {tienTraHangExpr}) AS GiaTriNhapHang,
             COALESCE(SUM(p.da_thanh_toan), 0) AS DaThanhToan,
             {congNoExpr} AS CongNo
         FROM phieu_nhap_hang p
-        INNER JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
+        LEFT JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
         LEFT JOIN (
             SELECT phieu_nhap_id, SUM(so_luong) AS tong_sl
             FROM chi_tiet_phieu_nhap_hang
             GROUP BY phieu_nhap_id
         ) ct ON ct.phieu_nhap_id = p.id
         WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
-          AND p.trang_thai != 'LUU_TAM' AND p.trang_thai != 'HUY'
-          AND ncc.trang_thai = 1
+          AND p.trang_thai NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
+          AND (ncc.trang_thai = 1 OR ncc.id IS NULL)
           {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")}
         GROUP BY ncc.id, ncc.ma_nha_cung_cap, ncc.ten_nha_cung_cap, ncc.so_dien_thoai
         ORDER BY GiaTriNhapHang DESC, SoPhieuNhap DESC, ncc.id
@@ -488,14 +487,14 @@ public sealed class BaoCaoNhaCungCapService
                COALESCE(SUM(SoPhieuNhap), 0) AS SoPhieuNhap
         FROM (
             SELECT DATE_FORMAT(p.thoi_gian_nhap, '{format}') AS ThoiGianStr,
-                   COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) AS TienNhap,
+                   COALESCE(SUM(p.tong_tien_nhap), 0) AS TienNhap,
                    0 AS TienTraHang,
                    COUNT(*) AS SoPhieuNhap
             FROM phieu_nhap_hang p
-            INNER JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
+            LEFT JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
             WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
-              AND p.trang_thai != 'LUU_TAM' AND p.trang_thai != 'HUY'
-              AND ncc.trang_thai = 1
+              AND p.trang_thai NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
+              AND (ncc.trang_thai = 1 OR ncc.id IS NULL)
               {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")}
             GROUP BY ThoiGianStr
             UNION ALL

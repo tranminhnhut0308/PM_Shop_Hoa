@@ -130,44 +130,44 @@ public sealed class BaoCaoKhachHangService
         public string? TimKiem { get; init; }
 
         public string Where =>
-            @"hd.trang_thai_hoa_don = 'HOAN_THANH'
+            @"hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
   AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep"
             + (TimKiem is null
                 ? ""
                 : @"
-  AND (kh.ma_khach_hang LIKE @TimKiem OR kh.ten_khach_hang LIKE @TimKiem OR kh.so_dien_thoai LIKE @TimKiem)");
+  AND (kh.ma_khach_hang LIKE @TimKiem OR kh.ten_khach_hang LIKE @TimKiem OR kh.so_dien_thoai LIKE @TimKiem OR (kh.id IS NULL AND 'Khách lẻ' LIKE @TimKiem))");
 
         public object Params => new { TuNgay, DenKeTiep, TimKiem };
 
         public const string From = @"
 FROM hoa_don_ban_hang hd
-INNER JOIN khach_hang kh ON kh.id = hd.khach_hang_id";
+LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id";
     }
 
     private const string TongHopCot = @"
   COUNT(*) AS SoDonHang,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang ELSE 0 END), 0) AS TongTienHang,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.giam_gia ELSE 0 END), 0) AS GiamGia,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang - hd.giam_gia ELSE 0 END), 0) AS GiaTriMuaHang,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThanhToan,
-  COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo";
+  COALESCE(SUM(hd.tong_tien_hang), 0) AS TongTienHang,
+  COALESCE(SUM(hd.giam_gia), 0) AS GiamGia,
+  COALESCE(SUM(hd.khach_can_tra), 0) AS GiaTriMuaHang,
+  COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThanhToan,
+  COALESCE(SUM(hd.con_no), 0) AS CongNo";
 
-    private const string NhomKhach = @"kh.id, kh.ma_khach_hang, kh.ten_khach_hang, kh.so_dien_thoai";
+    private const string NhomKhach = @"COALESCE(kh.id, 0), COALESCE(kh.ma_khach_hang, 'KHACH_LE'), COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ'), COALESCE(kh.so_dien_thoai, '')";
 
     private async Task<BaoCaoKhachHangTongHopKy> TaiTongHopAsync(
         MySqlConnection conn, DieuKien dk, CancellationToken token)
     {
         string sql = @"
 SELECT
-  COUNT(DISTINCT kh.id) AS TongKhachHang,
+  COUNT(DISTINCT COALESCE(kh.id, 0)) AS TongKhachHang,
   COUNT(*) AS SoDonHang,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang ELSE 0 END), 0) AS TongTienHang,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.giam_gia ELSE 0 END), 0) AS GiamGia,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang - hd.giam_gia ELSE 0 END), 0) AS GiaTriMuaHang,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThanhToan,
-  COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo,
-  COUNT(DISTINCT CASE WHEN hd.cong_no_da_ghi_nhan = 1 AND hd.con_no > 0 THEN kh.id END) AS SoKhachConNo,
-  COUNT(DISTINCT CASE WHEN hd.doanh_so_da_ghi_nhan = 1 AND hd.khach_da_thanh_toan > 0 THEN kh.id END) AS SoKhachCoThanhToan
+  COALESCE(SUM(hd.tong_tien_hang), 0) AS TongTienHang,
+  COALESCE(SUM(hd.giam_gia), 0) AS GiamGia,
+  COALESCE(SUM(hd.khach_can_tra), 0) AS GiaTriMuaHang,
+  COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThanhToan,
+  COALESCE(SUM(hd.con_no), 0) AS CongNo,
+  COUNT(DISTINCT CASE WHEN hd.con_no > 0 THEN COALESCE(kh.id, 0) END) AS SoKhachConNo,
+  COUNT(DISTINCT CASE WHEN hd.khach_da_thanh_toan > 0 THEN COALESCE(kh.id, 0) END) AS SoKhachCoThanhToan
 " + DieuKien.From + @"
 WHERE " + dk.Where + @";
 ";
@@ -185,14 +185,14 @@ WHERE " + dk.Where + @";
 
         string sql = @"
 SELECT
-  kh.id AS Id,
-  COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
-  COALESCE(kh.ten_khach_hang, '') AS TenKhachHang,
+  COALESCE(kh.id, 0) AS Id,
+  COALESCE(kh.ma_khach_hang, 'KHACH_LE') AS MaKhachHang,
+  COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
   COALESCE(kh.so_dien_thoai, '') AS SoDienThoai,
   " + TongHopCot + DieuKien.From + @"
 WHERE " + dk.Where + @"
 GROUP BY " + NhomKhach + @"
-ORDER BY " + orderBy + @", kh.id
+ORDER BY " + orderBy + @", COALESCE(kh.id, 0)
 LIMIT @SoDong OFFSET @Offset;
 ";
 
@@ -217,14 +217,14 @@ LIMIT @SoDong OFFSET @Offset;
 
         string sql = @"
 SELECT
-  kh.id AS Id,
-  COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
-  COALESCE(kh.ten_khach_hang, '') AS TenKhachHang,
+  COALESCE(kh.id, 0) AS Id,
+  COALESCE(kh.ma_khach_hang, 'KHACH_LE') AS MaKhachHang,
+  COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
   COALESCE(kh.so_dien_thoai, '') AS SoDienThoai,
   " + TongHopCot + DieuKien.From + @"
 WHERE " + dk.Where + @"
 GROUP BY " + NhomKhach + @"
-ORDER BY " + orderBy + @", SoDonHang DESC, kh.id
+ORDER BY " + orderBy + @", SoDonHang DESC, COALESCE(kh.id, 0)
 LIMIT 10;
 ";
 
@@ -241,25 +241,25 @@ LIMIT 10;
     {
         string sql = @"
 SELECT
-  kh.id AS Id,
-  COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
-  COALESCE(kh.ten_khach_hang, '') AS TenKhachHang,
+  COALESCE(kh.id, 0) AS Id,
+  COALESCE(kh.ma_khach_hang, 'KHACH_LE') AS MaKhachHang,
+  COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
   COALESCE(kh.so_dien_thoai, '') AS SoDienThoai,
   COUNT(hd.id) AS SoDonHang,
   COALESCE(SUM(ct.tong_sl), 0) AS TongSoLuongMua,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang - hd.giam_gia ELSE 0 END), 0) AS GiaTriMuaHang,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThanhToan,
-  COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo
+  COALESCE(SUM(hd.khach_can_tra), 0) AS GiaTriMuaHang,
+  COALESCE(SUM(hd.khach_da_thanh_toan), 0) AS DaThanhToan,
+  COALESCE(SUM(hd.con_no), 0) AS CongNo
 FROM hoa_don_ban_hang hd
-INNER JOIN khach_hang kh ON kh.id = hd.khach_hang_id
+LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
 LEFT JOIN (
   SELECT hoa_don_id, SUM(so_luong) AS tong_sl
   FROM chi_tiet_hoa_don_ban_hang
   GROUP BY hoa_don_id
 ) ct ON ct.hoa_don_id = hd.id
 WHERE " + dk.Where + @"
-GROUP BY kh.id, kh.ma_khach_hang, kh.ten_khach_hang, kh.so_dien_thoai
-ORDER BY GiaTriMuaHang DESC, SoDonHang DESC, kh.id
+GROUP BY " + NhomKhach + @"
+ORDER BY GiaTriMuaHang DESC, SoDonHang DESC, COALESCE(kh.id, 0)
 LIMIT 10;
 ";
 
@@ -282,14 +282,14 @@ LIMIT 10;
     {
         string sql = @"
 SELECT
-  COALESCE(nkh.ten_nhom, 'Chưa phân nhóm') AS TenNhom,
-  COUNT(DISTINCT kh.id) AS SoKhachHang,
-  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang - hd.giam_gia ELSE 0 END), 0) AS DoanhThu
+  COALESCE(nkh.ten_nhom, CASE WHEN kh.id IS NULL OR kh.id = 0 THEN 'Khách lẻ' ELSE 'Chưa phân nhóm' END) AS TenNhom,
+  COUNT(DISTINCT COALESCE(kh.id, 0)) AS SoKhachHang,
+  COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu
 FROM hoa_don_ban_hang hd
-INNER JOIN khach_hang kh ON kh.id = hd.khach_hang_id
+LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
 LEFT JOIN nhom_khach_hang nkh ON nkh.id = kh.nhom_khach_hang_id
 WHERE " + dk.Where + @"
-GROUP BY COALESCE(nkh.ten_nhom, 'Chưa phân nhóm')
+GROUP BY COALESCE(nkh.ten_nhom, CASE WHEN kh.id IS NULL OR kh.id = 0 THEN 'Khách lẻ' ELSE 'Chưa phân nhóm' END)
 ORDER BY DoanhThu DESC;
 ";
 
@@ -314,9 +314,9 @@ ORDER BY DoanhThu DESC;
     {
         string sql = @"
 SELECT
-  kh.id AS Id,
-  COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
-  COALESCE(kh.ten_khach_hang, '') AS TenKhachHang,
+  COALESCE(kh.id, 0) AS Id,
+  COALESCE(kh.ma_khach_hang, 'KHACH_LE') AS MaKhachHang,
+  COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
   COALESCE(kh.so_dien_thoai, '') AS SoDienThoai,
   " + TongHopCot + DieuKien.From + @"
 WHERE " + dk.Where + @"

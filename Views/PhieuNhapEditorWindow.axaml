@@ -185,13 +185,13 @@
       </Grid>
     </Border>
 
-    <!-- 2. THÔNG TIN CHUNG -->
+        <!-- 2. THÔNG TIN CHUNG (ISSUE #61) -->
     <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="16,13">
-      <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
+      <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
         <TextBlock Text="THÔNG TIN PHIẾU NHẬP" Classes="section-title" />
-        <Grid Grid.Row="1" ColumnDefinitions="250,14,*,14,180,14,160">
+        <Grid Grid.Row="1" ColumnDefinitions="220,14,*,14,160,14,150,14,140">
           <StackPanel Grid.Column="0">
-            <TextBlock Text="Ngày nhập hàng" Classes="field-label" />
+            <TextBlock Text="Ngày nhận hàng" Classes="field-label" />
             <DatePicker x:Name="DpThoiGianNhap" Height="38"
                         DayFormat="d" MonthFormat="MM" YearFormat="yyyy"
                         HorizontalAlignment="Stretch" />
@@ -207,13 +207,32 @@
           </StackPanel>
 
           <StackPanel Grid.Column="4">
-            <TextBlock Text="Số hóa đơn đầu vào" Classes="field-label" />
+            <TextBlock Text="Số HĐ đầu vào" Classes="field-label" />
             <TextBox x:Name="TxtSoHoaDon" Height="38" Watermark="Số HĐ đầu vào..." />
           </StackPanel>
 
           <StackPanel Grid.Column="6">
+            <TextBlock Text="Ngày hóa đơn" Classes="field-label" />
+            <DatePicker x:Name="DpNgayHoaDon" Height="38"
+                        DayFormat="d" MonthFormat="MM" YearFormat="yyyy"
+                        HorizontalAlignment="Stretch" />
+          </StackPanel>
+
+          <StackPanel Grid.Column="8">
             <TextBlock Text="Phương thức TT" Classes="field-label" />
             <ComboBox x:Name="CbbPhuongThuc" Height="38" HorizontalAlignment="Stretch" />
+          </StackPanel>
+        </Grid>
+
+        <!-- HÀNG THÔNG TIN GIAO NHẬN -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,14,*">
+          <StackPanel Grid.Column="0">
+            <TextBlock Text="Tên người giao hàng (Đại diện NCC / Shipper)" Classes="field-label" />
+            <TextBox x:Name="TxtTenNguoiGiaoHang" Height="36" Watermark="Tên người giao hàng..." />
+          </StackPanel>
+          <StackPanel Grid.Column="2">
+            <TextBlock Text="Số điện thoại người giao hàng" Classes="field-label" />
+            <TextBox x:Name="TxtSdtNguoiGiaoHang" Height="36" Watermark="SĐT người giao hàng..." />
           </StackPanel>
         </Grid>
       </Grid>

@@ -4348,37 +4348,95 @@ public partial class MainWindowViewModel : ObservableObject
             if (cuaSo is null)
                 return;
 
-            var soDong = BaoCaoPhieuNhapTotalCount < 1 ? 1 : BaoCaoPhieuNhapTotalCount;
+            // Tổng hợp mô tả bộ lọc hiện tại trên giao diện phiếu nhập
+            var moTaLoc = new List<string>();
+            if (!string.IsNullOrWhiteSpace(BaoCaoPhieuNhapSearch))
+                moTaLoc.Add($"Từ khóa: \"{BaoCaoPhieuNhapSearch.Trim()}\"");
+            if (!string.IsNullOrWhiteSpace(BaoCaoPhieuNhapLocThanhToan) && BaoCaoPhieuNhapLocThanhToan != "Tất cả")
+                moTaLoc.Add($"Thanh toán: {BaoCaoPhieuNhapLocThanhToan}");
 
-            var (items, _) = await _db.GetPhieuNhapHangPagedAsync(
-                BaoCaoPhieuNhapSearch,
-                1,
-                soDong,
-                BaoCaoPhieuNhapLocThanhToan,
-                ngayBatDau: BaoCaoPhieuNhapTuNgay?.Date,
-                ngayKetThuc: BaoCaoPhieuNhapDenNgay?.Date);
+            var moTaBoLocHienTai = moTaLoc.Count > 0 ? string.Join(", ", moTaLoc) : "Không áp dụng lọc";
 
-            using var wb = BaoCaoPhieuNhapExcel.TaoWorkbook(items, DateTime.Now);
+            // Mở cửa sổ lựa chọn xuất Excel
+            var yeuCau = await XuatExcelDialogWindow.ShowDialogAsync(
+                cuaSo,
+                "Tùy chọn xuất Excel - Phiếu nhập",
+                "Phiếu nhập hàng",
+                BaoCaoPhieuNhapTuNgay?.Date,
+                BaoCaoPhieuNhapDenNgay?.Date,
+                moTaBoLocHienTai);
 
-            var file = await cuaSo.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+            if (yeuCau is null)
             {
-                Title = "Xuất Excel danh sách phiếu nhập hàng",
-                FileTypeChoices = new[]
-                {
-                    new Avalonia.Platform.Storage.FilePickerFileType("Excel") { Patterns = new[] { "*.xlsx" } }
-                },
-                SuggestedFileName = $"PhieuNhapHang_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
-            });
-
-            if (file is not null)
-            {
-                await using var stream = await file.OpenWriteAsync();
-                wb.SaveAs(stream);
+                StatusMessage = "Bạn đã hủy xuất file phiếu nhập.";
+                return;
             }
+
+            StatusMessage = "Đang tải dữ liệu phiếu nhập để xuất Excel...";
+
+            var (tongQuans, chiTiets, tongHops) = await _db.GetPhieuNhapXuatExcelDataAsync(
+                yeuCau,
+                searchKeyword: BaoCaoPhieuNhapSearch,
+                nhaCungCapId: null,
+                trangThaiThanhToan: BaoCaoPhieuNhapLocThanhToan,
+                trangThaiPhieu: null);
+
+            var tongSoBanGhi = yeuCau.LoaiBaoCao switch
+            {
+                LoaiBaoCaoXuat.TongQuan => tongQuans.Count,
+                LoaiBaoCaoXuat.ChiTiet => chiTiets.Count,
+                _ => tongQuans.Count
+            };
+
+            if (tongSoBanGhi == 0)
+            {
+                await ShowMessageAsync(
+                    "Xuất file",
+                    "Không tìm thấy dữ liệu phiếu nhập nào khớp với khoảng thời gian và phạm vi đã chọn.");
+                StatusMessage = "Không có dữ liệu phiếu nhập để xuất.";
+                return;
+            }
+
+            var tenLoai = yeuCau.LoaiBaoCao switch
+            {
+                LoaiBaoCaoXuat.TongQuan => "TongQuan",
+                LoaiBaoCaoXuat.ChiTiet => "ChiTiet",
+                _ => "DayDu"
+            };
+
+            var tenTieuDe = yeuCau.LoaiBaoCao switch
+            {
+                LoaiBaoCaoXuat.TongQuan => "Báo cáo tổng quan phiếu nhập hàng",
+                LoaiBaoCaoXuat.ChiTiet => "Báo cáo chi tiết mặt hàng nhập",
+                _ => "Báo cáo đầy đủ phiếu nhập hàng"
+            };
+
+            var tenFileGoiY = $"PhieuNhap_{tenLoai}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            var ghiChuLoc = $"{yeuCau.MoTaKhoangThoiGian} | {yeuCau.MoTaBoLoc}";
+
+            await ReportExportService.ExportReportAsync(
+                cuaSo,
+                tenTieuDe,
+                tenFileGoiY,
+                () => BaoCaoPhieuNhapExcel.TaoWorkbookMoi(
+                    tongQuans,
+                    chiTiets,
+                    tongHops,
+                    yeuCau.LoaiBaoCao,
+                    DateTime.Now,
+                    ghiChuLoc,
+                    "VỰA HOA NHÀ HUY",
+                    Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap ?? "Hệ thống"),
+                recordCount: tongSoBanGhi,
+                statusCallback: msg => StatusMessage = msg,
+                reportPeriod: yeuCau.MoTaKhoangThoiGian);
         }
         catch (Exception ex)
         {
             StatusMessage = "Không xuất được file Excel: " + ex.Message;
+            await ShowMessageAsync(
+                "Xuất file thất bại",
+                $"Không thể xuất danh sách phiếu nhập hàng.\n\nChi tiết lỗi:\n{ex.Message}");
         }
     }
 

@@ -1,4 +1,8 @@
 using System;
+using System.IO;
+using Avalonia.Platform.Storage;
+using ShopHoa.Helpers;
+using System;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -232,5 +236,63 @@ public partial class PhieuNhapDetailWindow : Window
     private void OnCloseClicked(object? sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    private async void MoChungTuButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not DinhKemPhieuNhap dk)
+            return;
+
+        var path = dk.DuongDanTuyetDoi;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            await NotificationWindow.ShowWarningAsync("Tập tin chứng từ không tồn tại trên hệ thống lưu trữ.", "Không tìm thấy file", this);
+            return;
+        }
+
+        try
+        {
+            XuatFileHelper.MoFile(path);
+        }
+        catch (Exception ex)
+        {
+            await NotificationWindow.ShowErrorAsync("Không thể mở tài liệu: " + ex.Message, "Lỗi mở file", this);
+        }
+    }
+
+    private async void TaiChungTuButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not DinhKemPhieuNhap dk)
+            return;
+
+        var sourcePath = dk.DuongDanTuyetDoi;
+        if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+        {
+            await NotificationWindow.ShowWarningAsync("Tập tin chứng từ không tồn tại trên hệ thống lưu trữ.", "Không tìm thấy file", this);
+            return;
+        }
+
+        try
+        {
+            var saveFile = await StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+            {
+                Title = "Tải chứng từ về máy tính",
+                SuggestedFileName = dk.TenFileGoc
+            });
+
+            if (saveFile is null)
+                return;
+
+            var destPath = saveFile.Path.LocalPath;
+            if (!string.IsNullOrWhiteSpace(destPath))
+            {
+                File.Copy(sourcePath, destPath, overwrite: true);
+                await NotificationWindow.ShowSuccessAsync($"Đã tải file về thành công:\n{destPath}", "Tải về hoàn tất", this);
+            }
+        }
+        catch (Exception ex)
+        {
+            await NotificationWindow.ShowErrorAsync("Không thể tải file: " + ex.Message, "Lỗi tải về", this);
+        }
     }
 }

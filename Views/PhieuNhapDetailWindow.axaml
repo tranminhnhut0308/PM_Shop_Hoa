@@ -53,7 +53,7 @@
   </Window.Styles>
 
   <Grid Margin="22"
-    RowDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto"
+    RowDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto"
     RowSpacing="14">
 
     <!-- 1. TIÊU ĐỀ + BADGE TRẠNG THÁI -->
@@ -162,12 +162,13 @@
       BoxShadow="0 2 8 #080A352E">
 
       <Grid ColumnDefinitions="*,*"
-        RowDefinitions="Auto,Auto,Auto,Auto"
+        RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
         ColumnSpacing="24"
         RowSpacing="10">
 
+        <!-- HÀNG 1: THỜI GIAN & NGƯỜI TẠO -->
         <StackPanel Spacing="2">
-          <TextBlock Classes="label" Text="Ngày giờ nhập hàng" />
+          <TextBlock Classes="label" Text="Ngày giờ nhận hàng thực tế" />
           <TextBlock Classes="value" Text="{Binding ThoiGianNhapText}" />
         </StackPanel>
 
@@ -176,36 +177,63 @@
           <TextBlock Classes="value" Text="{Binding TenNhanVienHienThi}" />
         </StackPanel>
 
+        <!-- HÀNG 2: THÔNG TIN NHÀ CUNG CẤP CHI TIẾT -->
         <StackPanel Grid.Row="1" Spacing="2">
           <TextBlock Classes="label" Text="Mã nhà cung cấp" />
-          <TextBlock Classes="value" Text="{Binding MaNhaCungCapHienThi}" />
+          <TextBlock Classes="value" FontWeight="SemiBold" Text="{Binding MaNhaCungCapHienThi}" />
         </StackPanel>
 
         <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
           <TextBlock Classes="label" Text="Tên nhà cung cấp" />
-          <TextBlock Classes="value" Text="{Binding TenNhaCungCapHienThi}" />
+          <TextBlock Classes="value" FontWeight="Bold" Foreground="#164B40" Text="{Binding TenNhaCungCapHienThi}" />
         </StackPanel>
 
+        <!-- HÀNG 3: ĐỊA CHỈ & SĐT / MST NCC -->
         <StackPanel Grid.Row="2" Spacing="2">
+          <TextBlock Classes="label" Text="Điện thoại &amp; MST NCC" />
+          <TextBlock Classes="value">
+            <Run Text="{Binding SoDienThoaiNhaCungCap, FallbackValue='—'}" />
+            <Run Text=" | MST: " />
+            <Run Text="{Binding MaSoThueNhaCungCap, FallbackValue='—'}" />
+          </TextBlock>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="2">
+          <TextBlock Classes="label" Text="Địa chỉ nhà cung cấp" />
+          <TextBlock Classes="value" Text="{Binding DiaChiNhaCungCap, FallbackValue='—'}" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- HÀNG 4: THÔNG TIN GIAO NHẬN (SHIPPER) -->
+        <StackPanel Grid.Row="3" Spacing="2" IsVisible="{Binding CoNguoiGiaoHang}">
+          <TextBlock Classes="label" Text="Người giao hàng (Đại diện NCC)" />
+          <TextBlock Classes="value" FontWeight="SemiBold" Text="{Binding TenNguoiGiaoHang, FallbackValue='—'}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Grid.Column="1" Spacing="2" IsVisible="{Binding CoNguoiGiaoHang}">
+          <TextBlock Classes="label" Text="SĐT người giao hàng" />
+          <TextBlock Classes="value" Text="{Binding SdtNguoiGiaoHang, FallbackValue='—'}" />
+        </StackPanel>
+
+        <!-- HÀNG 5: HÓA ĐƠN ĐẦU VÀO & NGÀY HÓA ĐƠN -->
+        <StackPanel Grid.Row="4" Spacing="2" IsVisible="{Binding CoSoHoaDon}">
+          <TextBlock Classes="label" Text="Số hóa đơn đầu vào" />
+          <TextBlock Classes="value" FontWeight="SemiBold" Text="{Binding SoHoaDonDauVao}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Grid.Column="1" Spacing="2" IsVisible="{Binding CoNgayHoaDon}">
+          <TextBlock Classes="label" Text="Ngày hóa đơn đầu vào" />
+          <TextBlock Classes="value" Text="{Binding NgayHoaDonDauVaoHienThi}" />
+        </StackPanel>
+
+        <!-- HÀNG 6: PHƯƠNG THỨC & NGUỒN QUỸ -->
+        <StackPanel Grid.Row="5" Spacing="2">
           <TextBlock Classes="label" Text="Phương thức thanh toán" />
           <TextBlock Classes="value" FontWeight="SemiBold" Text="{Binding PhuongThucThanhToanHienThi}" />
         </StackPanel>
 
-        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="2">
+        <StackPanel Grid.Row="5" Grid.Column="1" Spacing="2">
           <TextBlock Classes="label" Text="Nguồn quỹ chi trả" />
           <TextBlock Classes="value" FontWeight="SemiBold" Foreground="#087F6E" Text="{Binding NguonQuyChiTraHienThi}" />
-        </StackPanel>
-
-        <StackPanel Grid.Row="3" Spacing="2"
-          IsVisible="{Binding CoSoHoaDon}">
-          <TextBlock Classes="label" Text="Số hóa đơn đầu vào" />
-          <TextBlock Classes="value" Text="{Binding SoHoaDonDauVao}" />
-        </StackPanel>
-
-        <StackPanel Grid.Row="3" Grid.Column="1" Spacing="2"
-          IsVisible="{Binding CoMaDatHang}">
-          <TextBlock Classes="label" Text="Mã đặt hàng nhập" />
-          <TextBlock Classes="value" Text="{Binding MaDatHangNhap}" />
         </StackPanel>
       </Grid>
     </Border>
@@ -616,8 +644,80 @@
       </Grid>
     </Border>
 
-    <!-- 6. GHI CHÚ + NÚT BẤM -->
-    <Grid Grid.Row="6"
+        <!-- 6. CHỨNG TỪ ĐÍNH KÈM (ISSUE #61) -->
+    <Border Grid.Row="6"
+      Background="White"
+      BorderBrush="#D5EAE3"
+      BorderThickness="1"
+      CornerRadius="12"
+      ClipToBounds="True"
+      IsVisible="{Binding CoDinhKem}">
+
+      <Grid RowDefinitions="Auto,Auto">
+        <Border Background="#EBF5F1"
+          BorderBrush="#D5EAE3"
+          BorderThickness="0,0,0,1"
+          Padding="16,10">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <TextBlock Text="📎" FontSize="14" VerticalAlignment="Center" />
+              <TextBlock Classes="section-title" Text="Chứng từ đính kèm (Hóa đơn giấy, biên bản, ảnh kho)" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Grid.Column="1"
+              Text="{Binding DinhKems.Count, StringFormat='Tổng số: {0} tài liệu'}"
+              FontSize="12"
+              FontWeight="SemiBold"
+              Foreground="#087F6E"
+              VerticalAlignment="Center" />
+          </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" MaxHeight="140" VerticalScrollBarVisibility="Auto">
+          <ItemsControl ItemsSource="{Binding DinhKems}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="models:DinhKemPhieuNhap">
+                <Border BorderBrush="#EEF3F1" BorderThickness="0,0,0,1" Padding="16,8">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="12" VerticalAlignment="Center">
+                    <TextBlock Text="📄" FontSize="16" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding TenFileGoc}" FontSize="12.5" FontWeight="SemiBold" Foreground="#163F38" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding TenFileGoc}" />
+                      <TextBlock Text="{Binding DungLuongHienThi, StringFormat='Dung lượng: {0}'}" FontSize="11" Foreground="#667A74" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                      <TextBlock Text="{Binding TenNguoiTaiLen, StringFormat='Người tải: {0}'}" FontSize="11.5" Foreground="#344B45" />
+                      <TextBlock Text="{Binding ThoiGianTaiLenHienThi}" FontSize="11" Foreground="#667A74" />
+                    </StackPanel>
+                    <Button Grid.Column="3"
+                      Classes="toolbar-primary"
+                      Background="#087F6E"
+                      BorderBrush="#087F6E"
+                      Content="👁 Mở xem"
+                      Padding="10,5"
+                      FontSize="11.5"
+                      Tag="{Binding}"
+                      Click="MoChungTuButton_OnClick"
+                      ToolTip.Tip="Mở tài liệu hoặc xem ảnh" />
+                    <Button Grid.Column="4"
+                      Classes="toolbar-primary"
+                      Background="#0A68A7"
+                      BorderBrush="#0A68A7"
+                      Content="⬇ Tải về"
+                      Padding="10,5"
+                      FontSize="11.5"
+                      Tag="{Binding}"
+                      Click="TaiChungTuButton_OnClick"
+                      ToolTip.Tip="Lưu file về máy tính" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Grid>
+    </Border>
+
+    <!-- 7. GHI CHÚ + NÚT BẤM -->
+    <Grid Grid.Row="7"
       ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto"
       ColumnSpacing="10">
 
