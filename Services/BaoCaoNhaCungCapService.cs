@@ -651,7 +651,7 @@ public sealed class BaoCaoNhaCungCapService
         FROM phieu_nhap_hang p
         WHERE p.nha_cung_cap_id = @NhaCungCapId
           AND p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
-          AND p.trang_thai != 'LUU_TAM' AND p.trang_thai != 'HUY'
+          AND p.trang_thai NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
         ORDER BY p.thoi_gian_nhap DESC, p.id DESC;
         """;
 

@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Globalization;
 using System.Text;
 using ClosedXML.Excel;
@@ -10846,6 +10846,21 @@ public sealed partial class DatabaseService
                             $"Không thể chuẩn bị cột theo dõi {column} của phiếu nhập hàng.",
                             ex);
                 }
+            }
+
+            try
+            {
+                // Đồng bộ dữ liệu lịch sử cho các phiếu nhập chưa bị hủy
+                await connection.ExecuteAsync("""
+                    UPDATE phieu_nhap_hang
+                    SET tong_mua_da_ghi_nhan = 1, cong_no_da_ghi_nhan = 1
+                    WHERE trang_thai NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
+                      AND (tong_mua_da_ghi_nhan = 0 OR cong_no_da_ghi_nhan = 0 OR tong_mua_da_ghi_nhan IS NULL OR cong_no_da_ghi_nhan IS NULL);
+                    """);
+            }
+            catch (Exception ex)
+            {
+                SafeLog.WriteError("Loi reconcile co phieu nhap", ex);
             }
 
             _hasPhieuNhapTrackingColumns = true;
