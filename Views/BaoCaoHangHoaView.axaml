@@ -440,6 +440,16 @@
               </StackPanel>
             </Border>
 
+
+            <Border Classes="bcMetric" Margin="0,0,10,10">
+              <StackPanel Spacing="2">
+                <TextBlock Classes="bcMetricLabel" Text="GIÁ TRỊ TỒN KHO" />
+                <TextBlock Classes="bcMetricValue" Foreground="#0E7090"
+                  Text="{Binding TongHop.GiaTriTonKhoHienThi}" />
+                <TextBlock Classes="bcMetricSub"
+                  Text="{Binding TongHop.TongSoLuongTonHienThi, StringFormat='{}{0} sản phẩm tồn'}" />
+              </StackPanel>
+            </Border>
           </WrapPanel>
 
           <!-- ===== CHẾ ĐỘ BIỂU ĐỒ ===== -->

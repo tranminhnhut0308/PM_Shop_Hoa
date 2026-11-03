@@ -141,7 +141,12 @@ public sealed class BaoCaoHangHoaTonKho
     public decimal TonToiThieu { get; set; }
     public decimal TonToiDa { get; set; }
     public decimal GiaVon { get; set; }
-    public decimal GiaTriTon => TonKho * GiaVon;
+    private decimal _giaTriTon;
+    public decimal GiaTriTon
+    {
+        get => _giaTriTon != 0 ? _giaTriTon : TonKho * GiaVon;
+        set => _giaTriTon = value;
+    }
 
     public string TrangThaiTon => TonKho <= 0
         ? "Hết hàng"

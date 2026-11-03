@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Globalization;
 using System.Text;
 using ClosedXML.Excel;
@@ -9522,7 +9522,7 @@ public sealed partial class DatabaseService
         var hasPhuongThuc = await EnsurePhieuNhapPhuongThucColumnAsync();
 
         var extraSelect = (hasExtraColumns
-            ? ",\n            p.so_hoa_don_dau_vao AS SoHoaDonDauVao,\n            p.ma_dat_hang_nhap   AS MaDatHangNhap"
+            ? ",\n            p.so_hoa_don_dau_vao AS SoHoaDonDauVao,\n            p.ma_dat_hang_nhap   AS MaDatHangNhap,\n            p.ngay_hoa_don_dau_vao AS NgayHoaDonDauVao,\n            p.ten_nguoi_giao_hang AS TenNguoiGiaoHang,\n            p.sdt_nguoi_giao_hang AS SdtNguoiGiaoHang,\n            ncc.dia_chi AS DiaChiNhaCungCap,\n            ncc.so_dien_thoai AS SoDienThoaiNhaCungCap,\n            ncc.ma_so_thue AS MaSoThueNhaCungCap"
             : string.Empty)
             + (hasPhuongThuc
             ? ",\n            COALESCE(p.phuong_thuc_thanh_toan, 'TIEN_MAT') AS PhuongThucThanhToan"
@@ -9637,6 +9637,16 @@ public sealed partial class DatabaseService
         {
             SafeLog.WriteError("Khong doc duoc lich su chinh sua phieu nhap", ex);
             header.EditHistory = [];
+        }
+
+        try
+        {
+            header.DinhKems = (await GetDinhKemPhieuNhapAsync(phieuNhapId)).AsList();
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Khong doc duoc dinh kem phieu nhap", ex);
+            header.DinhKems = [];
         }
 
         return header;
@@ -9974,7 +9984,8 @@ public sealed partial class DatabaseService
     public async Task<uint> LuuPhieuNhapHangAsync(
         PhieuNhapHang phieu,
         IReadOnlyList<ChiTietPhieuNhapHang> items,
-        string? draftId = null)
+        string? draftId = null,
+        IEnumerable<ChungTuItemModel>? chungTus = null)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.PurchasesCreate, "Bạn không có quyền lưu phiếu nhập hàng.");
         if (phieu is null)
@@ -10017,13 +10028,13 @@ public sealed partial class DatabaseService
         var hasPhieuQuyPhieuNhapColumns = await EnsurePhieuQuyPhieuNhapColumnsAsync();
 
         var extraColumns = (hasPhuongThucColumn ? ",\n                    phuong_thuc_thanh_toan" : string.Empty)
-            + (hasExtraColumns ? ",\n                    so_hoa_don_dau_vao,\n                    ma_dat_hang_nhap" : string.Empty);
+            + (hasExtraColumns ? ",\n                    so_hoa_don_dau_vao,\n                    ma_dat_hang_nhap,\n                    ngay_hoa_don_dau_vao,\n                    ten_nguoi_giao_hang,\n                    sdt_nguoi_giao_hang" : string.Empty);
 
         var extraValues = (hasPhuongThucColumn ? ",\n                    @PhuongThucThanhToan" : string.Empty)
-            + (hasExtraColumns ? ",\n                    @SoHoaDonDauVao,\n                    @MaDatHangNhap" : string.Empty);
+            + (hasExtraColumns ? ",\n                    @SoHoaDonDauVao,\n                    @MaDatHangNhap,\n                    @NgayHoaDonDauVao,\n                    @TenNguoiGiaoHang,\n                    @SdtNguoiGiaoHang" : string.Empty);
 
         var extraAssignments = (hasPhuongThucColumn ? ",\n                    phuong_thuc_thanh_toan = @PhuongThucThanhToan" : string.Empty)
-            + (hasExtraColumns ? ",\n                    so_hoa_don_dau_vao = @SoHoaDonDauVao,\n                    ma_dat_hang_nhap   = @MaDatHangNhap" : string.Empty);
+            + (hasExtraColumns ? ",\n                    so_hoa_don_dau_vao   = @SoHoaDonDauVao,\n                    ma_dat_hang_nhap     = @MaDatHangNhap,\n                    ngay_hoa_don_dau_vao = @NgayHoaDonDauVao,\n                    ten_nguoi_giao_hang  = @TenNguoiGiaoHang,\n                    sdt_nguoi_giao_hang  = @SdtNguoiGiaoHang" : string.Empty);
 
         if (!string.IsNullOrWhiteSpace(draftId))
             await EnsurePhieuNhapNhapTableAsync();
@@ -10229,6 +10240,62 @@ public sealed partial class DatabaseService
                 phieu,
                 hasPhieuQuyExtraColumns,
                 hasPhieuQuyPhieuNhapColumns);
+
+            // ============================================================
+            // 6. ĐÍNH KÈM CHỨNG TỪ & AUDIT TRAIL TẠO PHIẾU
+            // ============================================================
+            if (chungTus != null)
+            {
+                var currentUserId = phieu.NguoiNhapId ?? Session.CurrentUser?.Id;
+                var currentUserName = Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap ?? "Hệ thống";
+                await LuuDinhKemPhieuNhapAsync(
+                    connection,
+                    transaction,
+                    phieu.Id,
+                    phieu.MaPhieuNhap,
+                    chungTus,
+                    currentUserId,
+                    currentUserName);
+            }
+
+            // Ghi nhận Audit Trail tạo phiếu nhập
+            await EnsureLichSuChinhSuaPhieuNhapTableAsync();
+            const string insertLichSuTaoSql = """
+            INSERT INTO lich_su_chinh_sua_phieu_nhap
+            (
+                phieu_nhap_id, ma_phieu_nhap, thoi_gian, nguoi_thuc_hien_id,
+                ten_nguoi_thuc_hien, ly_do, tong_tien_truoc, tong_tien_sau,
+                da_thanh_toan_truoc, da_thanh_toan_sau, con_no_truoc, con_no_sau,
+                chi_tiet_thay_doi
+            )
+            VALUES
+            (
+                @PhieuNhapId, @MaPhieuNhap, NOW(), @NguoiThucHienId,
+                @TenNguoiThucHien, 'Tạo mới phiếu nhập hàng', 0, @TongTienSau,
+                0, @DaThanhToanSau, 0, @ConNoSau,
+                @ChiTietThayDoi
+            );
+            """;
+
+            var auditMoTa = $"• Tạo phiếu nhập mới {phieu.MaPhieuNhap} từ NCC: {phieu.TenNhaCungCap ?? "—"}\n"
+                + $"• Tổng tiền nhập: {phieu.TongTienNhap:N0} đ | Đã thanh toán: {phieu.DaThanhToan:N0} đ | Còn nợ: {phieu.ConNo:N0} đ"
+                + (!string.IsNullOrWhiteSpace(phieu.TenNguoiGiaoHang) ? $"\n• Người giao hàng: {phieu.TenNguoiGiaoHang} - SĐT: {phieu.SdtNguoiGiaoHang ?? "—"}" : "")
+                + (!string.IsNullOrWhiteSpace(phieu.SoHoaDonDauVao) ? $"\n• Số HĐ đầu vào: {phieu.SoHoaDonDauVao} (Ngày HĐ: {phieu.NgayHoaDonDauVaoHienThi})" : "");
+
+            await connection.ExecuteAsync(
+                insertLichSuTaoSql,
+                new
+                {
+                    PhieuNhapId = phieu.Id,
+                    phieu.MaPhieuNhap,
+                    NguoiThucHienId = phieu.NguoiNhapId,
+                    TenNguoiThucHien = Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap ?? "Hệ thống",
+                    TongTienSau = phieu.TongTienNhap,
+                    DaThanhToanSau = phieu.DaThanhToan,
+                    ConNoSau = phieu.ConNo,
+                    ChiTietThayDoi = auditMoTa
+                },
+                transaction);
 
             // Đóng phiếu nháp trong CÙNG transaction: chỉ đóng đúng phiếu này,
             // các phiếu nháp khác không bị ảnh hưởng.
@@ -10688,7 +10755,10 @@ public sealed partial class DatabaseService
         phieu.TrangThai,
         GhiChu = string.IsNullOrWhiteSpace(phieu.GhiChu) ? null : phieu.GhiChu.Trim(),
         SoHoaDonDauVao = string.IsNullOrWhiteSpace(phieu.SoHoaDonDauVao) ? null : phieu.SoHoaDonDauVao.Trim(),
-        MaDatHangNhap = string.IsNullOrWhiteSpace(phieu.MaDatHangNhap) ? null : phieu.MaDatHangNhap.Trim()
+        MaDatHangNhap = string.IsNullOrWhiteSpace(phieu.MaDatHangNhap) ? null : phieu.MaDatHangNhap.Trim(),
+        phieu.NgayHoaDonDauVao,
+        TenNguoiGiaoHang = string.IsNullOrWhiteSpace(phieu.TenNguoiGiaoHang) ? null : phieu.TenNguoiGiaoHang.Trim(),
+        SdtNguoiGiaoHang = string.IsNullOrWhiteSpace(phieu.SdtNguoiGiaoHang) ? null : phieu.SdtNguoiGiaoHang.Trim()
     };
 
     /// <summary>

@@ -325,7 +325,8 @@ SELECT
   COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) AS TonKho,
   sp.ton_toi_thieu AS TonToiThieu,
   sp.ton_toi_da AS TonToiDa,
-  sp.gia_von AS GiaVon
+  sp.gia_von AS GiaVon,
+  (COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) * sp.gia_von) AS GiaTriTon
 FROM san_pham sp
 LEFT JOIN (
   SELECT san_pham_id, SUM(so_luong_ton) AS so_luong_ton
@@ -340,7 +341,7 @@ WHERE 1 = 1"
    : dk.NhomId == 0 ? "\n  AND sp.nhom_san_pham_id IS NULL" : "")
 + (dk.TimKiem is null ? "" : "\n  AND (sp.ten_san_pham LIKE @TimKiem OR sp.ma_san_pham LIKE @TimKiem)")
 + @"
-ORDER BY TonKho ASC, (COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) * sp.gia_von) DESC;
+ORDER BY TonKho ASC, GiaTriTon DESC;
 ";
         var rs = await conn.QueryAsync<BaoCaoHangHoaTonKho>(
             new CommandDefinition(sql, dk.Params, cancellationToken: token));
@@ -359,7 +360,8 @@ SELECT
   COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) AS TonKho,
   sp.ton_toi_thieu AS TonToiThieu,
   sp.ton_toi_da AS TonToiDa,
-  sp.gia_von AS GiaVon
+  sp.gia_von AS GiaVon,
+  (COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) * sp.gia_von) AS GiaTriTon
 FROM san_pham sp
 LEFT JOIN (
   SELECT san_pham_id, SUM(so_luong_ton) AS so_luong_ton
@@ -382,7 +384,7 @@ WHERE sp.trang_thai = 1
    : dk.NhomId == 0 ? "\n  AND sp.nhom_san_pham_id IS NULL" : "")
 + (dk.TimKiem is null ? "" : "\n  AND (sp.ten_san_pham LIKE @TimKiem OR sp.ma_san_pham LIKE @TimKiem)")
 + @"
-ORDER BY TonKho DESC
+ORDER BY TonKho DESC, GiaTriTon DESC
 LIMIT 50;
 ";
         var rs = await conn.QueryAsync<BaoCaoHangHoaTonKho>(

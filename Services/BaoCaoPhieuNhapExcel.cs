@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using ClosedXML.Excel;
 using ShopHoa.Helpers;
@@ -55,11 +55,11 @@ public static class BaoCaoPhieuNhapExcel
             thoiDiemXuat,
             tenCuaHang,
             nguoiXuat,
-            tongSoCot: 14);
+            tongSoCot: 17);
 
         string[] tieuDe =
         [
-            "STT", "Mã phiếu nhập", "Thời gian nhập", "Mã NCC", "Tên nhà cung cấp", "Người tạo",
+            "STT", "Mã phiếu nhập", "Thời gian nhập", "Số HĐ đầu vào", "Ngày HĐ đầu vào", "Người giao hàng", "Mã NCC", "Tên nhà cung cấp", "Người tạo",
             "Phương thức", "Trạng thái", "Tiền hàng", "Chi phí khác / Giảm trừ", "Tổng tiền nhập",
             "Đã thanh toán", "Còn nợ", "Ghi chú"
         ];
@@ -76,19 +76,28 @@ public static class BaoCaoPhieuNhapExcel
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 1), i + 1, XLAlignmentHorizontalValues.Center);
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 2), p.MaPhieuNhap, XLAlignmentHorizontalValues.Center);
             ExcelHelper.GhiO_NgayGio(ws.Cell(dong, 3), p.ThoiGianNhap, coGio: true);
-            ExcelHelper.GhiO_Chu(ws.Cell(dong, 4), p.MaNhaCungCap ?? "", XLAlignmentHorizontalValues.Center);
-            ExcelHelper.GhiO_Chu(ws.Cell(dong, 5), p.TenNhaCungCap ?? "");
-            ExcelHelper.GhiO_Chu(ws.Cell(dong, 6), p.TenNhanVien ?? "");
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 4), p.SoHoaDonDauVao ?? "", XLAlignmentHorizontalValues.Center);
+            if (p.NgayHoaDonDauVao.HasValue)
+                ExcelHelper.GhiO_NgayGio(ws.Cell(dong, 5), p.NgayHoaDonDauVao.Value, coGio: false);
+            else
+                ExcelHelper.GhiO_Chu(ws.Cell(dong, 5), "—", XLAlignmentHorizontalValues.Center);
+            var giaoHangInfo = string.IsNullOrWhiteSpace(p.TenNguoiGiaoHang)
+                ? (p.SdtNguoiGiaoHang ?? "")
+                : (string.IsNullOrWhiteSpace(p.SdtNguoiGiaoHang) ? p.TenNguoiGiaoHang : $"{p.TenNguoiGiaoHang} ({p.SdtNguoiGiaoHang})");
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 6), giaoHangInfo);
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 7), p.MaNhaCungCap ?? "", XLAlignmentHorizontalValues.Center);
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 8), p.TenNhaCungCap ?? "");
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 9), p.TenNhanVien ?? "");
 
-            ExcelHelper.GhiO_Chu(ws.Cell(dong, 7), p.PhuongThucThanhToanHienThi, XLAlignmentHorizontalValues.Center);
-            ExcelHelper.GhiO_Chu(ws.Cell(dong, 8), p.TrangThaiHienThi, XLAlignmentHorizontalValues.Center);
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 10), p.PhuongThucThanhToanHienThi, XLAlignmentHorizontalValues.Center);
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 11), p.TrangThaiHienThi, XLAlignmentHorizontalValues.Center);
 
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 9), p.TongTienHang);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 10), p.ChiPhiKhac);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 11), p.TongTienNhap);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 12), p.DaThanhToan);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 13), p.ConNo);
-            ExcelHelper.GhiO_Chu(ws.Cell(dong, 14), p.GhiChu ?? "");
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 12), p.TongTienHang);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 13), p.ChiPhiKhac);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 14), p.TongTienNhap);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 15), p.DaThanhToan);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 16), p.ConNo);
+            ExcelHelper.GhiO_Chu(ws.Cell(dong, 17), p.GhiChu ?? "");
 
             tongTienHang += p.TongTienHang;
             tongChiPhi += p.ChiPhiKhac;
@@ -101,13 +110,13 @@ public static class BaoCaoPhieuNhapExcel
 
         // Dòng tổng cộng
         ws.Cell(dong, 1).Value = "";
-        ws.Cell(dong, 6).Value = "TỔNG CỘNG";
-        ws.Cell(dong, 6).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
-        ExcelHelper.GhiO_Tien(ws.Cell(dong, 9), tongTienHang);
-        ExcelHelper.GhiO_Tien(ws.Cell(dong, 10), tongChiPhi);
-        ExcelHelper.GhiO_Tien(ws.Cell(dong, 11), tongTienNhap);
-        ExcelHelper.GhiO_Tien(ws.Cell(dong, 12), tongDaTra);
-        ExcelHelper.GhiO_Tien(ws.Cell(dong, 13), tongConNo);
+        ws.Cell(dong, 9).Value = "TỔNG CỘNG";
+        ws.Cell(dong, 9).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+        ExcelHelper.GhiO_Tien(ws.Cell(dong, 12), tongTienHang);
+        ExcelHelper.GhiO_Tien(ws.Cell(dong, 13), tongChiPhi);
+        ExcelHelper.GhiO_Tien(ws.Cell(dong, 14), tongTienNhap);
+        ExcelHelper.GhiO_Tien(ws.Cell(dong, 15), tongDaTra);
+        ExcelHelper.GhiO_Tien(ws.Cell(dong, 16), tongConNo);
         ExcelHelper.DinhDangDongTongCong(ws, dong, 1, tieuDe.Length);
 
         ExcelHelper.HoanThienTrang(ws, dongHeader, dong, tieuDe.Length, batAutoFilter: items.Count > 0);

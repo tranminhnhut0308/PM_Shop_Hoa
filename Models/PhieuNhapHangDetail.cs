@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace ShopHoa.Models;
 
@@ -64,6 +64,28 @@ public sealed class PhieuNhapHangDetail
     public string? GhiChu { get; set; }
 
     public string? SoHoaDonDauVao { get; set; }
+
+    public DateTime? NgayHoaDonDauVao { get; set; }
+
+    public string NgayHoaDonDauVaoHienThi => NgayHoaDonDauVao?.ToString("dd/MM/yyyy") ?? "—";
+
+    public bool CoNgayHoaDon => NgayHoaDonDauVao.HasValue;
+
+    public string? TenNguoiGiaoHang { get; set; }
+
+    public string? SdtNguoiGiaoHang { get; set; }
+
+    public bool CoNguoiGiaoHang => !string.IsNullOrWhiteSpace(TenNguoiGiaoHang) || !string.IsNullOrWhiteSpace(SdtNguoiGiaoHang);
+
+    public string? DiaChiNhaCungCap { get; set; }
+
+    public string? SoDienThoaiNhaCungCap { get; set; }
+
+    public string? MaSoThueNhaCungCap { get; set; }
+
+    public List<DinhKemPhieuNhap> DinhKems { get; set; } = [];
+
+    public bool CoDinhKem => DinhKems.Count > 0;
 
     public string? MaDatHangNhap { get; set; }
 
@@ -285,3 +307,4 @@ public sealed class PhieuNhapHangPaymentItem
     public string GhiChuHienThi =>
         string.IsNullOrWhiteSpace(GhiChu) ? "—" : GhiChu.Trim();
 }
+

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace ShopHoa.Models;
@@ -82,6 +82,10 @@ public sealed class PhieuNhapEditRequest
     public string? MaNhaCungCap { get; set; }
     public string? TenNhaCungCap { get; set; }
     public string? SoHoaDonDauVao { get; set; }
+    public DateTime? NgayHoaDonDauVao { get; set; }
+    public string? TenNguoiGiaoHang { get; set; }
+    public string? SdtNguoiGiaoHang { get; set; }
+    public List<ChungTuItemModel> ChungTus { get; set; } = [];
     public string? MaDatHangNhap { get; set; }
     public string? GhiChu { get; set; }
     public decimal ChiPhiKhac { get; set; }
@@ -156,3 +160,4 @@ public sealed class SupplierOption
             ? $"{TenNhaCungCap} ({MaNhaCungCap})"
             : $"{TenNhaCungCap} ({MaNhaCungCap}) - {SoDienThoai}";
 }
+

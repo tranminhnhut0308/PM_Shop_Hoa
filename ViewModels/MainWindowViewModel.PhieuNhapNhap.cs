@@ -76,6 +76,9 @@ public sealed partial class MainWindowViewModel
             case nameof(PhieuNhapTongTienHang):
             case nameof(PhieuNhapTongTienNhap):
             case nameof(PhieuNhapSoHoaDonDauVao):
+            case nameof(PhieuNhapNgayHoaDonDauVao):
+            case nameof(PhieuNhapTenNguoiGiaoHang):
+            case nameof(PhieuNhapSdtNguoiGiaoHang):
             case nameof(PhieuNhapGhiChu):
             case nameof(PhieuNhapNgayNhap):
             case nameof(PhieuNhapChiPhiKhac):
@@ -245,6 +248,10 @@ public sealed partial class MainWindowViewModel
         state.TenNhaCungCap = SelectedPhieuNhapNcc?.TenNhaCungCap;
         state.NgayNhap = PhieuNhapNgayNhap;
         state.SoHoaDonDauVao = PhieuNhapSoHoaDonDauVao ?? "";
+        state.NgayHoaDonDauVao = PhieuNhapNgayHoaDonDauVao?.Date;
+        state.TenNguoiGiaoHang = PhieuNhapTenNguoiGiaoHang ?? "";
+        state.SdtNguoiGiaoHang = PhieuNhapSdtNguoiGiaoHang ?? "";
+        state.ChungTus = PhieuNhapChungTus.ToList();
         state.GhiChu = PhieuNhapGhiChu ?? "";
         state.ChiPhiKhac = PhieuNhapChiPhiKhac;
         state.DaThanhToan = PhieuNhapDaThanhToan;
@@ -325,6 +332,16 @@ public sealed partial class MainWindowViewModel
 
             PhieuNhapNgayNhap = state.NgayNhap ?? DateTime.Now;
             PhieuNhapSoHoaDonDauVao = state.SoHoaDonDauVao;
+            PhieuNhapNgayHoaDonDauVao = state.NgayHoaDonDauVao;
+            PhieuNhapTenNguoiGiaoHang = state.TenNguoiGiaoHang ?? "";
+            PhieuNhapSdtNguoiGiaoHang = state.SdtNguoiGiaoHang ?? "";
+            PhieuNhapChungTus.Clear();
+            if (state.ChungTus != null)
+            {
+                foreach (var ct in state.ChungTus)
+                    PhieuNhapChungTus.Add(ct);
+            }
+            OnPropertyChanged(nameof(CoPhieuNhapChungTu));
             PhieuNhapGhiChu = state.GhiChu;
             PhieuNhapChiPhiKhac = state.ChiPhiKhac;
             PhieuNhapDaThanhToan = state.DaThanhToan;

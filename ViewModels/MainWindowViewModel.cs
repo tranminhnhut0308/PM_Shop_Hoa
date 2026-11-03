@@ -5131,6 +5131,11 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HienThiGoiYPhieuNhap));
     [ObservableProperty] private string phieuNhapMa = "";
     [ObservableProperty] private string phieuNhapSoHoaDonDauVao = "";
+    [ObservableProperty] private DateTimeOffset? phieuNhapNgayHoaDonDauVao;
+    [ObservableProperty] private string phieuNhapTenNguoiGiaoHang = "";
+    [ObservableProperty] private string phieuNhapSdtNguoiGiaoHang = "";
+    public ObservableCollection<ChungTuItemModel> PhieuNhapChungTus { get; } = new();
+    public bool CoPhieuNhapChungTu => PhieuNhapChungTus.Count > 0;
     [ObservableProperty] private string phieuNhapGhiChu = "";
     [ObservableProperty] private string phieuNhapNhanVien = "";
     [ObservableProperty] private NhaCungCap? selectedPhieuNhapNcc;
@@ -5393,6 +5398,11 @@ public partial class MainWindowViewModel : ObservableObject
         IsPhieuNhapSuggestionsClosed = false;
         OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
         PhieuNhapSoHoaDonDauVao = "";
+        PhieuNhapNgayHoaDonDauVao = null;
+        PhieuNhapTenNguoiGiaoHang = "";
+        PhieuNhapSdtNguoiGiaoHang = "";
+        PhieuNhapChungTus.Clear();
+        OnPropertyChanged(nameof(CoPhieuNhapChungTu));
         PhieuNhapGhiChu = "";
         PhieuNhapChiPhiKhac = 0;
         PhieuNhapDaThanhToan = 0;
@@ -5719,18 +5729,149 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ChonNhaCungCapNhap(NhaCungCap? supplier)
+    private async Task ChonNhaCungCapNhapAsync(NhaCungCap? supplier)
     {
-        if (supplier is null)
-            return;
-
-        SelectedPhieuNhapNcc = supplier;
+        if (supplier is null) return;
+        try {
+            var fullNcc = await _db.GetNhaCungCapByIdAsync(supplier.Id);
+            SelectedPhieuNhapNcc = fullNcc ?? supplier;
+        } catch {
+            SelectedPhieuNhapNcc = supplier;
+        }
         ImportSupplierSearch = supplier.TenNhaCungCap;
-
         PhieuNhapSupplierSuggestions.Clear();
         OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
-
+        OnPropertyChanged(nameof(HasSelectedPhieuNhapNcc));
+        OnPropertyChanged(nameof(SelectedPhieuNhapNccDiaChiHienThi));
+        OnPropertyChanged(nameof(SelectedPhieuNhapNccSdtHienThi));
+        OnPropertyChanged(nameof(SelectedPhieuNhapNccMstHienThi));
         StatusMessage = $"Đã chọn nhà cung cấp {supplier.TenNhaCungCap}";
+    }
+
+
+    // ============================================================
+    // ISSUE #61: ĐÍNH KÈM CHỨNG TỪ PHIẾU NHẬP HÀNG
+    // ============================================================
+
+    [RelayCommand]
+    private async Task ThemChungTuPhieuNhapAsync()
+    {
+        if (OwnerWindow is null)
+            return;
+
+        try
+        {
+            var files = await OwnerWindow.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Chọn chứng từ đính kèm (Hóa đơn giấy, biên bản giao nhận, ảnh kho...)",
+                AllowMultiple = true,
+                FileTypeFilter =
+                [
+                    new FilePickerFileType("Tài liệu & Hình ảnh (JPG, PNG, PDF)")
+                    {
+                        Patterns = ["*.jpg", "*.jpeg", "*.png", "*.pdf"]
+                    }
+                ]
+            });
+
+            if (files.Count == 0)
+                return;
+
+            var userName = Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap ?? "Hệ thống";
+            int addedCount = 0;
+
+            foreach (var file in files)
+            {
+                var localPath = file.TryGetLocalPath();
+                if (string.IsNullOrWhiteSpace(localPath) || !File.Exists(localPath))
+                    continue;
+
+                if (!ChungTuStorageService.KiemTraDinhDangVaDungLuong(localPath, out var format, out var error))
+                {
+                    await NotificationWindow.ShowWarningAsync(error ?? "File không hợp lệ.", "Cảnh báo tệp đính kèm", OwnerWindow);
+                    continue;
+                }
+
+                var item = await ChungTuStorageService.LuuFileVaoThuMucTamAsync(
+                    localPath,
+                    "HOA_DON_GIAY",
+                    userName);
+
+                PhieuNhapChungTus.Add(item);
+                addedCount++;
+            }
+
+            if (addedCount > 0)
+            {
+                OnPropertyChanged(nameof(CoPhieuNhapChungTu));
+                SchedulePhieuNhapAutoSave();
+                StatusMessage = $"Đã đính kèm {addedCount} chứng từ.";
+            }
+        }
+        catch (Exception ex)
+        {
+            await NotificationWindow.ShowErrorAsync("Lỗi khi thêm chứng từ: " + ex.Message, "Lỗi đính kèm", OwnerWindow);
+        }
+    }
+
+    [RelayCommand]
+    private void XoaChungTuPhieuNhap(ChungTuItemModel? item)
+    {
+        if (item is null)
+            return;
+
+        PhieuNhapChungTus.Remove(item);
+        OnPropertyChanged(nameof(CoPhieuNhapChungTu));
+        SchedulePhieuNhapAutoSave();
+
+        // Xóa file tạm
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(item.DuongDanTam) && File.Exists(item.DuongDanTam))
+                File.Delete(item.DuongDanTam);
+        }
+        catch { }
+    }
+
+    [RelayCommand]
+    private async Task XemChungTuPhieuNhapAsync(ChungTuItemModel? item)
+    {
+        if (item is null)
+            return;
+
+        var path = !string.IsNullOrWhiteSpace(item.DuongDanTam) && File.Exists(item.DuongDanTam)
+            ? item.DuongDanTam
+            : item.DuongDanNguon;
+
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            await NotificationWindow.ShowWarningAsync("Tập tin không tồn tại hoặc đã bị xóa.", "Không tìm thấy file", OwnerWindow);
+            return;
+        }
+
+        try
+        {
+            XuatFileHelper.MoFile(path);
+        }
+        catch (Exception ex)
+        {
+            await NotificationWindow.ShowErrorAsync("Không thể mở tài liệu: " + ex.Message, "Lỗi mở file", OwnerWindow);
+        }
+    }
+        public bool HasSelectedPhieuNhapNcc => SelectedPhieuNhapNcc is not null && SelectedPhieuNhapNcc.Id > 0;
+    public string SelectedPhieuNhapNccDiaChiHienThi =>
+        string.IsNullOrWhiteSpace(SelectedPhieuNhapNcc?.DiaChi) ? "Chưa cập nhật" : SelectedPhieuNhapNcc!.DiaChi!;
+    public string SelectedPhieuNhapNccSdtHienThi =>
+        string.IsNullOrWhiteSpace(SelectedPhieuNhapNcc?.SoDienThoai) ? "Chưa cập nhật" : SelectedPhieuNhapNcc!.SoDienThoai!;
+    public string SelectedPhieuNhapNccMstHienThi =>
+        string.IsNullOrWhiteSpace(SelectedPhieuNhapNcc?.MaSoThue) ? "Chưa cập nhật" : SelectedPhieuNhapNcc!.MaSoThue!;
+
+    partial void OnSelectedPhieuNhapNccChanged(NhaCungCap? value)
+    {
+        OnPropertyChanged(nameof(HasSelectedPhieuNhapNcc));
+        OnPropertyChanged(nameof(SelectedPhieuNhapNccDiaChiHienThi));
+        OnPropertyChanged(nameof(SelectedPhieuNhapNccSdtHienThi));
+        OnPropertyChanged(nameof(SelectedPhieuNhapNccMstHienThi));
     }
 
     [RelayCommand]
@@ -5754,6 +5895,16 @@ public partial class MainWindowViewModel : ObservableObject
             PhieuNhapSupplierSuggestions.Clear();
             OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
 
+            try {
+                var fullNcc = await _db.GetNhaCungCapByIdAsync(supplier.Id);
+                SelectedPhieuNhapNcc = fullNcc ?? supplier;
+            } catch {
+                SelectedPhieuNhapNcc = supplier;
+            }
+            OnPropertyChanged(nameof(HasSelectedPhieuNhapNcc));
+            OnPropertyChanged(nameof(SelectedPhieuNhapNccDiaChiHienThi));
+            OnPropertyChanged(nameof(SelectedPhieuNhapNccSdtHienThi));
+            OnPropertyChanged(nameof(SelectedPhieuNhapNccMstHienThi));
             StatusMessage = $"Đã thêm và chọn nhà cung cấp {supplier.TenNhaCungCap}";
         }
         catch (Exception ex)
@@ -5838,6 +5989,17 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        // 5.1 Kiểm tra định dạng số điện thoại người giao hàng (nếu có nhập)
+        if (!string.IsNullOrWhiteSpace(PhieuNhapSdtNguoiGiaoHang))
+        {
+            var sdtClean = PhieuNhapSdtNguoiGiaoHang.Trim();
+            if (sdtClean.Length < 9 || sdtClean.Length > 15 || !System.Text.RegularExpressions.Regex.IsMatch(sdtClean, @"^[0-9\+\-\. ]+$"))
+            {
+                await BaoLoiLuuPhieuNhapAsync("Số điện thoại người giao hàng không hợp lệ (chỉ chấp nhận chữ số từ 9 - 15 ký tự).");
+                return;
+            }
+        }
+
         // 6. Mã phiếu phải sinh được trước khi lưu
         if (string.IsNullOrWhiteSpace(PhieuNhapMa))
         {
@@ -5877,12 +6039,15 @@ public partial class MainWindowViewModel : ObservableObject
                 DaThanhToan = PhieuNhapDaThanhToan,
                 PhuongThucThanhToan = PhieuNhapPhuongThuc == "Chuyển khoản" ? "CHUYEN_KHOAN" : "TIEN_MAT",
                 GhiChu = PhieuNhapGhiChu,
-                SoHoaDonDauVao = PhieuNhapSoHoaDonDauVao
+                SoHoaDonDauVao = PhieuNhapSoHoaDonDauVao,
+                NgayHoaDonDauVao = PhieuNhapNgayHoaDonDauVao?.Date,
+                TenNguoiGiaoHang = PhieuNhapTenNguoiGiaoHang,
+                SdtNguoiGiaoHang = PhieuNhapSdtNguoiGiaoHang
             };
 
-            // Lưu header + chi tiết + tồn kho + giá vốn + ĐVT + công nợ trong MỘT transaction.
+            // Lưu header + chi tiết + tồn kho + giá vốn + ĐVT + công nợ + chứng từ + audit trong MỘT transaction.
             // Service tự rollback toàn bộ nếu bất kỳ bước nào lỗi.
-            _phieuNhapId = await _db.LuuPhieuNhapHangAsync(phieu, dongHopLe, ActivePhieuNhapTab?.DraftId);
+            _phieuNhapId = await _db.LuuPhieuNhapHangAsync(phieu, dongHopLe, ActivePhieuNhapTab?.DraftId, PhieuNhapChungTus);
         }
         catch (Exception ex)
         {
@@ -7547,3 +7712,4 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
 }
+

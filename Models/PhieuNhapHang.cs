@@ -62,6 +62,14 @@ public sealed partial class PhieuNhapHang : ObservableObject
 
     public string? SoHoaDonDauVao { get; set; }
 
+    public DateTime? NgayHoaDonDauVao { get; set; }
+
+    public string NgayHoaDonDauVaoHienThi => NgayHoaDonDauVao?.ToString("dd/MM/yyyy") ?? "—";
+
+    public string? TenNguoiGiaoHang { get; set; }
+
+    public string? SdtNguoiGiaoHang { get; set; }
+
     public string? MaDatHangNhap { get; set; }
 
     /// <summary>Đã từng có người chỉnh sửa thông tin phiếu nhập.</summary>
@@ -183,3 +191,4 @@ public sealed partial class PhieuNhapHang : ObservableObject
         }
     }
 }
+

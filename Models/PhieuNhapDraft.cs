@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace ShopHoa.Models;
@@ -45,6 +45,10 @@ public sealed class PhieuNhapDraftState
 
     public DateTime? NgayNhap { get; set; } = DateTime.Now;
     public string SoHoaDonDauVao { get; set; } = "";
+    public DateTime? NgayHoaDonDauVao { get; set; }
+    public string TenNguoiGiaoHang { get; set; } = "";
+    public string SdtNguoiGiaoHang { get; set; } = "";
+    public List<ChungTuItemModel> ChungTus { get; set; } = new();
     public string GhiChu { get; set; } = "";
     public decimal ChiPhiKhac { get; set; }
     public decimal DaThanhToan { get; set; }
@@ -124,3 +128,4 @@ public sealed partial class PhieuNhapTab : ObservableObject
         TongTienNhap = Math.Max(0m, subtotal + State.ChiPhiKhac);
     }
 }
+

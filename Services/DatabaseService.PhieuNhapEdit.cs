@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Dapper;
 using MySqlConnector;
 using ShopHoa.Helpers;
@@ -143,7 +143,7 @@ public sealed partial class DatabaseService
         var hasPhuongThuc = await EnsurePhieuNhapPhuongThucColumnAsync();
 
         var extraSelect = (hasExtraColumns
-            ? ",\n            p.so_hoa_don_dau_vao AS SoHoaDonDauVao,\n            p.ma_dat_hang_nhap   AS MaDatHangNhap"
+            ? ",\n            p.so_hoa_don_dau_vao AS SoHoaDonDauVao,\n            p.ma_dat_hang_nhap   AS MaDatHangNhap,\n            p.ngay_hoa_don_dau_vao AS NgayHoaDonDauVao,\n            p.ten_nguoi_giao_hang AS TenNguoiGiaoHang,\n            p.sdt_nguoi_giao_hang AS SdtNguoiGiaoHang"
             : string.Empty)
             + (hasPhuongThuc
             ? ",\n            COALESCE(p.phuong_thuc_thanh_toan, 'TIEN_MAT') AS PhuongThucThanhToan"
@@ -281,6 +281,9 @@ public sealed partial class DatabaseService
                 p.trang_thai             AS TrangThai,
                 p.ghi_chu                AS GhiChu,
                 p.so_hoa_don_dau_vao     AS SoHoaDonDauVao,
+                p.ngay_hoa_don_dau_vao   AS NgayHoaDonDauVao,
+                p.ten_nguoi_giao_hang    AS TenNguoiGiaoHang,
+                p.sdt_nguoi_giao_hang    AS SdtNguoiGiaoHang,
                 p.ma_dat_hang_nhap       AS MaDatHangNhap,
                 p.phuong_thuc_thanh_toan AS PhuongThucThanhToan
             FROM phieu_nhap_hang p
@@ -581,10 +584,26 @@ public sealed partial class DatabaseService
             {
                 thayDoiLines.Add($"• Phương thức thanh toán: {oldPhieu.PhuongThucThanhToan} → {request.PhuongThucThanhToan}");
             }
+            if ((oldPhieu.SoHoaDonDauVao ?? "") != (request.SoHoaDonDauVao ?? ""))
+            {
+                thayDoiLines.Add($"• Số hóa đơn: '{oldPhieu.SoHoaDonDauVao ?? "—"}' → '{request.SoHoaDonDauVao ?? "—"}'");
+            }
+            if (oldPhieu.NgayHoaDonDauVao?.Date != request.NgayHoaDonDauVao?.Date)
+            {
+                thayDoiLines.Add($"• Ngày hóa đơn: {oldPhieu.NgayHoaDonDauVaoHienThi} → {request.NgayHoaDonDauVao?.ToString("dd/MM/yyyy") ?? "—"}");
+            }
+            if ((oldPhieu.TenNguoiGiaoHang ?? "") != (request.TenNguoiGiaoHang ?? ""))
+            {
+                thayDoiLines.Add($"• Người giao hàng: '{oldPhieu.TenNguoiGiaoHang ?? "—"}' → '{request.TenNguoiGiaoHang ?? "—"}'");
+            }
+            if ((oldPhieu.SdtNguoiGiaoHang ?? "") != (request.SdtNguoiGiaoHang ?? ""))
+            {
+                thayDoiLines.Add($"• SĐT người giao hàng: '{oldPhieu.SdtNguoiGiaoHang ?? "—"}' → '{request.SdtNguoiGiaoHang ?? "—"}'");
+            }
 
             // 6. CẬP NHẬT HEADER PHIẾU NHẬP
             var extraAssignments = (hasPhuongThucColumn ? ",\n                phuong_thuc_thanh_toan = @PhuongThucThanhToan" : string.Empty)
-                + (hasExtraColumns ? ",\n                so_hoa_don_dau_vao = @SoHoaDonDauVao,\n                ma_dat_hang_nhap   = @MaDatHangNhap" : string.Empty);
+                + (hasExtraColumns ? ",\n                so_hoa_don_dau_vao   = @SoHoaDonDauVao,\n                ma_dat_hang_nhap     = @MaDatHangNhap,\n                ngay_hoa_don_dau_vao = @NgayHoaDonDauVao,\n                ten_nguoi_giao_hang  = @TenNguoiGiaoHang,\n                sdt_nguoi_giao_hang  = @SdtNguoiGiaoHang" : string.Empty);
 
             var updateHeaderSql = $"""
             UPDATE phieu_nhap_hang
@@ -617,7 +636,10 @@ public sealed partial class DatabaseService
                     GhiChu = string.IsNullOrWhiteSpace(request.GhiChu) ? null : request.GhiChu.Trim(),
                     PhuongThucThanhToan = ChuanHoaPhuongThuc(request.PhuongThucThanhToan),
                     SoHoaDonDauVao = string.IsNullOrWhiteSpace(request.SoHoaDonDauVao) ? null : request.SoHoaDonDauVao.Trim(),
-                    MaDatHangNhap = string.IsNullOrWhiteSpace(request.MaDatHangNhap) ? null : request.MaDatHangNhap.Trim()
+                    MaDatHangNhap = string.IsNullOrWhiteSpace(request.MaDatHangNhap) ? null : request.MaDatHangNhap.Trim(),
+                    request.NgayHoaDonDauVao,
+                    TenNguoiGiaoHang = string.IsNullOrWhiteSpace(request.TenNguoiGiaoHang) ? null : request.TenNguoiGiaoHang.Trim(),
+                    SdtNguoiGiaoHang = string.IsNullOrWhiteSpace(request.SdtNguoiGiaoHang) ? null : request.SdtNguoiGiaoHang.Trim()
                 },
                 transaction);
 
@@ -645,6 +667,21 @@ public sealed partial class DatabaseService
                 phieuCapNhat,
                 branchId,
                 xoaLichSuCu: true);
+
+            // 7.1 LƯU CHỨNG TỪ MỚI (NẾU CÓ)
+            if (request.ChungTus != null && request.ChungTus.Count > 0)
+            {
+                var curUserId = Session.CurrentUser?.Id ?? oldPhieu.NguoiNhapId;
+                var curUserName = Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap ?? "Hệ thống";
+                await LuuDinhKemPhieuNhapAsync(
+                    connection,
+                    transaction,
+                    request.PhieuNhapId,
+                    oldPhieu.MaPhieuNhap,
+                    request.ChungTus,
+                    curUserId,
+                    curUserName);
+            }
 
             // 8. CẬP NHẬT SỔ QUỸ (PHIẾU CHI)
             await GhiPhieuChiNhapHangAsync(
