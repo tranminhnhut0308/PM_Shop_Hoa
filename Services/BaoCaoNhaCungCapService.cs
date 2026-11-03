@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Dapper;
 using MySqlConnector;
 using ShopHoa.Models;
@@ -138,7 +138,12 @@ public sealed class BaoCaoNhaCungCapService
         // 4. Top 10 biểu đồ
         var top = await TaiTop10Async(conn, dk, token);
         for (int i = 0; i < top.Count; i++)
+        {
             top[i].Stt = i + 1;
+            top[i].TyLePhanTram = tongHop.GiaTriNhapHang > 0
+                ? (double)(top[i].GiaTriNhapHang / tongHop.GiaTriNhapHang * 100m)
+                : 0.0;
+        }
 
         // 4b. Biểu đồ nhập hàng theo thời gian (ngày/giờ)
         var (bieuDo, bieuDoTrucY) = await TaiBieuDoAsync(conn, dk, token);
@@ -253,9 +258,13 @@ public sealed class BaoCaoNhaCungCapService
             COUNT(DISTINCT ncc.id) AS TongNhaCungCap,
             COUNT(p.id) AS SoPhieuNhap,
             COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) AS TongTienNhap,
+            COALESCE(SUM(p.giam_gia), 0) AS GiamGia,
+            COALESCE(SUM(p.chi_phi_khac), 0) AS ChiPhiKhac,
             COALESCE(SUM({tienTraHangExpr}), 0) AS TienTraHang,
             COALESCE(SUM(p.da_thanh_toan), 0) AS DaThanhToan,
-            COALESCE(SUM({congNoExpr}), 0) AS CongNo
+            COALESCE(SUM({congNoExpr}), 0) AS CongNo,
+            COALESCE(SUM(p.con_no), 0) AS CongNoPhatSinh,
+            COUNT(DISTINCT CASE WHEN p.con_no > 0 THEN ncc.id END) AS SoNccConNo
         FROM phieu_nhap_hang p
         INNER JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
         WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
@@ -354,6 +363,7 @@ public sealed class BaoCaoNhaCungCapService
             COALESCE(ncc.ten_nha_cung_cap, '') AS TenNhaCungCap,
             COALESCE(ncc.so_dien_thoai, '') AS SoDienThoai,
             COUNT(p.id) AS SoPhieuNhap,
+            COALESCE(SUM(ct.tong_sl), 0) AS TongSoLuongNhap,
             COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) AS TongTienNhap,
             {tienTraHangExpr} AS TienTraHang,
             (COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) - {tienTraHangExpr}) AS GiaTriNhapHang,
@@ -361,6 +371,11 @@ public sealed class BaoCaoNhaCungCapService
             {congNoExpr} AS CongNo
         FROM phieu_nhap_hang p
         INNER JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
+        LEFT JOIN (
+            SELECT phieu_nhap_id, SUM(so_luong) AS tong_sl
+            FROM chi_tiet_phieu_nhap_hang
+            GROUP BY phieu_nhap_id
+        ) ct ON ct.phieu_nhap_id = p.id
         WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
           AND p.trang_thai != 'LUU_TAM' AND p.trang_thai != 'HUY'
           AND ncc.trang_thai = 1
@@ -425,6 +440,7 @@ public sealed class BaoCaoNhaCungCapService
             COALESCE(ncc.ten_nha_cung_cap, '') AS TenNhaCungCap,
             COALESCE(ncc.so_dien_thoai, '') AS SoDienThoai,
             COUNT(p.id) AS SoPhieuNhap,
+            COALESCE(SUM(ct.tong_sl), 0) AS TongSoLuongNhap,
             COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) AS TongTienNhap,
             {tienTraHangExpr} AS TienTraHang,
             (COALESCE(SUM(CASE WHEN p.tong_mua_da_ghi_nhan = 1 THEN p.tong_tien_nhap ELSE 0 END), 0) - {tienTraHangExpr}) AS GiaTriNhapHang,
@@ -432,6 +448,11 @@ public sealed class BaoCaoNhaCungCapService
             {congNoExpr} AS CongNo
         FROM phieu_nhap_hang p
         INNER JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
+        LEFT JOIN (
+            SELECT phieu_nhap_id, SUM(so_luong) AS tong_sl
+            FROM chi_tiet_phieu_nhap_hang
+            GROUP BY phieu_nhap_id
+        ) ct ON ct.phieu_nhap_id = p.id
         WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
           AND p.trang_thai != 'LUU_TAM' AND p.trang_thai != 'HUY'
           AND ncc.trang_thai = 1

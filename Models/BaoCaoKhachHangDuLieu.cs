@@ -32,6 +32,18 @@ public sealed class BaoCaoKhachHangTongHopKy
     /// <summary>SUM(con_no) — công nợ phát sinh trong kỳ.</summary>
     public decimal CongNo { get; set; }
 
+    /// <summary>Số khách hàng còn nợ phát sinh trong kỳ.</summary>
+    public int SoKhachConNo { get; set; }
+
+    /// <summary>Số khách hàng đã thanh toán đầy đủ trong kỳ.</summary>
+    public int SoKhachDaThanhToanHet => Math.Max(0, TongKhachHang - SoKhachConNo);
+
+    /// <summary>Số khách hàng có phát sinh thanh toán tiền trong kỳ.</summary>
+    public int SoKhachCoThanhToan { get; set; }
+
+    /// <summary>Giá trị mua hàng trung bình trên mỗi khách hàng = Doanh số / Số khách hàng.</summary>
+    public decimal GiaTriMuaTrungBinh => TongKhachHang > 0 ? GiaTriMuaHang / TongKhachHang : 0m;
+
     public string TongKhachHangHienThi =>
         TongKhachHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
 
@@ -55,6 +67,18 @@ public sealed class BaoCaoKhachHangTongHopKy
 
     public string GiaTriMuaHangHienThi =>
         GiaTriMuaHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+
+    public string GiaTriMuaTrungBinhHienThi =>
+        GiaTriMuaTrungBinh.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+
+    public string SoKhachConNoHienThi =>
+        SoKhachConNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+
+    public string SoKhachDaThanhToanHetHienThi =>
+        SoKhachDaThanhToanHet.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
+
+    public string SoKhachCoThanhToanHienThi =>
+        SoKhachCoThanhToan.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
 
     public string KhoangHienThi =>
         $"Khoảng thời gian: {TuNgay:dd/MM/yyyy} - {DenNgay:dd/MM/yyyy}";
@@ -81,6 +105,9 @@ public sealed class BaoCaoKhachHangTop
 
     /// <summary>Số đơn hàng của khách trong kỳ — dùng làm dòng phụ trong tooltip.</summary>
     public int SoDonHang { get; set; }
+
+    /// <summary>Tổng số lượng sản phẩm khách hàng đã mua trong kỳ.</summary>
+    public decimal TongSoLuongMua { get; set; }
 
     /// <summary>Các cột tổng hợp của dòng top — service dùng để tính giá trị thanh
     /// theo mối quan tâm đang chọn (Dapper ánh xạ từ SUM trong câu truy vấn).</summary>
@@ -157,6 +184,16 @@ public sealed class BaoCaoKhachHangDong
         CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
 }
 
+/// <summary>Dòng phân tích khách hàng theo nhóm.</summary>
+public sealed class BaoCaoKhachHangNhom
+{
+    public int Stt { get; set; }
+    public string TenNhom { get; set; } = string.Empty;
+    public int SoKhachHang { get; set; }
+    public decimal DoanhThu { get; set; }
+    public double TyLePhanTram { get; set; }
+}
+
 /// <summary>Toàn bộ dữ liệu của một lần tải màn "Báo cáo khách hàng".</summary>
 public sealed class BaoCaoKhachHangDuLieu
 {
@@ -164,6 +201,15 @@ public sealed class BaoCaoKhachHangDuLieu
 
     /// <summary>Top khách hàng cho biểu đồ (tối đa 10 dòng, lấy trực tiếp từ SQL).</summary>
     public List<BaoCaoKhachHangTop> Top { get; set; } = new();
+
+    /// <summary>Top 10 khách hàng theo doanh thu đầy đủ số lượng mua, doanh thu, thanh toán, công nợ.</summary>
+    public List<BaoCaoKhachHangTop> Top10DoanhThu { get; set; } = new();
+
+    /// <summary>Danh sách phân tích nhóm khách hàng.</summary>
+    public List<BaoCaoKhachHangNhom> NhomKhachHang { get; set; } = new();
+
+    /// <summary>Danh sách khách hàng phục vụ phân tích công nợ.</summary>
+    public List<BaoCaoKhachHangDong> DanhSachCongNo { get; set; } = new();
 
     /// <summary>Các dòng của trang đang xem (phân trang bằng LIMIT/OFFSET trong SQL).</summary>
     public List<BaoCaoKhachHangDong> DongTrang { get; set; } = new();

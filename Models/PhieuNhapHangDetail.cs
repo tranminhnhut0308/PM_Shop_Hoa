@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace ShopHoa.Models;
 
@@ -36,6 +36,30 @@ public sealed class PhieuNhapHangDetail
     public decimal DaThanhToan { get; set; }
 
     public string TrangThai { get; set; } = "DA_NHAP_HANG";
+
+    public bool IsDaHuy => string.Equals(TrangThai, "DA_HUY", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(TrangThai, "HUY", StringComparison.OrdinalIgnoreCase);
+
+    public bool CoTheHuy => !IsDaHuy && !IsLuuTam;
+    public bool CoTheKhoiPhuc => IsDaHuy;
+
+    public string? LyDoHuy { get; set; }
+    public uint? NguoiHuyId { get; set; }
+    public string? TenNguoiHuy { get; set; }
+    public DateTime? ThoiGianHuy { get; set; }
+    public string ThoiGianHuyText => ThoiGianHuy?.ToString("dd/MM/yyyy HH:mm") ?? "—";
+    public decimal SoTienHoan { get; set; }
+    public string? MaPhieuThuHoan { get; set; }
+    public bool CoLyDoHuy => !string.IsNullOrWhiteSpace(LyDoHuy);
+    public bool CoSoTienHoan => SoTienHoan > 0m;
+    public string SoTienHoanText => SoTienHoan.ToString("N0", Vi) + " Ä‘";
+    public string ThongTinHuyText => $"Bá»Ÿi {(string.IsNullOrWhiteSpace(TenNguoiHuy) ? "Há»‡ thá»‘ng" : TenNguoiHuy)} lÃºc {ThoiGianHuyText}";
+
+    public string? LyDoKhoiPhuc { get; set; }
+    public uint? NguoiKhoiPhucId { get; set; }
+    public string? TenNguoiKhoiPhuc { get; set; }
+    public DateTime? ThoiGianKhoiPhuc { get; set; }
+    public string ThoiGianKhoiPhucText => ThoiGianKhoiPhuc?.ToString("dd/MM/yyyy HH:mm") ?? "—";
 
     public string? GhiChu { get; set; }
 
@@ -105,7 +129,7 @@ public sealed class PhieuNhapHangDetail
 
     public bool IsLuuTam => string.Equals(TrangThai, "LUU_TAM", StringComparison.OrdinalIgnoreCase);
 
-    public string TrangThaiHienThi => IsLuuTam ? "Lưu tạm" : "Đã nhập hàng";
+    public string TrangThaiHienThi => IsDaHuy ? "Đã hủy" : (IsLuuTam ? "Lưu tạm" : "Đã nhập hàng");
 
     public string TieuDe => $"Chi tiết phiếu nhập {MaPhieuNhap}";
 
@@ -137,7 +161,7 @@ public sealed class PhieuNhapHangDetail
 
     /// <summary>Phiếu đã hoàn thành và còn nợ thì mới được ghi nhận thanh toán.</summary>
     public bool CoTheThanhToan =>
-        TrangThaiThanhToanPhieuNhap.LaPhieuThanhToanDuoc(TrangThai) && ConNo > 0m;
+        !IsDaHuy && TrangThaiThanhToanPhieuNhap.LaPhieuThanhToanDuoc(TrangThai) && ConNo > 0m;
 
     public bool CoCongNo => ConNo > 0m;
 
@@ -183,6 +207,8 @@ public sealed class PhieuNhapHangDetailItem
     private static readonly CultureInfo Vi = CultureInfo.GetCultureInfo("vi-VN");
 
     public int Index { get; set; }
+
+    public uint SanPhamId { get; set; }
 
     public string MaSanPham { get; set; } = "";
 

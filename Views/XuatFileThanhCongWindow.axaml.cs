@@ -30,6 +30,8 @@ public partial class XuatFileThanhCongWindow : Window
     {
         MessageTextBlock.Text = noiDung;
         TenBaoCaoTextBlock.Text = "Báo cáo thống kê";
+        KhoangThoiGianLabel.IsVisible = false;
+        KhoangThoiGianTextBlock.IsVisible = false;
         TenFileTextBlock.Text = Path.GetFileName(duongDanFile);
         PathTextBlock.Text = duongDanFile;
         ThoiGianXuatTextBlock.Text = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
@@ -42,11 +44,25 @@ public partial class XuatFileThanhCongWindow : Window
         string duongDanFile,
         DateTime? thoiGianXuat = null,
         int? soDongDuLieu = null,
-        string? thongDiep = null)
+        string? thongDiep = null,
+        string? khoangThoiGian = null)
         : this()
     {
         MessageTextBlock.Text = thongDiep ?? $"Đã xuất hoàn tất {tenBaoCao}.";
         TenBaoCaoTextBlock.Text = tenBaoCao;
+
+        if (!string.IsNullOrWhiteSpace(khoangThoiGian))
+        {
+            KhoangThoiGianLabel.IsVisible = true;
+            KhoangThoiGianTextBlock.IsVisible = true;
+            KhoangThoiGianTextBlock.Text = khoangThoiGian;
+        }
+        else
+        {
+            KhoangThoiGianLabel.IsVisible = false;
+            KhoangThoiGianTextBlock.IsVisible = false;
+        }
+
         TenFileTextBlock.Text = Path.GetFileName(duongDanFile);
         PathTextBlock.Text = duongDanFile;
         ThoiGianXuatTextBlock.Text = (thoiGianXuat ?? DateTime.Now).ToString("dd/MM/yyyy HH:mm:ss");

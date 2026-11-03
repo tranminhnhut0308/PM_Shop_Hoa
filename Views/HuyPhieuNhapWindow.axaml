@@ -1,0 +1,282 @@
+<Window xmlns="https://github.com/avaloniaui"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:models="using:ShopHoa.Models"
+  x:Class="ShopHoa.Views.HuyPhieuNhapWindow"
+  Title="Xác nhận hủy phiếu nhập hàng"
+  Width="680"
+  SizeToContent="Height"
+  WindowStartupLocation="CenterOwner"
+  CanResize="False"
+  Background="#F4F7F6"
+  FontFamily="Inter, Segoe UI, Arial">
+
+  <Border Background="White"
+    Margin="16"
+    CornerRadius="14"
+    BorderBrush="#E2ECE8"
+    BorderThickness="1"
+    BoxShadow="0 10 28 #14000000"
+    ClipToBounds="True">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+      <!-- HEADER -->
+      <Border Grid.Row="0"
+        Background="#FEF2F2"
+        BorderBrush="#FECACA"
+        BorderThickness="0,0,0,1"
+        Padding="20,16">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+          <Border Width="40" Height="40" CornerRadius="20" Background="#FEE2E2"
+            VerticalAlignment="Center">
+            <TextBlock Text="🚫" FontSize="18" HorizontalAlignment="Center"
+              VerticalAlignment="Center" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+            <TextBlock Text="Xác nhận hủy phiếu nhập hàng"
+              FontSize="17"
+              FontWeight="Bold"
+              Foreground="#991B1B" />
+            <TextBlock Text="Phiếu nhập sẽ chuyển sang trạng thái Đã hủy, hoàn tác kho và công nợ."
+              FontSize="12"
+              Foreground="#7F1D1D" />
+          </StackPanel>
+          <Border Grid.Column="2"
+            Background="#DC2626"
+            CornerRadius="8"
+            Padding="10,5"
+            VerticalAlignment="Center">
+            <TextBlock x:Name="TxtMaPhieuBadge"
+              Text="#PN..."
+              Foreground="White"
+              FontWeight="Bold"
+              FontSize="12.5" />
+          </Border>
+        </Grid>
+      </Border>
+
+      <!-- BODY -->
+      <ScrollViewer Grid.Row="1" MaxHeight="560" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20,16" Spacing="14">
+
+          <!-- 1. THÔNG TIN PHIẾU NHẬP CẦN HỦY -->
+          <Border Background="#F8FAFC"
+            BorderBrush="#E2E8F0"
+            BorderThickness="1"
+            CornerRadius="10"
+            Padding="14,12">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="150,*" RowSpacing="8">
+
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="Mã phiếu nhập:" Foreground="#64748B" FontSize="12.5" />
+              <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtMaPhieu" Text="-" FontWeight="Bold" Foreground="#0F172A" FontSize="13" />
+
+              <TextBlock Grid.Row="1" Grid.Column="0" Text="Nhà cung cấp:" Foreground="#64748B" FontSize="12.5" />
+              <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TxtNhaCungCap" Text="-" FontWeight="SemiBold" Foreground="#0F172A" FontSize="13" />
+
+              <Border Grid.Row="2" Grid.ColumnSpan="2" Height="1" Background="#E2E8F0" Margin="0,2" />
+
+              <Grid Grid.Row="3" Grid.ColumnSpan="2" ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="10,8">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="Tổng tiền nhập" FontSize="11" Foreground="#64748B" />
+                    <TextBlock x:Name="TxtTongTienNhap" Text="0 đ" FontSize="14" FontWeight="Bold" Foreground="#0F766E" />
+                  </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="10,8">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="Đã thanh toán" FontSize="11" Foreground="#64748B" />
+                    <TextBlock x:Name="TxtDaThanhToan" Text="0 đ" FontSize="14" FontWeight="Bold" Foreground="#15803D" />
+                  </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="10,8">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="Số tiền còn nợ" FontSize="11" Foreground="#64748B" />
+                    <TextBlock x:Name="TxtConNo" Text="0 đ" FontSize="14" FontWeight="Bold" Foreground="#DC2626" />
+                  </StackPanel>
+                </Border>
+              </Grid>
+            </Grid>
+          </Border>
+
+          <!-- 2. KIỂM TRA TỒN KHO HÀNG HÓA -->
+          <Border Background="White"
+            BorderBrush="#D8E5E0"
+            BorderThickness="1"
+            CornerRadius="10"
+            Padding="14,12">
+            <StackPanel Spacing="8">
+              <TextBlock Text="1. Hoàn tác số lượng tồn kho"
+                FontWeight="Bold"
+                FontSize="13"
+                Foreground="#163F38" />
+
+              <Border x:Name="PanelTonKhoHopLe"
+                Background="#F0FDF4"
+                BorderBrush="#BBF7D0"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12,8">
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                  <TextBlock Text="✓" FontWeight="Bold" Foreground="#16A34A" />
+                  <TextBlock Text="Tồn kho các mặt hàng đủ điều kiện để trừ hoàn tác về kho."
+                    FontSize="12"
+                    Foreground="#166534" />
+                </StackPanel>
+              </Border>
+
+              <Border x:Name="PanelTonKhoLoi"
+                IsVisible="False"
+                Background="#FEF2F2"
+                BorderBrush="#FECACA"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12,10">
+                <StackPanel Spacing="6">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="⚠️" Foreground="#DC2626" />
+                    <TextBlock Text="Không thể hủy phiếu vì tồn kho hiện tại không đủ để hoàn tác:"
+                      FontSize="12.5"
+                      FontWeight="Bold"
+                      Foreground="#991B1B" />
+                  </StackPanel>
+                  <TextBlock x:Name="TxtChiTietTonKhoLoi"
+                    FontSize="12"
+                    Foreground="#B91C1C"
+                    TextWrapping="Wrap" />
+                  <TextBlock Text="* Hàng hóa đã được bán hoặc xuất kho. Vui lòng kiểm tra lại tồn kho trước khi hủy."
+                    FontSize="11.5"
+                    FontStyle="Italic"
+                    Foreground="#7F1D1D" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </Border>
+
+          <!-- 3. XỬ LÝ CÔNG NỢ & TIỀN ĐÃ THANH TOÁN -->
+          <Border Background="White"
+            BorderBrush="#D8E5E0"
+            BorderThickness="1"
+            CornerRadius="10"
+            Padding="14,12">
+            <StackPanel Spacing="8">
+              <TextBlock Text="2. Xử lý công nợ NCC &amp; khoản tiền đã chi"
+                FontWeight="Bold"
+                FontSize="13"
+                Foreground="#163F38" />
+
+              <TextBlock x:Name="TxtThongBaoCongNo"
+                FontSize="12"
+                Foreground="#475569"
+                TextWrapping="Wrap" />
+
+              <!-- Khi phiếu đã thanh toán DaThanhToan > 0 -->
+              <StackPanel x:Name="PanelXuLyTienDaChi" Spacing="8" IsVisible="False">
+                <RadioButton x:Name="RbHoanTienVeQuy"
+                  GroupName="GrpTienDaChi"
+                  IsChecked="True"
+                  Content="Hoàn trả tiền về quỹ tiệm (Tự động ghi phiếu thu hoàn tiền vào Sổ quỹ)"
+                  FontSize="12.5" />
+
+                <Grid Margin="26,0,0,0"
+                  ColumnDefinitions="Auto,200"
+                  ColumnSpacing="10">
+                  <TextBlock Text="Hình thức nhận lại tiền:"
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Foreground="#475569" />
+                  <ComboBox Grid.Column="1"
+                    x:Name="CboPhuongThucHoanTien"
+                    SelectedIndex="0"
+                    HorizontalAlignment="Stretch"
+                    FontSize="12">
+                    <ComboBoxItem Content="Tiền mặt" Tag="TIEN_MAT" />
+                    <ComboBoxItem Content="Chuyển khoản" Tag="CHUYEN_KHOAN" />
+                  </ComboBox>
+                </Grid>
+
+                <RadioButton x:Name="RbGiuNoNCC"
+                  GroupName="GrpTienDaChi"
+                  Content="Không hoàn tiền ngay — Giữ làm khoản trả trước / cấn trừ công nợ NCC sau"
+                  FontSize="12.5" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- 4. LÝ DO HỦY (BẮT BUỘC) -->
+          <StackPanel Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <TextBlock Text="3. Lý do hủy phiếu nhập"
+                FontWeight="Bold"
+                FontSize="13"
+                Foreground="#163F38" />
+              <TextBlock Text="(*)"
+                FontWeight="Bold"
+                FontSize="13"
+                Foreground="#DC2626" />
+            </StackPanel>
+
+            <TextBox x:Name="TxtLyDoHuy"
+              Watermark="Nhập rõ lý do hủy phiếu (VD: Nhập nhầm nhà cung cấp, sai đơn giá, hàng bị trả về NCC, lập trùng phiếu)..."
+              AcceptsReturn="True"
+              TextWrapping="Wrap"
+              MinHeight="64"
+              MaxHeight="96"
+              Padding="10,8"
+              FontSize="12.5" />
+          </StackPanel>
+
+          <!-- THÔNG BÁO LỖI -->
+          <Border x:Name="BannerLoi"
+            IsVisible="False"
+            Background="#FEF2F2"
+            BorderBrush="#FECACA"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="12,8">
+            <TextBlock x:Name="TxtLoi"
+              Foreground="#B91C1C"
+              FontSize="12.5"
+              FontWeight="SemiBold"
+              TextWrapping="Wrap" />
+          </Border>
+
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- FOOTER BUTTONS -->
+      <Border Grid.Row="2"
+        Background="#F8FAFC"
+        BorderBrush="#E2E8F0"
+        BorderThickness="0,1,0,0"
+        Padding="20,14">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+          <Button Grid.Column="0"
+            x:Name="BtnQuayLai"
+            Content="Quay lại"
+            Padding="18,9"
+            CornerRadius="8"
+            Background="White"
+            BorderBrush="#CBD5E1"
+            BorderThickness="1"
+            Foreground="#334155"
+            FontWeight="SemiBold"
+            Click="BtnQuayLai_OnClick" />
+
+          <Button Grid.Column="2"
+            x:Name="BtnXacNhanHuy"
+            Content="🚫 Xác nhận hủy phiếu"
+            Padding="20,9"
+            CornerRadius="8"
+            Background="#DC2626"
+            Foreground="White"
+            FontWeight="Bold"
+            ToolTip.Tip="Hủy phiếu nhập và hoàn tác tồn kho, công nợ"
+            Click="BtnXacNhanHuy_OnClick" />
+        </Grid>
+      </Border>
+
+    </Grid>
+  </Border>
+</Window>

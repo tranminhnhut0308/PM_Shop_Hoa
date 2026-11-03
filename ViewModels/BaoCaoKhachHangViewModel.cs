@@ -671,15 +671,18 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
                 soDong,
                 default);
 
-            var tenBaoCao = $"Báo cáo khách hàng ({TuNgay:dd/MM/yyyy} - {DenNgay:dd/MM/yyyy})";
+            var tenBaoCao = "Báo cáo khách hàng";
+            var khoangThoiGian = $"{TuNgay:dd/MM/yyyy} - {DenNgay:dd/MM/yyyy}";
             var tenFile = ReportExportService.TaoTenFile("BaoCaoKhachHang");
 
             await ReportExportService.ExportReportAsync(
-                ownerWindow: null,
+                ownerWindow: ReportExportService.LayCuaSoChinh(),
                 reportTitle: tenBaoCao,
                 suggestedFileName: tenFile,
                 generateWorkbook: () => BaoCaoKhachHangExcel.TaoWorkbook(duLieu),
-                recordCount: duLieu.DongTrang.Count);
+                recordCount: duLieu.DongTrang.Count,
+                statusCallback: msg => ThongBaoLoi = msg,
+                reportPeriod: khoangThoiGian);
         }
         catch (Exception ex)
         {

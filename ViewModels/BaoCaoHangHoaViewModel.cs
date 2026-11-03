@@ -538,15 +538,29 @@ public partial class BaoCaoHangHoaViewModel : ObservableObject
             DangTai = true;
             ThongBaoLoi = string.Empty;
 
-            var tenBaoCao = $"Báo cáo hàng hóa ({TuNgay:dd/MM/yyyy} - {DenNgay:dd/MM/yyyy})";
+            if (DuLieu is null)
+            {
+                await TaiDuLieuAsync();
+            }
+
+            if (DuLieu is null)
+            {
+                ThongBaoLoi = "Không có dữ liệu để xuất file.";
+                return;
+            }
+
+            var tenBaoCao = "Báo cáo hàng hóa";
+            var khoangThoiGian = $"{TuNgay:dd/MM/yyyy} - {DenNgay:dd/MM/yyyy}";
             var tenFile = ReportExportService.TaoTenFile("BaoCaoHangHoa");
 
             await ReportExportService.ExportReportAsync(
-                ownerWindow: null,
+                ownerWindow: ReportExportService.LayCuaSoChinh(),
                 reportTitle: tenBaoCao,
                 suggestedFileName: tenFile,
                 generateWorkbook: () => BaoCaoHangHoaExcel.TaoWorkbook(DuLieu),
-                recordCount: DuLieu?.TopDoanhThu.Count ?? 0);
+                recordCount: DuLieu.ChiTiet.Count,
+                statusCallback: msg => ThongBaoLoi = msg,
+                reportPeriod: khoangThoiGian);
         }
         catch (Exception ex)
         {

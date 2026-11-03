@@ -59,8 +59,11 @@ public sealed class HoaDonEditRequest
     public string? SoDienThoai { get; set; }
     public string? DiaChi { get; set; }
     public decimal GiamGiaHoaDon { get; set; }
+    public decimal GiamGia { get => GiamGiaHoaDon; set => GiamGiaHoaDon = value; }
+    public decimal ThuKhac { get; set; }
     public string? GhiChu { get; set; }
     public string LyDoChinhSua { get; set; } = "";
+    public string LyDoSua { get => LyDoChinhSua; set => LyDoChinhSua = value; }
     public decimal KhachDaThanhToan { get; set; }
     public decimal ConNo { get; set; }
     public int SoLanThanhToan { get; set; }

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -47,6 +47,17 @@ public sealed partial class PhieuNhapHang : ObservableObject
     /// </summary>
     public string TrangThai { get; set; } = "DA_NHAP_HANG";
 
+    public bool IsDaHuy => string.Equals(TrangThai, "DA_HUY", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(TrangThai, "HUY", StringComparison.OrdinalIgnoreCase);
+
+    public string? LyDoHuy { get; set; }
+    public uint? NguoiHuyId { get; set; }
+    public string? TenNguoiHuy { get; set; }
+    public DateTime? ThoiGianHuy { get; set; }
+    public string ThoiGianHuyText => ThoiGianHuy?.ToString("dd/MM/yyyy HH:mm") ?? "—";
+    public decimal SoTienHoan { get; set; }
+    public string? MaPhieuThuHoan { get; set; }
+
     public string? GhiChu { get; set; }
 
     public string? SoHoaDonDauVao { get; set; }
@@ -79,9 +90,9 @@ public sealed partial class PhieuNhapHang : ObservableObject
         _ => "Quỹ tiền mặt"
     };
 
-    public string TrangThaiHienThi => TrangThai == "LUU_TAM"
-        ? "Lưu tạm"
-        : "Đã nhập hàng";
+    public string TrangThaiHienThi => IsDaHuy
+        ? "Đã hủy"
+        : (TrangThai == "LUU_TAM" ? "Lưu tạm" : "Đã nhập hàng");
 
     // ============================================================
     // CÔNG NỢ / THANH TOÁN: trạng thái thanh toán được suy ra từ
@@ -90,7 +101,7 @@ public sealed partial class PhieuNhapHang : ObservableObject
 
     /// <summary>Phiếu đã hoàn thành và còn nợ thì mới được ghi nhận thanh toán.</summary>
     public bool CoTheThanhToan =>
-        TrangThaiThanhToanPhieuNhap.LaPhieuThanhToanDuoc(TrangThai) && ConNo > 0m;
+        !IsDaHuy && TrangThaiThanhToanPhieuNhap.LaPhieuThanhToanDuoc(TrangThai) && ConNo > 0m;
 
     public bool CoCongNo => ConNo > 0m;
 
@@ -116,16 +127,18 @@ public sealed partial class PhieuNhapHang : ObservableObject
     private static readonly IBrush ChuDaNhapHang = new SolidColorBrush(Color.Parse("#087F6E"));
     private static readonly IBrush NenLuuTam = new SolidColorBrush(Color.Parse("#FFF7E8"));
     private static readonly IBrush ChuLuuTam = new SolidColorBrush(Color.Parse("#B06A00"));
+    private static readonly IBrush NenDaHuy = new SolidColorBrush(Color.Parse("#FEF3F2"));
+    private static readonly IBrush ChuDaHuy = new SolidColorBrush(Color.Parse("#B42318"));
 
     /// <summary>Màu nền badge trạng thái: xanh nhạt khi đã nhập hàng, vàng nhạt khi lưu tạm.</summary>
-    public IBrush TrangThaiBadgeBrush => TrangThai == "LUU_TAM"
-        ? NenLuuTam
-        : NenDaNhapHang;
+    public IBrush TrangThaiBadgeBrush => IsDaHuy
+        ? NenDaHuy
+        : (TrangThai == "LUU_TAM" ? NenLuuTam : NenDaNhapHang);
 
     /// <summary>Màu chữ badge trạng thái.</summary>
-    public IBrush TrangThaiBadgeForeground => TrangThai == "LUU_TAM"
-        ? ChuLuuTam
-        : ChuDaNhapHang;
+    public IBrush TrangThaiBadgeForeground => IsDaHuy
+        ? ChuDaHuy
+        : (TrangThai == "LUU_TAM" ? ChuLuuTam : ChuDaNhapHang);
 
     private static readonly IBrush NenChuaThanhToan = new SolidColorBrush(Color.Parse("#FDECEC"));
     private static readonly IBrush ChuChuaThanhToan = new SolidColorBrush(Color.Parse("#C0392B"));

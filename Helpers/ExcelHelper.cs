@@ -12,16 +12,24 @@ namespace ShopHoa.Helpers;
 /// </summary>
 public static class ExcelHelper
 {
-    public const string MauChuDao = "#164B40";      // Màu xanh chủ đạo của ShopHoa
+    public const string MauChuDao = "#164B40";      // Màu xanh ngọc đậm chủ đạo của ShopHoa
     public const string MauNenNhe = "#EAF6F3";      // Nền nhấn nhẹ
     public const string MauVien = "#D0DFDA";        // Màu viền ô tinh tế
     public const string MauTongCong = "#DDF0EB";     // Màu nền dòng tổng cộng
+    public const string MauTop1 = "#FEF3C7";        // Màu nhấn Top 1 (Vàng nhạt ấm)
+    public const string MauTop2 = "#F1F5F9";        // Màu nhấn Top 2 (Bạc nhẹ)
+    public const string MauTop3 = "#FFEDD5";        // Màu nhấn Top 3 (Cam đồng nhạt)
+    public const string MauTichCuc = "#059669";     // Màu xanh lá chỉ số tích cực
+    public const string MauCanhBao = "#D97706";     // Màu cam cảnh báo
+    public const string MauNguyHiem = "#DC2626";    // Màu đỏ công nợ / số liệu chú ý
+    public const string MauNenThe = "#F8FAFC";      // Màu nền bảng/thẻ nhẹ
 
     public const string DinhDangTien = "#,##0";
     public const string DinhDangTienVND = "#,##0\" ₫\"";
     public const string DinhDangSoLuong = "#,##0.###";
-    public const string DinhDangPhanTram = "0.00%";
-    public const string DinhDangPhanTramSo = "0.00";
+    public const string DinhDangPhanTram = "0.0%";
+    public const string DinhDangPhanTramHaiSo = "0.00%";
+    public const string DinhDangPhanTramSo = "0.0%";
     public const string DinhDangNgayGio = "dd/MM/yyyy HH:mm";
     public const string DinhDangNgay = "dd/MM/yyyy";
 
@@ -213,5 +221,53 @@ public static class ExcelHelper
         }
 
         sheet.ShowGridLines = true;
+    }
+
+    /// <summary>
+    /// Tô màu nhấn cho Top 3 sản phẩm / khách hàng / nhà cung cấp.
+    /// </summary>
+    public static void DinhDangDongTop(IXLWorksheet sheet, int dong, int cotBatDau, int cotKetThuc, int thuHang)
+    {
+        string? mauNen = thuHang switch
+        {
+            1 => MauTop1,
+            2 => MauTop2,
+            3 => MauTop3,
+            _ => null
+        };
+
+        if (mauNen is not null)
+        {
+            var range = sheet.Range(dong, cotBatDau, dong, cotKetThuc);
+            range.Style.Fill.BackgroundColor = XLColor.FromHtml(mauNen);
+            range.Style.Font.Bold = true;
+        }
+    }
+
+    /// <summary>
+    /// Tạo thanh trực quan tỷ lệ in-cell (text-based data bar) tương thích 100% mọi ứng dụng đọc Excel.
+    /// </summary>
+    public static string TaoThanhTrucQuan(double phanTram, int doDai = 10)
+    {
+        if (phanTram <= 0) return new string('░', doDai);
+        int soKhoi = (int)Math.Round(Math.Clamp(phanTram / 100.0, 0.0, 1.0) * doDai);
+        return new string('█', soKhoi) + new string('░', doDai - soKhoi);
+    }
+
+    /// <summary>
+    /// Cấu hình in ấn trang A4, tự co vừa trang, Header / Footer chuyên nghiệp.
+    /// </summary>
+    public static void ThietLapTrangIn(IXLWorksheet sheet, XLPageOrientation huongGiay = XLPageOrientation.Portrait)
+    {
+        sheet.PageSetup.PageOrientation = huongGiay;
+        sheet.PageSetup.PaperSize = XLPaperSize.A4Paper;
+        sheet.PageSetup.FitToPages(1, 0);
+        sheet.PageSetup.Header.Left.AddText("&A");
+        sheet.PageSetup.Footer.Left.AddText("Cửa Hàng Shop Hoa - Ngày in: &D &T");
+        sheet.PageSetup.Footer.Right.AddText("Trang &P / &N");
+        sheet.PageSetup.Margins.Left = 0.5;
+        sheet.PageSetup.Margins.Right = 0.5;
+        sheet.PageSetup.Margins.Top = 0.75;
+        sheet.PageSetup.Margins.Bottom = 0.75;
     }
 }

@@ -34,10 +34,12 @@ public static class ReportExportService
         if (owner is not null)
             return owner;
 
-        return Application.Current?.ApplicationLifetime
-            is IClassicDesktopStyleApplicationLifetime desktop
-            ? desktop.MainWindow
-            : null;
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            return desktop.MainWindow ?? desktop.Windows.FirstOrDefault(w => w.IsActive) ?? desktop.Windows.FirstOrDefault();
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -49,6 +51,7 @@ public static class ReportExportService
     /// <param name="generateWorkbook">Hàm khởi tạo và dựng nội dung XLWorkbook</param>
     /// <param name="recordCount">Số lượng bản ghi chính xuất ra (nếu có)</param>
     /// <param name="statusCallback">Callback cập nhật dòng trạng thái trên màn hình</param>
+    /// <param name="reportPeriod">Khoảng thời gian báo cáo hiển thị trên hộp thoại (vd: 01/11/2026 - 03/11/2026)</param>
     /// <returns>Đường dẫn file đã xuất hoặc null nếu hủy/thất bại</returns>
     public static async Task<string?> ExportReportAsync(
         Window? ownerWindow,
@@ -56,7 +59,8 @@ public static class ReportExportService
         string suggestedFileName,
         Func<XLWorkbook> generateWorkbook,
         int recordCount = 0,
-        Action<string>? statusCallback = null)
+        Action<string>? statusCallback = null,
+        string? reportPeriod = null)
     {
         ownerWindow = LayCuaSoChinh(ownerWindow);
         if (ownerWindow is null)
@@ -151,7 +155,9 @@ public static class ReportExportService
                 reportTitle,
                 duongDanFile,
                 DateTime.Now,
-                recordCount);
+                recordCount,
+                thongDiep: $"Đã xuất hoàn tất báo cáo ra file Excel.",
+                khoangThoiGian: reportPeriod);
 
             var hanhDong = await dialog.ShowDialog<XuatFileHanhDong>(ownerWindow);
 

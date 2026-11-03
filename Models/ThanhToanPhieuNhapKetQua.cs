@@ -1,4 +1,4 @@
-namespace ShopHoa.Models;
+﻿namespace ShopHoa.Models;
 
 /// <summary>
 /// Trạng thái thanh toán công nợ của phiếu nhập hàng. Trạng thái này được SUY RA
@@ -14,7 +14,8 @@ public static class TrangThaiThanhToanPhieuNhap
     /// <summary>Phiếu ở trạng thái này mới được phép ghi nhận thanh toán.</summary>
     public static bool LaPhieuThanhToanDuoc(string? trangThaiPhieu)
         => !string.Equals(trangThaiPhieu, "LUU_TAM", StringComparison.OrdinalIgnoreCase)
-           && !string.Equals(trangThaiPhieu, "HUY", StringComparison.OrdinalIgnoreCase);
+           && !string.Equals(trangThaiPhieu, "HUY", StringComparison.OrdinalIgnoreCase)
+           && !string.Equals(trangThaiPhieu, "DA_HUY", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Suy ra mã trạng thái thanh toán từ số đã trả và số còn nợ.</summary>
     public static string Tinh(decimal daThanhToan, decimal conNo)

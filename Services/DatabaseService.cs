@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Globalization;
 using System.Text;
 using ClosedXML.Excel;
@@ -3209,7 +3209,7 @@ public sealed partial class DatabaseService
                     SELECT SUM(p_cn.con_no)
                     FROM phieu_nhap_hang p_cn
                     WHERE p_cn.nha_cung_cap_id = {idExpression}
-                      AND p_cn.trang_thai NOT IN ('LUU_TAM', 'HUY')
+                      AND p_cn.trang_thai NOT IN ('LUU_TAM', 'HUY', 'DA_HUY')
                 ),
                 0
             )
@@ -3222,7 +3222,7 @@ public sealed partial class DatabaseService
                     SELECT SUM(p.tong_tien_nhap)
                     FROM phieu_nhap_hang p
                     WHERE p.nha_cung_cap_id = {idExpression}
-                      AND p.trang_thai NOT IN ('LUU_TAM', 'HUY')
+                      AND p.trang_thai NOT IN ('LUU_TAM', 'HUY', 'DA_HUY')
                       AND p.tong_mua_da_ghi_nhan = 1
                 ),
                 0
@@ -6925,7 +6925,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
                     FROM phieu_nhap_hang p
                     WHERE p.nha_cung_cap_id = @NhaCungCapId
                       AND p.con_no > 0
-                      AND p.trang_thai NOT IN ('LUU_TAM', 'HUY')
+                      AND p.trang_thai NOT IN ('LUU_TAM', 'HUY', 'DA_HUY')
                     ORDER BY COALESCE(p.thoi_gian_nhap, p.ngay_tao, NOW()) ASC, p.id ASC
                     FOR UPDATE;
                     """;
@@ -8316,7 +8316,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
             ) AS TongConNoPhieuNhapDaGhiCongNo
         FROM phieu_nhap_hang p
         WHERE p.nha_cung_cap_id = @Id
-          AND p.trang_thai NOT IN ('LUU_TAM', 'HUY');
+          AND p.trang_thai NOT IN ('LUU_TAM', 'HUY', 'DA_HUY');
         """;
 
         const string congNoSql = """
@@ -9208,11 +9208,14 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
             ? ",\n            COALESCE(p.phuong_thuc_thanh_toan, 'TIEN_MAT') AS PhuongThucThanhToan"
             : string.Empty;
 
+                await EnsureHuyPhieuNhapSchemaAsync();
         var paymentCondition = (tinhTrangThanhToan?.ToUpperInvariant()) switch
         {
-            "DA_THANH_TOAN" => "AND p.con_no <= 0",
-            "CHUA_THANH_TOAN" => "AND p.da_thanh_toan <= 0",
-            "MOT_PHAN" => "AND p.da_thanh_toan > 0 AND p.con_no > 0",
+            "DA_HUY" => "AND p.trang_thai = 'DA_HUY'",
+            "DA_NHAP_HANG" => "AND (p.trang_thai = 'DA_NHAP_HANG' OR p.trang_thai IS NULL OR p.trang_thai = '')",
+            "DA_THANH_TOAN" => "AND (p.trang_thai != 'DA_HUY' OR p.trang_thai IS NULL) AND p.con_no <= 0",
+            "CHUA_THANH_TOAN" => "AND (p.trang_thai != 'DA_HUY' OR p.trang_thai IS NULL) AND p.da_thanh_toan <= 0",
+            "MOT_PHAN" => "AND (p.trang_thai != 'DA_HUY' OR p.trang_thai IS NULL) AND p.da_thanh_toan > 0 AND p.con_no > 0",
             _ => ""
         };
 
@@ -9258,7 +9261,10 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
         p.da_thanh_toan AS DaThanhToan,
         p.con_no AS ConNo,
         p.trang_thai AS TrangThai,
-        p.ghi_chu AS GhiChu{extraSelect},
+        p.ghi_chu AS GhiChu,
+        p.ly_do_huy AS LyDoHuy,
+        p.ten_nguoi_huy AS TenNguoiHuy,
+        p.thoi_gian_huy AS ThoiGianHuy{extraSelect},
         EXISTS (SELECT 1 FROM lich_su_chinh_sua_phieu_nhap ls WHERE ls.phieu_nhap_id = p.id) AS CoLichSuThayDoi
     FROM phieu_nhap_hang p
     LEFT JOIN nha_cung_cap ncc
@@ -9352,7 +9358,17 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
             p.chi_phi_khac     AS ChiPhiKhac,
             p.da_thanh_toan    AS DaThanhToan,
             p.trang_thai       AS TrangThai,
-            p.ghi_chu          AS GhiChu{extraSelect}
+            p.ghi_chu          AS GhiChu,
+            p.ly_do_huy        AS LyDoHuy,
+            p.nguoi_huy_id     AS NguoiHuyId,
+            p.ten_nguoi_huy    AS TenNguoiHuy,
+            p.thoi_gian_huy    AS ThoiGianHuy,
+            p.so_tien_hoan     AS SoTienHoan,
+            p.ma_phieu_thu_hoan AS MaPhieuThuHoan,
+            p.nguoi_khoi_phuc_id AS NguoiKhoiPhucId,
+            p.ten_nguoi_khoi_phuc AS TenNguoiKhoiPhuc,
+            p.thoi_gian_khoi_phuc AS ThoiGianKhoiPhuc,
+            p.ly_do_khoi_phuc  AS LyDoKhoiPhuc{extraSelect}
         FROM phieu_nhap_hang p
         LEFT JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
         LEFT JOIN nguoi_dung   nd  ON nd.id  = p.nguoi_nhap_id
@@ -9369,6 +9385,7 @@ ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
 
         const string detailSql = """
         SELECT
+            ct.san_pham_id  AS SanPhamId,
             ct.ma_san_pham  AS MaSanPham,
             ct.ten_san_pham AS TenSanPham,
             COALESCE(NULLIF(TRIM(ct.don_vi_tinh_excel), ''), dvt.ten_don_vi, '') AS DonViTinh,

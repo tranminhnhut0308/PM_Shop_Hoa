@@ -22,20 +22,37 @@ public partial class PhieuNhapDetailWindow : Window
     /// </summary>
     private readonly Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? _chinhSua;
 
+    /// <summary>
+    /// Hàm hủy phiếu nhập hàng. Mở hộp thoại xác nhận hủy, thực hiện transaction và
+    /// trả về detail đã cập nhật trạng thái ĐÃ HỦY. Null khi người dùng hủy.
+    /// </summary>
+    private readonly Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? _huyPhieu;
+
+    /// <summary>
+    /// Hàm khôi phục phiếu nhập đã hủy. Kiểm tra điều kiện, cộng lại kho & công nợ,
+    /// trả về detail đã cập nhật trạng thái ĐÃ NHẬP HÀNG. Null khi người dùng hủy.
+    /// </summary>
+    private readonly Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? _khoiPhuc;
+
+    /// <summary>
+    /// Hàm mua lại / tạo phiếu mới sao chép hàng hóa từ phiếu cũ.
+    /// </summary>
+    private readonly Func<PhieuNhapHangDetail, Window, Task>? _muaLai;
+
     public PhieuNhapDetailWindow()
         : this(new PhieuNhapHangDetail())
     {
     }
 
     public PhieuNhapDetailWindow(PhieuNhapHangDetail detail)
-        : this(detail, null, null)
+        : this(detail, null, null, null, null, null)
     {
     }
 
     public PhieuNhapDetailWindow(
         PhieuNhapHangDetail detail,
         Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? thanhToan)
-        : this(detail, thanhToan, null)
+        : this(detail, thanhToan, null, null, null, null)
     {
     }
 
@@ -43,21 +60,44 @@ public partial class PhieuNhapDetailWindow : Window
         PhieuNhapHangDetail detail,
         Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? thanhToan,
         Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? chinhSua)
+        : this(detail, thanhToan, chinhSua, null, null, null)
+    {
+    }
+
+    public PhieuNhapDetailWindow(
+        PhieuNhapHangDetail detail,
+        Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? thanhToan,
+        Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? chinhSua,
+        Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? huyPhieu,
+        Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? khoiPhuc,
+        Func<PhieuNhapHangDetail, Window, Task>? muaLai)
     {
         InitializeComponent();
         _thanhToan = thanhToan;
         _chinhSua = chinhSua;
+        _huyPhieu = huyPhieu;
+        _khoiPhuc = khoiPhuc;
+        _muaLai = muaLai;
         DataContext = detail;
         CapNhatGiaoDien(detail);
     }
 
     private void CapNhatGiaoDien(PhieuNhapHangDetail detail)
     {
-        // Chỉ hiện nút thanh toán khi phiếu đã hoàn thành và còn công nợ phải trả.
-        ThanhToanButton.IsVisible = detail.CoTheThanhToan;
+        // Chỉ hiện nút thanh toán khi phiếu chưa bị hủy và còn nợ
+        ThanhToanButton.IsVisible = detail.CoTheThanhToan && _thanhToan is not null;
 
-        // Chỉ hiện nút chỉnh sửa nếu có hàm xử lý chỉnh sửa được truyền vào
-        SuaPhieuButton.IsVisible = _chinhSua is not null;
+        // Chỉ hiện nút chỉnh sửa nếu chưa bị hủy và có hàm xử lý chỉnh sửa
+        SuaPhieuButton.IsVisible = !detail.IsDaHuy && _chinhSua is not null;
+
+        // Chỉ hiện nút hủy phiếu nếu phiếu chưa hủy và không phải lưu tạm
+        HuyPhieuButton.IsVisible = detail.CoTheHuy && _huyPhieu is not null;
+
+        // Chỉ hiện nút khôi phục nếu phiếu đã bị hủy
+        KhoiPhucPhieuButton.IsVisible = detail.CoTheKhoiPhuc && _khoiPhuc is not null;
+
+        // Nút mua lại luôn sẵn sàng nếu có hàm mua lại
+        MuaLaiButton.IsVisible = _muaLai is not null;
     }
 
     private async void SuaPhieuButton_OnClick(object? sender, RoutedEventArgs e)
@@ -111,6 +151,81 @@ public partial class PhieuNhapDetailWindow : Window
         finally
         {
             ThanhToanButton.IsEnabled = true;
+        }
+    }
+
+    private async void HuyPhieuButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not PhieuNhapHangDetail detail)
+            return;
+
+        if (_huyPhieu is null)
+            return;
+
+        HuyPhieuButton.IsEnabled = false;
+
+        try
+        {
+            var capNhat = await _huyPhieu(detail, this);
+
+            if (capNhat is not null)
+            {
+                DataContext = null;
+                DataContext = capNhat;
+                CapNhatGiaoDien(capNhat);
+            }
+        }
+        finally
+        {
+            HuyPhieuButton.IsEnabled = true;
+        }
+    }
+
+    private async void KhoiPhucPhieuButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not PhieuNhapHangDetail detail)
+            return;
+
+        if (_khoiPhuc is null)
+            return;
+
+        KhoiPhucPhieuButton.IsEnabled = false;
+
+        try
+        {
+            var capNhat = await _khoiPhuc(detail, this);
+
+            if (capNhat is not null)
+            {
+                DataContext = null;
+                DataContext = capNhat;
+                CapNhatGiaoDien(capNhat);
+            }
+        }
+        finally
+        {
+            KhoiPhucPhieuButton.IsEnabled = true;
+        }
+    }
+
+    private async void MuaLaiButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not PhieuNhapHangDetail detail)
+            return;
+
+        if (_muaLai is null)
+            return;
+
+        MuaLaiButton.IsEnabled = false;
+
+        try
+        {
+            await _muaLai(detail, this);
+            Close();
+        }
+        finally
+        {
+            MuaLaiButton.IsEnabled = true;
         }
     }
 

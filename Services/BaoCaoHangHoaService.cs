@@ -340,7 +340,7 @@ WHERE 1 = 1"
    : dk.NhomId == 0 ? "\n  AND sp.nhom_san_pham_id IS NULL" : "")
 + (dk.TimKiem is null ? "" : "\n  AND (sp.ten_san_pham LIKE @TimKiem OR sp.ma_san_pham LIKE @TimKiem)")
 + @"
-ORDER BY TonKho ASC, GiaTriTon DESC;
+ORDER BY TonKho ASC, (COALESCE(tk.so_luong_ton, sp.ton_kho_excel, 0) * sp.gia_von) DESC;
 ";
         var rs = await conn.QueryAsync<BaoCaoHangHoaTonKho>(
             new CommandDefinition(sql, dk.Params, cancellationToken: token));

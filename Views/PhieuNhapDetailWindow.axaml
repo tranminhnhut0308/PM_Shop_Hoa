@@ -4,10 +4,10 @@
   x:Class="ShopHoa.Views.PhieuNhapDetailWindow"
   x:DataType="models:PhieuNhapHangDetail"
   Title="{Binding TieuDe}"
-  Width="1040"
-  Height="820"
-  MinWidth="860"
-  MinHeight="620"
+  Width="1080"
+  Height="840"
+  MinWidth="900"
+  MinHeight="640"
   WindowStartupLocation="CenterOwner"
   Background="#F4FAF8">
 
@@ -53,7 +53,7 @@
   </Window.Styles>
 
   <Grid Margin="22"
-    RowDefinitions="Auto,Auto,*,Auto,Auto,Auto"
+    RowDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto"
     RowSpacing="14">
 
     <!-- 1. TIÊU ĐỀ + BADGE TRẠNG THÁI -->
@@ -71,18 +71,19 @@
 
       <StackPanel Grid.Column="1"
         VerticalAlignment="Center">
-        <Border IsVisible="{Binding IsLuuTam}"
-          Background="#FFF7E8"
+        <Border IsVisible="{Binding IsDaHuy}"
+          Background="#FEF3F2"
           CornerRadius="14"
           Padding="14,6"
           HorizontalAlignment="Right">
-          <TextBlock Text="{Binding TrangThaiHienThi}"
+          <TextBlock Text="ĐÃ HỦY"
             FontSize="12"
-            FontWeight="SemiBold"
-            Foreground="#B06A00" />
+            FontWeight="Bold"
+            Foreground="#B42318" />
         </Border>
-        <Border IsVisible="{Binding !IsLuuTam}"
-          Background="#E8F6F1"
+
+        <Border IsVisible="{Binding !IsDaHuy}"
+          Background="{Binding TrangThaiBadgeBrush}"
           CornerRadius="14"
           Padding="14,6"
           HorizontalAlignment="Right">
@@ -92,7 +93,7 @@
             Foreground="#087F6E" />
         </Border>
 
-        <Border IsVisible="{Binding !IsLuuTam}"
+        <Border IsVisible="{Binding !IsDaHuy}"
           Background="{Binding TrangThaiThanhToanBadgeBrush}"
           CornerRadius="14"
           Padding="14,6"
@@ -125,8 +126,34 @@
       </StackPanel>
     </Grid>
 
-    <!-- 2. THÔNG TIN PHIẾU -->
+    <!-- BANNER PHIẾU ĐÃ HỦY (Chỉ hiển thị khi phiếu có trạng thái ĐÃ HỦY) -->
     <Border Grid.Row="1"
+      IsVisible="{Binding IsDaHuy}"
+      Background="#FEF2F2"
+      BorderBrush="#FECACA"
+      BorderThickness="1"
+      CornerRadius="10"
+      Padding="14,10">
+      <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*,Auto" RowSpacing="6" ColumnSpacing="12">
+        <Border Width="34" Height="34" CornerRadius="17" Background="#FEE2E2" VerticalAlignment="Center">
+          <TextBlock Text="🚫" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+          <TextBlock Text="PHIẾU NHẬP NÀY ĐÃ BỊ HỦY" FontWeight="Bold" FontSize="13" Foreground="#991B1B" />
+          <TextBlock Text="{Binding ThongTinHuyText}" FontSize="12" Foreground="#B91C1C" />
+        </StackPanel>
+        <Border Grid.Column="2" Background="#FEE2E2" CornerRadius="6" Padding="10,5" VerticalAlignment="Center" IsVisible="{Binding CoSoTienHoan}">
+          <TextBlock Text="{Binding SoTienHoanText, StringFormat='Đã hoàn quỹ: {0}'}" FontSize="12" FontWeight="Bold" Foreground="#991B1B" />
+        </Border>
+        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="6" IsVisible="{Binding CoLyDoHuy}">
+          <TextBlock Text="Lý do hủy:" FontSize="12" FontWeight="SemiBold" Foreground="#991B1B" />
+          <TextBlock Text="{Binding LyDoHuy}" FontSize="12" Foreground="#7F1D1D" TextWrapping="Wrap" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- 2. THÔNG TIN PHIẾU -->
+    <Border Grid.Row="2"
       Background="White"
       BorderBrush="#E2ECE8"
       BorderThickness="1"
@@ -184,7 +211,7 @@
     </Border>
 
     <!-- 3. DANH SÁCH HÀNG HÓA -->
-    <Border Grid.Row="2"
+    <Border Grid.Row="3"
       Background="White"
       BorderBrush="#E2ECE8"
       BorderThickness="1"
@@ -197,7 +224,8 @@
           BorderBrush="#D5EAE3"
           BorderThickness="0,0,0,1"
           Padding="16,11">
-          <Grid ColumnDefinitions="40,95,*,55,55,100,85,110"
+          <Grid ColumnDefinitions="45,115,*,75,65,115,95,125"
+            MinWidth="860"
             ColumnSpacing="8">
             <TextBlock Classes="table-header" Text="STT" />
             <TextBlock Grid.Column="1" Classes="table-header" Text="MÃ HÀNG" />
@@ -216,6 +244,7 @@
 
         <ScrollViewer Grid.Row="1"
           VerticalScrollBarVisibility="Auto"
+          HorizontalScrollBarVisibility="Auto"
           IsVisible="{Binding CoHangHoa}">
           <ItemsControl ItemsSource="{Binding Items}">
             <ItemsControl.ItemTemplate>
@@ -223,7 +252,8 @@
                 <Border BorderBrush="#EEF3F1"
                   BorderThickness="0,0,0,1"
                   Padding="16,9">
-                  <Grid ColumnDefinitions="40,95,*,55,55,100,85,110"
+                  <Grid ColumnDefinitions="45,115,*,75,65,115,95,125"
+                    MinWidth="860"
                     ColumnSpacing="8"
                     VerticalAlignment="Center">
                     <TextBlock Text="{Binding Index}"
@@ -387,7 +417,7 @@
     </Border>
 
     <!-- 4. LỊCH SỬ THANH TOÁN CÔNG NỢ CỦA PHIẾU -->
-    <Border Grid.Row="3"
+    <Border Grid.Row="4"
       Background="White"
       BorderBrush="#E2ECE8"
       BorderThickness="1"
@@ -479,8 +509,8 @@
       </Grid>
     </Border>
 
-    <!-- 4b. LỊCH SỬ THAY ĐỔI PHIẾU NHẬP (Chỉ hiển thị nếu phiếu đó đã có người thay đổi) -->
-    <Border Grid.Row="4"
+    <!-- 5. LỊCH SỬ THAY ĐỔI PHIẾU NHẬP (Chỉ hiển thị nếu phiếu đó đã có người thay đổi) -->
+    <Border Grid.Row="5"
       Background="White"
       BorderBrush="#FED7AA"
       BorderThickness="1"
@@ -586,10 +616,10 @@
       </Grid>
     </Border>
 
-    <!-- 5. GHI CHÚ + NÚT BẤM -->
-    <Grid Grid.Row="5"
-      ColumnDefinitions="*,Auto,Auto,Auto"
-      ColumnSpacing="12">
+    <!-- 6. GHI CHÚ + NÚT BẤM -->
+    <Grid Grid.Row="6"
+      ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto"
+      ColumnSpacing="10">
 
       <Border Background="#FFFDF5"
         BorderBrush="#F0E6C8"
@@ -606,7 +636,41 @@
         </StackPanel>
       </Border>
 
+      <!-- NÚT MUA LẠI / TẠO PHIẾU MỚI TỪ PHIẾU NÀY -->
       <Button Grid.Column="1"
+        x:Name="MuaLaiButton"
+        Classes="toolbar-primary"
+        Background="#087F6E"
+        BorderBrush="#087F6E"
+        Content="🛒  Mua lại"
+        VerticalAlignment="Center"
+        ToolTip.Tip="Tạo một phiếu nhập mới sao chép danh sách hàng hóa từ phiếu này"
+        Click="MuaLaiButton_OnClick" />
+
+      <!-- NÚT HỦY PHIẾU -->
+      <Button Grid.Column="2"
+        x:Name="HuyPhieuButton"
+        Classes="toolbar-primary"
+        Background="#DC2626"
+        BorderBrush="#DC2626"
+        Content="🚫  Hủy phiếu"
+        VerticalAlignment="Center"
+        ToolTip.Tip="Hủy phiếu nhập hàng và hoàn tác tồn kho, công nợ"
+        Click="HuyPhieuButton_OnClick" />
+
+      <!-- NÚT KHÔI PHỤC PHIẾU -->
+      <Button Grid.Column="3"
+        x:Name="KhoiPhucPhieuButton"
+        Classes="toolbar-primary"
+        Background="#2563EB"
+        BorderBrush="#2563EB"
+        Content="🔄  Khôi phục phiếu"
+        VerticalAlignment="Center"
+        ToolTip.Tip="Khôi phục lại phiếu nhập đã hủy"
+        Click="KhoiPhucPhieuButton_OnClick" />
+
+      <!-- NÚT CHỈNH SỬA PHIẾU -->
+      <Button Grid.Column="4"
         x:Name="SuaPhieuButton"
         Classes="toolbar-primary"
         Background="#0A68A7"
@@ -615,16 +679,19 @@
         VerticalAlignment="Center"
         Click="SuaPhieuButton_OnClick" />
 
-      <Button Grid.Column="2"
+      <!-- NÚT THANH TOÁN CÔNG NỢ -->
+      <Button Grid.Column="5"
         x:Name="ThanhToanButton"
         Classes="toolbar-primary"
-        Content="✓  Thanh toán công nợ"
-        IsVisible="False"
+        Content="💳  Thanh toán công nợ"
         VerticalAlignment="Center"
         Click="ThanhToanButton_OnClick" />
 
-      <Button Grid.Column="3"
+      <!-- NÚT ĐÓNG -->
+      <Button Grid.Column="6"
         Classes="toolbar-primary"
+        Background="#64748B"
+        BorderBrush="#64748B"
         Content="Đóng"
         VerticalAlignment="Center"
         Click="OnCloseClicked" />

@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Dapper;
 using MySqlConnector;
 using ShopHoa.Models;
@@ -10,11 +15,9 @@ namespace ShopHoa.Services;
 /// thời gian đang chọn.
 /// <para>
 /// Mọi con số tính trong SQL (GROUP BY / SUM / ORDER BY / LIMIT) theo đúng
-/// pattern của <see cref="BaoCaoHangHoaService"/> và
-/// <see cref="BaoCaoBanHangService"/>: bộ lọc thời gian dùng
-/// <c>thoi_gian_ban &gt;= Tu AND &lt; Den+1</c> với hóa đơn
-/// <c>trang_thai_hoa_don = 'HOAN_THANH'</c>. Bảng danh sách phân trang bằng
-/// <c>LIMIT/OFFSET</c> nên không bao giờ kéo toàn bộ khách hàng về UI.
+/// chuẩn báo cáo quản trị: bộ lọc thời gian dùng thoi_gian_ban >= Tu AND < Den+1
+/// với hóa đơn trang_thai_hoa_don = 'HOAN_THANH'. Bảng danh sách phân trang bằng
+/// LIMIT/OFFSET.
 /// </para>
 /// </summary>
 public sealed class BaoCaoKhachHangService
@@ -34,7 +37,6 @@ public sealed class BaoCaoKhachHangService
             ["CongNo"] = "CongNo"
         };
 
-    /// <summary>Khoá mặc định khi truyền vào khoá lạ (không bao giờ nối khoá người dùng vào SQL).</summary>
     public const string KhoaMacDinh = "GiaTriMuaHang";
 
     private readonly Func<Task<MySqlConnection>> _taoKetNoi;
@@ -52,11 +54,8 @@ public sealed class BaoCaoKhachHangService
     }
 
     /// <summary>
-    /// Tải một lần gồm: thẻ thống kê (tổng khách, doanh số, số đơn, công nợ),
-    /// top khách hàng cho biểu đồ và các dòng của trang đang xem.
+    /// Tải dữ liệu toàn diện cho màn hình và xuất báo cáo Excel quản trị khách hàng.
     /// </summary>
-    /// <param name="sapXepKho">Khoá sắp xếp của bảng (một trong <see cref="CotSapXep"/>).</param>
-    /// <param name="metricKho">Khoá của "Mối quan tâm" — quyết định giá trị của biểu đồ.</param>
     public async Task<BaoCaoKhachHangDuLieu> TaiDuLieuAsync(
         DateTime tuNgay,
         DateTime denNgay,
@@ -70,9 +69,6 @@ public sealed class BaoCaoKhachHangService
     {
         var (tu, denKeTiep) = TinhKhoang(tuNgay, denNgay);
 
-        // _taoKetNoi() (DatabaseService.TaoKetNoiAsync) đã mở connection sẵn,
-        // KHÔNG được gọi OpenAsync lần nữa (MySqlConnector ném
-        // "Cannot Open when State is Open"). Dùng connection đã mở trực tiếp.
         await using var conn = await _taoKetNoi();
 
         var dk = new DieuKien
@@ -99,10 +95,26 @@ public sealed class BaoCaoKhachHangService
             top[i].Stt = i + 1;
         TinhThanhBar(top, metricKho);
 
+        // Top 10 khách hàng theo doanh thu kèm tổng SL mua (dùng cho báo cáo quản trị Excel)
+        var top10DoanhThu = await TaiTop10DoanhThuAsync(conn, dk, token);
+        for (int i = 0; i < top10DoanhThu.Count; i++)
+            top10DoanhThu[i].Stt = i + 1;
+
+        // Phân tích khách hàng theo nhóm
+        var nhomList = await TaiNhomKhachHangAsync(conn, dk, tongHop.GiaTriMuaHang, token);
+
+        // Danh sách khách hàng phục vụ phân tích công nợ
+        var danhSachCongNo = await TaiDanhSachCongNoAsync(conn, dk, token);
+        for (int i = 0; i < danhSachCongNo.Count; i++)
+            danhSachCongNo[i].Stt = i + 1;
+
         return new BaoCaoKhachHangDuLieu
         {
             TongHop = tongHop,
             Top = top,
+            Top10DoanhThu = top10DoanhThu,
+            NhomKhachHang = nhomList,
+            DanhSachCongNo = danhSachCongNo,
             DongTrang = dongTrang
         };
     }
@@ -117,7 +129,6 @@ public sealed class BaoCaoKhachHangService
         public DateTime DenKeTiep { get; init; }
         public string? TimKiem { get; init; }
 
-        /// <summary>WHERE dùng chung cho mọi truy vấn (tham số hoá, không nối tay người dùng vào SQL).</summary>
         public string Where =>
             @"hd.trang_thai_hoa_don = 'HOAN_THANH'
   AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep"
@@ -128,16 +139,11 @@ public sealed class BaoCaoKhachHangService
 
         public object Params => new { TuNgay, DenKeTiep, TimKiem };
 
-        /// <summary>
-        /// INNER JOIN khach_hang nên khách lẻ (khach_hang_id NULL) không xuất hiện
-        /// trong báo cáo khách hàng.
-        /// </summary>
         public const string From = @"
 FROM hoa_don_ban_hang hd
 INNER JOIN khach_hang kh ON kh.id = hd.khach_hang_id";
     }
 
-    /// <summary>Các cột tổng hợp dùng chung cho bảng chi tiết và top biểu đồ.</summary>
     private const string TongHopCot = @"
   COUNT(*) AS SoDonHang,
   COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang ELSE 0 END), 0) AS TongTienHang,
@@ -151,7 +157,6 @@ INNER JOIN khach_hang kh ON kh.id = hd.khach_hang_id";
     private async Task<BaoCaoKhachHangTongHopKy> TaiTongHopAsync(
         MySqlConnection conn, DieuKien dk, CancellationToken token)
     {
-        // COUNT(DISTINCT kh.id) = số nhóm khách hàng = tổng dòng bảng (để phân trang).
         string sql = @"
 SELECT
   COUNT(DISTINCT kh.id) AS TongKhachHang,
@@ -160,7 +165,9 @@ SELECT
   COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.giam_gia ELSE 0 END), 0) AS GiamGia,
   COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang - hd.giam_gia ELSE 0 END), 0) AS GiaTriMuaHang,
   COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThanhToan,
-  COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo
+  COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo,
+  COUNT(DISTINCT CASE WHEN hd.cong_no_da_ghi_nhan = 1 AND hd.con_no > 0 THEN kh.id END) AS SoKhachConNo,
+  COUNT(DISTINCT CASE WHEN hd.doanh_so_da_ghi_nhan = 1 AND hd.khach_da_thanh_toan > 0 THEN kh.id END) AS SoKhachCoThanhToan
 " + DieuKien.From + @"
 WHERE " + dk.Where + @";
 ";
@@ -226,6 +233,104 @@ LIMIT 10;
         return rs.AsList();
     }
 
+    /// <summary>
+    /// Tải Top 10 khách hàng theo doanh thu kèm tổng số lượng sản phẩm mua thực tế (không cộng trùng).
+    /// </summary>
+    private async Task<List<BaoCaoKhachHangTop>> TaiTop10DoanhThuAsync(
+        MySqlConnection conn, DieuKien dk, CancellationToken token)
+    {
+        string sql = @"
+SELECT
+  kh.id AS Id,
+  COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
+  COALESCE(kh.ten_khach_hang, '') AS TenKhachHang,
+  COALESCE(kh.so_dien_thoai, '') AS SoDienThoai,
+  COUNT(hd.id) AS SoDonHang,
+  COALESCE(SUM(ct.tong_sl), 0) AS TongSoLuongMua,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang - hd.giam_gia ELSE 0 END), 0) AS GiaTriMuaHang,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThanhToan,
+  COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS CongNo
+FROM hoa_don_ban_hang hd
+INNER JOIN khach_hang kh ON kh.id = hd.khach_hang_id
+LEFT JOIN (
+  SELECT hoa_don_id, SUM(so_luong) AS tong_sl
+  FROM chi_tiet_hoa_don_ban_hang
+  GROUP BY hoa_don_id
+) ct ON ct.hoa_don_id = hd.id
+WHERE " + dk.Where + @"
+GROUP BY kh.id, kh.ma_khach_hang, kh.ten_khach_hang, kh.so_dien_thoai
+ORDER BY GiaTriMuaHang DESC, SoDonHang DESC, kh.id
+LIMIT 10;
+";
+
+        var rs = await conn.QueryAsync<BaoCaoKhachHangTop>(
+            new CommandDefinition(sql, dk.Params, cancellationToken: token));
+        var list = rs.AsList();
+        foreach (var x in list)
+        {
+            x.GiaTri = x.GiaTriMuaHang;
+            x.LaTien = true;
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Phân tích doanh thu và cơ cấu khách hàng theo nhóm.
+    /// </summary>
+    private async Task<List<BaoCaoKhachHangNhom>> TaiNhomKhachHangAsync(
+        MySqlConnection conn, DieuKien dk, decimal tongDoanhThuKy, CancellationToken token)
+    {
+        string sql = @"
+SELECT
+  COALESCE(nkh.ten_nhom, 'Chưa phân nhóm') AS TenNhom,
+  COUNT(DISTINCT kh.id) AS SoKhachHang,
+  COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.tong_tien_hang - hd.giam_gia ELSE 0 END), 0) AS DoanhThu
+FROM hoa_don_ban_hang hd
+INNER JOIN khach_hang kh ON kh.id = hd.khach_hang_id
+LEFT JOIN nhom_khach_hang nkh ON nkh.id = kh.nhom_khach_hang_id
+WHERE " + dk.Where + @"
+GROUP BY COALESCE(nkh.ten_nhom, 'Chưa phân nhóm')
+ORDER BY DoanhThu DESC;
+";
+
+        var rs = await conn.QueryAsync<BaoCaoKhachHangNhom>(
+            new CommandDefinition(sql, dk.Params, cancellationToken: token));
+        var list = rs.AsList();
+        for (int i = 0; i < list.Count; i++)
+        {
+            list[i].Stt = i + 1;
+            list[i].TyLePhanTram = tongDoanhThuKy > 0
+                ? (double)(list[i].DoanhThu / tongDoanhThuKy * 100m)
+                : 0.0;
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Lấy danh sách khách hàng có công nợ phát sinh trong kỳ để phân tích công nợ chi tiết.
+    /// </summary>
+    private async Task<List<BaoCaoKhachHangDong>> TaiDanhSachCongNoAsync(
+        MySqlConnection conn, DieuKien dk, CancellationToken token)
+    {
+        string sql = @"
+SELECT
+  kh.id AS Id,
+  COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
+  COALESCE(kh.ten_khach_hang, '') AS TenKhachHang,
+  COALESCE(kh.so_dien_thoai, '') AS SoDienThoai,
+  " + TongHopCot + DieuKien.From + @"
+WHERE " + dk.Where + @"
+GROUP BY " + NhomKhach + @"
+HAVING CongNo > 0 OR DaThanhToan > 0
+ORDER BY CongNo DESC, GiaTriMuaHang DESC
+LIMIT 100;
+";
+
+        var rs = await conn.QueryAsync<BaoCaoKhachHangDong>(
+            new CommandDefinition(sql, dk.Params, cancellationToken: token));
+        return rs.AsList();
+    }
+
     /// <summary>Chuyển khoá sắp xếp của UI sang biểu thức ORDER BY (chỉ nhận khoá whitelist).</summary>
     private static string LayOrderBy(string? kho, bool sapXepTang)
     {
@@ -240,10 +345,6 @@ LIMIT 10;
     // TÍNH THANH BIỂU ĐỒ
     // ============================================================
 
-    /// <summary>
-    /// Gán độ lớn của thanh theo giá trị mối quan tâm đang chọn và cờ định dạng
-    /// (tiền hay số đơn) để XAML hiển thị đúng, có tooltip.
-    /// </summary>
     private static void TinhThanhBar(List<BaoCaoKhachHangTop> list, string metricKho)
     {
         string kho = (metricKho ?? KhoaMacDinh).Trim().ToUpperInvariant();
@@ -263,7 +364,6 @@ LIMIT 10;
         }
     }
 
-    /// <summary>Giá trị của mối quan tâm đang chọn trên một dòng top.</summary>
     private static decimal GiaTriCua(BaoCaoKhachHangTop x, string kho) => kho switch
     {
         "SODONHANG" => x.SoDonHang,
