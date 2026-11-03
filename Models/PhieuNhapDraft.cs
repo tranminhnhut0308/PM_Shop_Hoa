@@ -90,14 +90,37 @@ public sealed partial class PhieuNhapTab : ObservableObject
     [ObservableProperty]
     private bool isActive;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MoTaNgan))]
+    [NotifyPropertyChangedFor(nameof(CoSanPham))]
+    private int soLuongSanPham;
+
+    public bool CoSanPham => SoLuongSanPham > 0;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MoTaNgan))]
+    private decimal tongTienNhap;
+
     /// <summary>Ví dụ: "Phiếu nhập 2 – Nhà cung cấp B" hoặc "Phiếu nhập 3 – Chưa chọn NCC".</summary>
     public string TieuDe =>
-        $"Phiếu nhập {SoThuTu} – "
-        + (string.IsNullOrWhiteSpace(TenNhaCungCap) ? "Chưa chọn NCC" : TenNhaCungCap);
+        $"Phiếu nhập {SoThuTu}"
+        + (string.IsNullOrWhiteSpace(TenNhaCungCap) ? "" : $" – {TenNhaCungCap}");
+
+    /// <summary>Ví dụ: "3 mặt hàng • 450.000 đ" hoặc "0 mặt hàng • 0 đ".</summary>
+    public string MoTaNgan =>
+        $"{SoLuongSanPham} SP • {TongTienNhap:N0} đ";
 
     public void CapNhatTuState()
     {
         SoThuTu = State.SoThuTu;
         TenNhaCungCap = State.TenNhaCungCap;
+        var totalQty = (int)Math.Round(State.Lines.Sum(l => l.SoLuong));
+        SoLuongSanPham = totalQty > 0 ? totalQty : State.Lines.Count;
+        var subtotal = 0m;
+        foreach (var line in State.Lines)
+        {
+            subtotal += (line.SoLuong * line.DonGiaNhap - line.GiamGia);
+        }
+        TongTienNhap = Math.Max(0m, subtotal + State.ChiPhiKhac);
     }
 }

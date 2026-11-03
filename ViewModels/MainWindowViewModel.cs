@@ -1819,7 +1819,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task LoadInvoicesAsync()
     {
-        await SearchInvoicesAsync();
+        if (InvoiceCustomerOptions.Count == 0) await TaiDanhSachKhachHangLocHoaDonAsync();
+        await SearchInvoicesAsync(giuTrang: true);
     }
 
     private async Task LoadSuppliersAsync()
@@ -3123,55 +3124,6 @@ public partial class MainWindowViewModel : ObservableObject
         {
             StatusMessage = "Không thể tìm khách hàng: " + ex.Message;
         }
-    }
-    [RelayCommand]
-    private async Task SearchInvoicesAsync()
-    {
-        // 1. Kiểm tra ngày bắt đầu > ngày kết thúc
-        if (InvoiceFilterStartDate.HasValue && InvoiceFilterEndDate.HasValue
-            && InvoiceFilterStartDate.Value.Date > InvoiceFilterEndDate.Value.Date)
-        {
-            StatusMessage = "⚠️ Ngày bắt đầu không được lớn hơn ngày kết thúc. Vui lòng chọn lại.";
-            return;
-        }
-
-        try
-        {
-            HoaDons.Clear();
-            var tuNgay = InvoiceFilterStartDate?.Date;
-            var denNgay = InvoiceFilterEndDate?.Date;
-
-            var items = await _db.GetHoaDonAsync(
-                search: InvoiceSearch,
-                ngayLoc: null,
-                limit: 500,
-                trangThaiLoc: InvoiceStatusFilter,
-                tuNgay: tuNgay,
-                denNgay: denNgay);
-
-            foreach (var item in items)
-                HoaDons.Add(item);
-
-            CapNhatThongKeHoaDon();
-            StatusMessage = $"Tìm thấy {HoaDons.Count:N0} hóa đơn";
-        }
-        catch (Exception ex)
-        {
-            HoaDons.Clear();
-            CapNhatThongKeHoaDon();
-            StatusMessage = "Lỗi tìm kiếm hóa đơn: " + ex.Message;
-        }
-    }
-
-    [RelayCommand]
-    private async Task ClearInvoiceSearchAsync()
-    {
-        InvoiceSearch = "";
-        InvoiceStatusFilter = "TAT_CA";
-        ApDungPresetNgayHoaDon("Tháng này", tuDongTim: false);
-
-        await SearchInvoicesAsync();
-        StatusMessage = $"Đã làm mới bộ lọc hóa đơn (hiển thị {HoaDons.Count:N0} hóa đơn tháng này).";
     }
 
     [RelayCommand]
@@ -5069,7 +5021,13 @@ public partial class MainWindowViewModel : ObservableObject
                 return;
             }
 
-            var window = new PhieuNhapDetailWindow(detail, ThanhToanTuChiTietPhieuNhapAsync, ChinhSuaTuChiTietPhieuNhapAsync);
+            var window = new PhieuNhapDetailWindow(
+                detail,
+                ThanhToanTuChiTietPhieuNhapAsync,
+                ChinhSuaTuChiTietPhieuNhapAsync,
+                HuyTuChiTietPhieuNhapAsync,
+                KhoiPhucTuChiTietPhieuNhapAsync,
+                MuaLaiTuChiTietPhieuNhapAsync);
             await window.ShowDialog(OwnerWindow);
         }
         catch (Exception ex)
@@ -5409,30 +5367,8 @@ public partial class MainWindowViewModel : ObservableObject
         IsSalesPanelVisible = false;
         IsNhapHangFormVisible = true;
 
-        // Nếu đã có phiếu nhập đang thao tác hoặc đã khởi tạo trong phiên hiện tại,
-        // giữ nguyên toàn bộ dữ liệu nháp khi chuyển trang thay vì tự động tạo phiếu mới.
-        if (_phieuNhapDaKhoiTao && (CoDuLieuPhieuNhapDangSoan || !string.IsNullOrWhiteSpace(PhieuNhapMa)))
-        {
-            PhieuNhapNhanVien = Session.CurrentUser?.HoTen ?? "Chưa đăng nhập";
-
-            if (string.IsNullOrWhiteSpace(PhieuNhapMa))
-            {
-                try
-                {
-                    PhieuNhapMa = await _db.TaoMaPhieuNhapMoiAsync();
-                }
-                catch (Exception ex)
-                {
-                    SafeLog.WriteError("Loi tao ma phieu nhap", ex);
-                }
-            }
-
-            await LoadPhieuNhapDonViTinhOptionsAsync();
-            await LoadPhieuNhapProductSuggestionsAsync();
-            return;
-        }
-
-        await KhoiTaoPhieuNhapMoiAsync();
+        await EnsurePhieuNhapSessionAsync();
+        await LoadPhieuNhapProductSuggestionsAsync();
     }
 
     /// <summary>
@@ -5946,7 +5882,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             // Lưu header + chi tiết + tồn kho + giá vốn + ĐVT + công nợ trong MỘT transaction.
             // Service tự rollback toàn bộ nếu bất kỳ bước nào lỗi.
-            _phieuNhapId = await _db.LuuPhieuNhapHangAsync(phieu, dongHopLe);
+            _phieuNhapId = await _db.LuuPhieuNhapHangAsync(phieu, dongHopLe, ActivePhieuNhapTab?.DraftId);
         }
         catch (Exception ex)
         {
@@ -6025,7 +5961,14 @@ public partial class MainWindowViewModel : ObservableObject
         // KhoiTaoPhieuNhapMoiAsync() xóa hàng hóa, nhà cung cấp, số hóa đơn đầu vào,
         // ghi chú, chi phí khác, đã thanh toán, ngày nhập về hôm nay,
         // tính lại tổng tiền và SINH MÃ PHIẾU MỚI từ database.
-        await KhoiTaoPhieuNhapMoiAsync();
+        if (ActivePhieuNhapTab is { } daHoanThanhTab)
+        {
+            DongTabSauKhiHoanThanh(daHoanThanhTab);
+        }
+        else
+        {
+            await KhoiTaoPhieuNhapMoiAsync();
+        }
 
         // KhoiTaoPhieuNhapMoiAsync() để PhieuNhapMa = "" nếu sinh mã thất bại
         // (lỗi SQL/kết nối). Không được báo "sẵn sàng" khi mã còn rỗng.
@@ -6732,6 +6675,196 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    private async Task<PhieuNhapHangDetail?> HuyTuChiTietPhieuNhapAsync(
+        PhieuNhapHangDetail detail,
+        Window parentWindow)
+    {
+        var owner = parentWindow ?? OwnerWindow;
+        if (owner is null || detail.PhieuNhapId == 0)
+            return null;
+
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.PurchasesDelete,
+                "Báº¡n khÃ´ng cÃ³ quyá»n há»§y phiáº¿u nháº­p hÃ ng."))
+        {
+            return null;
+        }
+
+        try
+        {
+            var huyWindow = new HuyPhieuNhapWindow(
+                detail,
+                _db,
+                Session.CurrentUser?.Id,
+                Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap);
+
+            var result = await huyWindow.ShowDialog<bool>(owner);
+            if (result || huyWindow.DaHuyThanhCong)
+            {
+                _baoCaoPhieuNhapLoaded = false;
+                _ = RefreshProductsAsync();
+                _ = LoadSupplierPageAsync();
+                _ = LoadBaoCaoPhieuNhapAsync();
+                _ = LamMoiTongQuanNeuDangMoAsync();
+
+                StatusMessage = $"âœ… ÄÃ£ há»§y thÃ nh cÃ´ng phiáº¿u nháº­p {detail.MaPhieuNhap}.";
+
+                await ShowMessageAsync(
+                    "ThÃ nh cÃ´ng",
+                    $"ÄÃ£ há»§y thÃ nh cÃ´ng phiáº¿u nháº­p {detail.MaPhieuNhap}.\nTá»“n kho vÃ  cÃ´ng ná»£ Ä‘Ã£ Ä‘Æ°á»£c hoÃ n tÃ¡c an toÃ n.",
+                    owner);
+
+                return await _db.GetPhieuNhapHangDetailAsync(detail.PhieuNhapId);
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi huy phieu nhap", ex);
+            await ShowMessageAsync("Lá»—i", $"KhÃ´ng thá»ƒ há»§y phiáº¿u nháº­p: {ex.Message}", owner);
+            return null;
+        }
+    }
+
+    private async Task<PhieuNhapHangDetail?> KhoiPhucTuChiTietPhieuNhapAsync(
+        PhieuNhapHangDetail detail,
+        Window parentWindow)
+    {
+        var owner = parentWindow ?? OwnerWindow;
+        if (owner is null || detail.PhieuNhapId == 0)
+            return null;
+
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.PurchasesCreate,
+                "Báº¡n khÃ´ng cÃ³ quyá»n khÃ´i phá»¥c phiáº¿u nháº­p hÃ ng."))
+        {
+            return null;
+        }
+
+        var xacNhan = await ShowConfirmationAsync(
+            "XÃ¡c nháº­n khÃ´i phá»¥c phiáº¿u nháº­p",
+            $"Báº¡n cÃ³ cháº¯c cháº¯n muá»‘n khÃ´i phá»¥c láº¡i phiáº¿u nháº­p {detail.MaPhieuNhap}?\n\nThao tÃ¡c nÃ y sáº½:\nâ€¢ Cá»™ng láº¡i tá»“n kho cho cÃ¡c máº·t hÃ ng trong phiáº¿u.\nâ€¢ Ghi nháº­n láº¡i cÃ´ng ná»£ mua hÃ ng Ä‘á»‘i vá»›i nhÃ  cung cáº¥p {detail.TenNhaCungCapHienThi}.\nâ€¢ Cáº­p nháº­t tráº¡ng thÃ¡i phiáº¿u vá» ÄÃ£ nháº­p hÃ ng.",
+            "KhÃ´i phá»¥c phiáº¿u",
+            "Quay láº¡i");
+
+        if (!xacNhan)
+            return null;
+
+        try
+        {
+            var req = new KhoiPhucPhieuNhapYeuCau
+            {
+                PhieuNhapId = detail.PhieuNhapId,
+                LyDoKhoiPhuc = "KhÃ´i phá»¥c tá»« mÃ n hÃ¬nh chi tiáº¿t phiáº¿u nháº­p",
+                NguoiKhoiPhucId = Session.CurrentUser?.Id,
+                TenNguoiKhoiPhuc = Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap
+            };
+
+            await _db.KhoiPhucPhieuNhapHangAsync(req);
+
+            _baoCaoPhieuNhapLoaded = false;
+            _ = RefreshProductsAsync();
+            _ = LoadSupplierPageAsync();
+            _ = LoadBaoCaoPhieuNhapAsync();
+            _ = LamMoiTongQuanNeuDangMoAsync();
+
+            StatusMessage = $"âœ… ÄÃ£ khÃ´i phá»¥c thÃ nh cÃ´ng phiáº¿u nháº­p {detail.MaPhieuNhap}.";
+
+            await ShowMessageAsync(
+                "ThÃ nh cÃ´ng",
+                $"ÄÃ£ khÃ´i phá»¥c thÃ nh cÃ´ng phiáº¿u nháº­p {detail.MaPhieuNhap}.\nTá»“n kho vÃ  cÃ´ng ná»£ Ä‘Ã£ Ä‘Æ°á»£c ghi nháº­n láº¡i chÃ­nh xÃ¡c.",
+                owner);
+
+            return await _db.GetPhieuNhapHangDetailAsync(detail.PhieuNhapId);
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi khoi phuc phieu nhap", ex);
+            await ShowMessageAsync("Lá»—i", $"KhÃ´ng thá»ƒ khÃ´i phá»¥c phiáº¿u nháº­p: {ex.Message}", owner);
+            return null;
+        }
+    }
+
+    private async Task MuaLaiTuChiTietPhieuNhapAsync(
+        PhieuNhapHangDetail detail,
+        Window parentWindow)
+    {
+        var owner = parentWindow ?? OwnerWindow;
+        if (owner is null || detail.PhieuNhapId == 0)
+            return;
+
+        if (!await KiemTraQuyenAsync(
+                PermissionKeys.PurchasesCreate,
+                "Báº¡n khÃ´ng cÃ³ quyá»n láº­p phiáº¿u nháº­p hÃ ng."))
+        {
+            return;
+        }
+
+        try
+        {
+            // Má»Ÿ giao diá»‡n Nháº­p hÃ ng vÃ  khá»Ÿi táº¡o phiáº¿u má»›i
+            await MoGiaoDienNhapHangAsync();
+            await KhoiTaoPhieuNhapMoiAsync();
+
+            // GÃ¡n láº¡i nhÃ  cung cáº¥p náº¿u cÃ³
+            if (detail.NhaCungCapId.HasValue && detail.NhaCungCapId.Value > 0)
+            {
+                var ncc = await _db.GetNhaCungCapByIdAsync(detail.NhaCungCapId.Value);
+                if (ncc is not null)
+                {
+                    SelectedPhieuNhapNcc = ncc;
+                }
+            }
+
+            // GÃ¡n cÃ¡c dÃ²ng hÃ ng hÃ³a tá»« phiáº¿u cÅ©
+            BoDangKyPhieuNhapItems();
+            PhieuNhapItems.Clear();
+
+            foreach (var item in detail.Items)
+            {
+                SanPham? sp = null;
+                if (item.SanPhamId > 0)
+                {
+                    sp = await _db.GetSanPhamByIdAsync(item.SanPhamId);
+                }
+
+                if (sp is null)
+                {
+                    sp = new SanPham
+                    {
+                        Id = item.SanPhamId,
+                        MaSanPham = item.MaSanPham,
+                        TenSanPham = item.TenSanPham,
+                        DonViTinh = item.DonViTinh,
+                        GiaVon = item.DonGiaNhap
+                    };
+                }
+
+                var dongMoi = new ChiTietPhieuNhapHang(sp, PhieuNhapDonViTinhOptions)
+                {
+                    SoLuong = item.SoLuong,
+                    DonGiaNhap = item.DonGiaNhap,
+                    GiamGia = item.GiamGia
+                };
+                dongMoi.PropertyChanged += ChiTietPhieuNhapHang_OnPropertyChanged;
+                PhieuNhapItems.Add(dongMoi);
+            }
+
+            // GÃ¡n chi phÃ­ khÃ¡c vÃ  ghi chÃº
+            PhieuNhapChiPhiKhac = detail.ChiPhiKhac;
+            PhieuNhapGhiChu = $"Táº¡o láº¡i tá»« phiáº¿u {detail.MaPhieuNhap}. " + (detail.GhiChu ?? "");
+
+            RecalculatePhieuNhapTongTienHang();
+
+            StatusMessage = $"ÄÃ£ táº¡o phiáº¿u nháº­p má»›i tá»« phiáº¿u {detail.MaPhieuNhap}. Báº¡n cÃ³ thá»ƒ chá»‰nh sá»­a sá»‘ lÆ°á»£ng, Ä‘Æ¡n giÃ¡ trÆ°á»›c khi lÆ°u.";
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi mua lai phieu nhap", ex);
+            await ShowMessageAsync("Lá»—i", $"KhÃ´ng thá»ƒ táº¡o phiáº¿u má»›i tá»« phiáº¿u cÅ©: {ex.Message}", owner);
+        }
+    }
     private async Task<PhieuNhapHangDetail?> ChinhSuaTuChiTietPhieuNhapAsync(
         PhieuNhapHangDetail detail,
         Window parentWindow)

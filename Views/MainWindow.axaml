@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:vm="using:ShopHoa.ViewModels"
   xmlns:models="using:ShopHoa.Models"
@@ -3592,12 +3592,12 @@
               CornerRadius="12"
               Padding="14,12"
               BoxShadow="0 2 8 #080A352E">
-              <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+              <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="10">
 
-                <!-- HÀNG 1: Ô TÌM KIẾM + NÚT TÌM KIẾM + NÚT LÀM MỚI -->
+                <!-- HÀNG 1: Ô TÌM KIẾM + NÚT TÌM KIẾM + NÚT ĐẶT LẠI -->
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" VerticalAlignment="Center">
                   <TextBox x:Name="InvoiceSearchBox" Classes="searchInput"
-                    Watermark="🔍 Tìm theo mã hóa đơn, tên/SĐT khách hàng, tên sản phẩm..."
+                    Watermark="🔍 Tìm theo mã hóa đơn, mã/tên/SĐT khách hàng, ghi chú..."
                     Text="{Binding InvoiceSearch, Mode=TwoWay}"
                     Height="38"
                     VerticalContentAlignment="Center"
@@ -3614,84 +3614,86 @@
 
                   <Button Grid.Column="2"
                     Classes="toolbar-action"
-                    Content="↻ Làm mới"
+                    Content="↻ Đặt lại"
                     Height="38"
                     Padding="14,0"
                     Command="{Binding ClearInvoiceSearchCommand}"
-                    ToolTip.Tip="Đặt lại toàn bộ bộ lọc và tải lại danh sách hóa đơn" />
+                    ToolTip.Tip="Đặt lại toàn bộ bộ lọc và tải lại danh sách hóa đơn mặc định" />
                 </Grid>
 
-                <!-- HÀNG 2: BỘ LỌC THỜI GIAN NHANH + TỪ NGÀY + ĐẾN NGÀY + TRẠNG THÁI -->
+                <!-- HÀNG 2: TỪ NGÀY + ĐẾN NGÀY + CÁC LỰA CHỌN THỜI GIAN NHANH -->
                 <WrapPanel VerticalAlignment="Center">
-                  <!-- Bộ lọc thời gian nhanh -->
-                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,10,0">
-                    <TextBlock Text="Thời gian:" FontSize="12" FontWeight="SemiBold"
-                      Foreground="#4F6861" VerticalAlignment="Center" />
-                    <ComboBox ItemsSource="{Binding InvoiceDatePresets}"
-                      SelectedItem="{Binding SelectedInvoiceDatePreset, Mode=TwoWay}"
-                      Width="130" Height="34" FontSize="11.5"
-                      VerticalContentAlignment="Center"
-                      ToolTip.Tip="Chọn nhanh khoảng thời gian" />
-                  </StackPanel>
-
                   <!-- Từ ngày -->
-                  <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,0,8,0">
-                    <TextBlock Text="Từ" FontSize="11.5" Foreground="#61736E" VerticalAlignment="Center" />
+                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,14,4">
+                    <TextBlock Text="Từ ngày:" FontSize="12" FontWeight="SemiBold" Foreground="#4F6861" VerticalAlignment="Center" />
                     <DatePicker Classes="sq-date"
-                      Width="140"
+                      Width="145" Height="34"
                       SelectedDate="{Binding InvoiceFilterStartDate, Mode=TwoWay}"
                       ToolTip.Tip="Lọc từ ngày bắt đầu" />
                   </StackPanel>
 
                   <!-- Đến ngày -->
-                  <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,0,12,0">
-                    <TextBlock Text="Đến" FontSize="11.5" Foreground="#61736E" VerticalAlignment="Center" />
+                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,4">
+                    <TextBlock Text="Đến ngày:" FontSize="12" FontWeight="SemiBold" Foreground="#4F6861" VerticalAlignment="Center" />
                     <DatePicker Classes="sq-date"
-                      Width="140"
+                      Width="145" Height="34"
                       SelectedDate="{Binding InvoiceFilterEndDate, Mode=TwoWay}"
                       ToolTip.Tip="Lọc đến hết ngày kết thúc" />
                   </StackPanel>
 
-                  <Border Width="1" Height="22" Background="#D8E5E0" Margin="4,0,12,0" VerticalAlignment="Center" />
+                  <Border Width="1" Height="22" Background="#D8E5E0" Margin="4,0,16,4" VerticalAlignment="Center" />
 
-                  <!-- Trạng thái hóa đơn -->
-                  <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                    <TextBlock Text="Trạng thái:" FontSize="12" FontWeight="SemiBold"
-                      Foreground="#4F6861" VerticalAlignment="Center" Margin="0,0,4,0" />
-
-                    <Button Classes="invoiceFilterChip"
-                      Classes.active="{Binding IsInvoiceStatusAll}"
-                      Content="Tất cả"
-                      Command="{Binding LocHoaDonTheoTrangThaiCommand}"
-                      CommandParameter="TAT_CA" />
-
-                    <Button Classes="invoiceFilterChip"
-                      Classes.active="{Binding IsInvoiceStatusHoanThanh}"
-                      Content="Hoàn thành"
-                      Command="{Binding LocHoaDonTheoTrangThaiCommand}"
-                      CommandParameter="HOAN_THANH" />
-
-                    <Button Classes="invoiceFilterChip"
-                      Classes.active="{Binding IsInvoiceStatusChuaThanhToan}"
-                      Content="Chưa thanh toán"
-                      Command="{Binding LocHoaDonTheoTrangThaiCommand}"
-                      CommandParameter="CHUA_THANH_TOAN" />
-
-                    <Button Classes="invoiceFilterChip"
-                      Classes.active="{Binding IsInvoiceStatusThanhToanMotPhan}"
-                      Content="Thanh toán 1 phần"
-                      Command="{Binding LocHoaDonTheoTrangThaiCommand}"
-                      CommandParameter="THANH_TOAN_MOT_PHAN" />
-
-                    <Button Classes="invoiceFilterChip"
-                      Classes.active="{Binding IsInvoiceStatusDaHuy}"
-                      Content="Đã hủy"
-                      Command="{Binding LocHoaDonTheoTrangThaiCommand}"
-                      CommandParameter="DA_HUY" />
+                  <!-- Lựa chọn thời gian nhanh -->
+                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,8,4">
+                    <TextBlock Text="Nhanh:" FontSize="12" FontWeight="SemiBold" Foreground="#4F6861" VerticalAlignment="Center" />
+                    <ComboBox ItemsSource="{Binding InvoiceDatePresets}"
+                      SelectedItem="{Binding SelectedInvoiceDatePreset, Mode=TwoWay}"
+                      Width="135" Height="34" FontSize="12"
+                      VerticalContentAlignment="Center"
+                      ToolTip.Tip="Chọn nhanh khoảng thời gian" />
                   </StackPanel>
                 </WrapPanel>
 
-                <!-- HÀNG 3: BĂNG THÔNG TIN TỔNG HỢP & THỐNG KÊ (SUMMARY BAR) -->
+                <!-- HÀNG 3: TRẠNG THÁI THANH TOÁN + TRẠNG THÁI HÓA ĐƠN + KHÁCH HÀNG -->
+                <WrapPanel VerticalAlignment="Center">
+                  <!-- Trạng thái thanh toán -->
+                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,4">
+                    <TextBlock Text="Thanh toán:" FontSize="12" FontWeight="SemiBold" Foreground="#4F6861" VerticalAlignment="Center" />
+                    <ComboBox ItemsSource="{Binding InvoicePaymentStatusOptions}"
+                      SelectedItem="{Binding SelectedInvoicePaymentStatus, Mode=TwoWay}"
+                      Width="160" Height="34" FontSize="12"
+                      VerticalContentAlignment="Center"
+                      ToolTip.Tip="Lọc theo tình trạng thanh toán" />
+                  </StackPanel>
+
+                  <!-- Trạng thái hóa đơn -->
+                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,4">
+                    <TextBlock Text="Trạng thái HĐ:" FontSize="12" FontWeight="SemiBold" Foreground="#4F6861" VerticalAlignment="Center" />
+                    <ComboBox ItemsSource="{Binding InvoiceStatusOptions}"
+                      SelectedItem="{Binding SelectedInvoiceStatus, Mode=TwoWay}"
+                      Width="135" Height="34" FontSize="12"
+                      VerticalContentAlignment="Center"
+                      ToolTip.Tip="Lọc theo trạng thái hóa đơn" />
+                  </StackPanel>
+
+                  <!-- Khách hàng -->
+                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,8,4">
+                    <TextBlock Text="Khách hàng:" FontSize="12" FontWeight="SemiBold" Foreground="#4F6861" VerticalAlignment="Center" />
+                    <ComboBox ItemsSource="{Binding InvoiceCustomerOptions}"
+                      SelectedItem="{Binding SelectedInvoiceCustomer, Mode=TwoWay}"
+                      Width="220" Height="34" FontSize="12"
+                      VerticalContentAlignment="Center"
+                      ToolTip.Tip="Lọc theo khách hàng cụ thể">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding DisplayText}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                  </StackPanel>
+                </WrapPanel>
+
+                <!-- HÀNG 4: BĂNG THÔNG TIN TỔNG HỢP & THỐNG KÊ (SUMMARY BAR) -->
                 <Border Background="#F4FAF8" BorderBrush="#D1E9E2" BorderThickness="1"
                   CornerRadius="8" Padding="12,7">
                   <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
@@ -3719,10 +3721,15 @@
               CornerRadius="12"
               ClipToBounds="True"
               BoxShadow="0 4 16 #0A0A352E">
-              <Grid RowDefinitions="Auto,*">
+              <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+                <!-- 0. THANH TIẾN TRÌNH ĐANG TẢI (PROGRESS BAR) -->
+                <ProgressBar Grid.Row="0" IsIndeterminate="True" Height="3"
+                  Foreground="#087F6E" Background="Transparent"
+                  IsVisible="{Binding IsLoadingInvoices}" />
 
                 <!-- HEADER BẢNG -->
-                <Border Background="#EBF5F1"
+                <Border Grid.Row="1" Background="#EBF5F1"
                   BorderBrush="#D5EAE3"
                   BorderThickness="0,0,0,1"
                   Padding="16,12">
@@ -3752,9 +3759,9 @@
                   </Grid>
                 </Border>
 
-                <!-- NỘI DUNG DỮ LIỆU -->
-                <ListBox Grid.Row="1"
-                  ItemsSource="{Binding HoaDons}"
+                <!-- NỘI DUNG DỮ LIỆU HOẶC THÔNG BÁO RỖNG -->
+                <Grid Grid.Row="2">
+                  <ListBox ItemsSource="{Binding HoaDons}"
                   Background="Transparent"
                   BorderThickness="0">
                   <ListBox.Styles>
@@ -3944,7 +3951,74 @@
                       </Border>
                     </DataTemplate>
                   </ListBox.ItemTemplate>
-                </ListBox>
+                  </ListBox>
+
+                  <!-- THÔNG BÁO KHI KHÔNG TÌM THẤY DỮ LIỆU -->
+                  <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,50"
+                    IsVisible="{Binding HasNoInvoices}">
+                    <TextBlock Text="🔍" FontSize="36" HorizontalAlignment="Center" Opacity="0.4" />
+                    <TextBlock Text="Không tìm thấy hóa đơn nào phù hợp với bộ lọc."
+                      FontSize="14" FontWeight="SemiBold" Foreground="#667A74" Margin="0,8,0,0"
+                      HorizontalAlignment="Center" />
+                    <TextBlock Text="Hãy kiểm tra lại khoảng thời gian, từ khóa tìm kiếm hoặc các tiêu chí trạng thái."
+                      FontSize="12" Foreground="#8FA39D" Margin="0,4,0,0"
+                      HorizontalAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+
+                <!-- PHÂN TRANG (PAGINATION BAR) -->
+                <Border Grid.Row="3" Padding="16,10" BorderBrush="#E2ECE8" BorderThickness="0,1,0,0" Background="#FAFCFB">
+                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16" VerticalAlignment="Center">
+                    <!-- Số dòng / trang -->
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                      <TextBlock Text="Hiển thị" FontSize="12" Foreground="#61736E" VerticalAlignment="Center" />
+                      <ComboBox Width="72" Height="30" FontSize="12"
+                        ItemsSource="{Binding InvoicePageSizeOptions}"
+                        SelectedItem="{Binding InvoicePageSize, Mode=TwoWay}"
+                        VerticalContentAlignment="Center" />
+                      <TextBlock Text="dòng/trang" FontSize="12" Foreground="#61736E" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <!-- Khoảng hiển thị -->
+                    <TextBlock Grid.Column="1" Text="{Binding InvoiceRangeText}" FontSize="12"
+                      Foreground="#163F38" FontWeight="SemiBold" VerticalAlignment="Center"
+                      HorizontalAlignment="Center" />
+
+                    <!-- Điều hướng trang -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                      <Button Classes="toolbar-action" Content="⏮" Width="32" Height="28"
+                        Padding="0" FontSize="11" ToolTip.Tip="Về trang đầu" Margin="0"
+                        IsEnabled="{Binding CanInvoiceTrangTruoc}"
+                        Command="{Binding InvoiceTrangDauCommand}" />
+
+                      <Button Classes="toolbar-action" Content="◀" Width="32" Height="28"
+                        Padding="0" FontSize="11" ToolTip.Tip="Trang trước" Margin="0"
+                        IsEnabled="{Binding CanInvoiceTrangTruoc}"
+                        Command="{Binding InvoiceTrangTruocCommand}" />
+
+                      <Border Background="#087F6E" CornerRadius="6" MinWidth="34" Height="28"
+                        Padding="8,0">
+                        <TextBlock Text="{Binding InvoicePage}" Foreground="White" FontWeight="Bold"
+                          FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+
+                      <TextBlock Text="trên" FontSize="12" Foreground="#61736E" VerticalAlignment="Center" />
+
+                      <TextBlock Text="{Binding InvoiceTotalPages}" FontSize="12" Foreground="#163F38"
+                        FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,4,0" />
+
+                      <Button Classes="toolbar-action" Content="▶" Width="32" Height="28"
+                        Padding="0" FontSize="11" ToolTip.Tip="Trang sau" Margin="0"
+                        IsEnabled="{Binding CanInvoiceTrangSau}"
+                        Command="{Binding InvoiceTrangSauCommand}" />
+
+                      <Button Classes="toolbar-action" Content="⏭" Width="32" Height="28"
+                        Padding="0" FontSize="11" ToolTip.Tip="Về trang cuối" Margin="0"
+                        IsEnabled="{Binding CanInvoiceTrangSau}"
+                        Command="{Binding InvoiceTrangCuoiCommand}" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
 
               </Grid>
             </Border>
@@ -4865,12 +4939,12 @@
 
             <!-- MÀN 2: LẬP PHIẾU NHẬP HÀNG (BỐ CỤC 3 CỘT: CỘT 1 TÌM & DANH SÁCH SP / CỘT 2 BẢNG HÀNG NHẬP / CỘT 3 THÔNG TIN PHIẾU) -->
             <Grid IsVisible="{Binding IsNhapHangFormVisible}"
-              RowDefinitions="Auto,*"
+              RowDefinitions="Auto,Auto,*"
               RowSpacing="12">
 
-              <!-- TIÊU ĐỀ -->
-              <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-                <StackPanel>
+              <!-- TIÊU ĐỀ & TRẠNG THÁI -->
+              <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+                <StackPanel VerticalAlignment="Center">
                   <TextBlock Text="Lập phiếu nhập hàng"
                     FontSize="24"
                     FontWeight="Bold"
@@ -4883,7 +4957,25 @@
                     Margin="0,4,0,0" />
                 </StackPanel>
 
-                <Button Grid.Column="1"
+                <!-- Trạng thái tự động lưu nháp -->
+                <Border Grid.Column="1"
+                        Background="#F4F8F7"
+                        BorderBrush="#D8E5E0"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="10,6"
+                        VerticalAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <TextBlock Text="●" FontSize="10" Foreground="{Binding PhieuNhapTrangThaiLuuMau}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding PhieuNhapTrangThaiLuu}"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Foreground="{Binding PhieuNhapTrangThaiLuuMau}"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
+                </Border>
+
+                <Button Grid.Column="2"
                   Classes="toolbar-action"
                   Content="📋  Danh sách phiếu nhập"
                   Command="{Binding QuayLaiDanhSachPhieuNhapCommand}"
@@ -4892,8 +4984,81 @@
                   IsVisible="{Binding CanViewPurchases}" />
               </Grid>
 
+              <!-- THANH TAB NHIỀU PHIẾU NHẬP (MULTI-DRAFT TABS) -->
+              <Border Grid.Row="1" Background="#F4F7F6" CornerRadius="10" Padding="6,4" BorderBrush="#D8E5E0" BorderThickness="1">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                      <ItemsControl ItemsSource="{Binding PhieuNhapTabs}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="6" />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="models:PhieuNhapTab">
+                            <Border Classes="cartTabItem" Classes.active="{Binding IsActive}" Margin="0,0,6,0">
+                              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" VerticalAlignment="Center">
+                                <Button Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="0"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
+                                        Cursor="Hand"
+                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChuyenPhieuNhapCommand}"
+                                        CommandParameter="{Binding}">
+                                  <StackPanel Spacing="2">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                      <TextBlock Text="{Binding TieuDe}" Classes="cartTitle" FontSize="12.5" />
+                                      <Border Classes="cartBadge" CornerRadius="8" Padding="5,1"
+                                              IsVisible="{Binding CoSanPham}">
+                                        <TextBlock Text="{Binding SoLuongSanPham}" FontSize="10" FontWeight="Bold" />
+                                      </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding MoTaNgan}" Classes="cartSub" FontSize="10.5" MaxWidth="190" TextTrimming="CharacterEllipsis" />
+                                  </StackPanel>
+                                </Button>
+
+                                <Button Grid.Column="1"
+                                        Classes="cartCloseBtn"
+                                        Content="✕"
+                                        ToolTip.Tip="Đóng hoặc xóa phiếu nháp này"
+                                        VerticalAlignment="Center"
+                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).DongPhieuNhapCommand}"
+                                        CommandParameter="{Binding}" />
+                              </Grid>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+
+                      <!-- Nút + Tạo phiếu -->
+                      <Button Classes="cartAddTabBtn"
+                              Command="{Binding TaoPhieuNhapMoiCommand}"
+                              ToolTip.Tip="Tạo thêm phiếu nhập mới">
+                        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                          <TextBlock Text="＋" FontWeight="Bold" FontSize="14" Foreground="#0A8C78" VerticalAlignment="Center" />
+                          <TextBlock Text="Tạo phiếu" FontWeight="SemiBold" FontSize="12" Foreground="#0A8C78" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
+                    </StackPanel>
+                  </ScrollViewer>
+
+                  <!-- Nút Lưu nháp thủ công -->
+                  <Button Grid.Column="1"
+                          Classes="toolbar-action"
+                          Content="💾 Lưu nháp"
+                          ToolTip.Tip="Lưu nháp ngay lập tức xuống cơ sở dữ liệu"
+                          Padding="10,6"
+                          FontSize="12"
+                          VerticalAlignment="Center"
+                          Command="{Binding LuuNhapPhieuNhapCommand}" />
+                </Grid>
+              </Border>
+
               <!-- KHUNG 3 CỘT NỘI DUNG -->
-              <Grid Grid.Row="1"
+              <Grid Grid.Row="2"
                     ColumnDefinitions="310,*,330"
                     ColumnSpacing="14">
 
@@ -5062,7 +5227,7 @@
                       BorderThickness="0,0,0,1"
                       Padding="8,0">
 
-                      <Grid ColumnDefinitions="36,105,*,85,96,110,115,36"
+                      <Grid ColumnDefinitions="36,110,*,90,100,115,120,36"
                         Height="38">
 
                         <TextBlock Text="STT"
@@ -5128,7 +5293,8 @@
                     <!-- DANH SÁCH -->
                     <Grid Grid.Row="1">
 
-                      <ItemsControl ItemsSource="{Binding PhieuNhapItems}">
+                      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding PhieuNhapItems}" MinWidth="750">
                         <ItemsControl.ItemTemplate>
                           <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
 
@@ -5137,7 +5303,7 @@
                               BorderThickness="0,0,0,1"
                               Padding="8,2">
 
-                              <Grid ColumnDefinitions="36,105,*,85,96,110,115,36"
+                              <Grid ColumnDefinitions="36,110,*,90,100,115,120,36"
                                 MinHeight="46">
 
                                 <!-- STT -->
@@ -5147,14 +5313,42 @@
                                   VerticalAlignment="Center"
                                   HorizontalAlignment="Center" />
 
-                                <!-- MÃ HÀNG -->
-                                <TextBlock Grid.Column="1"
-                                  Text="{Binding MaSanPham}"
-                                  Foreground="#344054"
-                                  FontSize="13"
-                                  VerticalAlignment="Center"
-                                  TextTrimming="CharacterEllipsis" />
+                                <!-- MÃ HÀNG (nhấn để mở xem / chỉnh sửa chi tiết) -->
+                                <Button Grid.Column="1"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="0"
+                                        Cursor="Hand"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Center"
+                                        ToolTip.Tip="Nhấn vào mã để xem / chỉnh sửa thông tin hàng hóa"
+                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoChiTietSanPhamTuPhieuNhapCommand}"
+                                        CommandParameter="{Binding}">
+                                  <Border Background="#E6F4F1" CornerRadius="4" Padding="5,2">
+                                    <TextBlock Text="{Binding MaSanPham}" FontSize="12" FontWeight="Bold" Foreground="#0A8C78" TextTrimming="CharacterEllipsis" />
+                                  </Border>
+                                </Button>
 
+                                <!-- TÊN HÀNG (nhấn để mở xem / chỉnh sửa chi tiết, tự động xuống dòng Wrap) -->
+                                <Button Grid.Column="2"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="0,2,8,2"
+                                        Cursor="Hand"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Center"
+                                        HorizontalContentAlignment="Left"
+                                        ToolTip.Tip="{Binding TenSanPham, StringFormat='Nhấn để xem / chỉnh sửa: {0}'}"
+                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoChiTietSanPhamTuPhieuNhapCommand}"
+                                        CommandParameter="{Binding}">
+                                  <TextBlock Text="{Binding TenSanPham}"
+                                    Foreground="#163F38"
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    VerticalAlignment="Center"
+                                    TextWrapping="Wrap"
+                                    LineHeight="18" />
+                                </Button>
                                 <!-- TÊN HÀNG -->
                                 <TextBlock Grid.Column="2"
                                   Text="{Binding TenSanPham}"
@@ -5353,6 +5547,7 @@
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>
+                      </ScrollViewer>
 
                       <!-- RỖNG -->
                       <StackPanel IsVisible="{Binding IsPhieuNhapEmpty}"
@@ -5705,12 +5900,14 @@
                       IsVisible="{Binding CanCreatePurchase}" />
 
                     <!-- XÓA TẤT CẢ -->
+                    <!-- RESET PHIẾU HIỆN TẠI -->
                     <Button Classes="toolbar-action"
-                      Content="🗑  Xóa tất cả dòng hàng"
+                      Content="🗑  Reset phiếu nhập"
+                      ToolTip.Tip="Xóa dữ liệu của đúng phiếu nhập đang mở và làm mới thành phiếu trống (không ảnh hưởng các phiếu khác)"
                       HorizontalAlignment="Stretch"
                       HorizontalContentAlignment="Center"
                       Padding="0,10"
-                      Command="{Binding XoaTatPhieuNhapCommand}" />
+                      Command="{Binding ResetPhieuNhapCommand}" />
 
                   </StackPanel>
                 </ScrollViewer>

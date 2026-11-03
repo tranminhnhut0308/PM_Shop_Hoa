@@ -36,6 +36,8 @@ public sealed partial class MainWindowViewModel
     public ObservableCollection<PhieuNhapTab> PhieuNhapTabs { get; } = new();
 
     [ObservableProperty] private PhieuNhapTab? activePhieuNhapTab;
+    [ObservableProperty] private string phieuNhapTrangThaiLuu = "Đã lưu";
+    [ObservableProperty] private string phieuNhapTrangThaiLuuMau = "#087F6E";
 
     private bool _phieuNhapSessionReady;
     private bool _dangNapPhieuNhap;
@@ -71,6 +73,8 @@ public sealed partial class MainWindowViewModel
                 SchedulePhieuNhapAutoSave();
                 break;
 
+            case nameof(PhieuNhapTongTienHang):
+            case nameof(PhieuNhapTongTienNhap):
             case nameof(PhieuNhapSoHoaDonDauVao):
             case nameof(PhieuNhapGhiChu):
             case nameof(PhieuNhapNgayNhap):
@@ -363,6 +367,14 @@ public sealed partial class MainWindowViewModel
         if (_dangNapPhieuNhap || !_phieuNhapSessionReady || ActivePhieuNhapTab is null)
             return;
 
+        if (ActivePhieuNhapTab is { } tab)
+        {
+            ChupPhieuNhapDangMo(tab);
+        }
+
+        PhieuNhapTrangThaiLuu = "Đang lưu...";
+        PhieuNhapTrangThaiLuuMau = "#D97706";
+
         _phieuNhapDirty = true;
 
         _phieuNhapAutoSaveCts?.Cancel();
@@ -411,11 +423,15 @@ public sealed partial class MainWindowViewModel
         try
         {
             await GhiPhieuNhapNhapAsync(state, json, seq, empty);
+            PhieuNhapTrangThaiLuu = "Đã lưu";
+            PhieuNhapTrangThaiLuuMau = "#087F6E";
             return true;
         }
         catch (Exception ex)
         {
             _phieuNhapDirty = true;
+            PhieuNhapTrangThaiLuu = "Lưu thất bại";
+            PhieuNhapTrangThaiLuuMau = "#DC2626";
             SafeLog.WriteError("Loi luu nhap phieu nhap " + draftId, ex);
             StatusMessage = "Không lưu được phiếu nhập nháp: " + ex.Message;
             return false;
@@ -448,6 +464,8 @@ public sealed partial class MainWindowViewModel
     {
         _phieuNhapAutoSaveCts?.Cancel();
         _phieuNhapDirty = false;
+        PhieuNhapTrangThaiLuu = "Đã lưu";
+        PhieuNhapTrangThaiLuuMau = "#087F6E";
     }
 
     // ------------------------------------------------------------

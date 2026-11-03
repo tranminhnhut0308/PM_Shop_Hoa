@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ShopHoa.Models;
 
@@ -20,9 +21,47 @@ public sealed class HuyPhieuNhapYeuCau
     /// </summary>
     public string PhuongAnTien { get; set; } = "HOAN_TIEN_MAT";
 
+    public bool HoanTienVeQuy
+    {
+        get => PhuongAnTien == "HOAN_TIEN_MAT" || PhuongAnTien == "HOAN_CHUYEN_KHOAN";
+        set
+        {
+            if (!value)
+                PhuongAnTien = "TREO_CONG_NO";
+            else if (PhuongThucHoanTien == "CHUYEN_KHOAN")
+                PhuongAnTien = "HOAN_CHUYEN_KHOAN";
+            else
+                PhuongAnTien = "HOAN_TIEN_MAT";
+        }
+    }
+
+    public string PhuongThucHoanTien
+    {
+        get => PhuongAnTien == "HOAN_CHUYEN_KHOAN" ? "CHUYEN_KHOAN" : "TIEN_MAT";
+        set
+        {
+            if (value == "CHUYEN_KHOAN")
+                PhuongAnTien = "HOAN_CHUYEN_KHOAN";
+            else if (PhuongAnTien != "TREO_CONG_NO")
+                PhuongAnTien = "HOAN_TIEN_MAT";
+        }
+    }
+
     public decimal SoTienHoan { get; set; }
     public uint? NguoiHuyId { get; set; }
     public string TenNguoiHuy { get; set; } = string.Empty;
+
+    public uint? NguoiThaoTacId
+    {
+        get => NguoiHuyId;
+        set => NguoiHuyId = value;
+    }
+
+    public string? TenNguoiThaoTac
+    {
+        get => TenNguoiHuy;
+        set => TenNguoiHuy = value ?? string.Empty;
+    }
 }
 
 /// <summary>
@@ -35,6 +74,18 @@ public sealed class KhoiPhucPhieuNhapYeuCau
     public string LyDoKhoiPhuc { get; set; } = string.Empty;
     public uint? NguoiKhoiPhucId { get; set; }
     public string TenNguoiKhoiPhuc { get; set; } = string.Empty;
+
+    public uint? NguoiThaoTacId
+    {
+        get => NguoiKhoiPhucId;
+        set => NguoiKhoiPhucId = value;
+    }
+
+    public string? TenNguoiThaoTac
+    {
+        get => TenNguoiKhoiPhuc;
+        set => TenNguoiKhoiPhuc = value ?? string.Empty;
+    }
 }
 
 /// <summary>
@@ -51,6 +102,9 @@ public sealed class MatHangKiemTraHuy
     public decimal TonKhoSauKhiHuy => TonKhoHienTai - SoLuongNhap;
     public bool DuTonKho => TonKhoHienTai >= SoLuongNhap;
     public decimal SoLuongThieu => DuTonKho ? 0m : (SoLuongNhap - TonKhoHienTai);
+
+    public decimal SoLuongCanHoanTac => SoLuongNhap;
+    public decimal ThieuHut => SoLuongThieu;
 }
 
 /// <summary>
@@ -75,6 +129,10 @@ public sealed class KiemTraHuyPhieuNhapResult
     public bool CoMatHangThieuTonKho => MatHangs.Exists(m => !m.DuTonKho);
 
     public int SoMatHangThieuTonKho => MatHangs.Count(m => !m.DuTonKho);
+
+    public bool HopLe => CoTheHuy && !CoMatHangThieuTonKho;
+    public string? CanhBao => LyDoKhongTheHuy;
+    public List<MatHangKiemTraHuy> MatHangLoi => MatHangs.FindAll(m => !m.DuTonKho);
 }
 
 /// <summary>
@@ -100,14 +158,7 @@ public sealed class LichSuHuyPhieuNhap
     public uint? NguoiThucHienId { get; set; }
     public string TenNguoiThucHien { get; set; } = string.Empty;
     public DateTime ThoiGian { get; set; } = DateTime.Now;
-    public string? DuLieuSnapshot { get; set; }
 
-    public string ThoiGianText => ThoiGian.ToString("dd/MM/yyyy HH:mm:ss");
-    public string HanhDongHienThi => HanhDong switch
-    {
-        "HUY" => "Hủy phiếu",
-        "KHOI_PHUC" => "Khôi phục phiếu",
-        "MUA_LAI" => "Mua lại / Tạo mới",
-        _ => HanhDong
-    };
+    public string ThoiGianText => ThoiGian.ToString("dd/MM/yyyy HH:mm");
+    public string SoTienHoanText => SoTienHoan.ToString("N0") + " đ";
 }

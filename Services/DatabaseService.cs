@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Globalization;
 using System.Text;
 using ClosedXML.Excel;
@@ -4735,17 +4735,252 @@ public sealed partial class DatabaseService
         };
     }
 
+    public async Task EnsureHoaDonFilterIndexesAsync()
+    {
+        try
+        {
+            await using var connection = await OpenAsync();
+            var existingIndexes = (await connection.QueryAsync<string>(
+                """
+                SELECT DISTINCT INDEX_NAME
+                FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'hoa_don_ban_hang';
+                """)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (!existingIndexes.Contains("idx_hdbh_thoi_gian_ban"))
+            {
+                await connection.ExecuteAsync("ALTER TABLE hoa_don_ban_hang ADD INDEX idx_hdbh_thoi_gian_ban (thoi_gian_ban);");
+            }
+            if (!existingIndexes.Contains("idx_hdbh_khach_hang_id"))
+            {
+                await connection.ExecuteAsync("ALTER TABLE hoa_don_ban_hang ADD INDEX idx_hdbh_khach_hang_id (khach_hang_id);");
+            }
+            if (!existingIndexes.Contains("idx_hdbh_trang_thai_hd"))
+            {
+                await connection.ExecuteAsync("ALTER TABLE hoa_don_ban_hang ADD INDEX idx_hdbh_trang_thai_hd (trang_thai_hoa_don);");
+            }
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("EnsureHoaDonFilterIndexesAsync error", ex);
+        }
+    }
+
+    private static (string WhereClause, object Params) XayDungDieuKienLocHoaDon(
+        string? search,
+        DateTime? tuNgay,
+        DateTime? denNgay,
+        string? trangThaiThanhToan,
+        string? trangThaiHoaDon,
+        uint? khachHangId)
+    {
+        var rawSearch = (search ?? "").Trim();
+        var normalizedSearch = ProductSearchHelper.ChuanHoa(rawSearch);
+
+        DateTime? tuNgayDau = tuNgay?.Date;
+        DateTime? denNgaySau = denNgay?.Date.AddDays(1);
+
+        var dieuKien = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(rawSearch))
+        {
+            var tenKhachHangExpr = BieuThucChuanHoaSql("COALESCE(kh.ten_khach_hang, 'Khach le')");
+            var ghiChuExpr = BieuThucChuanHoaSql("COALESCE(hd.ghi_chu, '')");
+
+            dieuKien.Add($"""
+                (
+                    hd.ma_hoa_don LIKE CONCAT('%', @SearchRaw, '%')
+                    OR kh.ma_khach_hang LIKE CONCAT('%', @SearchRaw, '%')
+                    OR kh.ten_khach_hang LIKE CONCAT('%', @SearchRaw, '%')
+                    OR {tenKhachHangExpr} LIKE CONCAT('%', @SearchNormalized, '%')
+                    OR kh.so_dien_thoai LIKE CONCAT('%', @SearchRaw, '%')
+                    OR hd.ghi_chu LIKE CONCAT('%', @SearchRaw, '%')
+                    OR {ghiChuExpr} LIKE CONCAT('%', @SearchNormalized, '%')
+                )
+                """);
+        }
+
+        if (tuNgayDau.HasValue)
+        {
+            dieuKien.Add("hd.thoi_gian_ban >= @TuNgayDau");
+        }
+
+        if (denNgaySau.HasValue)
+        {
+            dieuKien.Add("hd.thoi_gian_ban < @DenNgaySau");
+        }
+
+        if (khachHangId.HasValue && khachHangId.Value > 0)
+        {
+            dieuKien.Add("hd.khach_hang_id = @KhachHangId");
+        }
+
+        var ttHd = (trangThaiHoaDon ?? "").Trim().ToUpperInvariant();
+        if (ttHd is "HOAN_THANH")
+        {
+            dieuKien.Add("hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY')");
+        }
+        else if (ttHd is "DA_HUY" or "HUY")
+        {
+            dieuKien.Add("hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY')");
+        }
+
+        var ttTt = (trangThaiThanhToan ?? "").Trim().ToUpperInvariant();
+        if (ttTt is "DA_THANH_TOAN")
+        {
+            dieuKien.Add("(hd.con_no <= 0 OR hd.trang_thai_thanh_toan = 'DA_THANH_TOAN')");
+        }
+        else if (ttTt is "THANH_TOAN_MOT_PHAN")
+        {
+            dieuKien.Add("((hd.con_no > 0 AND hd.khach_da_thanh_toan > 0) OR hd.trang_thai_thanh_toan IN ('THANH_TOAN_MOT_PHAN', 'CONG_NO'))");
+        }
+        else if (ttTt is "CHUA_THANH_TOAN")
+        {
+            dieuKien.Add("((hd.con_no > 0 AND (hd.khach_da_thanh_toan <= 0 OR hd.khach_da_thanh_toan IS NULL)) OR hd.trang_thai_thanh_toan = 'CHUA_THANH_TOAN')");
+        }
+
+        var whereClause = dieuKien.Count > 0 ? "WHERE " + string.Join(" AND ", dieuKien) : "";
+
+        var paramObj = new
+        {
+            SearchRaw = rawSearch,
+            SearchNormalized = normalizedSearch,
+            TuNgayDau = tuNgayDau,
+            DenNgaySau = denNgaySau,
+            KhachHangId = khachHangId
+        };
+
+        return (whereClause, paramObj);
+    }
+
+    public async Task<HoaDonPagedResult> GetHoaDonPagedAsync(
+        string? search = null,
+        DateTime? tuNgay = null,
+        DateTime? denNgay = null,
+        string? trangThaiThanhToan = null,
+        string? trangThaiHoaDon = null,
+        uint? khachHangId = null,
+        int page = 1,
+        int pageSize = 20)
+    {
+        var coCotHuy = await EnsureHuyHoaDonSchemaAsync();
+        await EnsureHoaDonFilterIndexesAsync();
+
+        await using var connection = await OpenAsync();
+
+        var (whereClause, paramObj) = XayDungDieuKienLocHoaDon(
+            search, tuNgay, denNgay, trangThaiThanhToan, trangThaiHoaDon, khachHangId);
+
+        var summarySql = $"""
+            SELECT
+                COUNT(*) AS TongSoLuong,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') THEN hd.khach_can_tra ELSE 0 END), 0) AS TongDoanhThu,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS TongDaThanhToan,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') THEN hd.con_no ELSE 0 END), 0) AS TongConNo,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY') THEN 1 ELSE 0 END), 0) AS TongDaHuy
+            FROM hoa_don_ban_hang hd
+            LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
+            {whereClause};
+            """;
+
+        var summary = await connection.QueryFirstOrDefaultAsync<HoaDonPagedResult>(summarySql, paramObj)
+            ?? new HoaDonPagedResult();
+
+        if (summary.TongSoLuong == 0)
+        {
+            summary.Items = Array.Empty<HoaDon>();
+            return summary;
+        }
+
+        var safePage = page < 1 ? 1 : page;
+        var safePageSize = pageSize < 1 ? 20 : pageSize;
+        var offset = (safePage - 1) * safePageSize;
+
+        var huySelectCols = coCotHuy
+            ? """
+              ,
+              hd.ly_do_huy AS LyDoHuy,
+              hd.nguoi_huy_id AS NguoiHuyId,
+              hd.ten_nguoi_huy AS TenNguoiHuy,
+              hd.thoi_gian_huy AS ThoiGianHuy,
+              hd.trang_thai_giao_hang_khi_huy AS TrangThaiGiaoHangKhiHuy,
+              COALESCE(hd.da_hoan_kho, 0) AS DaHoanKho,
+              hd.phuong_an_tien_khi_huy AS PhuongAnTienKhiHuy,
+              COALESCE(hd.so_tien_hoan, 0) AS SoTienHoan,
+              hd.ma_phieu_chi_hoan AS MaPhieuChiHoan,
+              hd.hoa_don_goc_id AS HoaDonGocId,
+              hd.ma_hoa_don_goc AS MaHoaDonGoc,
+              hd.hoa_don_thay_the_id AS HoaDonThayTheId,
+              hd.ma_hoa_don_thay_the AS MaHoaDonThayThe
+              """
+            : "";
+
+        var listSql = $"""
+            SELECT
+                hd.id AS Id,
+                hd.ma_hoa_don AS MaHoaDon,
+                hd.thoi_gian_ban AS ThoiGianBan,
+                COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
+                COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
+                hd.tong_tien_hang AS TongTienHang,
+                hd.giam_gia AS GiamGia,
+                hd.thu_khac AS ThuKhac,
+                hd.khach_can_tra AS KhachCanTra,
+                hd.khach_da_thanh_toan AS KhachDaThanhToan,
+                hd.con_no AS ConNo,
+                hd.trang_thai_thanh_toan AS TrangThaiThanhToan,
+                hd.trang_thai_hoa_don AS TrangThaiHoaDon,
+                hd.ghi_chu AS GhiChu{huySelectCols}
+            FROM hoa_don_ban_hang hd
+            LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
+            {whereClause}
+            ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
+            LIMIT @Limit OFFSET @Offset;
+            """;
+
+        var dynParams = new DynamicParameters(paramObj);
+        dynParams.Add("Limit", safePageSize);
+        dynParams.Add("Offset", offset);
+
+        var items = (await connection.QueryAsync<HoaDon>(listSql, dynParams)).AsList();
+        summary.Items = items;
+        return summary;
+    }
+
     public async Task<IReadOnlyList<HoaDon>> GetHoaDonAsync(
         string? search = null,
         DateTime? ngayLoc = null,
         int? limit = 500,
         string? trangThaiLoc = null,
         DateTime? tuNgay = null,
-        DateTime? denNgay = null)
+        DateTime? denNgay = null,
+        string? trangThaiThanhToan = null,
+        string? trangThaiHoaDon = null,
+        uint? khachHangId = null)
     {
         var coCotHuy = await EnsureHuyHoaDonSchemaAsync();
+        await EnsureHoaDonFilterIndexesAsync();
+
+        if (ngayLoc.HasValue && !tuNgay.HasValue && !denNgay.HasValue)
+        {
+            tuNgay = ngayLoc.Value.Date;
+            denNgay = ngayLoc.Value.Date;
+        }
+
+        if (string.IsNullOrWhiteSpace(trangThaiHoaDon) && string.IsNullOrWhiteSpace(trangThaiThanhToan) && !string.IsNullOrWhiteSpace(trangThaiLoc))
+        {
+            var loc = trangThaiLoc.Trim().ToUpperInvariant();
+            if (loc is "HOAN_THANH") trangThaiHoaDon = "HOAN_THANH";
+            else if (loc is "DA_HUY" or "HUY") trangThaiHoaDon = "DA_HUY";
+            else if (loc is "CHUA_THANH_TOAN") trangThaiThanhToan = "CHUA_THANH_TOAN";
+            else if (loc is "THANH_TOAN_MOT_PHAN") trangThaiThanhToan = "THANH_TOAN_MOT_PHAN";
+            else if (loc is "DA_THANH_TOAN") trangThaiThanhToan = "DA_THANH_TOAN";
+        }
 
         await using var connection = await OpenAsync();
+
+        var (whereClause, paramObj) = XayDungDieuKienLocHoaDon(
+            search, tuNgay, denNgay, trangThaiThanhToan, trangThaiHoaDon, khachHangId);
 
         var limitClause = limit.HasValue ? $"LIMIT {limit.Value}" : "";
 
@@ -4768,82 +5003,30 @@ public sealed partial class DatabaseService
               """
             : "";
 
-        var dieuKienTrangThai = (trangThaiLoc ?? "TAT_CA").Trim().ToUpperInvariant() switch
-        {
-            "HOAN_THANH" => "AND hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') AND hd.con_no <= 0",
-            "CHUA_THANH_TOAN" => "AND hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') AND hd.con_no > 0 AND hd.khach_da_thanh_toan <= 0",
-            "THANH_TOAN_MOT_PHAN" => "AND hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') AND hd.con_no > 0 AND hd.khach_da_thanh_toan > 0",
-            "DA_HUY" => "AND hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY')",
-            _ => ""
-        };
-
-        // Nếu truyền ngayLoc thì tuNgay = denNgay = ngayLoc
-        if (ngayLoc.HasValue && !tuNgay.HasValue && !denNgay.HasValue)
-        {
-            tuNgay = ngayLoc.Value.Date;
-            denNgay = ngayLoc.Value.Date;
-        }
-
-        DateTime? tuNgayDau = tuNgay?.Date;
-        DateTime? denNgaySau = denNgay?.Date.AddDays(1);
-
-        var searchTrim = (search ?? "").Trim();
-
         var sql = $"""
-SELECT
-    hd.id AS Id,
-    hd.ma_hoa_don AS MaHoaDon,
-    hd.thoi_gian_ban AS ThoiGianBan,
+            SELECT
+                hd.id AS Id,
+                hd.ma_hoa_don AS MaHoaDon,
+                hd.thoi_gian_ban AS ThoiGianBan,
+                COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
+                COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
+                hd.tong_tien_hang AS TongTienHang,
+                hd.giam_gia AS GiamGia,
+                hd.thu_khac AS ThuKhac,
+                hd.khach_can_tra AS KhachCanTra,
+                hd.khach_da_thanh_toan AS KhachDaThanhToan,
+                hd.con_no AS ConNo,
+                hd.trang_thai_thanh_toan AS TrangThaiThanhToan,
+                hd.trang_thai_hoa_don AS TrangThaiHoaDon,
+                hd.ghi_chu AS GhiChu{huySelectCols}
+            FROM hoa_don_ban_hang hd
+            LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
+            {whereClause}
+            ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
+            {limitClause};
+            """;
 
-    COALESCE(kh.ma_khach_hang, '') AS MaKhachHang,
-    COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
-
-    hd.tong_tien_hang AS TongTienHang,
-    hd.giam_gia AS GiamGia,
-    hd.thu_khac AS ThuKhac,
-    hd.khach_can_tra AS KhachCanTra,
-    hd.khach_da_thanh_toan AS KhachDaThanhToan,
-    hd.con_no AS ConNo,
-    hd.trang_thai_thanh_toan AS TrangThaiThanhToan,
-    hd.trang_thai_hoa_don AS TrangThaiHoaDon,
-    hd.ghi_chu AS GhiChu{huySelectCols}
-
-FROM hoa_don_ban_hang hd
-
-LEFT JOIN khach_hang kh
-    ON kh.id = hd.khach_hang_id
-
-WHERE (
-    @Search = ''
-    OR hd.ma_hoa_don LIKE CONCAT('%', @Search, '%')
-    OR kh.ma_khach_hang LIKE CONCAT('%', @Search, '%')
-    OR kh.ten_khach_hang LIKE CONCAT('%', @Search, '%')
-    OR kh.so_dien_thoai LIKE CONCAT('%', @Search, '%')
-    OR hd.ghi_chu LIKE CONCAT('%', @Search, '%')
-    OR EXISTS (
-        SELECT 1 FROM chi_tiet_hoa_don_ban_hang cthd
-        WHERE cthd.hoa_don_id = hd.id
-          AND cthd.ten_san_pham LIKE CONCAT('%', @Search, '%')
-    )
-)
-AND (@TuNgayDau IS NULL OR hd.thoi_gian_ban >= @TuNgayDau)
-AND (@DenNgaySau IS NULL OR hd.thoi_gian_ban < @DenNgaySau)
-{dieuKienTrangThai}
-
-ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
-{limitClause};
-""";
-
-        return (
-            await connection.QueryAsync<HoaDon>(
-                sql,
-                new
-                {
-                    Search = searchTrim,
-                    TuNgayDau = tuNgayDau,
-                    DenNgaySau = denNgaySau
-                })
-        ).AsList();
+        return (await connection.QueryAsync<HoaDon>(sql, paramObj)).AsList();
     }
     /// <summary>
     /// Sinh mã hóa đơn kế tiếp trong ngày, dạng HDyyMMdd-NNN (VD: HD261005-002).

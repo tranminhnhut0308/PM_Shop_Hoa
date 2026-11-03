@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -585,14 +585,34 @@ public sealed partial class MainWindowViewModel
         {
             StatusMessage = "Đang xuất danh sách hóa đơn...";
 
-            // Lấy toàn bộ hóa đơn theo đúng điều kiện tìm kiếm, ngày và trạng thái đang lọc (không giới hạn 500 dòng)
+            var ttThanhToan = SelectedInvoicePaymentStatus switch
+            {
+                "Đã thanh toán" => "DA_THANH_TOAN",
+                "Thanh toán một phần" => "THANH_TOAN_MOT_PHAN",
+                "Chưa thanh toán" => "CHUA_THANH_TOAN",
+                _ => null
+            };
+
+            var ttHoaDon = SelectedInvoiceStatus switch
+            {
+                "Hoàn thành" => "HOAN_THANH",
+                "Đã hủy" => "DA_HUY",
+                _ => null
+            };
+
+            var khId = SelectedInvoiceCustomer?.Id;
+
+            // Lấy toàn bộ hóa đơn theo đúng điều kiện tìm kiếm, ngày và trạng thái đang lọc (không giới hạn dòng)
             var danhSach = await _db.GetHoaDonAsync(
-                InvoiceSearch,
-                null,
+                search: InvoiceSearch,
+                ngayLoc: null,
                 limit: null,
-                trangThaiLoc: InvoiceStatusFilter,
+                trangThaiLoc: null,
                 tuNgay: InvoiceFilterStartDate?.Date,
-                denNgay: InvoiceFilterEndDate?.Date);
+                denNgay: InvoiceFilterEndDate?.Date,
+                trangThaiThanhToan: ttThanhToan,
+                trangThaiHoaDon: ttHoaDon,
+                khachHangId: khId);
 
             if (danhSach.Count == 0)
             {
@@ -620,6 +640,13 @@ public sealed partial class MainWindowViewModel
             {
                 moTaLoc.Add($"Đến ngày: {InvoiceFilterEndDate.Value:dd/MM/yyyy}");
             }
+
+            if (!string.IsNullOrWhiteSpace(SelectedInvoicePaymentStatus) && SelectedInvoicePaymentStatus != "Tất cả")
+                moTaLoc.Add($"Thanh toán: {SelectedInvoicePaymentStatus}");
+            if (!string.IsNullOrWhiteSpace(SelectedInvoiceStatus) && SelectedInvoiceStatus != "Tất cả")
+                moTaLoc.Add($"Trạng thái HĐ: {SelectedInvoiceStatus}");
+            if (SelectedInvoiceCustomer?.Id != null)
+                moTaLoc.Add($"Khách hàng: {SelectedInvoiceCustomer.DisplayText}");
 
             if (!string.IsNullOrWhiteSpace(InvoiceSearch))
                 moTaLoc.Add($"Từ khóa: \"{InvoiceSearch.Trim()}\"");

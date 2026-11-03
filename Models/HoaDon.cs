@@ -147,3 +147,20 @@ public sealed class HoaDon
         }
     }
 }
+
+public sealed class KhachHangFilterOption
+{
+    public uint? Id { get; set; }
+    public string DisplayText { get; set; } = "";
+    public override string ToString() => DisplayText;
+}
+
+public sealed class HoaDonPagedResult
+{
+    public IReadOnlyList<HoaDon> Items { get; set; } = [];
+    public int TongSoLuong { get; set; }
+    public decimal TongDoanhThu { get; set; }
+    public decimal TongDaThanhToan { get; set; }
+    public decimal TongConNo { get; set; }
+    public int TongDaHuy { get; set; }
+}
