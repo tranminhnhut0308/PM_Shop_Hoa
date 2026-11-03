@@ -48,6 +48,8 @@ public partial class InvoiceWindow : Window
         CapNhatNutThanhToan(receipt);
         PrintButton.IsVisible = !receipt.LaHoaDonTongHop;
         CancelInvoiceButton.IsVisible = !receipt.LaHoaDonDaHuy && DatabaseService.CoQuyenHuyHoaDonHienTai();
+        EditInvoiceButton.IsVisible = !receipt.LaHoaDonDaHuy;
+        HistoryInvoiceButton.IsVisible = true;
     }
 
     private void CapNhatNutThanhToan(HoaDonBanHangReceipt receipt)
@@ -268,6 +270,55 @@ public partial class InvoiceWindow : Window
         okButton.Click += (_, _) => window.Close();
 
         await window.ShowDialog(this);
+    }
+
+    private async void EditInvoiceButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not HoaDonBanHangReceipt receipt)
+            return;
+
+        if (receipt.LaHoaDonDaHuy)
+        {
+            await HienThiThongBaoAsync("Thông báo", $"Hóa đơn {receipt.MaHoaDon} đã bị hủy, không thể chỉnh sửa.");
+            return;
+        }
+
+        try
+        {
+            var db = new DatabaseService();
+            var allProducts = await db.GetSanPhamAsync();
+
+            var editor = new HoaDonEditorWindow(receipt, db, allProducts);
+            var updated = await editor.ShowDialog<HoaDonBanHangReceipt?>(this);
+            if (updated != null)
+            {
+                CapNhatGiaoDienTheoReceipt(updated);
+                await HienThiThongBaoAsync("Thành công", $"Đã cập nhật hóa đơn {updated.MaHoaDon} thành công.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await HienThiThongBaoAsync("Lỗi", $"Không thể mở màn hình chỉnh sửa: {ex.Message}");
+        }
+    }
+
+    private async void HistoryInvoiceButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not HoaDonBanHangReceipt receipt)
+            return;
+
+        try
+        {
+            var db = new DatabaseService();
+            var lichSu = await db.GetLichSuSuaHoaDonAsync(receipt.HoaDonId);
+
+            var dialog = new LichSuSuaHoaDonWindow(receipt.MaHoaDon, lichSu);
+            await dialog.ShowDialog(this);
+        }
+        catch (Exception ex)
+        {
+            await HienThiThongBaoAsync("Lỗi", $"Không thể tải lịch sử chỉnh sửa: {ex.Message}");
+        }
     }
 
     private void CloseButton_OnClick(object? sender, RoutedEventArgs e)

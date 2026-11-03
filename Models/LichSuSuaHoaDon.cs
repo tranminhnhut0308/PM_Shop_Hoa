@@ -1,4 +1,6 @@
 using System;
+using System.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace ShopHoa.Models;
 
@@ -48,6 +50,7 @@ public sealed class HoaDonItemSnapshot
     public string DonViTinh { get; set; } = string.Empty;
     public decimal SoLuong { get; set; }
     public decimal DonGia { get; set; }
+    public decimal GiamGia { get; set; }
     public decimal ThanhTien { get; set; }
     public decimal GiaVon { get; set; }
 }
@@ -67,16 +70,67 @@ public sealed class HoaDonEditRequest
 }
 
 /// <summary>
-/// Dòng mặt hàng trong form chỉnh sửa hóa đơn.
+/// Dòng mặt hàng trong form chỉnh sửa hóa đơn, hỗ trợ thông báo thay đổi (INotifyPropertyChanged).
 /// </summary>
-public sealed class HoaDonItemEditModel
+public sealed class HoaDonItemEditModel : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public uint SanPhamId { get; set; }
     public string MaSanPham { get; set; } = string.Empty;
     public string TenSanPham { get; set; } = string.Empty;
     public string DonViTinh { get; set; } = "Bó";
-    public decimal SoLuong { get; set; }
-    public decimal DonGia { get; set; }
-    public decimal ThanhTien => SoLuong * DonGia;
     public decimal GiaVon { get; set; }
+
+    private decimal _soLuong = 1;
+    public decimal SoLuong
+    {
+        get => _soLuong;
+        set
+        {
+            if (_soLuong != value)
+            {
+                _soLuong = value;
+                OnPropertyChanged(nameof(SoLuong));
+                OnPropertyChanged(nameof(ThanhTien));
+            }
+        }
+    }
+
+    private decimal _donGia;
+    public decimal DonGia
+    {
+        get => _donGia;
+        set
+        {
+            if (_donGia != value)
+            {
+                _donGia = value;
+                OnPropertyChanged(nameof(DonGia));
+                OnPropertyChanged(nameof(ThanhTien));
+            }
+        }
+    }
+
+    private decimal _giamGia;
+    public decimal GiamGia
+    {
+        get => _giamGia;
+        set
+        {
+            if (_giamGia != value)
+            {
+                _giamGia = value;
+                OnPropertyChanged(nameof(GiamGia));
+                OnPropertyChanged(nameof(ThanhTien));
+            }
+        }
+    }
+
+    public decimal ThanhTien => Math.Max(0, (SoLuong * DonGia) - GiamGia);
+
+    private void OnPropertyChanged(string propertyName)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
 }

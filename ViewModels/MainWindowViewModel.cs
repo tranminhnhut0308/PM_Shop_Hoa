@@ -7115,7 +7115,7 @@ public partial class MainWindowViewModel : ObservableObject
     // Hóa đơn
     public bool CanViewInvoiceDetail => CoQuyen(PermissionKeys.InvoicesDetail);
     public bool CanCreateInvoice => CoQuyen(PermissionKeys.InvoicesCreate);
-    public bool CanEditInvoice => false;
+    public bool CanEditInvoice => CoQuyen(PermissionKeys.InvoicesEdit) || CoQuyen(PermissionKeys.InvoicesDetail);
     public bool CanCancelInvoice => CoQuyen(PermissionKeys.InvoicesCancel) || CoQuyen(PermissionKeys.SalesCancel);
     public bool CanDeleteInvoice => CoQuyen(PermissionKeys.InvoicesDelete);
     public bool CanPrintInvoice => CoQuyen(PermissionKeys.InvoicesPrint);

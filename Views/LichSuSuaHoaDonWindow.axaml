@@ -1,0 +1,156 @@
+<Window xmlns="https://github.com/avaloniaui"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:models="using:ShopHoa.Models"
+  x:Class="ShopHoa.Views.LichSuSuaHoaDonWindow"
+  Title="Lịch sử chỉnh sửa hóa đơn"
+  Width="800"
+  Height="600"
+  WindowStartupLocation="CenterOwner"
+  Background="#F8FAF9">
+
+  <Window.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="#263B35" />
+    </Style>
+    <Style Selector="Button.btn-close">
+      <Setter Property="Background" Value="#F1F5F9" />
+      <Setter Property="Foreground" Value="#475569" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="16,8" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.btn-close:pointerover">
+      <Setter Property="Background" Value="#E2E8F0" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- Header -->
+    <Border Grid.Row="0"
+      Background="White"
+      BorderBrush="#E2ECE8"
+      BorderThickness="0,0,0,1"
+      Padding="20,16">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="3">
+          <TextBlock x:Name="TxtTitle"
+            Text="Lịch sử chỉnh sửa hóa đơn"
+            FontSize="18"
+            FontWeight="Bold"
+            Foreground="#087F6E" />
+          <TextBlock x:Name="TxtSubTitle"
+            Text="Danh sách các lần chỉnh sửa thông tin hoặc hàng hóa của hóa đơn này"
+            FontSize="12"
+            Foreground="#61736E" />
+        </StackPanel>
+        <Border Grid.Column="1"
+          Background="#E6F5F1"
+          CornerRadius="6"
+          Padding="10,6"
+          VerticalAlignment="Center">
+          <TextBlock x:Name="TxtCount"
+            Text="0 lần chỉnh sửa"
+            FontSize="12"
+            FontWeight="Bold"
+            Foreground="#087F6E" />
+        </Border>
+      </Grid>
+    </Border>
+
+    <!-- Content: List / Timeline -->
+    <ScrollViewer Grid.Row="1" Padding="20">
+      <StackPanel Spacing="14">
+        <TextBlock x:Name="TxtEmpty"
+          Text="Hóa đơn này chưa từng qua chỉnh sửa nào."
+          HorizontalAlignment="Center"
+          Foreground="#94A3B8"
+          FontSize="13"
+          Margin="0,40,0,0"
+          IsVisible="False" />
+
+        <ItemsControl x:Name="HistoryItemsList">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="models:LichSuSuaHoaDon">
+              <Border Background="White"
+                BorderBrush="#E2ECE8"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="16"
+                Margin="0,0,0,12"
+                BoxShadow="0 2 8 #08000000">
+                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+                  <!-- Row 1: Time, User, Amount Delta -->
+                  <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Border Background="#F1F5F9" CornerRadius="6" Padding="6,2">
+                        <TextBlock Text="{Binding ThoiGianSuaText}"
+                          FontSize="11.5"
+                          FontWeight="SemiBold"
+                          Foreground="#475569" />
+                      </Border>
+                      <TextBlock Text="•" Foreground="#CBD5E1" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding TenNguoiSua, StringFormat='Người sửa: {0}'}"
+                        FontSize="12"
+                        FontWeight="SemiBold"
+                        Foreground="#1E293B"
+                        VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding TongTienTruocText}"
+                        FontSize="12"
+                        Foreground="#64748B"
+                        TextDecorations="Strikethrough" />
+                      <TextBlock Text="➔" FontSize="11" Foreground="#94A3B8" />
+                      <TextBlock Text="{Binding TongTienSauText}"
+                        FontSize="12.5"
+                        FontWeight="Bold"
+                        Foreground="#087F6E" />
+                      <Border Background="#FEF3C7" CornerRadius="4" Padding="6,2" Margin="4,0,0,0">
+                        <TextBlock Text="{Binding ChenhLechText}"
+                          FontSize="11"
+                          FontWeight="Bold"
+                          Foreground="#B45309" />
+                      </Border>
+                    </StackPanel>
+                  </Grid>
+
+                  <!-- Row 2: Reason -->
+                  <Border Grid.Row="1" Background="#F8FAFC" CornerRadius="6" Padding="10,6">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="Lý do:" FontWeight="SemiBold" FontSize="12" Foreground="#475569" />
+                      <TextBlock Text="{Binding LyDoSua}" FontSize="12" Foreground="#0F172A" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Border>
+
+                  <!-- Row 3: Detail changes text -->
+                  <StackPanel Grid.Row="2" Spacing="4">
+                    <TextBlock Text="Chi tiết thay đổi:" FontSize="11" FontWeight="SemiBold" Foreground="#64748B" />
+                    <TextBlock Text="{Binding GhiChuThayDoi}"
+                      FontSize="11.5"
+                      Foreground="#334155"
+                      LineHeight="18"
+                      TextWrapping="Wrap" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Footer -->
+    <Border Grid.Row="2"
+      Background="White"
+      BorderBrush="#E2ECE8"
+      BorderThickness="0,1,0,0"
+      Padding="16,12">
+      <Button Content="Đóng"
+        Classes="btn-close"
+        HorizontalAlignment="Right"
+        Click="CloseButton_OnClick" />
+    </Border>
+  </Grid>
+</Window>

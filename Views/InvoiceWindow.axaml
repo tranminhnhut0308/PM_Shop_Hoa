@@ -73,6 +73,34 @@
       <Setter Property="Padding" Value="16,10" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
+    <Style Selector="Button.btn-edit-invoice">
+      <Setter Property="Background" Value="#E0F2FE" />
+      <Setter Property="Foreground" Value="#0369A1" />
+      <Setter Property="BorderBrush" Value="#BAE6FD" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="16,10" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.btn-edit-invoice:pointerover">
+      <Setter Property="Background" Value="#BAE6FD" />
+      <Setter Property="Foreground" Value="#0284C7" />
+    </Style>
+    <Style Selector="Button.btn-history-invoice">
+      <Setter Property="Background" Value="#F8FAFC" />
+      <Setter Property="Foreground" Value="#475569" />
+      <Setter Property="BorderBrush" Value="#CBD5E1" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="16,10" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.btn-history-invoice:pointerover">
+      <Setter Property="Background" Value="#F1F5F9" />
+      <Setter Property="Foreground" Value="#334155" />
+    </Style>
     <Style Selector="Button.btn-close:pointerover">
       <Setter Property="Background" Value="#E4E7EC" />
     </Style>
@@ -434,8 +462,16 @@
         HorizontalAlignment="Center" TextAlignment="Center"
         Foreground="#D92D20" FontSize="12" Margin="0,0,0,6" />
 
-      <!-- CÁC NÚT THAO TÁC (Đã gỡ bỏ nút Chỉnh sửa hóa đơn, thay bằng nút Hủy hóa đơn) -->
+      <!-- CÁC NÚT THAO TÁC -->
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+        <Button x:Name="EditInvoiceButton" Content="✏ Chỉnh sửa"
+          Classes="btn-edit-invoice"
+          Click="EditInvoiceButton_OnClick"
+          ToolTip.Tip="Chỉnh sửa chi tiết hóa đơn (mặt hàng, số lượng, giảm giá)" />
+        <Button x:Name="HistoryInvoiceButton" Content="🕒 Lịch sử sửa"
+          Classes="btn-history-invoice"
+          Click="HistoryInvoiceButton_OnClick"
+          ToolTip.Tip="Xem lịch sử các lần chỉnh sửa của hóa đơn này" />
         <Button x:Name="ThanhToanCongNoButton" Content="💵 Thanh toán nợ"
           Classes="btn-pay-debt" IsVisible="False"
           Click="ThanhToanCongNoButton_OnClick"
