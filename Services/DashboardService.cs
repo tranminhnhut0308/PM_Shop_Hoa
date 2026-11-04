@@ -259,7 +259,7 @@ public sealed class DashboardService
     public async Task<List<TongQuanHoaDonBiLoaiTru>> TaiDanhSachHoaDonChuaGhiNhanAsync(
         DateTime tuNgay,
         DateTime denKeTiep,
-        CancellationToken token)
+        CancellationToken token = default)
     {
         await using var connection = await _taoKetNoi();
 

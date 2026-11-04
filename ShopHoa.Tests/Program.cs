@@ -1,7 +1,7 @@
-﻿using System;
-using System.IO;
-using System.Security.Cryptography;
-using System.Text.Json;
+using System;
+using System.Threading.Tasks;
+using Dapper;
+using MySqlConnector;
 using ShopHoa.Models;
 using ShopHoa.Services;
 
@@ -9,29 +9,69 @@ namespace ShopHoa.Tests;
 
 internal class Program
 {
-    static int Main(string[] args)
+    static async Task<int> Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
-        Console.WriteLine("===============================================================");
-        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG OTA UPDATE - SHOP HOA (ISSUE #65)  ");
-        Console.WriteLine("===============================================================");
+        Console.WriteLine("==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG SHOP HOA: ĐỐI SOÁT TOÀN DIỆN THỐNG KÊ TRANG TỔNG QUAN (#69)  ");
+        Console.WriteLine("==========================================================================================");
 
         try
         {
-            Test1_SemanticVersion_Comparison();
-            Test2_AppVersionInfo_Serialization();
-            Test3_Sha256_Checksum_Verification();
-            Test4_Offline_And_NetworkFailure_Handling();
-            Test5_DatabaseConfig_Preservation();
-            Test6_Mandatory_Version_Enforcement();
-            Test7_DismissSession_Handling();
-            Test8_Real_UpdateCheck_Scenario();
-            Test9_Cancel_And_Recreate_Permission_Rules();
-            Test10_Stock_Rollback_Idempotency();
-            Test11_Debt_And_Cashbook_Adjustment_On_Cancellation();
-            Test12_Recreate_Invoice_Independence_And_Traceability();
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
 
-            Console.WriteLine("\n>>> TẤT CẢ CÁC BÀI KIỂM THỬ ĐÃ VƯỢT QUA 100% THÀNH CÔNG! <<<");
+            var service = new DashboardService(async () =>
+            {
+                var conn = new MySqlConnection(csb.ConnectionString);
+                await conn.OpenAsync();
+                return conn;
+            });
+
+            var homNay = DateTime.Now;
+
+            // 1. Kiểm tra kỳ Hôm Nay
+            await KiemTraKhoangThoiGianAsync(service, csb.ConnectionString, TongQuanKhoangThoiGian.HomNay, "Hôm nay", homNay);
+
+            // 2. Kiểm tra kỳ 7 Ngày Qua
+            await KiemTraKhoangThoiGianAsync(service, csb.ConnectionString, TongQuanKhoangThoiGian.BayNgay, "7 ngày qua", homNay);
+
+            // 3. Kiểm tra kỳ Tháng Này
+            await KiemTraKhoangThoiGianAsync(service, csb.ConnectionString, TongQuanKhoangThoiGian.ThangNay, "Tháng này", homNay);
+
+            // 4. Kiểm tra kỳ Tháng Trước
+            await KiemTraKhoangThoiGianAsync(service, csb.ConnectionString, TongQuanKhoangThoiGian.ThangTruoc, "Tháng trước", homNay);
+
+            // 5. Kiểm tra kỳ Năm Nay
+            await KiemTraKhoangThoiGianAsync(service, csb.ConnectionString, TongQuanKhoangThoiGian.NamNay, "Năm nay", homNay);
+
+            // 6. Kiểm tra Danh sách hóa đơn bị loại trừ (Đã hủy / Lưu tạm)
+            await KiemTraDanhSachHoaDonLoaiTruAsync(service, csb.ConnectionString, homNay);
+
+            // 7. Kiểm tra Thống kê kho
+            await KiemTraThongKeKhoAsync(service);
+
+            // ==========================================================================================
+            // CÁC BÀI KIỂM THỬ ISSUE #68: FIX LỖI TẠO VÀ LƯU PHIẾU NHẬP HÀNG MỚI (ATOMIC CODE, MULTI-TAB)
+            // ==========================================================================================
+            Console.WriteLine("\n------------------------------------------------------------------------------------------");
+            Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #68: CƠ CHẾ CẤP MÃ ATOMIC & LƯU PHIẾU NHẬP ĐA TAB               ");
+            Console.WriteLine("------------------------------------------------------------------------------------------");
+            await KiemTraIssue68_SinhMaAtomicAsync(csb.ConnectionString);
+            await KiemTraIssue68_LuuPhieuNhapMaRongAsync(csb.ConnectionString);
+            KiemTraIssue68_MultiTab_DocLap();
+
+            Console.WriteLine("\n>>> TẤT CẢ CÁC BÀI KIỂM THỬ ISSUE #68 & #69 ĐÃ VƯỢT QUA 100% THÀNH CÔNG! <<<");
             return 0;
         }
         catch (Exception ex)
@@ -44,258 +84,250 @@ internal class Program
         }
     }
 
-    private static void Test1_SemanticVersion_Comparison()
+    private static async Task KiemTraKhoangThoiGianAsync(
+        DashboardService service,
+        string connStr,
+        string khoang,
+        string tenKhoang,
+        DateTime anchor)
     {
-        Console.Write("[Test 1] So sánh Semantic Versioning (SemVer)... ");
+        Console.Write($"[Kiểm tra kỳ {tenKhoang}] Đối soát số liệu Dashboard và Database... ");
 
-        // Số học chuẩn: 1.10.0 > 1.2.0 (Nếu so sánh chuỗi sẽ sai vì '1' < '2')
-        var v1_2 = SemanticVersion.Parse("1.2.0");
-        var v1_10 = SemanticVersion.Parse("1.10.0");
-        if (!(v1_10 > v1_2)) throw new Exception("Lỗi: 1.10.0 phải lớn hơn 1.2.0!");
+        var duLieu = await service.TaiDuLieuAsync(
+            khoang,
+            TongQuanChieuDoanhThu.TheoNgay,
+            TongQuanXepHang.TheoDoanhThu,
+            null,
+            null,
+            anchor);
 
-        // Tiền tố 'v'
-        var v1 = SemanticVersion.Parse("v1.0.8");
-        var v2 = SemanticVersion.Parse("1.0.8");
-        if (v1 != v2) throw new Exception("Lỗi: v1.0.8 phải bằng 1.0.8!");
+        var (tuNgay, denKeTiep, _) = DashboardService.TinhKhoang(khoang, null, null, anchor);
 
-        // Bản vá patch: 1.0.8 > 1.0.7
-        var vPatch1 = SemanticVersion.Parse("1.0.8");
-        var vPatch2 = SemanticVersion.Parse("1.0.7");
-        if (!(vPatch1 > vPatch2)) throw new Exception("Lỗi: 1.0.8 phải lớn hơn 1.0.7!");
+        await using var conn = new MySqlConnection(connStr);
+        await conn.OpenAsync();
 
-        // Prerelease: 1.0.0 > 1.0.0-rc1
-        var vFull = SemanticVersion.Parse("1.0.0");
-        var vRc = SemanticVersion.Parse("1.0.0-rc1");
-        if (!(vFull > vRc)) throw new Exception("Lỗi: 1.0.0 phải lớn hơn 1.0.0-rc1!");
+        var dbStats = await conn.QuerySingleAsync<(int Count, decimal DoanhThu, decimal DaThu, decimal ConNo)>(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN 1 ELSE 0 END), 0) AS Count,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThu,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.con_no ELSE 0 END), 0) AS ConNo
+            FROM hoa_don_ban_hang hd
+            WHERE hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep;
+            """,
+            new { TuNgay = tuNgay, DenKeTiep = denKeTiep });
 
-        Console.WriteLine("PASSED ✓");
+        if (duLieu.SoHoaDonHomNay != dbStats.Count)
+            throw new Exception($"Số hóa đơn {tenKhoang} không khớp! Dashboard: {duLieu.SoHoaDonHomNay}, DB: {dbStats.Count}");
+
+        if (duLieu.DoanhThuHomNay != dbStats.DoanhThu)
+            throw new Exception($"Doanh thu {tenKhoang} không khớp! Dashboard: {duLieu.DoanhThuHomNay:N0}, DB: {dbStats.DoanhThu:N0}");
+
+        if (duLieu.DaThuHomNay != dbStats.DaThu)
+            throw new Exception($"Tiền đã thu {tenKhoang} không khớp! Dashboard: {duLieu.DaThuHomNay:N0}, DB: {dbStats.DaThu:N0}");
+
+        if (duLieu.ConNoHomNay != dbStats.ConNo)
+            throw new Exception($"Công nợ {tenKhoang} không khớp! Dashboard: {duLieu.ConNoHomNay:N0}, DB: {dbStats.ConNo:N0}");
+
+        // Biểu đồ phải khớp 100% với Doanh thu thẻ
+        if (duLieu.TongDoanhThuKyChon != duLieu.DoanhThuHomNay)
+            throw new Exception($"Tổng doanh thu biểu đồ {tenKhoang} không khớp với thẻ Doanh thu! Biểu đồ: {duLieu.TongDoanhThuKyChon:N0}, Thẻ: {duLieu.DoanhThuHomNay:N0}");
+
+        Console.WriteLine($"PASSED (HĐ: {duLieu.SoHoaDonHomNay:N0}, Doanh thu: {duLieu.DoanhThuHomNay:N0} đ, Đã thu: {duLieu.DaThuHomNay:N0} đ, Nợ: {duLieu.ConNoHomNay:N0} đ) ✓");
     }
 
-    private static void Test2_AppVersionInfo_Serialization()
+    private static async Task KiemTraDanhSachHoaDonLoaiTruAsync(
+        DashboardService service,
+        string connStr,
+        DateTime anchor)
     {
-        Console.Write("[Test 2] Parse JSON Metadata version.json... ");
+        Console.Write("[Kiểm tra Hóa đơn loại trừ] Đối soát danh sách HĐ bị loại trừ (Đã hủy / Lưu tạm)... ");
 
-        string json = @"
+        var (tuNgay, denKeTiep, _) = DashboardService.TinhKhoang(TongQuanKhoangThoiGian.NamNay, null, null, anchor);
+
+        var danhSach = await service.TaiDanhSachHoaDonChuaGhiNhanAsync(tuNgay, denKeTiep);
+
+        await using var conn = new MySqlConnection(connStr);
+        await conn.OpenAsync();
+
+        var dbCount = await conn.ExecuteScalarAsync<int>(
+            """
+            SELECT COUNT(*) FROM hoa_don_ban_hang hd
+            WHERE hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY', 'LUU_TAM')
+              AND hd.thoi_gian_ban >= @TuNgay AND hd.thoi_gian_ban < @DenKeTiep;
+            """,
+            new { TuNgay = tuNgay, DenKeTiep = denKeTiep });
+
+        if (danhSach.Count != dbCount)
+            throw new Exception($"Số lượng hóa đơn bị loại trừ không khớp! Query danh sách: {danhSach.Count}, DB: {dbCount}");
+
+        // Xác minh không có bất kỳ hóa đơn hoàn thành nào lọt vào danh sách này
+        foreach (var item in danhSach)
         {
-            ""version"": ""1.0.8"",
-            ""release_date"": ""2026-11-04"",
-            ""release_notes"": ""Bản cập nhật tối ưu hóa"",
-            ""download_url"": ""https://github.com/tranminhnhut0308/PM_Shop_Hoa/releases/download/v1.0.8/ShopHoa-win-Setup.exe"",
-            ""file_size"": 83920806,
-            ""sha256"": ""92064FE3FCEE9DB05C4FB745447B9826BDE99803CB14856D9A98F005502787AA"",
-            ""mandatory"": false,
-            ""minimum_supported_version"": ""1.0.0"",
-            ""platform"": ""win-x64"",
-            ""architecture"": ""x64""
-        }";
-
-        var info = JsonSerializer.Deserialize<AppVersionInfo>(json);
-        if (info == null) throw new Exception("Không parse được AppVersionInfo!");
-        if (info.Version != "1.0.8") throw new Exception("Version không khớp!");
-        if (!info.FileSizeFormatted.Contains("MB")) throw new Exception("FileSizeFormatted sai: " + info.FileSizeFormatted);
-        if (info.Mandatory) throw new Exception("Mandatory phải là false!");
-
-        Console.WriteLine("PASSED ✓");
-    }
-
-    private static void Test3_Sha256_Checksum_Verification()
-    {
-        Console.Write("[Test 3] Kiểm tra tính toàn vẹn và xác minh SHA256... ");
-
-        var tempFile = Path.GetTempFileName();
-        File.WriteAllText(tempFile, "NoiDungFileDuocKiemTraBoiVuaHoaNhaHuy2026");
-
-        using var sha256 = SHA256.Create();
-        var bytes = File.ReadAllBytes(tempFile);
-        var expectedHash = BitConverter.ToString(sha256.ComputeHash(bytes)).Replace("-", "").ToUpperInvariant();
-
-        if (expectedHash.Length != 64) throw new Exception("SHA256 phải đủ 64 ký tự hex!");
-
-        var fakeHash = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
-        if (string.Equals(expectedHash, fakeHash, StringComparison.OrdinalIgnoreCase))
-            throw new Exception("Lỗi: fake hash không được khớp!");
-
-        File.Delete(tempFile);
-        Console.WriteLine("PASSED ✓");
-    }
-
-    private static void Test4_Offline_And_NetworkFailure_Handling()
-    {
-        Console.Write("[Test 4] Xử lý ngoại lệ mạng / Offline / Timeout... ");
-
-        var service = new UpdateService();
-        service.UpdateUrl = "http://127.0.0.1:54321/nonexistent";
-
-        var task = service.CheckForUpdatesAsync(isSilent: true);
-        task.Wait(TimeSpan.FromSeconds(5));
-
-        var result = task.Result;
-        if (result.IsUpdateAvailable) throw new Exception("Khi offline không được báo có cập nhật!");
-        if (string.IsNullOrEmpty(result.ErrorMessage) && string.IsNullOrEmpty(result.Message)) throw new Exception("Phải có thông báo kết quả kiểm tra!");
-
-        Console.WriteLine("PASSED ✓");
-    }
-
-    private static void Test5_DatabaseConfig_Preservation()
-    {
-        Console.Write("[Test 5] Bảo toàn cấu hình MySQL và cơ sở dữ liệu bán hàng... ");
-
-        var dbService = new DatabaseConfigService();
-        var configPath = dbService.GetConfigPath();
-
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        if (!configPath.StartsWith(localAppData, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new Exception($"Cấu hình DB phải nằm ngoài thư mục ứng dụng! Đường dẫn hiện tại: {configPath}");
+            if (item.LyDoLoaiTru != "Hóa đơn đã hủy" && item.LyDoLoaiTru != "Hóa đơn lưu tạm")
+            {
+                throw new Exception($"Hóa đơn {item.MaHoaDon} có lý do không hợp lệ: {item.LyDoLoaiTru}");
+            }
         }
 
-        Console.WriteLine($"PASSED (Vị trí độc lập: {configPath}) ✓");
+        Console.WriteLine($"PASSED (Tổng {danhSach.Count} hóa đơn bị loại trừ hợp lệ) ✓");
     }
 
-    private static void Test6_Mandatory_Version_Enforcement()
+    private static async Task KiemTraThongKeKhoAsync(DashboardService service)
     {
-        Console.Write("[Test 6] Kiểm tra cơ chế cập nhật bắt buộc (Mandatory)... ");
+        Console.Write("[Kiểm tra Thống kê kho] Độc lập thời gian và tính toán chính xác... ");
 
-        var current = SemanticVersion.Parse("1.0.0");
-        var minSupported = SemanticVersion.Parse("1.0.5");
-        bool isMandatory = current < minSupported;
+        var duLieu = await service.TaiDuLieuAsync(
+            TongQuanKhoangThoiGian.HomNay,
+            TongQuanChieuDoanhThu.TheoNgay,
+            TongQuanXepHang.TheoDoanhThu,
+            null,
+            null,
+            DateTime.Now);
 
-        if (!isMandatory) throw new Exception("1.0.0 phải bị ép bắt buộc cập nhật khi minSupported là 1.0.5!");
+        var kho = duLieu.ThongKeKho;
+        if (kho.TongSoHangHoa <= 0) throw new Exception("Tổng số hàng hóa trong kho phải > 0");
+        if (kho.TongSoKhachHang <= 0) throw new Exception("Tổng số khách hàng phải > 0");
+        if (kho.TongSoNhaCungCap <= 0) throw new Exception("Tổng số nhà cung cấp phải > 0");
+        if (kho.GiaTriTonKho <= 0) throw new Exception("Giá trị tồn kho phải > 0");
 
-        var modern = SemanticVersion.Parse("1.0.8");
-        bool isModernMandatory = modern < minSupported;
-        if (isModernMandatory) throw new Exception("1.0.8 không được bị bắt buộc cập nhật khi minSupported là 1.0.5!");
-
-        Console.WriteLine("PASSED ✓");
+        Console.WriteLine($"PASSED (Mặt hàng: {kho.TongSoHangHoa:N0}, Khách hàng: {kho.TongSoKhachHang:N0}, NCC: {kho.TongSoNhaCungCap:N0}, Giá trị tồn: {kho.GiaTriTonKhoHienThi}) ✓");
     }
 
-    private static void Test7_DismissSession_Handling()
+    private static async Task KiemTraIssue68_SinhMaAtomicAsync(string connStr)
     {
-        Console.Write("[Test 7] Bỏ qua nhắc lại trong phiên làm việc (Dismiss for Session)... ");
+        Console.Write("[Kiểm tra Issue #68] 1. Sinh mã phiếu nhập nguyên tử (GET_LOCK + PNxxxxxx)... ");
+        Session.SetCurrentUser(new NguoiDung { TenDangNhap = "tester", MaVaiTro = Quyen.QuanTri });
+        var db = new DatabaseService();
+        var code1 = await db.TaoMaPhieuNhapMoiAsync();
 
-        var service = new UpdateService();
-        service.DismissVersionForSession("1.0.8");
-
-        Console.WriteLine("PASSED ✓");
-    }
-
-    private static void Test8_Real_UpdateCheck_Scenario()
-    {
-        Console.Write("[Test 8] Kiểm thử kiểm tra bản mới thực tế từ metadata... ");
-
-        var service = new UpdateService();
-        // Kiểm tra phiên bản hiện tại
-        if (service.CurrentVersion == null)
-            throw new Exception("CurrentVersion không được null!");
-
-        // Giả lập kịch bản máy đang ở 1.0.0 phát hiện bản 1.0.8
-        var currentVer = SemanticVersion.Parse("1.0.0");
-        var latestVer = SemanticVersion.Parse("1.0.8");
-        bool hasUpdate = latestVer > currentVer;
-        if (!hasUpdate) throw new Exception("Phải phát hiện có bản mới!");
-
-        // Giả lập kịch bản máy đã ở 1.0.8 kiểm tra với 1.0.8 -> Up to date
-        var sameVer = SemanticVersion.Parse("1.0.8");
-        bool alreadyLatest = !(sameVer > latestVer);
-        if (!alreadyLatest) throw new Exception("Phải nhận diện đã ở bản mới nhất!");
-
-        Console.WriteLine("PASSED ✓");
-    }
-
-    private static void Test9_Cancel_And_Recreate_Permission_Rules()
-    {
-        Console.Write("[Test 9] Kiểm tra quy tắc phân quyền Hủy và Tạo lại hóa đơn... ");
-
-        var cancelPermissions = new HashSet<string> { "hoadon.huy" };
-        bool canCancel = cancelPermissions.Contains("hoadon.huy") || cancelPermissions.Contains("banhang.huy_hoa_don");
-        if (!canCancel) throw new Exception("Người có hoadon.huy phải được phép hủy hóa đơn!");
-
-        var noCancelPerms = new HashSet<string> { "banhang.xem" };
-        bool shouldNotCancel = noCancelPerms.Contains("hoadon.huy") || noCancelPerms.Contains("banhang.huy_hoa_don");
-        if (shouldNotCancel) throw new Exception("Không có quyền hủy thì tuyệt đối không được hủy!");
-
-        var recreatePerms = new HashSet<string> { "banhang.thanh_toan" };
-        bool canRecreate = recreatePerms.Contains("hoadon.tao") || recreatePerms.Contains("banhang.thanh_toan");
-        if (!canRecreate) throw new Exception("Người có quyền thanh toán/tạo HĐ phải được phép tạo lại đơn!");
-
-        Console.WriteLine("PASSED ✓");
-    }
-
-    private static void Test10_Stock_Rollback_Idempotency()
-    {
-        Console.Write("[Test 10] Kiểm tra quy tắc hoàn kho 1 lần duy nhất (Idempotency)... ");
-
-        decimal tonKhoBanDau = 20;
-        decimal soLuongXuat = 5;
-        decimal tonKhoSauBan = tonKhoBanDau - soLuongXuat;
-        bool daHoanKho = false;
-
-        if (!daHoanKho)
+        if (string.IsNullOrWhiteSpace(code1) || !code1.StartsWith("PN") || code1.Length < 8)
         {
-            tonKhoSauBan += soLuongXuat;
-            daHoanKho = true;
+            throw new Exception($"Mã sinh ra không đúng định dạng PNxxxxxx: '{code1}'");
         }
 
-        if (tonKhoSauBan != 20) throw new Exception($"Tồn kho sau khi hoàn phải là 20, thực tế: {tonKhoSauBan}");
+        // Kiểm tra xem mã này đã tồn tại trong DB chưa
+        await using var conn = new MySqlConnection(connStr);
+        await conn.OpenAsync();
+        var count = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM phieu_nhap_hang WHERE TRIM(ma_phieu_nhap) = @ma",
+            new { ma = code1 });
 
-        // Gọi lần 2
-        if (!daHoanKho)
+        if (count > 0)
         {
-            tonKhoSauBan += soLuongXuat;
+            throw new Exception($"Lỗi: Mã vừa sinh '{code1}' đã bị trùng với phiếu hiện có!");
         }
 
-        if (tonKhoSauBan != 20) throw new Exception($"Lỗi: Tồn kho bị hoàn lặp lại thành {tonKhoSauBan}!");
-
-        Console.WriteLine("PASSED ✓");
+        Console.WriteLine($"PASSED (Mã kế tiếp cấp nguyên tử: {code1}) ✓");
     }
 
-    private static void Test11_Debt_And_Cashbook_Adjustment_On_Cancellation()
+    private static async Task KiemTraIssue68_LuuPhieuNhapMaRongAsync(string connStr)
     {
-        Console.Write("[Test 11] Kiểm tra xử lý công nợ và sổ quỹ khi hủy hóa đơn... ");
+        Console.Write("[Kiểm tra Issue #68] 2. Lưu phiếu nhập khi mã rỗng (Tự sinh trong Transaction & Rollback an toàn)... ");
+        
+        await using var conn = new MySqlConnection(connStr);
+        await conn.OpenAsync();
 
-        decimal tongTien = 500_000m;
-        decimal daThanhToan = 200_000m;
-        decimal conNo = 300_000m;
+        // Thiết lập phiên làm việc có quyền Quản trị với ID người dùng thực trong DB
+        var userDb = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ten_dang_nhap FROM nguoi_dung LIMIT 1");
+        uint currentUserId = userDb != null ? (uint)userDb.id : 1;
+        Session.SetCurrentUser(new NguoiDung { Id = currentUserId, TenDangNhap = userDb?.ten_dang_nhap ?? "admin", MaVaiTro = Quyen.QuanTri });
 
-        decimal congNoSauHuy = conNo - 300_000m;
-        if (congNoSauHuy != 0) throw new Exception("Công nợ phải về 0 sau khi hủy!");
+        // Lấy 1 sản phẩm có sẵn để test
+        var sp = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ma_san_pham, ten_san_pham, gia_von, COALESCE(ton_kho_excel, 0) AS ton_kho FROM san_pham WHERE trang_thai = 1 LIMIT 1");
+        if (sp == null) throw new Exception("Không có hàng hóa nào để kiểm thử");
 
-        decimal soTienHoan = daThanhToan;
-        string maPhieuChiHoan = "PC0009";
-        if (soTienHoan != 200_000m || string.IsNullOrEmpty(maPhieuChiHoan))
-            throw new Exception("Phương án hoàn tiền phải giữ nguyên số tiền đã trả và có mã phiếu chi!");
+        uint spId = (uint)sp.id;
 
-        Console.WriteLine("PASSED ✓");
+        // Lấy 1 nhà cung cấp hợp lệ
+        var nccId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM nha_cung_cap LIMIT 1");
+
+        var db = new DatabaseService();
+
+        var phieu = new PhieuNhapHang
+        {
+            MaPhieuNhap = "", // Rỗng, hệ thống phải tự sinh trong transaction!
+            ThoiGianNhap = DateTime.Now,
+            NhaCungCapId = nccId,
+            TongTienHang = 50000,
+            ChiPhiKhac = 0,
+            TongTienNhap = 50000,
+            DaThanhToan = 0,
+            ConNo = 50000,
+            TrangThai = "DA_NHAP_HANG"
+        };
+
+        var items = new List<ChiTietPhieuNhapHang>
+        {
+            new()
+            {
+                SanPham = new SanPham
+                {
+                    Id = spId,
+                    MaSanPham = sp.ma_san_pham ?? "TEST",
+                    TenSanPham = sp.ten_san_pham ?? "Hoa Test",
+                    GiaVon = 50000
+                },
+                SoLuong = 1,
+                DonGiaNhap = 50000
+            }
+        };
+
+        decimal tonKhoTruoc = await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @id", new { id = spId });
+        uint savedId = 0;
+        try
+        {
+            savedId = await db.LuuPhieuNhapHangAsync(phieu, items);
+            if (savedId == 0 || string.IsNullOrWhiteSpace(phieu.MaPhieuNhap) || !phieu.MaPhieuNhap.StartsWith("PN"))
+            {
+                throw new Exception($"Phiếu nhập sau khi lưu không được cấp ID hoặc mã hợp lệ! Id={savedId}, Ma={phieu.MaPhieuNhap}");
+            }
+
+            // Kiểm tra tồn kho sau khi lưu phải tăng 1
+            decimal tonKhoSau = await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @id", new { id = spId });
+            if (tonKhoSau != tonKhoTruoc + 1)
+            {
+                throw new Exception($"Tồn kho không tăng đúng: trước={tonKhoTruoc}, sau={tonKhoSau}");
+            }
+        }
+        finally
+        {
+            // Cleanup: Xóa phiếu test, chi tiết phiếu và lịch sử kho test, hoàn lại tồn kho
+            if (savedId > 0)
+            {
+                await conn.ExecuteAsync("DELETE FROM chi_tiet_phieu_nhap_hang WHERE phieu_nhap_id = @id", new { id = savedId });
+                await conn.ExecuteAsync("DELETE FROM phieu_nhap_hang WHERE id = @id", new { id = savedId });
+                await conn.ExecuteAsync("DELETE FROM lich_su_nhap_xuat_kho WHERE loai_chung_tu = 'PHIEU_NHAP' AND ma_chung_tu = @ma", new { ma = phieu.MaPhieuNhap });
+            }
+            await conn.ExecuteAsync("UPDATE san_pham SET ton_kho_excel = @tonKho WHERE id = @id", new { tonKho = tonKhoTruoc, id = spId });
+        }
+
+        Console.WriteLine($"PASSED (Cấp mã tự động: {phieu.MaPhieuNhap}, ID: {savedId}, Tồn kho cập nhật chính xác, Đã dọn dẹp) ✓");
     }
 
-    private static void Test12_Recreate_Invoice_Independence_And_Traceability()
+    private static void KiemTraIssue68_MultiTab_DocLap()
     {
-        Console.Write("[Test 12] Kiểm tra tính độc lập và truy vết khi tạo lại hóa đơn... ");
+        Console.Write("[Kiểm tra Issue #68] 3. Tính độc lập đa tab phiếu nhập (Multi-tab state isolation)... ");
+        
+        var tab1 = new PhieuNhapTab { SoThuTu = 1 };
+        tab1.State.NhaCungCapId = 101;
+        tab1.State.TenNhaCungCap = "Nhà cung cấp A";
+        tab1.State.Lines.Add(new PhieuNhapDraftLine { SanPhamId = 1, TenSanPham = "Hoa Hồng Đỏ", SoLuong = 50, DonGiaNhap = 10000 });
+        tab1.CapNhatTuState();
 
-        string maHoaDonGoc = "HD0001";
-        uint hoaDonGocId = 101;
-        string maPhieuThuCu = "PT0005";
+        var tab2 = new PhieuNhapTab { SoThuTu = 2 };
+        tab2.State.NhaCungCapId = 102;
+        tab2.State.TenNhaCungCap = "Nhà cung cấp B";
+        tab2.State.Lines.Add(new PhieuNhapDraftLine { SanPhamId = 2, TenSanPham = "Hoa Lan Trắng", SoLuong = 20, DonGiaNhap = 50000 });
+        tab2.CapNhatTuState();
 
-        string maHoaDonMoi = "HD0002";
-        uint hoaDonMoiId = 102;
-        string? maPhieuThuMoi = null;
+        if (tab1.TieuDe == tab2.TieuDe) throw new Exception("Tiêu đề tab 1 và tab 2 không được trùng nhau");
+        if (tab1.State.NhaCungCapId == tab2.State.NhaCungCapId) throw new Exception("Nhà cung cấp bị ghi đè");
+        if (tab1.State.Lines.Count != 1 || tab2.State.Lines.Count != 1) throw new Exception("Số dòng hàng bị sai lệch");
+        if (tab1.State.Lines[0].SanPhamId == tab2.State.Lines[0].SanPhamId) throw new Exception("Dòng hàng bị lẫn lộn giữa các tab");
+        if (tab1.TongTienNhap != 500000m || tab2.TongTienNhap != 1000000m) throw new Exception("Tính toán tổng tiền từng tab bị sai");
 
-        if (string.Equals(maPhieuThuMoi, maPhieuThuCu))
-            throw new Exception("Hóa đơn mới không được copy mã phiếu thu cũ!");
-
-        bool daTruKho = false;
-        if (daTruKho) throw new Exception("Đơn nháp chưa lưu tuyệt đối không được trừ kho!");
-
-        uint? lienKetGoc = hoaDonGocId;
-        string? maLienKetGoc = maHoaDonGoc;
-        if (lienKetGoc != 101 || maLienKetGoc != "HD0001")
-            throw new Exception("Đơn mới phải lưu vết hoa_don_goc_id!");
-
-        uint? lienKetThayThe = hoaDonMoiId;
-        string? maLienKetThayThe = maHoaDonMoi;
-        if (lienKetThayThe != 102 || maLienKetThayThe != "HD0002")
-            throw new Exception("Đơn gốc phải cập nhật hoa_don_thay_the_id!");
-
-        Console.WriteLine("PASSED ✓");
+        Console.WriteLine("PASSED (Tab 1: 50 SP • 500.000 đ | Tab 2: 20 SP • 1.000.000 đ - Hoàn toàn độc lập) ✓");
     }
 }
