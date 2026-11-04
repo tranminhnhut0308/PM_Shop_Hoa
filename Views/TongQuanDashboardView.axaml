@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:models="using:ShopHoa.Models"
   xmlns:vm="using:ShopHoa.ViewModels"
@@ -746,7 +746,7 @@
                     Content="{Binding NhanNutThangTruocGoiY}"
                     Command="{Binding ChuyenSangThangTruocCommand}" />
                   <Button Classes="toolbar-action" Height="30" Padding="10,0" FontSize="11"
-                    Content="ðŸ“… Xem 7 ngÃ y qua"
+                    Content="📅 Xem 7 ngày qua"
                     Command="{Binding ChuyenSangBayNgayCommand}" />
                 </WrapPanel>
               </StackPanel>

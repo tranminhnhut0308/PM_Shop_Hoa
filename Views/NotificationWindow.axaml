@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ShopHoa.Views.NotificationWindow"
         Title="Thông báo"
@@ -7,7 +7,8 @@
         CanResize="False"
         WindowStartupLocation="CenterOwner"
         RequestedThemeVariant="Light"
-        Background="White">
+        Background="White"
+        FontFamily="Inter, Segoe UI, Arial">
 
   <Window.Styles>
     <Style Selector="Button.primaryBtn">

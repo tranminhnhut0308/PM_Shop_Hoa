@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ShopHoa.Views.ConfirmationWindow"
         Width="520"
@@ -8,6 +8,7 @@
         Title="Xác nhận"
         WindowStartupLocation="CenterOwner"
         Background="#F5F8F7"
+        FontFamily="Inter, Segoe UI, Arial"
         CanResize="False">
   <Window.Styles>
     <Style Selector="Button">

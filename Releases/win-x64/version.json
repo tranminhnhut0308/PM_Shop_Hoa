@@ -1,0 +1,12 @@
+{
+  "version": "1.0.8",
+  "release_date": "2026-11-04",
+  "release_notes": "• Tự động kiểm tra và thông báo phiên bản mới (OTA Update)\n• Tích hợp thông báo Toast hiện đại và badge thông minh trên menu\n• Xác minh SHA256 an toàn và bảo toàn dữ liệu cơ sở dữ liệu bán hàng\n• Tối ưu hiệu năng và cập nhật giao diện Fluent UI",
+  "download_url": "https://github.com/tranminhnhut0308/PM_Shop_Hoa/releases/download/v1.0.8/ShopHoa-win-Setup.exe",
+  "file_size": 83920806,
+  "sha256": "92064FE3FCEE9DB05C4FB745447B9826BDE99803CB14856D9A98F005502787AA",
+  "mandatory": false,
+  "minimum_supported_version": "1.0.0",
+  "platform": "win-x64",
+  "architecture": "x64"
+}

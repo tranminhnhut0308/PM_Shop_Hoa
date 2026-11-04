@@ -280,7 +280,7 @@ public sealed partial class DashboardViewModel : ObservableObject
     public string NhanNutNgayGanNhatGoiY =>
         NgayGiaoDichGanNhat.HasValue
             ? $"📅 Xem ngày {NgayGiaoDichGanNhat.Value:dd/MM/yyyy}"
-            : "Xem ngÃ y gáº§n nháº¥t";
+            : "Xem ngày gần nhất";
 
     /// <summary>Nội dung mô tả khoảng đang xem, hiển thị trên đầu thẻ doanh thu.</summary>
     [ObservableProperty]

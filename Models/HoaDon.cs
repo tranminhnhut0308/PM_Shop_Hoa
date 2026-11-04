@@ -1,4 +1,4 @@
-namespace ShopHoa.Models;
+﻿namespace ShopHoa.Models;
 
 using System.Globalization;
 
@@ -149,6 +149,14 @@ public sealed class HoaDon
 }
 
 public sealed class KhachHangFilterOption
+{
+    public uint? Id { get; set; }
+    public bool IsWalkIn { get; set; }
+    public string DisplayText { get; set; } = "";
+    public override string ToString() => DisplayText;
+}
+
+public sealed class HoaDonNhanVienFilterOption
 {
     public uint? Id { get; set; }
     public string DisplayText { get; set; } = "";

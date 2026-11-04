@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Velopack;
 using Velopack.Sources;
 
@@ -17,7 +17,36 @@ public sealed class UpdateService
 
     public string CurrentVersionText { get; private set; } = "1.0.0";
     public string UpdateUrl { get; set; } = "https://github.com/tranminhnhut0308/PM_Shop_Hoa";
+    public SemanticVersion CurrentVersion => SemanticVersion.TryParse(CurrentVersionText, out var v) ? v : new SemanticVersion(1, 0, 0);
+
     public bool IsInstalled => _updateManager?.IsInstalled ?? false;
+
+
+    private readonly HashSet<string> _dismissedVersions = new();
+
+
+    public void DismissVersionForSession(string version)
+
+    {
+
+        if (!string.IsNullOrWhiteSpace(version))
+
+        {
+
+            _dismissedVersions.Add(version.Trim());
+
+        }
+
+    }
+
+
+    public bool IsVersionDismissed(string version)
+
+    {
+
+        return !string.IsNullOrWhiteSpace(version) && _dismissedVersions.Contains(version.Trim());
+
+    }
 
     public UpdateService()
     {
@@ -64,7 +93,7 @@ public sealed class UpdateService
     /// Kiểm tra xem có phiên bản mới từ xa hay không.
     /// Trả về UpdateCheckResult chứa thông tin phiên bản mới nếu có.
     /// </summary>
-    public async Task<UpdateCheckResult> CheckForUpdatesAsync()
+    public async Task<UpdateCheckResult> CheckForUpdatesAsync(bool isSilent = false)
     {
         if (_updateManager is null || !_updateManager.IsInstalled)
         {

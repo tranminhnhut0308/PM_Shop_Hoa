@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -25,10 +25,15 @@ public sealed partial class MainWindowViewModel
     private string _selectedInvoicePaymentStatus = "Tất cả";
     private string _selectedInvoiceStatus = "Tất cả";
     private KhachHangFilterOption? _selectedInvoiceCustomer;
+    private HoaDonNhanVienFilterOption? _selectedInvoiceEmployee;
+    private int _invoiceSearchVersion;
 
     private int _invoicePage = 1;
     private int _invoicePageSize = 20;
     private int _invoiceTotalCount;
+
+    [ObservableProperty]
+    private bool isInvoiceAdvancedFiltersExpanded;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasNoInvoices))]
@@ -43,6 +48,7 @@ public sealed partial class MainWindowViewModel
         "Hôm qua",
         "7 ngày qua",
         "30 ngày qua",
+        "Tuần này",
         "Tháng này",
         "Tháng trước",
         "Quý này",
@@ -59,7 +65,7 @@ public sealed partial class MainWindowViewModel
             {
                 if (!_dangCapNhatPresetNgay && !string.IsNullOrWhiteSpace(value) && value != "Tùy chọn")
                 {
-                    ApDungPresetNgayHoaDon(value, tuDongTim: true);
+                    ApDungPresetNgayHoaDon(value, tuDongTim: false);
                 }
             }
         }
@@ -121,8 +127,7 @@ public sealed partial class MainWindowViewModel
         {
             if (SetProperty(ref _selectedInvoicePaymentStatus, value))
             {
-                InvoicePage = 1;
-                _ = SearchInvoicesAsync(giuTrang: true);
+                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
             }
         }
     }
@@ -131,7 +136,8 @@ public sealed partial class MainWindowViewModel
     [
         "Tất cả",
         "Hoàn thành",
-        "Đã hủy"
+        "Đã hủy",
+        "Tổng hợp"
     ];
 
     public string SelectedInvoiceStatus
@@ -141,8 +147,7 @@ public sealed partial class MainWindowViewModel
         {
             if (SetProperty(ref _selectedInvoiceStatus, value))
             {
-                InvoicePage = 1;
-                _ = SearchInvoicesAsync(giuTrang: true);
+                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
             }
         }
     }
@@ -157,10 +162,64 @@ public sealed partial class MainWindowViewModel
         {
             if (SetProperty(ref _selectedInvoiceCustomer, value))
             {
-                InvoicePage = 1;
-                _ = SearchInvoicesAsync(giuTrang: true);
+                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
             }
         }
+    }
+
+    public ObservableCollection<HoaDonNhanVienFilterOption> InvoiceEmployeeOptions { get; } = [];
+
+    public HoaDonNhanVienFilterOption? SelectedInvoiceEmployee
+    {
+        get => _selectedInvoiceEmployee;
+        set
+        {
+            if (SetProperty(ref _selectedInvoiceEmployee, value))
+            {
+                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+            }
+        }
+    }
+
+    public string InvoiceAdvancedFiltersToggleText =>
+        IsInvoiceAdvancedFiltersExpanded ? "Ẩn bộ lọc nâng cao" : "Bộ lọc nâng cao";
+
+    public string InvoiceActiveFiltersText
+    {
+        get
+        {
+            var filters = new List<string>();
+            if (!string.IsNullOrWhiteSpace(InvoiceSearch))
+                filters.Add($"Từ khóa: {InvoiceSearch.Trim()}");
+            if (InvoiceFilterStartDate.HasValue || InvoiceFilterEndDate.HasValue)
+            {
+                var start = InvoiceFilterStartDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "…";
+                var end = InvoiceFilterEndDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "…";
+                filters.Add($"Thời gian: {start} – {end}");
+            }
+            if (SelectedInvoiceStatus != "Tất cả")
+                filters.Add($"Hóa đơn: {SelectedInvoiceStatus}");
+            if (SelectedInvoicePaymentStatus != "Tất cả")
+                filters.Add($"Thanh toán: {SelectedInvoicePaymentStatus}");
+            if (SelectedInvoiceCustomer is { IsWalkIn: true })
+                filters.Add("Khách hàng: Khách lẻ");
+            else if (SelectedInvoiceCustomer?.Id is not null)
+                filters.Add($"Khách hàng: {SelectedInvoiceCustomer.DisplayText}");
+            if (SelectedInvoiceEmployee is { Id: not null })
+                filters.Add($"Nhân viên: {SelectedInvoiceEmployee.DisplayText}");
+
+            return filters.Count == 0 ? "Không áp dụng bộ lọc" : string.Join("  •  ", filters);
+        }
+    }
+
+    partial void OnIsInvoiceAdvancedFiltersExpandedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(InvoiceAdvancedFiltersToggleText));
+    }
+
+    partial void OnInvoiceSearchChanged(string value)
+    {
+        OnPropertyChanged(nameof(InvoiceActiveFiltersText));
     }
 
     public async Task TaiDanhSachKhachHangLocHoaDonAsync()
@@ -174,23 +233,61 @@ public sealed partial class MainWindowViewModel
                 Id = null,
                 DisplayText = "-- Tất cả khách hàng --"
             });
+            InvoiceCustomerOptions.Add(new KhachHangFilterOption
+            {
+                Id = null,
+                IsWalkIn = true,
+                DisplayText = "Khách lẻ"
+            });
 
             foreach (var kh in customers.OrderBy(c => c.TenKhachHang))
             {
                 var code = string.IsNullOrWhiteSpace(kh.MaKhachHang) ? "" : $"[{kh.MaKhachHang}] ";
+                var phone = string.IsNullOrWhiteSpace(kh.SoDienThoai) ? "" : $" · {kh.SoDienThoai}";
                 InvoiceCustomerOptions.Add(new KhachHangFilterOption
                 {
                     Id = kh.Id,
-                    DisplayText = $"{code}{kh.TenKhachHang}"
+                    DisplayText = $"{code}{kh.TenKhachHang}{phone}"
                 });
             }
 
             _selectedInvoiceCustomer = InvoiceCustomerOptions.FirstOrDefault();
             OnPropertyChanged(nameof(SelectedInvoiceCustomer));
+            await TaiDanhSachNhanVienLocHoaDonAsync();
         }
         catch (Exception ex)
         {
             SafeLog.WriteError("TaiDanhSachKhachHangLocHoaDonAsync error", ex);
+        }
+    }
+
+    private async Task TaiDanhSachNhanVienLocHoaDonAsync()
+    {
+        try
+        {
+            var employees = await _db.GetUsersAsync();
+            InvoiceEmployeeOptions.Clear();
+            InvoiceEmployeeOptions.Add(new HoaDonNhanVienFilterOption
+            {
+                DisplayText = "-- Tất cả nhân viên --"
+            });
+
+            foreach (var employee in employees.OrderBy(user => user.HoTen))
+            {
+                InvoiceEmployeeOptions.Add(new HoaDonNhanVienFilterOption
+                {
+                    Id = employee.Id,
+                    DisplayText = employee.HoTen
+                });
+            }
+
+            _selectedInvoiceEmployee = InvoiceEmployeeOptions.FirstOrDefault();
+            OnPropertyChanged(nameof(SelectedInvoiceEmployee));
+            OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("TaiDanhSachNhanVienLocHoaDonAsync error", ex);
         }
     }
 
@@ -344,6 +441,12 @@ public sealed partial class MainWindowViewModel
                     InvoiceFilterEndDate = new DateTimeOffset(today);
                     break;
 
+                case "Tuần này":
+                    var firstDayOfWeek = today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
+                    InvoiceFilterStartDate = new DateTimeOffset(firstDayOfWeek);
+                    InvoiceFilterEndDate = new DateTimeOffset(firstDayOfWeek.AddDays(6));
+                    break;
+
                 case "Tháng này":
                     var firstThisMonth = new DateTime(today.Year, today.Month, 1);
                     var lastThisMonth = firstThisMonth.AddMonths(1).AddDays(-1);
@@ -390,6 +493,8 @@ public sealed partial class MainWindowViewModel
             InvoicePage = 1;
             _ = SearchInvoicesAsync(giuTrang: true);
         }
+
+        OnPropertyChanged(nameof(InvoiceActiveFiltersText));
     }
 
     // --- 7. TÌM KIẾM VÀ TRUY VẤN DỮ LIỆU ---
@@ -418,6 +523,7 @@ public sealed partial class MainWindowViewModel
             InvoicePage = 1;
         }
 
+        var searchVersion = ++_invoiceSearchVersion;
         IsLoadingInvoices = true;
         OnPropertyChanged(nameof(HasNoInvoices));
 
@@ -440,10 +546,13 @@ public sealed partial class MainWindowViewModel
             {
                 "Hoàn thành" => "HOAN_THANH",
                 "Đã hủy" => "DA_HUY",
+                "Tổng hợp" => "TONG_HOP",
                 _ => null
             };
 
             var khId = SelectedInvoiceCustomer?.Id;
+            var khachLe = SelectedInvoiceCustomer?.IsWalkIn == true;
+            var nhanVienId = SelectedInvoiceEmployee?.Id;
 
             var result = await _db.GetHoaDonPagedAsync(
                 search: InvoiceSearch,
@@ -452,8 +561,13 @@ public sealed partial class MainWindowViewModel
                 trangThaiThanhToan: ttThanhToan,
                 trangThaiHoaDon: ttHoaDon,
                 khachHangId: khId,
+                nhanVienId: nhanVienId,
+                khachLe: khachLe,
                 page: InvoicePage,
                 pageSize: InvoicePageSize);
+
+            if (searchVersion != _invoiceSearchVersion)
+                return;
 
             InvoiceTotalCount = result.TongSoLuong;
 
@@ -468,6 +582,8 @@ public sealed partial class MainWindowViewModel
                     trangThaiThanhToan: ttThanhToan,
                     trangThaiHoaDon: ttHoaDon,
                     khachHangId: khId,
+                    nhanVienId: nhanVienId,
+                    khachLe: khachLe,
                     page: 1,
                     pageSize: InvoicePageSize);
                 InvoiceTotalCount = result.TongSoLuong;
@@ -492,6 +608,9 @@ public sealed partial class MainWindowViewModel
         }
         catch (Exception ex)
         {
+            if (searchVersion != _invoiceSearchVersion)
+                return;
+
             HoaDons.Clear();
             InvoiceTotalCount = 0;
             InvoiceTongSoLuong = 0;
@@ -509,8 +628,11 @@ public sealed partial class MainWindowViewModel
         }
         finally
         {
-            IsLoadingInvoices = false;
-            OnPropertyChanged(nameof(HasNoInvoices));
+            if (searchVersion == _invoiceSearchVersion)
+            {
+                IsLoadingInvoices = false;
+                OnPropertyChanged(nameof(HasNoInvoices));
+            }
         }
     }
 
@@ -520,9 +642,11 @@ public sealed partial class MainWindowViewModel
     {
         InvoiceSearch = "";
         _dangCapNhatPresetNgay = true;
-        _selectedInvoiceDatePreset = "Tháng này";
-        ApDungPresetNgayHoaDon("Tháng này", tuDongTim: false);
+        _selectedInvoiceDatePreset = "Tùy chọn";
+        InvoiceFilterStartDate = null;
+        InvoiceFilterEndDate = null;
         _dangCapNhatPresetNgay = false;
+        OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
 
         _selectedInvoicePaymentStatus = "Tất cả";
         OnPropertyChanged(nameof(SelectedInvoicePaymentStatus));
@@ -533,6 +657,10 @@ public sealed partial class MainWindowViewModel
         _selectedInvoiceCustomer = InvoiceCustomerOptions.FirstOrDefault();
         OnPropertyChanged(nameof(SelectedInvoiceCustomer));
 
+        _selectedInvoiceEmployee = InvoiceEmployeeOptions.FirstOrDefault();
+        OnPropertyChanged(nameof(SelectedInvoiceEmployee));
+
+        OnPropertyChanged(nameof(InvoiceActiveFiltersText));
         InvoicePage = 1;
 
         await SearchInvoicesAsync(giuTrang: true);

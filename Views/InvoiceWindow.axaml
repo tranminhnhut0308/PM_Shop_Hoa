@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:models="using:ShopHoa.Models"
   x:Class="ShopHoa.Views.InvoiceWindow"
@@ -48,6 +48,21 @@
     <Style Selector="Button.btn-print:pointerover">
       <Setter Property="Background" Value="#D4EDE6" />
       <Setter Property="Foreground" Value="#056B5D" />
+    </Style>
+    <Style Selector="Button.btn-recreate-invoice">
+      <Setter Property="Background" Value="#E6F5F1" />
+      <Setter Property="Foreground" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="#B2DDD0" />
+      <Setter Property="BorderThickness" Value="1.2" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Padding" Value="16,10" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.btn-recreate-invoice:pointerover">
+      <Setter Property="Background" Value="#D0EFE7" />
+      <Setter Property="Foreground" Value="#066557" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
     <Style Selector="Button.btn-cancel-invoice">
       <Setter Property="Background" Value="#FEF2F2" />
@@ -464,6 +479,16 @@
 
       <!-- CÁC NÚT THAO TÁC -->
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+        <Button x:Name="RecreateInvoiceButton" Content="🔄 Tạo lại hóa đơn"
+          Classes="btn-recreate-invoice" IsVisible="False"
+          Click="RecreateInvoiceButton_OnClick"
+          ToolTip.Tip="Tạo lại hóa đơn mới từ hóa đơn đã hủy này" />
+
+        <Button x:Name="CancelInvoiceButton" Content="🚫 Hủy hóa đơn"
+          Classes="btn-cancel-invoice" IsVisible="False"
+          Click="CancelInvoiceButton_OnClick"
+          ToolTip.Tip="Hủy hóa đơn này và hoàn tác tồn kho / công nợ / sổ quỹ hoặc tạo lại đơn mới" />
+
         <Button x:Name="EditInvoiceButton" Content="✏ Chỉnh sửa"
           Classes="btn-edit-invoice"
           Click="EditInvoiceButton_OnClick"

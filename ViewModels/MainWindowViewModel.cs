@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Platform.Storage;
 using ClosedXML.Excel;
@@ -2967,6 +2967,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             Title = title,
             Width = 430,
+            FontFamily = new Avalonia.Media.FontFamily("Inter, Segoe UI, Arial"),
             // Cao theo nội dung: tiêu đề/nguyên nhân dài không bị cắt chữ.
             SizeToContent = Avalonia.Controls.SizeToContent.Height,
             MinHeight = 230,
@@ -6528,7 +6529,7 @@ public partial class MainWindowViewModel : ObservableObject
             // dùng vừa sửa ở màn "Thông tin tiệm" cũng thấy ngay ở hóa đơn này.
             receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
 
-            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync, XuLySauKhiHuyHoaDonAsync);
+            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync, XuLySauKhiHuyHoaDonAsync, TaoLaiHoaDonTuMaHoaDonAsync);
             await invoiceWindow.ShowDialog(owner);
         }
         catch (Exception ex)
@@ -6587,7 +6588,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
 
-            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync, XuLySauKhiHuyHoaDonAsync);
+            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync, XuLySauKhiHuyHoaDonAsync, TaoLaiHoaDonTuMaHoaDonAsync);
             await invoiceWindow.ShowDialog(OwnerWindow);
         }
         catch (Exception ex)
@@ -6908,7 +6909,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (!await KiemTraQuyenAsync(
                 PermissionKeys.PurchasesDelete,
-                "Báº¡n khÃ´ng cÃ³ quyá»n há»§y phiáº¿u nháº­p hÃ ng."))
+                "Bạn không có quyền hủy phiếu nhập hàng."))
         {
             return null;
         }
@@ -6930,11 +6931,11 @@ public partial class MainWindowViewModel : ObservableObject
                 _ = LoadBaoCaoPhieuNhapAsync();
                 _ = LamMoiTongQuanNeuDangMoAsync();
 
-                StatusMessage = $"âœ… ÄÃ£ há»§y thÃ nh cÃ´ng phiáº¿u nháº­p {detail.MaPhieuNhap}.";
+                StatusMessage = $"✅ Đã hủy thành công phiếu nhập {detail.MaPhieuNhap}.";
 
                 await ShowMessageAsync(
-                    "ThÃ nh cÃ´ng",
-                    $"ÄÃ£ há»§y thÃ nh cÃ´ng phiáº¿u nháº­p {detail.MaPhieuNhap}.\nTá»“n kho vÃ  cÃ´ng ná»£ Ä‘Ã£ Ä‘Æ°á»£c hoÃ n tÃ¡c an toÃ n.",
+                    "Thành công",
+                    $"Đã hủy thành công phiếu nhập {detail.MaPhieuNhap}.\nTồn kho và công nợ đã được hoàn tác an toàn.",
                     owner);
 
                 return await _db.GetPhieuNhapHangDetailAsync(detail.PhieuNhapId);
@@ -6945,7 +6946,7 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             SafeLog.WriteError("Loi huy phieu nhap", ex);
-            await ShowMessageAsync("Lá»—i", $"KhÃ´ng thá»ƒ há»§y phiáº¿u nháº­p: {ex.Message}", owner);
+            await ShowMessageAsync("Lỗi", $"Không thể hủy phiếu nhập: {ex.Message}", owner);
             return null;
         }
     }
@@ -6960,16 +6961,16 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (!await KiemTraQuyenAsync(
                 PermissionKeys.PurchasesCreate,
-                "Báº¡n khÃ´ng cÃ³ quyá»n khÃ´i phá»¥c phiáº¿u nháº­p hÃ ng."))
+                "Bạn không có quyền khôi phục phiếu nhập hàng."))
         {
             return null;
         }
 
         var xacNhan = await ShowConfirmationAsync(
-            "XÃ¡c nháº­n khÃ´i phá»¥c phiáº¿u nháº­p",
-            $"Báº¡n cÃ³ cháº¯c cháº¯n muá»‘n khÃ´i phá»¥c láº¡i phiáº¿u nháº­p {detail.MaPhieuNhap}?\n\nThao tÃ¡c nÃ y sáº½:\nâ€¢ Cá»™ng láº¡i tá»“n kho cho cÃ¡c máº·t hÃ ng trong phiáº¿u.\nâ€¢ Ghi nháº­n láº¡i cÃ´ng ná»£ mua hÃ ng Ä‘á»‘i vá»›i nhÃ  cung cáº¥p {detail.TenNhaCungCapHienThi}.\nâ€¢ Cáº­p nháº­t tráº¡ng thÃ¡i phiáº¿u vá» ÄÃ£ nháº­p hÃ ng.",
-            "KhÃ´i phá»¥c phiáº¿u",
-            "Quay láº¡i");
+            "Xác nhận khôi phục phiếu nhập",
+            $"Bạn có chắc chắn muốn khôi phục lại phiếu nhập {detail.MaPhieuNhap}?\n\nThao tác này sẽ:\n• Cộng lại tồn kho cho các mặt hàng trong phiếu.\n• Ghi nhận lại công nợ mua hàng đối với nhà cung cấp {detail.TenNhaCungCapHienThi}.\n• Cập nhật trạng thái phiếu về Đã nhập hàng.",
+            "Khôi phục phiếu",
+            "Quay lại");
 
         if (!xacNhan)
             return null;
@@ -6979,7 +6980,7 @@ public partial class MainWindowViewModel : ObservableObject
             var req = new KhoiPhucPhieuNhapYeuCau
             {
                 PhieuNhapId = detail.PhieuNhapId,
-                LyDoKhoiPhuc = "KhÃ´i phá»¥c tá»« mÃ n hÃ¬nh chi tiáº¿t phiáº¿u nháº­p",
+                LyDoKhoiPhuc = "Khôi phục từ màn hình chi tiết phiếu nhập",
                 NguoiKhoiPhucId = Session.CurrentUser?.Id,
                 TenNguoiKhoiPhuc = Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap
             };
@@ -6992,11 +6993,11 @@ public partial class MainWindowViewModel : ObservableObject
             _ = LoadBaoCaoPhieuNhapAsync();
             _ = LamMoiTongQuanNeuDangMoAsync();
 
-            StatusMessage = $"âœ… ÄÃ£ khÃ´i phá»¥c thÃ nh cÃ´ng phiáº¿u nháº­p {detail.MaPhieuNhap}.";
+            StatusMessage = $"✅ Đã khôi phục thành công phiếu nhập {detail.MaPhieuNhap}.";
 
             await ShowMessageAsync(
-                "ThÃ nh cÃ´ng",
-                $"ÄÃ£ khÃ´i phá»¥c thÃ nh cÃ´ng phiáº¿u nháº­p {detail.MaPhieuNhap}.\nTá»“n kho vÃ  cÃ´ng ná»£ Ä‘Ã£ Ä‘Æ°á»£c ghi nháº­n láº¡i chÃ­nh xÃ¡c.",
+                "Thành công",
+                $"Đã khôi phục thành công phiếu nhập {detail.MaPhieuNhap}.\nTồn kho và công nợ đã được ghi nhận lại chính xác.",
                 owner);
 
             return await _db.GetPhieuNhapHangDetailAsync(detail.PhieuNhapId);
@@ -7004,7 +7005,7 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             SafeLog.WriteError("Loi khoi phuc phieu nhap", ex);
-            await ShowMessageAsync("Lá»—i", $"KhÃ´ng thá»ƒ khÃ´i phá»¥c phiáº¿u nháº­p: {ex.Message}", owner);
+            await ShowMessageAsync("Lỗi", $"Không thể khôi phục phiếu nhập: {ex.Message}", owner);
             return null;
         }
     }
@@ -7019,18 +7020,18 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (!await KiemTraQuyenAsync(
                 PermissionKeys.PurchasesCreate,
-                "Báº¡n khÃ´ng cÃ³ quyá»n láº­p phiáº¿u nháº­p hÃ ng."))
+                "Bạn không có quyền lập phiếu nhập hàng."))
         {
             return;
         }
 
         try
         {
-            // Má»Ÿ giao diá»‡n Nháº­p hÃ ng vÃ  khá»Ÿi táº¡o phiáº¿u má»›i
+            // Mở giao diện Nhập hàng và khởi tạo phiếu mới
             await MoGiaoDienNhapHangAsync();
             await KhoiTaoPhieuNhapMoiAsync();
 
-            // GÃ¡n láº¡i nhÃ  cung cáº¥p náº¿u cÃ³
+            // Gán lại nhà cung cấp nếu có
             if (detail.NhaCungCapId.HasValue && detail.NhaCungCapId.Value > 0)
             {
                 var ncc = await _db.GetNhaCungCapByIdAsync(detail.NhaCungCapId.Value);
@@ -7040,7 +7041,7 @@ public partial class MainWindowViewModel : ObservableObject
                 }
             }
 
-            // GÃ¡n cÃ¡c dÃ²ng hÃ ng hÃ³a tá»« phiáº¿u cÅ©
+            // Gán các dòng hàng hóa từ phiếu cũ
             BoDangKyPhieuNhapItems();
             PhieuNhapItems.Clear();
 
@@ -7074,18 +7075,18 @@ public partial class MainWindowViewModel : ObservableObject
                 PhieuNhapItems.Add(dongMoi);
             }
 
-            // GÃ¡n chi phÃ­ khÃ¡c vÃ  ghi chÃº
+            // Gán chi phí khác và ghi chú
             PhieuNhapChiPhiKhac = detail.ChiPhiKhac;
-            PhieuNhapGhiChu = $"Táº¡o láº¡i tá»« phiáº¿u {detail.MaPhieuNhap}. " + (detail.GhiChu ?? "");
+            PhieuNhapGhiChu = $"Tạo lại từ phiếu {detail.MaPhieuNhap}. " + (detail.GhiChu ?? "");
 
             RecalculatePhieuNhapTongTienHang();
 
-            StatusMessage = $"ÄÃ£ táº¡o phiáº¿u nháº­p má»›i tá»« phiáº¿u {detail.MaPhieuNhap}. Báº¡n cÃ³ thá»ƒ chá»‰nh sá»­a sá»‘ lÆ°á»£ng, Ä‘Æ¡n giÃ¡ trÆ°á»›c khi lÆ°u.";
+            StatusMessage = $"Đã tạo phiếu nhập mới từ phiếu {detail.MaPhieuNhap}. Bạn có thể chỉnh sửa số lượng, đơn giá trước khi lưu.";
         }
         catch (Exception ex)
         {
             SafeLog.WriteError("Loi mua lai phieu nhap", ex);
-            await ShowMessageAsync("Lá»—i", $"KhÃ´ng thá»ƒ táº¡o phiáº¿u má»›i tá»« phiáº¿u cÅ©: {ex.Message}", owner);
+            await ShowMessageAsync("Lỗi", $"Không thể tạo phiếu mới từ phiếu cũ: {ex.Message}", owner);
         }
     }
     private async Task<PhieuNhapHangDetail?> ChinhSuaTuChiTietPhieuNhapAsync(
@@ -7351,7 +7352,7 @@ public partial class MainWindowViewModel : ObservableObject
             nameof(CanPrintSaleInvoice), nameof(CanCancelSaleInvoice), nameof(CanViewSaleHistory),
             // Hóa đơn
             nameof(CanViewInvoiceDetail), nameof(CanCreateInvoice), nameof(CanEditInvoice),
-            nameof(CanCancelInvoice), nameof(CanDeleteInvoice), nameof(CanPrintInvoice),
+            nameof(CanCancelInvoice), nameof(CanRecreateInvoice), nameof(CanDeleteInvoice), nameof(CanPrintInvoice),
             nameof(CanImportInvoice), nameof(CanExportInvoice),
             // Khách hàng
             nameof(CanCreateCustomer), nameof(CanEditCustomer), nameof(CanDeleteCustomer),
@@ -7472,7 +7473,8 @@ public partial class MainWindowViewModel : ObservableObject
     public bool CanViewInvoiceDetail => CoQuyen(PermissionKeys.InvoicesDetail);
     public bool CanCreateInvoice => CoQuyen(PermissionKeys.InvoicesCreate);
     public bool CanEditInvoice => CoQuyen(PermissionKeys.InvoicesEdit) || CoQuyen(PermissionKeys.InvoicesDetail);
-    public bool CanCancelInvoice => false;
+    public bool CanCancelInvoice => CoQuyen(PermissionKeys.InvoicesCancel) || CoQuyen(PermissionKeys.SalesCancel);
+    public bool CanRecreateInvoice => CoQuyen(PermissionKeys.InvoicesCreate) || CoQuyen(PermissionKeys.SalesPayment);
     public bool CanDeleteInvoice => CoQuyen(PermissionKeys.InvoicesDelete);
     public bool CanPrintInvoice => CoQuyen(PermissionKeys.InvoicesPrint);
     public bool CanImportInvoice => CoQuyen(PermissionKeys.InvoicesImport);

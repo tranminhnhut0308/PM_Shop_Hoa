@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Globalization;
 using System.Text;
 using ClosedXML.Excel;
@@ -77,6 +77,7 @@ public sealed partial class DatabaseService
             $"Server={config.Server};" +
             $"Port={config.Port};" +
             $"Database={config.Database};" +
+            $"Character Set=utf8mb4;" +
             $"User ID={config.User};" +
             $"Password={config.Password};" +
             $"SslMode={config.SslMode};" +
@@ -4740,24 +4741,30 @@ public sealed partial class DatabaseService
         try
         {
             await using var connection = await OpenAsync();
-            var existingIndexes = (await connection.QueryAsync<string>(
+            var indexedColumns = (await connection.QueryAsync<string>(
                 """
-                SELECT DISTINCT INDEX_NAME
+                SELECT DISTINCT COLUMN_NAME
                 FROM information_schema.STATISTICS
-                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'hoa_don_ban_hang';
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'hoa_don_ban_hang'
+                  AND SEQ_IN_INDEX = 1;
                 """)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            if (!existingIndexes.Contains("idx_hdbh_thoi_gian_ban"))
+            var requiredIndexes = new[]
             {
-                await connection.ExecuteAsync("ALTER TABLE hoa_don_ban_hang ADD INDEX idx_hdbh_thoi_gian_ban (thoi_gian_ban);");
-            }
-            if (!existingIndexes.Contains("idx_hdbh_khach_hang_id"))
+                (Column: "thoi_gian_ban", Name: "idx_hdbh_thoi_gian_ban"),
+                (Column: "khach_hang_id", Name: "idx_hdbh_khach_hang_id"),
+                (Column: "trang_thai_hoa_don", Name: "idx_hdbh_trang_thai_hd"),
+                (Column: "nguoi_ban_id", Name: "idx_hdbh_nguoi_ban_id")
+            };
+
+            foreach (var (column, indexName) in requiredIndexes)
             {
-                await connection.ExecuteAsync("ALTER TABLE hoa_don_ban_hang ADD INDEX idx_hdbh_khach_hang_id (khach_hang_id);");
-            }
-            if (!existingIndexes.Contains("idx_hdbh_trang_thai_hd"))
-            {
-                await connection.ExecuteAsync("ALTER TABLE hoa_don_ban_hang ADD INDEX idx_hdbh_trang_thai_hd (trang_thai_hoa_don);");
+                if (!indexedColumns.Contains(column))
+                {
+                    await connection.ExecuteAsync(
+                        $"ALTER TABLE hoa_don_ban_hang ADD INDEX {indexName} ({column});");
+                }
             }
         }
         catch (Exception ex)
@@ -4772,10 +4779,14 @@ public sealed partial class DatabaseService
         DateTime? denNgay,
         string? trangThaiThanhToan,
         string? trangThaiHoaDon,
-        uint? khachHangId)
+        uint? khachHangId,
+        uint? nhanVienId,
+        bool khachLe)
     {
         var rawSearch = (search ?? "").Trim();
-        var normalizedSearch = ProductSearchHelper.ChuanHoa(rawSearch);
+        var escapedSearch = rawSearch.Replace("!", "!!").Replace("%", "!%").Replace("_", "!_");
+        var normalizedSearch = ProductSearchHelper.ChuanHoa(rawSearch)
+            .Replace("!", "!!").Replace("%", "!%").Replace("_", "!_");
 
         DateTime? tuNgayDau = tuNgay?.Date;
         DateTime? denNgaySau = denNgay?.Date.AddDays(1);
@@ -4786,16 +4797,27 @@ public sealed partial class DatabaseService
         {
             var tenKhachHangExpr = BieuThucChuanHoaSql("COALESCE(kh.ten_khach_hang, 'Khach le')");
             var ghiChuExpr = BieuThucChuanHoaSql("COALESCE(hd.ghi_chu, '')");
+            var tenSanPhamExpr = BieuThucChuanHoaSql("COALESCE(ct.ten_san_pham, '')");
 
             dieuKien.Add($"""
                 (
-                    hd.ma_hoa_don LIKE CONCAT('%', @SearchRaw, '%')
-                    OR kh.ma_khach_hang LIKE CONCAT('%', @SearchRaw, '%')
-                    OR kh.ten_khach_hang LIKE CONCAT('%', @SearchRaw, '%')
-                    OR {tenKhachHangExpr} LIKE CONCAT('%', @SearchNormalized, '%')
-                    OR kh.so_dien_thoai LIKE CONCAT('%', @SearchRaw, '%')
-                    OR hd.ghi_chu LIKE CONCAT('%', @SearchRaw, '%')
-                    OR {ghiChuExpr} LIKE CONCAT('%', @SearchNormalized, '%')
+                    hd.ma_hoa_don LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
+                    OR kh.ma_khach_hang LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
+                    OR kh.ten_khach_hang LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
+                    OR {tenKhachHangExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
+                    OR kh.so_dien_thoai LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
+                    OR hd.ghi_chu LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
+                    OR {ghiChuExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
+                    OR EXISTS (
+                        SELECT 1
+                        FROM chi_tiet_hoa_don_ban_hang ct
+                        WHERE ct.hoa_don_id = hd.id
+                          AND (
+                              COALESCE(ct.ma_san_pham, '') LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
+                              OR ct.ten_san_pham LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
+                              OR {tenSanPhamExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
+                          )
+                    )
                 )
                 """);
         }
@@ -4814,6 +4836,15 @@ public sealed partial class DatabaseService
         {
             dieuKien.Add("hd.khach_hang_id = @KhachHangId");
         }
+        else if (khachLe)
+        {
+            dieuKien.Add("hd.khach_hang_id IS NULL");
+        }
+
+        if (nhanVienId.HasValue && nhanVienId.Value > 0)
+        {
+            dieuKien.Add("hd.nguoi_ban_id = @NhanVienId");
+        }
 
         var ttHd = (trangThaiHoaDon ?? "").Trim().ToUpperInvariant();
         if (ttHd is "HOAN_THANH")
@@ -4824,30 +4855,37 @@ public sealed partial class DatabaseService
         {
             dieuKien.Add("hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY')");
         }
+        else if (ttHd is "TONG_HOP")
+        {
+            dieuKien.Add("hd.trang_thai_hoa_don = 'TONG_HOP'");
+        }
 
         var ttTt = (trangThaiThanhToan ?? "").Trim().ToUpperInvariant();
         if (ttTt is "DA_THANH_TOAN")
         {
-            dieuKien.Add("(hd.con_no <= 0 OR hd.trang_thai_thanh_toan = 'DA_THANH_TOAN')");
+            dieuKien.Add("COALESCE(hd.khach_da_thanh_toan, 0) >= COALESCE(hd.khach_can_tra, 0)");
         }
         else if (ttTt is "THANH_TOAN_MOT_PHAN")
         {
-            dieuKien.Add("((hd.con_no > 0 AND hd.khach_da_thanh_toan > 0) OR hd.trang_thai_thanh_toan IN ('THANH_TOAN_MOT_PHAN', 'CONG_NO'))");
+            dieuKien.Add(
+                "COALESCE(hd.khach_da_thanh_toan, 0) > 0 AND COALESCE(hd.khach_da_thanh_toan, 0) < COALESCE(hd.khach_can_tra, 0)");
         }
         else if (ttTt is "CHUA_THANH_TOAN")
         {
-            dieuKien.Add("((hd.con_no > 0 AND (hd.khach_da_thanh_toan <= 0 OR hd.khach_da_thanh_toan IS NULL)) OR hd.trang_thai_thanh_toan = 'CHUA_THANH_TOAN')");
+            dieuKien.Add(
+                "COALESCE(hd.khach_da_thanh_toan, 0) <= 0 AND COALESCE(hd.khach_can_tra, 0) > 0");
         }
 
         var whereClause = dieuKien.Count > 0 ? "WHERE " + string.Join(" AND ", dieuKien) : "";
 
         var paramObj = new
         {
-            SearchRaw = rawSearch,
+            SearchRaw = escapedSearch,
             SearchNormalized = normalizedSearch,
             TuNgayDau = tuNgayDau,
             DenNgaySau = denNgaySau,
-            KhachHangId = khachHangId
+            KhachHangId = khachHangId,
+            NhanVienId = nhanVienId
         };
 
         return (whereClause, paramObj);
@@ -4860,6 +4898,8 @@ public sealed partial class DatabaseService
         string? trangThaiThanhToan = null,
         string? trangThaiHoaDon = null,
         uint? khachHangId = null,
+        uint? nhanVienId = null,
+        bool khachLe = false,
         int page = 1,
         int pageSize = 20)
     {
@@ -4869,7 +4909,7 @@ public sealed partial class DatabaseService
         await using var connection = await OpenAsync();
 
         var (whereClause, paramObj) = XayDungDieuKienLocHoaDon(
-            search, tuNgay, denNgay, trangThaiThanhToan, trangThaiHoaDon, khachHangId);
+            search, tuNgay, denNgay, trangThaiThanhToan, trangThaiHoaDon, khachHangId, nhanVienId, khachLe);
 
         var summarySql = $"""
             SELECT
@@ -4956,7 +4996,9 @@ public sealed partial class DatabaseService
         DateTime? denNgay = null,
         string? trangThaiThanhToan = null,
         string? trangThaiHoaDon = null,
-        uint? khachHangId = null)
+        uint? khachHangId = null,
+        uint? nhanVienId = null,
+        bool khachLe = false)
     {
         var coCotHuy = await EnsureHuyHoaDonSchemaAsync();
         await EnsureHoaDonFilterIndexesAsync();
@@ -4980,7 +5022,7 @@ public sealed partial class DatabaseService
         await using var connection = await OpenAsync();
 
         var (whereClause, paramObj) = XayDungDieuKienLocHoaDon(
-            search, tuNgay, denNgay, trangThaiThanhToan, trangThaiHoaDon, khachHangId);
+            search, tuNgay, denNgay, trangThaiThanhToan, trangThaiHoaDon, khachHangId, nhanVienId, khachLe);
 
         var limitClause = limit.HasValue ? $"LIMIT {limit.Value}" : "";
 
@@ -12004,7 +12046,7 @@ public sealed partial class DatabaseService
 
     /// <summary>
     /// Tên hiển thị của một mã loại thu/chi trong bảng nhom_chi_phi.
-    /// Trả về r��ng nếu id không tồn tại (phiếu cũ chưa gán nhóm).
+    /// Trả về rỗng nếu id không tồn tại (phiếu cũ chưa gán nhóm).
     /// </summary>
     public async Task<string> GetTenNhomChiPhiAsync(int id)
     {

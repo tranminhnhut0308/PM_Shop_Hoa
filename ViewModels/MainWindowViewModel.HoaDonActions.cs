@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -330,5 +330,53 @@ public sealed partial class MainWindowViewModel
             StatusMessage = $"Không thể mở lịch sử hóa đơn {maHoaDon}: {ex.Message}";
             SafeLog.WriteError("Loi XemLichSuHoaDonAsync", ex);
         }
+    }
+
+    /// <summary>
+    /// Tạo lại hóa đơn từ hóa đơn đã hủy (chuyển sang màn hình bán hàng với đầy đủ dữ liệu nháp).
+    /// </summary>
+    [RelayCommand]
+    public async Task TaoLaiHoaDonDaHuyAsync(object? parameter)
+    {
+        string? maHoaDon = null;
+        if (parameter is HoaDon hd)
+        {
+            maHoaDon = hd.MaHoaDon;
+        }
+        else if (parameter is string str)
+        {
+            maHoaDon = str;
+        }
+
+        if (string.IsNullOrWhiteSpace(maHoaDon))
+            return;
+
+        if (!DatabaseService.CoQuyenTaoLaiHoaDonHienTai())
+        {
+            await ShowMessageAsync("Thông báo", "Bạn không có quyền tạo lại hóa đơn bán hàng.");
+            return;
+        }
+
+        try
+        {
+            var thongTin = await _db.GetThongTinXacNhanHuyHoaDonAsync(maHoaDon, choPhepDaHuy: true);
+            if (thongTin is null)
+            {
+                await ShowMessageAsync("Thông báo", $"Không tìm thấy thông tin của hóa đơn {maHoaDon}.");
+                return;
+            }
+
+            await SaoChepHoaDonDaHuySangDonNhapBanHangAsync(thongTin);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Không thể tạo lại hóa đơn từ {maHoaDon}: {ex.Message}";
+            SafeLog.WriteError("Loi TaoLaiHoaDonDaHuyAsync", ex);
+        }
+    }
+
+    public async Task TaoLaiHoaDonTuMaHoaDonAsync(string maHoaDon)
+    {
+        await TaoLaiHoaDonDaHuyAsync(maHoaDon);
     }
 }

@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:models="using:ShopHoa.Models"
   x:Class="ShopHoa.Views.PhieuNhapDetailWindow"
@@ -9,6 +9,7 @@
   MinWidth="900"
   MinHeight="640"
   WindowStartupLocation="CenterOwner"
+  FontFamily="Inter, Segoe UI, Arial"
   Background="#F4FAF8">
 
   <Window.Styles>

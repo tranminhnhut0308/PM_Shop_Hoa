@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -974,7 +974,7 @@ public sealed partial class MainWindowViewModel
             }
 
             receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
-            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync, XuLySauKhiHuyHoaDonAsync);
+            var invoiceWindow = new InvoiceWindow(receipt, ThuCongNoTuChiTietHoaDonAsync, XuLySauKhiHuyHoaDonAsync, TaoLaiHoaDonTuMaHoaDonAsync);
             await invoiceWindow.ShowDialog(OwnerWindow);
 
             // Làm mới chi tiết phiếu nếu có thay đổi

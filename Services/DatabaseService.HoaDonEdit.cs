@@ -30,6 +30,13 @@ public sealed partial class DatabaseService
             PermissionKeys.InvoicesCancel,
             PermissionKeys.SalesCancel);
 
+    public static bool CoQuyenTaoLaiHoaDonHienTai()
+        => Quyen.HasAnyPermission(
+            Session.CurrentUser,
+            PermissionKeys.InvoicesCreate,
+            PermissionKeys.SalesPayment,
+            PermissionKeys.InvoicesEdit);
+
     private static void KiemTraQuyenHuyHoaDon()
     {
         if (!CoQuyenHuyHoaDonHienTai())
@@ -247,12 +254,19 @@ public sealed partial class DatabaseService
     /// <summary>
     /// Tải thông tin hóa đơn để hiển thị lên hộp thoại Xác nhận hủy hóa đơn.
     /// </summary>
-    public async Task<ThongTinXacNhanHuyHoaDon> GetThongTinXacNhanHuyHoaDonAsync(string maHoaDon)
+    public async Task<ThongTinXacNhanHuyHoaDon> GetThongTinXacNhanHuyHoaDonAsync(string maHoaDon, bool choPhepDaHuy = false)
     {
-        KiemTraQuyenHuyHoaDon();
-
         if (string.IsNullOrWhiteSpace(maHoaDon))
-            throw new InvalidOperationException("Thiếu mã hóa đơn cần hủy.");
+            throw new InvalidOperationException("Thiếu mã hóa đơn.");
+
+        if (!choPhepDaHuy)
+        {
+            KiemTraQuyenHuyHoaDon();
+        }
+        else if (!CoQuyenTaoLaiHoaDonHienTai())
+        {
+            throw new UnauthorizedAccessException("Bạn không có quyền tạo lại hóa đơn bán hàng.");
+        }
 
         var maCanTim = maHoaDon.Trim();
 
@@ -306,7 +320,7 @@ public sealed partial class DatabaseService
         if (header is null)
             throw new InvalidOperationException($"Không tìm thấy hóa đơn {maCanTim} trong hệ thống.");
 
-        if (LaTrangThaiHoaDonDaHuy(header.TrangThaiHoaDon))
+        if (!choPhepDaHuy && LaTrangThaiHoaDonDaHuy(header.TrangThaiHoaDon))
             throw new InvalidOperationException($"Hóa đơn {maCanTim} đã ở trạng thái Đã hủy, không thể hủy lại.");
 
         var items = (await connection.QueryAsync<ChiTietSanPhamBanSaoHoaDon>(

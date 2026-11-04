@@ -52,8 +52,8 @@ public sealed class PhieuNhapHangDetail
     public string? MaPhieuThuHoan { get; set; }
     public bool CoLyDoHuy => !string.IsNullOrWhiteSpace(LyDoHuy);
     public bool CoSoTienHoan => SoTienHoan > 0m;
-    public string SoTienHoanText => SoTienHoan.ToString("N0", Vi) + " Ä‘";
-    public string ThongTinHuyText => $"Bá»Ÿi {(string.IsNullOrWhiteSpace(TenNguoiHuy) ? "Há»‡ thá»‘ng" : TenNguoiHuy)} lÃºc {ThoiGianHuyText}";
+    public string SoTienHoanText => SoTienHoan.ToString("N0", Vi) + " đ";
+    public string ThongTinHuyText => $"Bởi {(string.IsNullOrWhiteSpace(TenNguoiHuy) ? "Hệ thống" : TenNguoiHuy)} lúc {ThoiGianHuyText}";
 
     public string? LyDoKhoiPhuc { get; set; }
     public uint? NguoiKhoiPhucId { get; set; }

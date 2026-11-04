@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace ShopHoa.Models;
 
@@ -9,7 +9,7 @@ public sealed class BaoCaoBanHangPhuongThucRow
     public int SoGiaoDich { get; set; }
     public decimal SoTien { get; set; }
 
-    /// <summary>T? l? s? ti?n c?a d�ng n�y so v?i t?ng c�c d�ng (0..100).</summary>
+    /// <summary>Tỷ lệ số tiền của dòng này so với tổng các dòng (0..100).</summary>
     public double TyLePhanTram { get; set; }
 
     public string SoTienHienThi => SoTien.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
@@ -26,44 +26,44 @@ public sealed class BaoCaoBanHangDiemThoiGian
     public decimal DoanhThu { get; set; }
     public int SoHoaDon { get; set; }
 
-    /// <summary>S? ti?n d� thu trong di?m th?i gian n�y (d�ng cho tooltip bi?u d?).</summary>
+    /// <summary>Số tiền đã thu trong điểm thời gian này (dùng cho tooltip biểu đồ).</summary>
     public decimal DaThu { get; set; }
 
-    /// <summary>C�ng n? ph�t sinh trong di?m th?i gian n�y (d�ng cho tooltip bi?u d?).</summary>
+    /// <summary>Công nợ phát sinh trong điểm thời gian này (dùng cho tooltip biểu đồ).</summary>
     public decimal CongNo { get; set; }
 
-    /// <summary>T? l? chi?u cao c?t so v?i di?m cao nh?t trong kho?ng (0..100).</summary>
+    /// <summary>Tỷ lệ chiều cao cột so với điểm cao nhất trong khoảng (0..100).</summary>
     public double TyLeChieuCao { get; set; }
 
-    /// <summary>B? r?ng c?t (0..100) � m?i c?t trong bi?u d? r?ng d?u nhau.</summary>
+    /// <summary>Bề rộng cột (0..100) — mỗi cột trong biểu đồ rộng đều nhau.</summary>
     public double TyLeBeRong { get; set; } = 100;
 
-    /// <summary>Chi?u cao t?i da c?a v�ng v? c?t (px) � XAML l?y h?ng n�y l�m m?c.</summary>
+    /// <summary>Chiều cao tối đa của vùng vẽ cột (px) — XAML lấy hằng này làm mốc.</summary>
     public const double ChieuCaoToiDa = 190;
 
-    /// <summary>B? r?ng t?i da c?a m?t c?t (px) d? c?t kh�ng gi�n qu� r?ng.</summary>
+    /// <summary>Bề rộng tối đa của một cột (px) để cột không giãn quá rộng.</summary>
     public const double BeRongToiDa = 72;
 
-    /// <summary>Chi?u cao c?t t�nh b?ng pixel d? XAML bind th?ng, kh�ng c?n converter.</summary>
+    /// <summary>Chiều cao cột tính bằng pixel để XAML bind thẳng, không cần converter.</summary>
     public double ChieuCaoCot => DoanhThu <= 0 ? 0 : Math.Max(3, TyLeChieuCao / 100d * ChieuCaoToiDa);
 
-    /// <summary>B? r?ng c?t (px); nhi?u di?m th� cu?n ngang trong v�ng bi?u d?.</summary>
+    /// <summary>Bề rộng cột (px); nhiều điểm thì cuộn ngang trong vùng biểu đồ.</summary>
     public double BeRongCot => Math.Max(55, Math.Min(BeRongToiDa, TyLeBeRong / 100d * BeRongToiDa));
 
     public string DoanhThuHienThi => DoanhThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
     public string DaThuHienThi => DaThu.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
     public string CongNoHienThi => CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " d";
-    public string SoHoaDonHienThi => SoHoaDon.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " h�a don";
+    public string SoHoaDonHienThi => SoHoaDon.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " hóa đơn";
 
-    /// <summary>Ng�y d?y d? hi?n th? tr�n d�ng d?u tooltip (k�m gi? n?u bi?u d? chia theo gi?).</summary>
+    /// <summary>Ngày đầy đủ hiển thị trên dòng đầu tooltip (kèm giờ nếu biểu đồ chia theo giờ).</summary>
     public string NgayDayDu => ThoiGian.ToString(NhanXet.Contains(':') ? "dd/MM/yyyy HH:00" : "dd/MM/yyyy");
 
     public string ToolTip =>
         $"{NgayDayDu}\n" +
         $"Doanh thu: {DoanhThuHienThi}\n" +
-        $"S? h�a don: {SoHoaDonHienThi}\n" +
-        $"�� thu: {DaThuHienThi}\n" +
-        $"C�ng n?: {CongNoHienThi}";
+        $"Số hóa đơn: {SoHoaDonHienThi}\n" +
+        $"Đã thu: {DaThuHienThi}\n" +
+        $"Công nợ: {CongNoHienThi}";
 }
 
 
@@ -149,7 +149,7 @@ public sealed class BaoCaoBanHangNhomHang
     public decimal SoLuongBan { get; set; }
     public decimal DoanhThu { get; set; }
 
-    /// <summary>T? l? doanh thu c?a nh�m so v?i t?ng (0..100).</summary>
+    /// <summary>Tỷ lệ doanh thu của nhóm so với tổng (0..100).</summary>
     public double TyLePhanTram { get; set; }
 
     public string SoLuongBanHienThi => SoLuongBan.ToString("N3", CultureInfo.GetCultureInfo("vi-VN"));
