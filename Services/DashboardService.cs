@@ -12,11 +12,13 @@ namespace ShopHoa.Services;
 /// không hard-code số liệu.
 /// </para>
 /// <para>
-/// Quy tắc doanh thu (đồng nhất với màn Hóa đơn):
-/// chỉ tính hóa đơn <c>trang_thai_hoa_don = 'HOAN_THANH'</c>, doanh thu là
-/// <c>khach_can_tra</c> (không phải "tiền khách đưa"), tiền thu là
-/// <c>khach_da_thanh_toan</c> (không phải <c>tien_khach_dua</c>), nợ là <c>con_no</c>.
-/// Nhờ vậy hóa đơn 500.000 với tiền thừa 100.000 vẫn ra doanh thu 500.000.
+/// Quy tắc doanh thu (đồng nhất với màn Hóa đơn và Báo cáo bán hàng):
+/// - Hóa đơn hợp lệ là mọi hóa đơn <c>trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')</c>
+///   (bao gồm cả hóa đơn tạo thủ công và import Excel).
+/// - Doanh thu là <c>khach_can_tra</c> (doanh số sau chiết khấu).
+/// - Tiền đã thu là <c>khach_da_thanh_toan</c>.
+/// - Còn nợ là <c>con_no</c>.
+/// - Các hóa đơn bị loại trừ (Đã hủy, Lưu tạm) được thống kê riêng và có danh sách chi tiết.
 /// </para>
 /// </summary>
 public sealed class DashboardService
@@ -76,15 +78,24 @@ public sealed class DashboardService
         DateTime? denNgayTuChon,
         DateTime dauNgay)
     {
-        var tu = (tuNgayTuChon ?? dauNgay).Date;
-        var den = (denNgayTuChon ?? dauNgay).Date;
-        if (tu > den) (tu, den) = (den, tu);
+        if (tuNgayTuChon is null || denNgayTuChon is null)
+            throw new ArgumentException("Vui lòng chọn cả ngày bắt đầu và ngày kết thúc.");
+
+        var tu = tuNgayTuChon.Value.Date;
+        var den = denNgayTuChon.Value.Date;
+
+        if (tu > den)
+            throw new ArgumentException("Ngày bắt đầu không được lớn hơn ngày kết thúc.");
+
+        if (den > dauNgay)
+            throw new ArgumentException("Ngày kết thúc không được ở trong tương lai.");
+
         return (tu, den.AddDays(1), den);
     }
 
     /// <summary>
     /// Biểu thức SQL dùng để cắt bucket theo ngày/giờ/thứ. Chỉ dùng hàm có sẵn
-    /// của MariaDB để không phụ thuộc tuỳ chọn đặc biệt.
+    /// của MariaDB/MySQL để không phụ thuộc tuỳ chọn đặc biệt.
     /// </summary>
     private static string BieuThucBucket(string chieu)
     {
@@ -134,8 +145,9 @@ public sealed class DashboardService
         var taskTopKhach = TaiTopKhachHangAsync(tuNgay, denKeTiep, token);
         var taskHoatDongSub = laAdmin ? TaiHoatDongTaiKhoanConAsync(token) : Task.FromResult(new List<TongQuanHoatDongTaiKhoanCon>());
         var taskThongTinGanNhat = TaiThongTinGiaoDichGanNhatAsync(homNay, token);
+        var taskDanhSachChuaGhiNhan = TaiDanhSachHoaDonChuaGhiNhanAsync(tuNgay, denKeTiep, token);
 
-        await Task.WhenAll(taskBanHangTheoKy, taskBieuDo, taskTopHang, taskTopKhach, taskHoatDongSub, taskThongTinGanNhat);
+        await Task.WhenAll(taskBanHangTheoKy, taskBieuDo, taskTopHang, taskTopKhach, taskHoatDongSub, taskThongTinGanNhat, taskDanhSachChuaGhiNhan);
 
         var banHang = await taskBanHangTheoKy;
         var (tongDoanhThu, tongSoHoaDon, bieuDo) = await taskBieuDo;
@@ -143,6 +155,7 @@ public sealed class DashboardService
         var topKhach = await taskTopKhach;
         var hoatDongSub = await taskHoatDongSub;
         var thongTinGanNhat = await taskThongTinGanNhat;
+        var dsChuaGhiNhan = await taskDanhSachChuaGhiNhan;
 
         ketQua.NgayGiaoDichGanNhat = thongTinGanNhat.NgayGanNhat;
         ketQua.MaHoaDonGanNhat = thongTinGanNhat.MaHoaDon;
@@ -155,10 +168,13 @@ public sealed class DashboardService
         ketQua.DaThuHomNay = banHang.DaThu;
         ketQua.ConNoHomNay = banHang.ConNo;
         ketQua.SoDonHangHomNay = banHang.SoHoaDon;
+
         ketQua.SoHoaDonChuaGhiNhan = banHang.SoHoaDonChuaGhiNhan;
+        ketQua.TongTienHangChuaGhiNhan = banHang.TongTienHangChuaGhiNhan;
         ketQua.DoanhThuChuaGhiNhan = banHang.DoanhThuChuaGhiNhan;
         ketQua.DaThuChuaGhiNhan = banHang.DaThuChuaGhiNhan;
         ketQua.ConNoChuaGhiNhan = banHang.ConNoChuaGhiNhan;
+        ketQua.DanhSachHoaDonChuaGhiNhan = dsChuaGhiNhan;
 
         ketQua.TongDoanhThuKyChon = tongDoanhThu;
         ketQua.TongSoHoaDonKyChon = tongSoHoaDon;
@@ -176,13 +192,17 @@ public sealed class DashboardService
         return ketQua;
     }
 
-    /// <summary>KPI chính thức và số liệu riêng của hóa đơn chưa ghi nhận, trong cùng khoảng thời gian.</summary>
+    /// <summary>
+    /// KPI chính thức (tất cả hóa đơn hợp lệ: thủ công và import Excel)
+    /// và số liệu riêng của hóa đơn bị loại trừ (Đã hủy, Lưu tạm), trong cùng khoảng thời gian.
+    /// </summary>
     private async Task<(
         decimal DoanhThu,
         int SoHoaDon,
         decimal DaThu,
         decimal ConNo,
         int SoHoaDonChuaGhiNhan,
+        decimal TongTienHangChuaGhiNhan,
         decimal DoanhThuChuaGhiNhan,
         decimal DaThuChuaGhiNhan,
         decimal ConNoChuaGhiNhan)> TaiSoLieuBanHangHomNayAsync(
@@ -194,17 +214,20 @@ public sealed class DashboardService
 
         const string sql = """
         SELECT
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu,
-            COUNT(*) AS SoHoaDon,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThu,
-            COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 1 THEN hd.con_no ELSE 0 END), 0) AS ConNo,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 0 THEN 1 ELSE 0 END), 0) AS SoHoaDonChuaGhiNhan,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 0 THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThuChuaGhiNhan,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 0 THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThuChuaGhiNhan,
-            COALESCE(SUM(CASE WHEN hd.cong_no_da_ghi_nhan = 0 THEN hd.con_no ELSE 0 END), 0) AS ConNoChuaGhiNhan
+            -- Hóa đơn hợp lệ (không phân biệt tạo thủ công hay import, mọi hóa đơn hoàn thành)
+            COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThu,
+            COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN 1 ELSE 0 END), 0) AS SoHoaDon,
+            COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThu,
+            COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.con_no ELSE 0 END), 0) AS ConNo,
+
+            -- Hóa đơn bị loại trừ hợp lệ (chỉ tính hóa đơn ĐÃ HỦY hoặc LƯU TẠM)
+            COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN 1 ELSE 0 END), 0) AS SoHoaDonChuaGhiNhan,
+            COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.tong_tien_hang ELSE 0 END), 0) AS TongTienHangChuaGhiNhan,
+            COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.khach_can_tra ELSE 0 END), 0) AS DoanhThuChuaGhiNhan,
+            COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS DaThuChuaGhiNhan,
+            COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.con_no ELSE 0 END), 0) AS ConNoChuaGhiNhan
         FROM hoa_don_ban_hang hd
-        WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
-          AND hd.thoi_gian_ban >= @TuNgay
+        WHERE hd.thoi_gian_ban >= @TuNgay
           AND hd.thoi_gian_ban < @DenKeTiep;
         """;
 
@@ -214,6 +237,7 @@ public sealed class DashboardService
             decimal DaThu,
             decimal ConNo,
             int SoHoaDonChuaGhiNhan,
+            decimal TongTienHangChuaGhiNhan,
             decimal DoanhThuChuaGhiNhan,
             decimal DaThuChuaGhiNhan,
             decimal ConNoChuaGhiNhan)>(
@@ -230,8 +254,52 @@ public sealed class DashboardService
     }
 
     /// <summary>
+    /// Lấy danh sách chi tiết các hóa đơn bị loại trừ khỏi KPI (Đã hủy, Lưu tạm) trong khoảng thời gian đang chọn.
+    /// </summary>
+    public async Task<List<TongQuanHoaDonBiLoaiTru>> TaiDanhSachHoaDonChuaGhiNhanAsync(
+        DateTime tuNgay,
+        DateTime denKeTiep,
+        CancellationToken token)
+    {
+        await using var connection = await _taoKetNoi();
+
+        const string sql = """
+        SELECT
+            hd.id AS Id,
+            hd.ma_hoa_don AS MaHoaDon,
+            hd.thoi_gian_ban AS ThoiGianBan,
+            COALESCE(NULLIF(TRIM(kh.ten_khach_hang), ''), 'Khách lẻ') AS TenKhachHang,
+            COALESCE(hd.tong_tien_hang, 0) AS TongTienHang,
+            COALESCE(hd.khach_can_tra, 0) AS KhachCanTra,
+            COALESCE(hd.khach_da_thanh_toan, 0) AS DaThanhToan,
+            COALESCE(hd.con_no, 0) AS ConNo,
+            hd.trang_thai_hoa_don AS TrangThaiHoaDon,
+            hd.ly_do_huy AS LyDoChiTiet
+        FROM hoa_don_ban_hang hd
+        LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
+        WHERE hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY', 'LUU_TAM')
+          AND hd.thoi_gian_ban >= @TuNgay
+          AND hd.thoi_gian_ban < @DenKeTiep
+        ORDER BY hd.thoi_gian_ban DESC, hd.id DESC;
+        """;
+
+        return (
+            await connection.QueryAsync<TongQuanHoaDonBiLoaiTru>(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        TuNgay = tuNgay,
+                        DenKeTiep = denKeTiep
+                    },
+                    cancellationToken: token))
+        ).AsList();
+    }
+
+    /// <summary>
     /// Biểu đồ doanh thu: GROUP BY theo bucket trong DB (theo ngày / khung giờ / thứ trong tuần),
     /// sau đó dựng đầy đủ trục thời gian để người dùng thấy rõ sự phân bổ và so sánh giữa các mốc.
+    /// Tổng doanh thu của biểu đồ phải khớp 100% với thẻ Doanh thu.
     /// </summary>
     private async Task<(decimal TongDoanhThu, int TongSoHoaDon, List<TongQuanDiemDoanhThu> Diem)> TaiBieuDoDoanhThuAsync(
         string chieu,
@@ -254,11 +322,11 @@ public sealed class DashboardService
         var sql = $"""
         SELECT
             {bucket} AS Bucket,
-            COALESCE(SUM(CASE WHEN hd.doanh_so_da_ghi_nhan = 1 THEN hd.khach_can_tra ELSE 0 END), 0) AS {TenCotTongTien()},
+            COALESCE(SUM(hd.khach_can_tra), 0) AS {TenCotTongTien()},
             COUNT(*) AS SoHoaDon,
             MAX(hd.thoi_gian_ban) AS ThoiGianLonNhat
         FROM hoa_don_ban_hang hd
-        WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
+        WHERE hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
           AND hd.thoi_gian_ban >= @TuNgay
           AND hd.thoi_gian_ban < @DenKeTiep
         GROUP BY Bucket
@@ -662,8 +730,7 @@ public sealed class DashboardService
 
     /// <summary>
     /// Top 10 hàng bán chạy — GROUP BY ở tầng database, chỉ trả về đúng 10 dòng.
-    /// Lấy từ chi tiết hóa đơn hợp lệ (trạng thái HOAN_THANH, đã ghi nhận doanh số),
-    /// không tính hóa đơn hủy/nháp.
+    /// Lấy từ chi tiết tất cả hóa đơn hợp lệ (thủ công & import, không tính hóa đơn hủy/lưu tạm).
     /// </summary>
     private async Task<List<TongQuanHangTop>> TaiTopHangBanChayAsync(
         string xepHang,
@@ -694,8 +761,7 @@ public sealed class DashboardService
             ON hd.id = ct.hoa_don_id
         LEFT JOIN san_pham sp
             ON sp.id = ct.san_pham_id
-        WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
-          AND hd.doanh_so_da_ghi_nhan = 1
+        WHERE hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
           AND hd.thoi_gian_ban >= @TuNgay
           AND hd.thoi_gian_ban < @DenKeTiep
         GROUP BY COALESCE(ct.san_pham_id, 0), Ten, TenPhu
@@ -740,7 +806,7 @@ public sealed class DashboardService
     }
 
     /// <summary>
-    /// Top 10 khách hàng theo doanh thu đã ghi nhận. Gom tất cả hóa đơn
+    /// Top 10 khách hàng theo doanh thu hợp lệ. Gom tất cả hóa đơn
     /// khách lẻ vãng lai thành một dòng "Khách lẻ" duy nhất.
     /// </summary>
     private async Task<List<TongQuanHangTop>> TaiTopKhachHangAsync(
@@ -759,8 +825,7 @@ public sealed class DashboardService
             COALESCE(SUM(hd.khach_can_tra), 0) AS DoanhThu
         FROM hoa_don_ban_hang hd
         LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
-        WHERE hd.trang_thai_hoa_don = 'HOAN_THANH'
-          AND hd.doanh_so_da_ghi_nhan = 1
+        WHERE hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
           AND hd.thoi_gian_ban >= @TuNgay
           AND hd.thoi_gian_ban < @DenKeTiep
         GROUP BY Id, Ten, TenPhu
@@ -873,7 +938,7 @@ public sealed class DashboardService
         const string sqlGanNhat = """
         SELECT thoi_gian_ban AS NgayGanNhat, ma_hoa_don AS MaHoaDon, COALESCE(khach_can_tra, 0) AS TongTien
         FROM hoa_don_ban_hang
-        WHERE trang_thai_hoa_don = 'HOAN_THANH'
+        WHERE trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
         ORDER BY thoi_gian_ban DESC, id DESC
         LIMIT 1;
         """;
@@ -887,9 +952,9 @@ public sealed class DashboardService
         const string sqlThangTruoc = """
         SELECT
             COUNT(*) AS SoHoaDon,
-            COALESCE(SUM(CASE WHEN doanh_so_da_ghi_nhan = 1 THEN khach_can_tra ELSE 0 END), 0) AS DoanhThu
+            COALESCE(SUM(khach_can_tra), 0) AS DoanhThu
         FROM hoa_don_ban_hang
-        WHERE trang_thai_hoa_don = 'HOAN_THANH'
+        WHERE trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
           AND thoi_gian_ban >= @DauThangTruoc
           AND thoi_gian_ban < @DauThangNay;
         """;

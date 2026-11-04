@@ -315,46 +315,12 @@
             <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
               <StackPanel Spacing="3" Width="160">
                 <TextBlock Text="Từ ngày" Classes="tqMetricLabel" />
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
-                  <Button Name="DashboardFromDateButton" Classes="tqDateButton"
-                    Command="{Binding ToggleLichTuNgayCommand}">
-                    <Grid ColumnDefinitions="*,Auto">
-                      <TextBlock Text="{Binding TuNgayTuChonText}" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="1" Text="📅" Foreground="#087F6E" />
-                    </Grid>
-                  </Button>
-                  <Popup PlacementTarget="DashboardFromDateButton"
-                    Placement="Bottom" IsLightDismissEnabled="True"
-                    IsOpen="{Binding IsLichTuNgayMo, Mode=TwoWay}">
-                    <Border Background="White" BorderBrush="#D8E5E0" BorderThickness="1"
-                      CornerRadius="8" Padding="4">
-                      <Calendar SelectedDate="{Binding TuNgayTuChon, Mode=TwoWay}"
-                        Background="Transparent" BorderThickness="0" />
-                    </Border>
-                  </Popup>
-                </Grid>
+                <DatePicker SelectedDate="{Binding TuNgayTuChon, Mode=TwoWay}" HorizontalAlignment="Stretch" />
               </StackPanel>
 
               <StackPanel Spacing="3" Width="160">
                 <TextBlock Text="Đến ngày" Classes="tqMetricLabel" />
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
-                  <Button Name="DashboardToDateButton" Classes="tqDateButton"
-                    Command="{Binding ToggleLichDenNgayCommand}">
-                    <Grid ColumnDefinitions="*,Auto">
-                      <TextBlock Text="{Binding DenNgayTuChonText}" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="1" Text="📅" Foreground="#087F6E" />
-                    </Grid>
-                  </Button>
-                  <Popup PlacementTarget="DashboardToDateButton"
-                    Placement="Bottom" IsLightDismissEnabled="True"
-                    IsOpen="{Binding IsLichDenNgayMo, Mode=TwoWay}">
-                    <Border Background="White" BorderBrush="#D8E5E0" BorderThickness="1"
-                      CornerRadius="8" Padding="4">
-                      <Calendar SelectedDate="{Binding DenNgayTuChon, Mode=TwoWay}"
-                        Background="Transparent" BorderThickness="0" />
-                    </Border>
-                  </Popup>
-                </Grid>
+                <DatePicker SelectedDate="{Binding DenNgayTuChon, Mode=TwoWay}" HorizontalAlignment="Stretch" />
               </StackPanel>
 
               <Button Classes="toolbar-primary" Content="Áp dụng"
@@ -479,33 +445,49 @@
         <StackPanel Spacing="8">
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
             <StackPanel Spacing="2">
-              <TextBlock Text="HÓA ĐƠN CHƯA GHI NHẬN VÀO TỔNG BÁN"
+              <TextBlock Text="HÓA ĐƠN BỊ LOẠI TRỪ KHỎI TỔNG BÁN"
                 Classes="tqSectionTitle" />
-              <TextBlock Text="Doanh thu/đã thu dùng cờ doanh số; công nợ dùng cờ công nợ. Số liệu này không cộng vào KPI chính thức."
+              <TextBlock Text="Gồm các hóa đơn ĐÃ HỦY hoặc LƯU TẠM trong kỳ. Không tính vào Doanh thu chính thức."
                 Classes="tqSectionSub" />
             </StackPanel>
-            <Border Grid.Column="1" Background="#FFF5E5" CornerRadius="6"
-              Padding="8,4" VerticalAlignment="Center">
-              <TextBlock Text="{Binding SoHoaDonChuaGhiNhanHienThi, StringFormat='{}{0} hóa đơn'}"
-                FontSize="12" FontWeight="SemiBold" Foreground="#A45B00" />
-            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+              <Border Background="#FFF5E5" CornerRadius="6"
+                Padding="8,4" VerticalAlignment="Center">
+                <TextBlock Text="{Binding SoHoaDonChuaGhiNhanHienThi, StringFormat='{}{0} hóa đơn'}"
+                  FontSize="12" FontWeight="SemiBold" Foreground="#A45B00" />
+              </Border>
+              <Button Classes="tqViewSegment"
+                      Command="{Binding XemChiTietHoaDonChuaGhiNhanCommand}"
+                      Content="👁️ Xem danh sách"
+                      Height="30"
+                      Padding="10,0"
+                      FontSize="12"
+                      Cursor="Hand" />
+            </StackPanel>
           </Grid>
-          <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+          <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
             <Border Classes="tqFilter" Padding="10,6">
               <StackPanel Spacing="2">
-                <TextBlock Text="Doanh thu hóa đơn" Classes="tqMuted" />
+                <TextBlock Text="Tổng tiền hàng" Classes="tqMuted" />
+                <TextBlock Text="{Binding TongTienHangChuaGhiNhanHienThi}"
+                  FontSize="16" FontWeight="Bold" Foreground="#163F38" />
+              </StackPanel>
+            </Border>
+            <Border Grid.Column="1" Classes="tqFilter" Padding="10,6">
+              <StackPanel Spacing="2">
+                <TextBlock Text="Doanh thu liên quan" Classes="tqMuted" />
                 <TextBlock Text="{Binding DoanhThuChuaGhiNhanHienThi}"
                   FontSize="16" FontWeight="Bold" Foreground="#087F6E" />
               </StackPanel>
             </Border>
-            <Border Grid.Column="1" Classes="tqFilter" Padding="10,6">
+            <Border Grid.Column="2" Classes="tqFilter" Padding="10,6">
               <StackPanel Spacing="2">
                 <TextBlock Text="Đã thu từ hóa đơn" Classes="tqMuted" />
                 <TextBlock Text="{Binding DaThuChuaGhiNhanHienThi}"
                   FontSize="16" FontWeight="Bold" Foreground="#087F6E" />
               </StackPanel>
             </Border>
-            <Border Grid.Column="2" Classes="tqFilter" Padding="10,6">
+            <Border Grid.Column="3" Classes="tqFilter" Padding="10,6">
               <StackPanel Spacing="2">
                 <TextBlock Text="Còn nợ trên hóa đơn" Classes="tqMuted" />
                 <TextBlock Text="{Binding ConNoChuaGhiNhanHienThi}"

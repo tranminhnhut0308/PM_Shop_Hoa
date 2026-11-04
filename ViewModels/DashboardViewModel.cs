@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -22,6 +22,8 @@ public sealed partial class DashboardViewModel : ObservableObject
     // Khởi tạo sẵn một CTS để lần tải đầu tiên không gặp null khi hủy lượt cũ.
     private CancellationTokenSource _cts = new();
     private int _loadVersion;
+
+    public Avalonia.Controls.Window? OwnerWindow { get; set; }
 
     public DashboardViewModel(DatabaseService db)
     {
@@ -64,6 +66,12 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CoTheDungNgayTuChon))]
+    [NotifyPropertyChangedFor(nameof(IsKhoangHomNay))]
+    [NotifyPropertyChangedFor(nameof(IsKhoangBayNgay))]
+    [NotifyPropertyChangedFor(nameof(IsKhoangThangNay))]
+    [NotifyPropertyChangedFor(nameof(IsKhoangThangTruoc))]
+    [NotifyPropertyChangedFor(nameof(IsKhoangNamNay))]
+    [NotifyPropertyChangedFor(nameof(IsKhoangTuDien))]
     private bool dungKhoangTuDien;
 
     [ObservableProperty]
@@ -80,15 +88,20 @@ public sealed partial class DashboardViewModel : ObservableObject
     public string ChieuDoanhThuHienThi => TongQuanChieuDoanhThu.TenHienThi(ChieuDoanhThu);
 
     public string XepHangTopHangHienThi => TongQuanXepHang.TenHienThi(XepHangTopHang);
-    public bool IsKhoangHomNay => KhoangThoiGian == TongQuanKhoangThoiGian.HomNay;
-    public bool IsKhoangBayNgay => KhoangThoiGian == TongQuanKhoangThoiGian.BayNgay;
-    public bool IsKhoangThangNay => KhoangThoiGian == TongQuanKhoangThoiGian.ThangNay;
-    public bool IsKhoangThangTruoc => KhoangThoiGian == TongQuanKhoangThoiGian.ThangTruoc;
-    public bool IsKhoangNamNay => KhoangThoiGian == TongQuanKhoangThoiGian.NamNay;
-    public bool IsKhoangTuDien => KhoangThoiGian == TongQuanKhoangThoiGian.TuDien;
+    public DateTimeOffset NgayToiDa => DateTimeOffset.Now.Date;
+    public DateTimeOffset? TuNgayTuChonMax =>
+        DenNgayTuChon is { } den && den.Date < NgayToiDa.Date ? den.Date : NgayToiDa;
+    public DateTimeOffset? DenNgayTuChonMin => TuNgayTuChon?.Date;
+    public bool IsKhoangHomNay => !DungKhoangTuDien && KhoangThoiGian == TongQuanKhoangThoiGian.HomNay;
+    public bool IsKhoangBayNgay => !DungKhoangTuDien && KhoangThoiGian == TongQuanKhoangThoiGian.BayNgay;
+    public bool IsKhoangThangNay => !DungKhoangTuDien && KhoangThoiGian == TongQuanKhoangThoiGian.ThangNay;
+    public bool IsKhoangThangTruoc => !DungKhoangTuDien && KhoangThoiGian == TongQuanKhoangThoiGian.ThangTruoc;
+    public bool IsKhoangNamNay => !DungKhoangTuDien && KhoangThoiGian == TongQuanKhoangThoiGian.NamNay;
+    public bool IsKhoangTuDien => DungKhoangTuDien || KhoangThoiGian == TongQuanKhoangThoiGian.TuDien;
     public bool IsChieuTheoNgay => ChieuDoanhThu == TongQuanChieuDoanhThu.TheoNgay;
     public bool IsChieuTheoGio => ChieuDoanhThu == TongQuanChieuDoanhThu.TheoGio;
     public bool IsChieuTheoThu => ChieuDoanhThu == TongQuanChieuDoanhThu.TheoThu;
+
     public string TuNgayTuChonText =>
         TuNgayTuChon?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "Chọn ngày";
     public string DenNgayTuChonText =>
@@ -103,13 +116,17 @@ public sealed partial class DashboardViewModel : ObservableObject
     partial void OnTuNgayTuChonChanged(DateTimeOffset? value)
     {
         OnPropertyChanged(nameof(TuNgayTuChonText));
+        OnPropertyChanged(nameof(DenNgayTuChonMin));
         IsLichTuNgayMo = false;
+        ThongBaoLoi = "";
     }
 
     partial void OnDenNgayTuChonChanged(DateTimeOffset? value)
     {
         OnPropertyChanged(nameof(DenNgayTuChonText));
+        OnPropertyChanged(nameof(TuNgayTuChonMax));
         IsLichDenNgayMo = false;
+        ThongBaoLoi = "";
     }
 
     public string TieuDeTheDoanhThu => KhoangThoiGian switch
@@ -223,7 +240,7 @@ public sealed partial class DashboardViewModel : ObservableObject
     public bool HienThiTrangThaiBieuDo => !CoLoi && !DangTai && !CoDuLieu;
 
     public string TrangThaiBieuDo => BieuDoDoanhThu.Any(d => d.SoHoaDon > 0)
-        ? "Các hóa đơn chưa ghi nhận được thống kê riêng ở phần dữ liệu bên trên; biểu đồ này chỉ hiển thị doanh thu chính thức."
+        ? "Biểu đồ thể hiện doanh thu của toàn bộ hóa đơn hợp lệ trong kỳ."
         : NgayGiaoDichGanNhat.HasValue
             ? $"Chưa có giao dịch bán hàng trong {KhoangThoiGianHienThi} ({ThoiGianHienThi}). Giao dịch gần nhất vào ngày {NgayGiaoDichGanNhat.Value:dd/MM/yyyy}."
             : "Chưa có phát sinh trong khoảng đã chọn. Hãy thử chọn khoảng thời gian khác.";
@@ -305,10 +322,18 @@ public sealed partial class DashboardViewModel : ObservableObject
     [ObservableProperty]
     private string soDonHangHomNayHienThi = "0";
 
+    // ============================================================
+    // HÓA ĐƠN BỊ LOẠI TRỪ HỢP LỆ (HÓA ĐƠN HỦY / LƯU TẠM)
+    // ============================================================
+
     [ObservableProperty]
     private bool coHoaDonChuaGhiNhan;
+
     [ObservableProperty]
     private string soHoaDonChuaGhiNhanHienThi = "0";
+
+    [ObservableProperty]
+    private string tongTienHangChuaGhiNhanHienThi = "0 đ";
 
     [ObservableProperty]
     private string doanhThuChuaGhiNhanHienThi = "0 đ";
@@ -318,6 +343,15 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     [ObservableProperty]
     private string conNoChuaGhiNhanHienThi = "0 đ";
+
+    public ObservableCollection<TongQuanHoaDonBiLoaiTru> DanhSachHoaDonChuaGhiNhan { get; } = new();
+
+    [RelayCommand]
+    private async Task XemChiTietHoaDonChuaGhiNhanAsync()
+    {
+        var owner = OwnerWindow ?? (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop ? desktop.MainWindow : null);
+        await Views.HoaDonChuaGhiNhanWindow.ShowAsync(owner, DanhSachHoaDonChuaGhiNhan.ToList());
+    }
 
     // ============================================================
     // THẺ DOANH THU + BIỂU ĐỒ + CHỈ SỐ PHÂN TÍCH GÓC NHÌN
@@ -499,6 +533,14 @@ public sealed partial class DashboardViewModel : ObservableObject
         var token = _cts.Token;
         var version = ++_loadVersion;
 
+        if (KhoangThoiGian == TongQuanKhoangThoiGian.TuDien &&
+            !TryGetKhoangTuChon(out _, out _, out var thongBaoLoi))
+        {
+            DangTai = false;
+            ThongBaoLoi = thongBaoLoi;
+            return;
+        }
+
         DangTai = true;
         ThongBaoLoi = "";
 
@@ -543,10 +585,6 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     private void CapNhat(TongQuanDuLieu duLieu)
     {
-        // Khoảng/thời gian đang xem được suy ra từ lựa chọn nên "Tùy chọn" mở
-        // ô chọn ngày ngay khi bấm, không phụ thuộc thứ tự gán của binding.
-        DungKhoangTuDien = KhoangThoiGian == TongQuanKhoangThoiGian.TuDien;
-
         ThoiGianHienThi = duLieu.ThoiGianHienThi;
 
         DoanhThuHomNayHienThi = duLieu.DoanhThuHomNayHienThi;
@@ -554,11 +592,14 @@ public sealed partial class DashboardViewModel : ObservableObject
         DaThuHomNayHienThi = duLieu.DaThuHomNayHienThi;
         ConNoHomNayHienThi = duLieu.ConNoHomNayHienThi;
         SoDonHangHomNayHienThi = duLieu.SoDonHangHomNayHienThi;
+
         CoHoaDonChuaGhiNhan = duLieu.SoHoaDonChuaGhiNhan > 0;
         SoHoaDonChuaGhiNhanHienThi = duLieu.SoHoaDonChuaGhiNhanHienThi;
+        TongTienHangChuaGhiNhanHienThi = duLieu.TongTienHangChuaGhiNhanHienThi;
         DoanhThuChuaGhiNhanHienThi = duLieu.DoanhThuChuaGhiNhanHienThi;
         DaThuChuaGhiNhanHienThi = duLieu.DaThuChuaGhiNhanHienThi;
         ConNoChuaGhiNhanHienThi = duLieu.ConNoChuaGhiNhanHienThi;
+        DoDanhSachMoi(DanhSachHoaDonChuaGhiNhan, duLieu.DanhSachHoaDonChuaGhiNhan);
 
         TongDoanhThuKyChonHienThi = duLieu.TongDoanhThuKyChonHienThi;
         TongSoHoaDonKyChonHienThi = duLieu.TongSoHoaDonKyChonHienThi;
@@ -658,29 +699,24 @@ public sealed partial class DashboardViewModel : ObservableObject
         if (!TongQuanKhoangThoiGian.TatCa.Contains(key))
             return;
 
+        if (key == TongQuanKhoangThoiGian.TuDien)
+        {
+            DungKhoangTuDien = true;
+            return;
+        }
+
+        DungKhoangTuDien = false;
+
         // Nút vừa được tick thì chuỗi đã được binding ghi vào trước; vẫn chạy lại
         // tải dữ liệu để ô chọn ngày và kết quả cập nhật đúng theo khoảng mới.
         if (key == KhoangThoiGian)
         {
-            DungKhoangTuDien = key == TongQuanKhoangThoiGian.TuDien;
-
             await TaiDuLieuAsync();
 
             return;
         }
 
         KhoangThoiGian = key;
-        DungKhoangTuDien = key == TongQuanKhoangThoiGian.TuDien;
-
-        // "Tùy chọn" mở ra thì đặt sẵn khoảng 7 ngày gần nhất cho tiện.
-        if (DungKhoangTuDien)
-        {
-            if (DenNgayTuChon is null)
-                DenNgayTuChon = DateTimeOffset.Now.Date;
-
-            if (TuNgayTuChon is null)
-                TuNgayTuChon = DenNgayTuChon.Value.AddDays(-6);
-        }
 
         await TaiDuLieuAsync();
     }
@@ -718,13 +754,47 @@ public sealed partial class DashboardViewModel : ObservableObject
     [RelayCommand]
     private async Task ApDungKhoangTuDienAsync()
     {
-        if (DenNgayTuChon is not null && TuNgayTuChon is not null && TuNgayTuChon > DenNgayTuChon)
-            (TuNgayTuChon, DenNgayTuChon) = (DenNgayTuChon, TuNgayTuChon);
-
         DungKhoangTuDien = true;
+
+        if (!TryGetKhoangTuChon(out _, out _, out var thongBaoLoi))
+        {
+            ThongBaoLoi = thongBaoLoi;
+            return;
+        }
+
         KhoangThoiGian = TongQuanKhoangThoiGian.TuDien;
 
         await TaiDuLieuAsync();
+    }
+
+    private bool TryGetKhoangTuChon(out DateTime tuNgay, out DateTime denNgay, out string thongBaoLoi)
+    {
+        tuNgay = default;
+        denNgay = default;
+
+        if (TuNgayTuChon is null || DenNgayTuChon is null)
+        {
+            thongBaoLoi = "Vui lòng chọn cả ngày bắt đầu và ngày kết thúc.";
+            return false;
+        }
+
+        tuNgay = TuNgayTuChon.Value.Date;
+        denNgay = DenNgayTuChon.Value.Date;
+
+        if (tuNgay > denNgay)
+        {
+            thongBaoLoi = "Ngày bắt đầu không được lớn hơn ngày kết thúc.";
+            return false;
+        }
+
+        if (denNgay > DateTime.Now.Date)
+        {
+            thongBaoLoi = "Ngày kết thúc không được ở trong tương lai.";
+            return false;
+        }
+
+        thongBaoLoi = "";
+        return true;
     }
 
     [RelayCommand]

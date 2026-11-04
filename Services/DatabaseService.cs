@@ -9306,50 +9306,96 @@ public sealed partial class DatabaseService
     /// Mọi mã lệch định dạng (NULL, rỗng, chứa chữ) bị loại bằng REGEXP nên dữ liệu
     /// rác không làm sai/hỏng số thứ tự và không làm ứng dụng bị lỗi.
     /// </summary>
+    /// <summary>
+    /// Sinh mã phiếu nhập hàng mới có tính nguyên tử trong hoặc ngoài giao dịch.
+    /// Sử dụng Database Named Lock (GET_LOCK) để chống race condition khi nhiều tab
+    /// hoặc nhiều người dùng cùng tạo/lưu phiếu nhập tại cùng một thời điểm.
+    /// Định dạng: PNxxxxxx (ví dụ PN006550).
+    /// </summary>
+    private static async Task<string> TaoMaPhieuNhapMoiTrongGiaoDichAsync(
+        MySqlConnection connection,
+        MySqlTransaction? transaction)
+    {
+        const string lockName = "pmhoa_phieu_nhap_code_lock";
+        var lockAcquired = false;
+
+        try
+        {
+            var lockVal = await connection.ExecuteScalarAsync<int?>(
+                "SELECT GET_LOCK(@LockName, 10);",
+                new { LockName = lockName },
+                transaction);
+
+            lockAcquired = (lockVal == 1);
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Khong the lay khoa sinh ma phieu nhap (GET_LOCK)", ex);
+        }
+
+        try
+        {
+            const string maxSuffixSql = """
+            SELECT COALESCE(
+                MAX(CAST(SUBSTRING_INDEX(SUBSTRING(TRIM(ma_phieu_nhap), 3), '-', -1) AS SIGNED)),
+                0
+            )
+            FROM phieu_nhap_hang
+            WHERE TRIM(ma_phieu_nhap) REGEXP '^PN[0-9]{6,}(-[0-9]+)?$';
+            """;
+
+            var maxSuffix = await connection.ExecuteScalarAsync<long?>(
+                maxSuffixSql,
+                transaction: transaction) ?? 0L;
+
+            var nextNumber = maxSuffix > 0 ? maxSuffix + 1 : 1L;
+
+            for (var i = 0; i < 100; i++)
+            {
+                var candidate = "PN" + nextNumber.ToString("D6", CultureInfo.InvariantCulture);
+
+                var daTonTai = await connection.ExecuteScalarAsync<int?>(
+                    "SELECT 1 FROM phieu_nhap_hang WHERE ma_phieu_nhap = @Ma LIMIT 1;",
+                    new { Ma = candidate },
+                    transaction: transaction);
+
+                if (daTonTai is null)
+                    return candidate;
+
+                nextNumber++;
+            }
+
+            throw new InvalidOperationException(
+                "Không sinh được mã phiếu nhập: đã thử 100 lần liên tiếp mà mã vẫn bị trùng.");
+        }
+        finally
+        {
+            if (lockAcquired)
+            {
+                try
+                {
+                    await connection.ExecuteAsync(
+                        "SELECT RELEASE_LOCK(@LockName);",
+                        new { LockName = lockName },
+                        transaction);
+                }
+                catch
+                {
+                    // Ignore release lock exception
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sinh mã phiếu nhập tự động dạng PN000001, PN000002, PN000003...
+    /// </summary>
     public async Task<string> TaoMaPhieuNhapMoiAsync()
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.PurchasesCreate, "Bạn không có quyền tạo phiếu nhập hàng.");
         await using var connection = await OpenAsync();
 
-        // SUBSTRING(ma, 3) bỏ đúng 2 ký tự tiền tố "PN" (SQL đếm từ 1).
-        // SUBSTRING_INDEX(..., '-', -1) lấy đoạn sau dấu '-' cuối cùng để vẫn lấy
-        // đúng số thứ tự với mã cũ dạng PNyyMMdd-NNN.
-        //
-        // CAST(... AS SIGNED) để giá trị trả về luôn nằm trong kiểu long.
-        // Nếu dùng AS UNSIGNED, chuỗi bắt đầu bằng '-' sẽ ra số khổng lồ và làm
-        // ExecuteScalarAsync<long> ném exception.
-        const string maxSuffixSql = """
-        SELECT COALESCE(
-            MAX(CAST(SUBSTRING_INDEX(SUBSTRING(TRIM(ma_phieu_nhap), 3), '-', -1) AS SIGNED)),
-            0
-        )
-        FROM phieu_nhap_hang
-        WHERE TRIM(ma_phieu_nhap) REGEXP '^PN[0-9]{6,}(-[0-9]+)?$';
-        """;
-
-        var maxSuffix = await connection.ExecuteScalarAsync<long?>(maxSuffixSql) ?? 0L;
-
-        // Database chưa có phiếu nào (hoặc mã toàn sai định dạng) => bắt đầu từ PN000001.
-        var nextNumber = maxSuffix > 0 ? maxSuffix + 1 : 1L;
-
-        // ma_phieu_nhap có UNIQUE KEY uk_pnh_ma: nếu mã vừa sinh trùng
-        // (ví dụ 2 máy cùng mở màn hình) thì tăng tiếp tới khi ra mã còn trống.
-        for (var i = 0; i < 100; i++)
-        {
-            var candidate = "PN" + nextNumber.ToString("D6", CultureInfo.InvariantCulture);
-
-            var daTonTai = await connection.ExecuteScalarAsync<int?>(
-                "SELECT 1 FROM phieu_nhap_hang WHERE ma_phieu_nhap = @Ma LIMIT 1;",
-                new { Ma = candidate });
-
-            if (daTonTai is null)
-                return candidate;
-
-            nextNumber++;
-        }
-
-        throw new InvalidOperationException(
-            "Không sinh được mã phiếu nhập: đã thử 100 lần liên tiếp mà mã vẫn bị trùng.");
+        return await TaoMaPhieuNhapMoiTrongGiaoDichAsync(connection, null);
     }
 
     public async Task<IReadOnlyList<PhieuNhapHang>> GetPhieuNhapHangAsync(
@@ -10043,12 +10089,13 @@ public sealed partial class DatabaseService
         if (dongHopLe.Count == 0)
             throw new InvalidOperationException("Phiếu nhập chưa có hàng hóa nào hợp lệ.");
 
-        // Chặn ở tầng service: mã phiếu rỗng hoặc sai định dạng tuyệt đối không được
-        // ghi xuống phieu_nhap_hang (ràng buộc UNIQUE uk_pnh_ma chỉ bắt được mã rỗng).
-        if (string.IsNullOrWhiteSpace(phieu.MaPhieuNhap))
-            throw new InvalidOperationException("Mã phiếu nhập rỗng, không thể lưu phiếu nhập.");
+        // Với phiếu cập nhật (phieu.Id > 0), bắt buộc phải có mã phiếu nhập.
+        // Với phiếu tạo mới (phieu.Id == 0), nếu mã phiếu rỗng thì sẽ được tự động sinh duy nhất
+        // và cấp nguyên tử trong transaction.
+        if (phieu.Id > 0 && string.IsNullOrWhiteSpace(phieu.MaPhieuNhap))
+            throw new InvalidOperationException("Mã phiếu nhập rỗng, không thể cập nhật phiếu nhập.");
 
-        phieu.MaPhieuNhap = phieu.MaPhieuNhap.Trim();
+        phieu.MaPhieuNhap = phieu.MaPhieuNhap?.Trim() ?? string.Empty;
 
         var branchId = phieu.ChiNhanhId != 0
             ? phieu.ChiNhanhId
@@ -10084,6 +10131,7 @@ public sealed partial class DatabaseService
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
 
+        var buocXuLy = "Khởi tạo giao dịch";
         try
         {
             // ============================================================
@@ -10119,8 +10167,26 @@ public sealed partial class DatabaseService
             // 1. HEADER
             // ============================================================
 
+            buocXuLy = "Cấp mã và lưu thông tin phiếu nhập";
             if (phieu.Id == 0)
             {
+                var canTaoMaMoi = string.IsNullOrWhiteSpace(phieu.MaPhieuNhap);
+                if (!canTaoMaMoi)
+                {
+                    // Nếu mã đã có nhưng bị trùng trong DB thì tự cấp mã mới
+                    var tonTai = await connection.ExecuteScalarAsync<int?>(
+                        "SELECT 1 FROM phieu_nhap_hang WHERE ma_phieu_nhap = @Ma LIMIT 1;",
+                        new { Ma = phieu.MaPhieuNhap },
+                        transaction);
+                    if (tonTai is not null)
+                        canTaoMaMoi = true;
+                }
+
+                if (canTaoMaMoi)
+                {
+                    phieu.MaPhieuNhap = await TaoMaPhieuNhapMoiTrongGiaoDichAsync(connection, transaction);
+                }
+
                 var insertSql = $"""
                 INSERT INTO phieu_nhap_hang
                 (
@@ -10161,10 +10227,36 @@ public sealed partial class DatabaseService
                 SELECT LAST_INSERT_ID();
                 """;
 
-                phieu.Id = await connection.ExecuteScalarAsync<uint>(
-                    insertSql,
-                    BuildPhieuNhapParameters(phieu),
-                    transaction);
+                const int soLanThuLai = 5;
+                var insertThanhCong = false;
+
+                for (var lan = 1; lan <= soLanThuLai; lan++)
+                {
+                    if (lan > 1)
+                    {
+                        phieu.MaPhieuNhap = await TaoMaPhieuNhapMoiTrongGiaoDichAsync(connection, transaction);
+                    }
+
+                    try
+                    {
+                        phieu.Id = await connection.ExecuteScalarAsync<uint>(
+                            insertSql,
+                            BuildPhieuNhapParameters(phieu),
+                            transaction);
+                        insertThanhCong = true;
+                        break;
+                    }
+                    catch (MySqlException ex) when (ex.Number == 1062 && lan < soLanThuLai)
+                    {
+                        Console.WriteLine($"Trùng mã phiếu nhập {phieu.MaPhieuNhap}, đang thử lại cấp mã mới (lần {lan + 1})...");
+                        await Task.Delay(50);
+                    }
+                }
+
+                if (!insertThanhCong)
+                {
+                    throw new InvalidOperationException("Không thể cấp mã phiếu nhập duy nhất sau nhiều lần thử.");
+                }
             }
             else
             {
@@ -10193,6 +10285,7 @@ public sealed partial class DatabaseService
             }
 
             // ============================================================
+            buocXuLy = "Lưu chi tiết hàng hóa";
             // 2. CHI TIẾT PHIẾU NHẬP
             // ============================================================
 
@@ -10247,6 +10340,7 @@ public sealed partial class DatabaseService
             }
 
             // ============================================================
+            buocXuLy = "Cập nhật tồn kho hàng hóa";
             // 3. CẬP NHẬT TỒN KHO + LỊCH SỬ NHẬP XUẤT KHO
             // ============================================================
 
@@ -10257,6 +10351,7 @@ public sealed partial class DatabaseService
                 dongHopLe);
 
             // ============================================================
+            buocXuLy = "Ghi nhận công nợ nhà cung cấp";
             // 4. CÔNG NỢ NHÀ CUNG CẤP
             //    Ghi vào lich_su_cong_no_nha_cung_cap ngay trong giao dịch này
             //    để số dư công nợ khách mới luôn khớp với phiếu vừa lưu.
@@ -10269,6 +10364,7 @@ public sealed partial class DatabaseService
                 branchId);
 
             // ============================================================
+            buocXuLy = "Ghi nhận sổ quỹ thanh toán";
             // 5. SỔ QUỸ (PHIẾU CHI)
             //    Nếu phiếu nhập có thanh toán tiền (DaThanhToan > 0), ghi
             //    phiếu chi tương ứng vào sổ quỹ để số dư quỹ tự động giảm đúng nguồn tiền.
@@ -10284,6 +10380,7 @@ public sealed partial class DatabaseService
                 hasPhieuQuyPhieuNhapColumns);
 
             // ============================================================
+            buocXuLy = "Lưu chứng từ và nhật ký hoạt động";
             // 6. ĐÍNH KÈM CHỨNG TỪ & AUDIT TRAIL TẠO PHIẾU
             // ============================================================
             if (chungTus != null)
@@ -10356,10 +10453,27 @@ public sealed partial class DatabaseService
 
             return phieu.Id;
         }
-        catch
+        catch (Exception ex)
         {
             await transaction.RollbackAsync();
-            throw;
+
+            SafeLog.WriteError($"Lỗi tại bước [{buocXuLy}] khi lưu phiếu nhập {phieu.MaPhieuNhap}", ex);
+
+            if (ex is MySqlException myEx)
+            {
+                if (myEx.Number == 1062)
+                    throw new InvalidOperationException($"Mã phiếu nhập '{phieu.MaPhieuNhap}' đã tồn tại trong hệ thống. Vui lòng bấm Hoàn thành lại để hệ thống cấp mã mới.", ex);
+
+                if (myEx.Number == 1042 || myEx.Number == 0 || myEx.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase) || myEx.Message.Contains("Connection", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Kết nối Database bị gián đoạn. Vui lòng kiểm tra kết nối mạng và bấm Hoàn thành lại.", ex);
+
+                throw new InvalidOperationException($"Lỗi cơ sở dữ liệu (Mã lỗi {myEx.Number}) tại bước [{buocXuLy}]: {myEx.Message}", ex);
+            }
+
+            if (ex is InvalidOperationException)
+                throw;
+
+            throw new InvalidOperationException($"Thất bại tại bước [{buocXuLy}]: {ex.Message}", ex);
         }
     }
 

@@ -1,0 +1,127 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ShopHoa.Views.HoaDonChuaGhiNhanWindow"
+        x:CompileBindings="False"
+        Width="960"
+        Height="620"
+        MinWidth="800"
+        MinHeight="450"
+        Title="Danh sách hóa đơn chưa ghi nhận / bị loại trừ"
+        WindowStartupLocation="CenterOwner"
+        Background="#F5F8F7"
+        CanResize="True">
+
+  <Window.Styles>
+    <Style Selector="Button">
+      <Setter Property="Padding" Value="18,9" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style Selector="Button.primary:pointerover">
+      <Setter Property="Background" Value="#056B5D" />
+    </Style>
+
+    <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+      <Setter Property="Fill" Value="#E6F4F1" />
+    </Style>
+  </Window.Styles>
+
+  <Border Margin="16"
+          Background="#FFFFFF"
+          BorderBrush="#D7E7E2"
+          BorderThickness="1"
+          CornerRadius="14">
+
+    <DockPanel Margin="20">
+
+      <!-- NÚT ĐÓNG DƯỚI CÙNG -->
+      <StackPanel DockPanel.Dock="Bottom"
+                  Orientation="Horizontal"
+                  HorizontalAlignment="Right"
+                  Margin="0,16,0,0">
+        <Button Classes="primary"
+                Content="Đóng"
+                Click="DongButton_OnClick" />
+      </StackPanel>
+
+      <!-- TIÊU ĐỀ -->
+      <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,16">
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <TextBlock Text="DANH SÁCH HÓA ĐƠN BỊ LOẠI TRỪ KHỎI TỔNG BÁN"
+                     FontSize="18"
+                     FontWeight="Bold"
+                     Foreground="#163F38" />
+          <Border x:Name="BadgeSoLuong"
+                  Background="#FFF5E5"
+                  CornerRadius="6"
+                  Padding="8,3"
+                  VerticalAlignment="Center">
+            <TextBlock x:Name="TxtSoLuongBadge"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Foreground="#A45B00" />
+          </Border>
+        </StackPanel>
+        <TextBlock Text="Bao gồm các hóa đơn ĐÃ HỦY hoặc LƯU TẠM trong khoảng thời gian đã chọn. Những hóa đơn này hợp lệ được loại trừ và không tính vào doanh thu chính thức."
+                   FontSize="12"
+                   Foreground="#667A74"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+
+      <!-- BẢNG DANH SÁCH -->
+      <DataGrid x:Name="GridHoaDon"
+                AutoGenerateColumns="False"
+                IsReadOnly="True"
+                GridLinesVisibility="Horizontal"
+                BorderThickness="1"
+                BorderBrush="#E5ECE9"
+                CornerRadius="8"
+                RowHeight="40"
+                HeadersVisibility="Column">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="Mã hóa đơn"
+                              Binding="{Binding MaHoaDon}"
+                              Width="130"
+                              FontWeight="SemiBold" />
+          <DataGridTextColumn Header="Thời gian"
+                              Binding="{Binding ThoiGianHienThi}"
+                              Width="140" />
+          <DataGridTextColumn Header="Khách hàng"
+                              Binding="{Binding TenKhachHang}"
+                              Width="160" />
+          <DataGridTextColumn Header="Tổng tiền hàng"
+                              Binding="{Binding TongTienHangHienThi}"
+                              Width="120" />
+          <DataGridTextColumn Header="Khách cần trả"
+                              Binding="{Binding KhachCanTraHienThi}"
+                              Width="120" />
+          <DataGridTextColumn Header="Đã trả"
+                              Binding="{Binding DaThanhToanHienThi}"
+                              Width="110" />
+          <DataGridTextColumn Header="Còn nợ"
+                              Binding="{Binding ConNoHienThi}"
+                              Width="110" />
+          <DataGridTextColumn Header="Lý do loại trừ"
+                              Binding="{Binding LyDoLoaiTru}"
+                              Width="130" />
+          <DataGridTextColumn Header="Chi tiết lý do"
+                              Binding="{Binding LyDoChiTiet}"
+                              Width="*" />
+        </DataGrid.Columns>
+      </DataGrid>
+
+    </DockPanel>
+  </Border>
+</Window>

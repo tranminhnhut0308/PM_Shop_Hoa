@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Platform.Storage;
 using ClosedXML.Excel;
@@ -29,7 +29,17 @@ public partial class MainWindowViewModel : ObservableObject
     private string _saleSearchKeywordDaTim = string.Empty;
     private string _phieuNhapKeywordDaTim = string.Empty;
     private int _productLoadVersion;
-    public Window? OwnerWindow { get; set; }
+    private Window? _ownerWindow;
+    public Window? OwnerWindow
+    {
+        get => _ownerWindow;
+        set
+        {
+            _ownerWindow = value;
+            if (Dashboard != null)
+                Dashboard.OwnerWindow = value;
+        }
+    }
     private bool _customersLoaded;
     private bool _invoicesLoaded;
     private bool _overviewLoaded;
@@ -6059,12 +6069,7 @@ public partial class MainWindowViewModel : ObservableObject
             }
         }
 
-        // 6. Mã phiếu phải sinh được trước khi lưu
-        if (string.IsNullOrWhiteSpace(PhieuNhapMa))
-        {
-            await BaoLoiLuuPhieuNhapAsync("Chưa tạo được mã phiếu nhập, vui lòng mở lại màn hình và thử lại.");
-            return;
-        }
+        // 6. Mã phiếu: nếu rỗng sẽ được sinh duy nhất tự động khi lưu (nguyên tử trong transaction)
 
         var soHangCapNhatDvt = dongHopLe.Count(item => item.DonViTinhIdMoi is > 0);
         var thongBaoDvtConfirm = soHangCapNhatDvt > 0
@@ -6082,15 +6087,15 @@ public partial class MainWindowViewModel : ObservableObject
 
         IsSavingPhieuNhap = true;
 
-        var maPhieuVuaLuu = PhieuNhapMa;
         var tongTienVuaLuu = PhieuNhapTongTienNhapText;
+        string maPhieuVuaLuu = PhieuNhapMa;
 
         try
         {
             var phieu = new PhieuNhapHang
             {
                 Id = _phieuNhapId,
-                MaPhieuNhap = PhieuNhapMa,
+                MaPhieuNhap = PhieuNhapMa?.Trim() ?? string.Empty,
                 NhaCungCapId = SelectedPhieuNhapNcc.Id,
                 TenNhaCungCap = SelectedPhieuNhapNcc.TenNhaCungCap,
                 ThoiGianNhap = PhieuNhapNgayNhap.Value,
@@ -6107,6 +6112,9 @@ public partial class MainWindowViewModel : ObservableObject
             // Lưu header + chi tiết + tồn kho + giá vốn + ĐVT + công nợ + chứng từ + audit trong MỘT transaction.
             // Service tự rollback toàn bộ nếu bất kỳ bước nào lỗi.
             _phieuNhapId = await _db.LuuPhieuNhapHangAsync(phieu, dongHopLe, ActivePhieuNhapTab?.DraftId, PhieuNhapChungTus);
+
+            maPhieuVuaLuu = phieu.MaPhieuNhap;
+            PhieuNhapMa = phieu.MaPhieuNhap;
         }
         catch (Exception ex)
         {
@@ -6196,9 +6204,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         // KhoiTaoPhieuNhapMoiAsync() để PhieuNhapMa = "" nếu sinh mã thất bại
         // (lỗi SQL/kết nối). Không được báo "sẵn sàng" khi mã còn rỗng.
-        StatusMessage = string.IsNullOrWhiteSpace(PhieuNhapMa)
-            ? $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Không tạo được mã phiếu mới, vui lòng mở lại màn hình."
-            : $"✅ Đã lưu phiếu nhập {maPhieuVuaLuu}. Sẵn sàng lập phiếu mới: {PhieuNhapMa}";
+        StatusMessage = $"✅ Đã lưu thành công phiếu nhập {maPhieuVuaLuu}.";
     }
 
     partial void OnTienKhachDuaChanged(decimal value)

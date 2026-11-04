@@ -246,6 +246,34 @@ public sealed class TongQuanHoatDongTaiKhoanCon
     };
 }
 
+/// <summary>Thông tin một hóa đơn bị loại trừ khỏi KPI chính thức (hóa đơn hủy, lưu tạm).</summary>
+public sealed class TongQuanHoaDonBiLoaiTru
+{
+    public uint Id { get; set; }
+    public string MaHoaDon { get; set; } = "";
+    public DateTime ThoiGianBan { get; set; }
+    public string TenKhachHang { get; set; } = "";
+    public decimal TongTienHang { get; set; }
+    public decimal KhachCanTra { get; set; }
+    public decimal DaThanhToan { get; set; }
+    public decimal ConNo { get; set; }
+    public string TrangThaiHoaDon { get; set; } = "";
+    public string? LyDoChiTiet { get; set; }
+
+    public string LyDoLoaiTru => TrangThaiHoaDon switch
+    {
+        "DA_HUY" or "HUY" => "Hóa đơn đã hủy",
+        "LUU_TAM" => "Hóa đơn lưu tạm",
+        _ => "Chưa ghi nhận"
+    };
+
+    public string ThoiGianHienThi => ThoiGianBan.ToString("dd/MM/yyyy HH:mm");
+    public string TongTienHangHienThi => $"{TongTienHang:N0} đ";
+    public string KhachCanTraHienThi => $"{KhachCanTra:N0} đ";
+    public string DaThanhToanHienThi => $"{DaThanhToan:N0} đ";
+    public string ConNoHienThi => $"{ConNo:N0} đ";
+}
+
 /// <summary>Thống kê kho lấy trực tiếp từ database, không suy diễn ở client.</summary>
 public sealed class TongQuanThongKeKho
 {
@@ -278,13 +306,18 @@ public sealed class TongQuanDuLieu
 
     public int SoDonHangHomNay { get; set; }
 
+    // --- Hóa đơn bị loại trừ hợp lệ khỏi KPI chính thức (hóa đơn hủy, lưu tạm) ---
     public int SoHoaDonChuaGhiNhan { get; set; }
+
+    public decimal TongTienHangChuaGhiNhan { get; set; }
 
     public decimal DoanhThuChuaGhiNhan { get; set; }
 
     public decimal DaThuChuaGhiNhan { get; set; }
 
     public decimal ConNoChuaGhiNhan { get; set; }
+
+    public List<TongQuanHoaDonBiLoaiTru> DanhSachHoaDonChuaGhiNhan { get; set; } = [];
 
     // --- Thông tin giao dịch gần nhất & kỳ trước (hỗ trợ hiển thị khi kỳ chọn chưa có dữ liệu) ---
     public DateTime? NgayGiaoDichGanNhat { get; set; }
@@ -336,6 +369,8 @@ public sealed class TongQuanDuLieu
     public string SoDonHangHomNayHienThi => $"{SoDonHangHomNay:N0}";
 
     public string SoHoaDonChuaGhiNhanHienThi => $"{SoHoaDonChuaGhiNhan:N0}";
+
+    public string TongTienHangChuaGhiNhanHienThi => $"{TongTienHangChuaGhiNhan:N0} đ";
 
     public string DoanhThuChuaGhiNhanHienThi => $"{DoanhThuChuaGhiNhan:N0} đ";
 

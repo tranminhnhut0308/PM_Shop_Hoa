@@ -5815,7 +5815,7 @@
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="10,8">
-                        <TextBlock Text="{Binding PhieuNhapMa}"
+                        <TextBlock Text="{Binding PhieuNhapMaHienThi}"
                           FontSize="14"
                           FontWeight="Bold"
                           Foreground="#087F6E" />
