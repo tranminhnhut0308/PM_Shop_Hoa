@@ -371,4 +371,8 @@ public partial class InvoiceWindow : Window
         }
         catch (Exception ex)
         {
-           
+            PrintStatus.Text = "Không mở được bản in: " + ex.Message;
+            PrintStatus.IsVisible = true;
+        }
+    }
+}

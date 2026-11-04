@@ -3883,7 +3883,7 @@
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center" />
 
-                          <!-- CỘT THAO TÁC (THU NỢ) -->
+                          <!-- CỘT THAO TÁC (THU NỢ + HỦY + TẠO LẠI) -->
                           <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="6"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Button
@@ -3902,6 +3902,42 @@
                               HorizontalContentAlignment="Center"
                               VerticalContentAlignment="Center"
                               Command="{Binding ElementName=RootWindow, Path=DataContext.ThuNoHoaDonCommand}"
+                              CommandParameter="{Binding}" />
+
+                            <Button
+                              IsVisible="{Binding CoTheHuy}"
+                              Content="Hủy"
+                              Width="46" Height="26"
+                              Padding="0"
+                              CornerRadius="13"
+                              Background="#FEF3F2"
+                              BorderBrush="#FECDCA"
+                              BorderThickness="1"
+                              FontSize="11"
+                              FontWeight="SemiBold"
+                              Foreground="#B42318"
+                              ToolTip.Tip="Hủy hóa đơn này và hoàn tác kho / công nợ / sổ quỹ"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Command="{Binding ElementName=RootWindow, Path=DataContext.HuyHoaDonCommand}"
+                              CommandParameter="{Binding}" />
+
+                            <Button
+                              IsVisible="{Binding LaHoaDonDaHuy}"
+                              Content="Tạo lại"
+                              Width="60" Height="26"
+                              Padding="0"
+                              CornerRadius="13"
+                              Background="#E6F5F1"
+                              BorderBrush="#B2DDD0"
+                              BorderThickness="1"
+                              FontSize="11"
+                              FontWeight="SemiBold"
+                              Foreground="#087F6E"
+                              ToolTip.Tip="Tạo lại hóa đơn mới từ hóa đơn đã hủy này"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Command="{Binding ElementName=RootWindow, Path=DataContext.TaoLaiHoaDonDaHuyCommand}"
                               CommandParameter="{Binding}" />
                           </StackPanel>
 
