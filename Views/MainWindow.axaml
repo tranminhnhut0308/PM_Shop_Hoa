@@ -3601,12 +3601,19 @@
                       Foreground="#4F6861" VerticalAlignment="Center" />
                     <ComboBox x:Name="InvoiceDatePresetBox" ItemsSource="{Binding InvoiceDatePresets}"
                       SelectedItem="{Binding SelectedInvoiceDatePreset, Mode=TwoWay}"
-                      Width="190" Height="36" FontSize="12"
+                      Width="170" Height="36" FontSize="12"
                       VerticalContentAlignment="Center" />
                     <Button Content="▦" Width="36" Height="36" Padding="0"
                       Classes="toolbar-action" ToolTip.Tip="Chọn khoảng ngày"
                       IsVisible="{Binding IsInvoiceCustomDatePreset}"
                       Command="{Binding MoChonKhoangNgayHoaDonCommand}" />
+                    <TextBlock Text="{Binding InvoiceDateCompactText}" Width="170"
+                      TextTrimming="CharacterEllipsis" FontSize="11" Foreground="#4F6861"
+                      VerticalAlignment="Center" ToolTip.Tip="{Binding InvoiceDateFilterText}" />
+                    <Button Content="×" Width="28" Height="36" Padding="0"
+                      Classes="toolbar-action" ToolTip.Tip="Xóa lọc thời gian"
+                      IsVisible="{Binding HasInvoiceDateFilter}"
+                      Command="{Binding DatLaiKhoangNgayHoaDonCommand}" />
                   </StackPanel>
                   <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5"
                     HorizontalAlignment="Center" VerticalAlignment="Center">
