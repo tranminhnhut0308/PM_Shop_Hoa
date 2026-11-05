@@ -23,6 +23,7 @@ public sealed class ThanhToanCongNoKhachHang
     public string TrangThai { get; set; } = "HOAN_THANH";
     public bool DaHuy => TrangThai.Equals("HUY", StringComparison.OrdinalIgnoreCase);
     public string TrangThaiHienThi => DaHuy ? "Đã hủy" : "Hoàn thành";
+    public int SoThuTuHienThi { get; set; }
 
     public string? NguoiHuy { get; set; }
     public DateTime? ThoiGianHuy { get; set; }

@@ -58,7 +58,8 @@ public sealed partial class DatabaseService
                 }
             }
 
-            await AddColIfMissing(connection, "phieu_nhap_hang", "ly_do_huy", "TEXT NULL");
+            await AddColIfMissing(connection, "phieu_nhap_hang", "ly_do_huy",
+                "TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL");
             await AddColIfMissing(connection, "phieu_nhap_hang", "nguoi_huy_id", "INT(10) UNSIGNED NULL");
             await AddColIfMissing(connection, "phieu_nhap_hang", "ten_nguoi_huy", "VARCHAR(150) NULL");
             await AddColIfMissing(connection, "phieu_nhap_hang", "thoi_gian_huy", "DATETIME NULL");

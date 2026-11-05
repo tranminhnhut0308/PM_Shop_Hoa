@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
 
 namespace ShopHoa.Services;
@@ -182,15 +183,54 @@ public static class ChungTuStorageService
         var relativePath = $"{subFolder}/{uniqueFileName}";
         var size = new FileInfo(destPhysicalPath).Length;
 
-        // Xóa file tạm nếu là file trong _temp
+        return (relativePath, uniqueFileName, size);
+    }
+
+    public static void XoaFileTamNeuCo(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            return;
+
+        var tempRoot = Path.GetFullPath(GetTempStoragePath());
+        var fullPath = Path.GetFullPath(filePath);
+        if (!fullPath.StartsWith(tempRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        XoaFileNeuCo(fullPath, "tạm");
+    }
+
+    public static void XoaFileDaLuuNeuCo(string relativePath)
+    {
+        var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
+        if (Path.IsPathRooted(normalized))
+            throw new ArgumentException("Đường dẫn chứng từ phải là đường dẫn tương đối.", nameof(relativePath));
+
+        var storageRoot = Path.GetFullPath(GetBaseStoragePath());
+        var fullPath = Path.GetFullPath(Path.Combine(storageRoot, normalized));
+        if (!fullPath.StartsWith(storageRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            || fullPath.StartsWith(Path.GetFullPath(GetTempStoragePath()) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Đường dẫn chứng từ nằm ngoài thư mục lưu trữ hợp lệ.", nameof(relativePath));
+        }
+
+        XoaFileNeuCo(fullPath, "đã lưu");
+    }
+
+    private static void XoaFileNeuCo(string filePath, string loaiFile)
+    {
         try
         {
-            if (tempOrSourceFilePath.Contains("_temp", StringComparison.OrdinalIgnoreCase) && File.Exists(tempOrSourceFilePath))
-                File.Delete(tempOrSourceFilePath);
+            if (File.Exists(filePath))
+                File.Delete(filePath);
         }
-        catch { }
-
-        return (relativePath, uniqueFileName, size);
+        catch (IOException ex)
+        {
+            SafeLog.WriteError($"Không thể xóa tệp chứng từ {loaiFile}: {filePath}", ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            SafeLog.WriteError($"Không có quyền xóa tệp chứng từ {loaiFile}: {filePath}", ex);
+        }
     }
 
     /// <summary>

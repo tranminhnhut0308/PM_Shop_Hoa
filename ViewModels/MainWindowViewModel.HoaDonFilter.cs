@@ -34,6 +34,8 @@ public sealed partial class MainWindowViewModel
 
     [ObservableProperty]
     private bool isInvoiceAdvancedFiltersExpanded;
+    [ObservableProperty]
+    private string invoiceCustomerSearch = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasNoInvoices))]
@@ -117,7 +119,9 @@ public sealed partial class MainWindowViewModel
         "Tất cả",
         "Đã thanh toán",
         "Thanh toán một phần",
-        "Chưa thanh toán"
+        "Chưa thanh toán",
+        "Còn công nợ",
+        "Không còn công nợ"
     ];
 
     public string SelectedInvoicePaymentStatus
@@ -136,6 +140,8 @@ public sealed partial class MainWindowViewModel
     [
         "Tất cả",
         "Hoàn thành",
+        "Chưa thanh toán",
+        "Thanh toán một phần",
         "Đã hủy",
         "Tổng hợp"
     ];
@@ -154,6 +160,7 @@ public sealed partial class MainWindowViewModel
 
     // --- 3. BỘ LỌC KHÁCH HÀNG ---
     public ObservableCollection<KhachHangFilterOption> InvoiceCustomerOptions { get; } = [];
+    public ObservableCollection<KhachHangFilterOption> InvoiceCustomerFilterOptions { get; } = [];
 
     public KhachHangFilterOption? SelectedInvoiceCustomer
     {
@@ -163,6 +170,7 @@ public sealed partial class MainWindowViewModel
             if (SetProperty(ref _selectedInvoiceCustomer, value))
             {
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+                CapNhatInvoiceCustomerFilterOptions();
             }
         }
     }
@@ -222,6 +230,9 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(InvoiceActiveFiltersText));
     }
 
+    partial void OnInvoiceCustomerSearchChanged(string value) =>
+        CapNhatInvoiceCustomerFilterOptions();
+
     public async Task TaiDanhSachKhachHangLocHoaDonAsync()
     {
         try
@@ -253,11 +264,29 @@ public sealed partial class MainWindowViewModel
 
             _selectedInvoiceCustomer = InvoiceCustomerOptions.FirstOrDefault();
             OnPropertyChanged(nameof(SelectedInvoiceCustomer));
+            CapNhatInvoiceCustomerFilterOptions();
             await TaiDanhSachNhanVienLocHoaDonAsync();
         }
         catch (Exception ex)
         {
             SafeLog.WriteError("TaiDanhSachKhachHangLocHoaDonAsync error", ex);
+        }
+    }
+
+    private void CapNhatInvoiceCustomerFilterOptions()
+    {
+        var query = ProductSearchHelper.ChuanHoa(InvoiceCustomerSearch);
+        InvoiceCustomerFilterOptions.Clear();
+
+        foreach (var option in InvoiceCustomerOptions)
+        {
+            var matches = string.IsNullOrWhiteSpace(query)
+                || ProductSearchHelper.ChuanHoa(option.DisplayText).Contains(query, StringComparison.Ordinal);
+            var isSelected = option.Id == SelectedInvoiceCustomer?.Id
+                && option.IsWalkIn == SelectedInvoiceCustomer?.IsWalkIn;
+
+            if (matches || option.Id is null || isSelected)
+                InvoiceCustomerFilterOptions.Add(option);
         }
     }
 
@@ -497,6 +526,19 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(InvoiceActiveFiltersText));
     }
 
+    [RelayCommand]
+    private async Task XoaTuKhoaHoaDonAsync()
+    {
+        InvoiceSearch = "";
+        await SearchInvoicesAsync();
+    }
+
+    [RelayCommand]
+    private async Task LamMoiDanhSachHoaDonAsync()
+    {
+        await SearchInvoicesAsync(giuTrang: true);
+    }
+
     // --- 7. TÌM KIẾM VÀ TRUY VẤN DỮ LIỆU ---
     [RelayCommand]
     public async Task SearchInvoicesAsync()
@@ -539,12 +581,16 @@ public sealed partial class MainWindowViewModel
                 "Đã thanh toán" => "DA_THANH_TOAN",
                 "Thanh toán một phần" => "THANH_TOAN_MOT_PHAN",
                 "Chưa thanh toán" => "CHUA_THANH_TOAN",
+                "Còn công nợ" => "CON_NO",
+                "Không còn công nợ" => "KHONG_CON_NO",
                 _ => null
             };
 
             var ttHoaDon = SelectedInvoiceStatus switch
             {
                 "Hoàn thành" => "HOAN_THANH",
+                "Chưa thanh toán" => "CHUA_THANH_TOAN",
+                "Thanh toán một phần" => "THANH_TOAN_MOT_PHAN",
                 "Đã hủy" => "DA_HUY",
                 "Tổng hợp" => "TONG_HOP",
                 _ => null
@@ -656,6 +702,8 @@ public sealed partial class MainWindowViewModel
 
         _selectedInvoiceCustomer = InvoiceCustomerOptions.FirstOrDefault();
         OnPropertyChanged(nameof(SelectedInvoiceCustomer));
+        InvoiceCustomerSearch = "";
+        CapNhatInvoiceCustomerFilterOptions();
 
         _selectedInvoiceEmployee = InvoiceEmployeeOptions.FirstOrDefault();
         OnPropertyChanged(nameof(SelectedInvoiceEmployee));

@@ -107,7 +107,9 @@ public partial class DatabaseService
         string? searchKeyword = null,
         uint? khachHangId = null,
         string? trangThaiThanhToan = null,
-        string? trangThaiHoaDon = null)
+        string? trangThaiHoaDon = null,
+        uint? nhanVienId = null,
+        bool khachLe = false)
     {
         await using var connection = await OpenAsync();
 
@@ -121,47 +123,40 @@ public partial class DatabaseService
 
         if (yeuCau.PhamViLoc == PhamViLocXuat.TheoBoLocHienTai)
         {
-            if (!string.IsNullOrWhiteSpace(searchKeyword))
+            var paymentStatusCode = trangThaiThanhToan switch
             {
-                var kw = $"%{searchKeyword.Trim()}%";
-                whereSb.Append(" AND (hd.ma_hoa_don LIKE @Kw OR kh.ten_khach_hang LIKE @Kw OR kh.so_dien_thoai LIKE @Kw OR hd.so_dien_thoai LIKE @Kw)");
-                parameters.Add("Kw", kw);
-            }
+                "Đã thanh toán" => "DA_THANH_TOAN",
+                "Thanh toán một phần" => "THANH_TOAN_MOT_PHAN",
+                "Chưa thanh toán" => "CHUA_THANH_TOAN",
+                "Còn công nợ" => "CON_NO",
+                "Không còn công nợ" => "KHONG_CON_NO",
+                _ => trangThaiThanhToan
+            };
 
-            if (khachHangId.HasValue && khachHangId.Value > 0)
+            var invoiceStatusCode = trangThaiHoaDon switch
             {
-                whereSb.Append(" AND hd.khach_hang_id = @KhachHangId");
-                parameters.Add("KhachHangId", khachHangId.Value);
-            }
+                "Hoàn thành" => "HOAN_THANH",
+                "Chưa thanh toán" => "CHUA_THANH_TOAN",
+                "Thanh toán một phần" => "THANH_TOAN_MOT_PHAN",
+                "Đã hủy" => "DA_HUY",
+                "Tổng hợp" => "TONG_HOP",
+                _ => trangThaiHoaDon
+            };
 
-            if (!string.IsNullOrWhiteSpace(trangThaiThanhToan) && trangThaiThanhToan != "Tất cả")
+            var (filterWhere, filterParameters) = XayDungDieuKienLocHoaDon(
+                searchKeyword,
+                tuNgay: null,
+                denNgay: null,
+                trangThaiThanhToan: paymentStatusCode,
+                trangThaiHoaDon: invoiceStatusCode,
+                khachHangId: khachHangId,
+                nhanVienId: nhanVienId,
+                khachLe: khachLe);
+
+            if (!string.IsNullOrWhiteSpace(filterWhere))
             {
-                var ttCode = trangThaiThanhToan switch
-                {
-                    "Đã thanh toán" => "DA_THANH_TOAN",
-                    "Thanh toán một phần" => "THANH_TOAN_MOT_PHAN",
-                    "Chưa thanh toán" => "CHUA_THANH_TOAN",
-                    _ => trangThaiThanhToan
-                };
-                whereSb.Append(" AND hd.trang_thai_thanh_toan = @TrangThaiThanhToan");
-                parameters.Add("TrangThaiThanhToan", ttCode);
-            }
-
-            if (!string.IsNullOrWhiteSpace(trangThaiHoaDon) && trangThaiHoaDon != "Tất cả")
-            {
-                var hdCode = trangThaiHoaDon switch
-                {
-                    "Hoàn thành" => "HOAN_THANH",
-                    "Đã hủy" => "DA_HUY",
-                    _ => trangThaiHoaDon
-                };
-
-                if (hdCode == "DA_HUY")
-                    whereSb.Append(" AND hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY')");
-                else
-                    whereSb.Append(" AND hd.trang_thai_hoa_don = @TrangThaiHoaDon");
-
-                parameters.Add("TrangThaiHoaDon", hdCode);
+                whereSb.Append(" AND ").Append(filterWhere["WHERE ".Length..]);
+                parameters.AddDynamicParams(filterParameters);
             }
         }
 

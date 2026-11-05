@@ -26,6 +26,7 @@ public sealed partial class DatabaseService
 {
     private readonly DatabaseConfigService _configService;
     private bool? _hasPhieuNhapExtraColumns;
+    private readonly SemaphoreSlim _ensurePhieuNhapExtraColumns = new(1, 1);
     private bool? _hasPhieuNhapTrackingColumns;
     private readonly SemaphoreSlim _ensurePhieuNhapTrackingColumns = new(1, 1);
     private bool? _hasHoaDonTrackingColumns;
@@ -4806,6 +4807,7 @@ public sealed partial class DatabaseService
                     OR kh.ten_khach_hang LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
                     OR {tenKhachHangExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
                     OR kh.so_dien_thoai LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
+                    OR hd.so_dien_thoai LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
                     OR hd.ghi_chu LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
                     OR {ghiChuExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
                     OR EXISTS (
@@ -4855,6 +4857,16 @@ public sealed partial class DatabaseService
         {
             dieuKien.Add("hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY')");
         }
+        else if (ttHd is "CHUA_THANH_TOAN")
+        {
+            dieuKien.Add(
+                "COALESCE(hd.khach_da_thanh_toan, 0) <= 0 AND COALESCE(hd.khach_can_tra, 0) > 0");
+        }
+        else if (ttHd is "THANH_TOAN_MOT_PHAN")
+        {
+            dieuKien.Add(
+                "COALESCE(hd.khach_da_thanh_toan, 0) > 0 AND COALESCE(hd.khach_da_thanh_toan, 0) < COALESCE(hd.khach_can_tra, 0)");
+        }
         else if (ttHd is "TONG_HOP")
         {
             dieuKien.Add("hd.trang_thai_hoa_don = 'TONG_HOP'");
@@ -4874,6 +4886,14 @@ public sealed partial class DatabaseService
         {
             dieuKien.Add(
                 "COALESCE(hd.khach_da_thanh_toan, 0) <= 0 AND COALESCE(hd.khach_can_tra, 0) > 0");
+        }
+        else if (ttTt is "CON_NO")
+        {
+            dieuKien.Add("COALESCE(hd.con_no, 0) > 0");
+        }
+        else if (ttTt is "KHONG_CON_NO")
+        {
+            dieuKien.Add("COALESCE(hd.con_no, 0) <= 0");
         }
 
         var whereClause = dieuKien.Count > 0 ? "WHERE " + string.Join(" AND ", dieuKien) : "";
@@ -10115,6 +10135,10 @@ public sealed partial class DatabaseService
         var hasPhuongThucColumn = await EnsurePhieuNhapPhuongThucColumnAsync();
         var hasPhieuQuyExtraColumns = await EnsurePhieuQuyExtraColumnsAsync();
         var hasPhieuQuyPhieuNhapColumns = await EnsurePhieuQuyPhieuNhapColumnsAsync();
+        if (!await EnsureLichSuChinhSuaPhieuNhapTableAsync())
+            throw new InvalidOperationException("Không thể chuẩn bị bảng nhật ký phiếu nhập; phiếu chưa được lưu.");
+        if (chungTus is not null && !await EnsureDinhKemPhieuNhapTableAsync())
+            throw new InvalidOperationException("Không thể chuẩn bị bảng chứng từ phiếu nhập; phiếu chưa được lưu.");
 
         var extraColumns = (hasPhuongThucColumn ? ",\n                    phuong_thuc_thanh_toan" : string.Empty)
             + (hasExtraColumns ? ",\n                    so_hoa_don_dau_vao,\n                    ma_dat_hang_nhap,\n                    ngay_hoa_don_dau_vao,\n                    ten_nguoi_giao_hang,\n                    sdt_nguoi_giao_hang" : string.Empty);
@@ -10128,6 +10152,7 @@ public sealed partial class DatabaseService
         if (!string.IsNullOrWhiteSpace(draftId))
             await EnsurePhieuNhapNhapTableAsync();
 
+        var attachmentCleanup = new AttachmentSaveCleanup();
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
 
@@ -10394,11 +10419,11 @@ public sealed partial class DatabaseService
                     phieu.MaPhieuNhap,
                     chungTus,
                     currentUserId,
-                    currentUserName);
+                    currentUserName,
+                    attachmentCleanup);
             }
 
             // Ghi nhận Audit Trail tạo phiếu nhập
-            await EnsureLichSuChinhSuaPhieuNhapTableAsync();
             const string insertLichSuTaoSql = """
             INSERT INTO lich_su_chinh_sua_phieu_nhap
             (
@@ -10443,6 +10468,9 @@ public sealed partial class DatabaseService
 
             await transaction.CommitAsync();
 
+            foreach (var tempFile in attachmentCleanup.TempFilesToDeleteOnCommit)
+                ChungTuStorageService.XoaFileTamNeuCo(tempFile);
+
             _ = LogSubAccountActivityAsync(
                 "Nhập hàng",
                 "PHIEU_NHAP",
@@ -10456,6 +10484,8 @@ public sealed partial class DatabaseService
         catch (Exception ex)
         {
             await transaction.RollbackAsync();
+            foreach (var storedFile in attachmentCleanup.FilesToDeleteOnRollback)
+                ChungTuStorageService.XoaFileDaLuuNeuCo(storedFile);
 
             SafeLog.WriteError($"Lỗi tại bước [{buocXuLy}] khi lưu phiếu nhập {phieu.MaPhieuNhap}", ex);
 
@@ -10926,27 +10956,82 @@ public sealed partial class DatabaseService
         if (_hasPhieuNhapExtraColumns.HasValue)
             return _hasPhieuNhapExtraColumns.Value;
 
+        await _ensurePhieuNhapExtraColumns.WaitAsync();
         try
         {
+            if (_hasPhieuNhapExtraColumns.HasValue)
+                return _hasPhieuNhapExtraColumns.Value;
+
             await using var connection = await OpenAsync();
-
-            const string sql = """
-            SELECT COUNT(*)
-            FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = 'phieu_nhap_hang'
-              AND COLUMN_NAME IN ('so_hoa_don_dau_vao', 'ma_dat_hang_nhap');
-            """;
-
-            var count = await connection.ExecuteScalarAsync<long>(sql);
-            _hasPhieuNhapExtraColumns = count >= 2;
+            await EnsurePhieuNhapColumnAsync(connection, "so_hoa_don_dau_vao", null,
+                "VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL", copyEmptyValue: true);
+            await EnsurePhieuNhapColumnAsync(connection, "ma_dat_hang_nhap", null,
+                "VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL", copyEmptyValue: true);
+            await EnsurePhieuNhapColumnAsync(connection, "ngay_hoa_don_dau_vao", "gay_hoa_don_dau_vao",
+                "DATE NULL DEFAULT NULL", copyEmptyValue: false);
+            await EnsurePhieuNhapColumnAsync(connection, "ten_nguoi_giao_hang", "en_nguoi_giao_hang",
+                "VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL", copyEmptyValue: true);
+            await EnsurePhieuNhapColumnAsync(connection, "sdt_nguoi_giao_hang", null,
+                "VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL", copyEmptyValue: true);
+            _hasPhieuNhapExtraColumns = true;
         }
-        catch
+        catch (Exception ex)
         {
-            _hasPhieuNhapExtraColumns = false;
+            _hasPhieuNhapExtraColumns = null;
+            SafeLog.WriteError("Không thể đảm bảo các cột thông tin hóa đơn phiếu nhập", ex);
+            throw new InvalidOperationException("Không thể cập nhật cấu trúc thông tin hóa đơn của phiếu nhập.", ex);
+        }
+        finally
+        {
+            _ensurePhieuNhapExtraColumns.Release();
         }
 
         return _hasPhieuNhapExtraColumns.Value;
+    }
+
+    private static async Task EnsurePhieuNhapColumnAsync(
+        MySqlConnection connection,
+        string columnName,
+        string? legacyColumnName,
+        string definition,
+        bool copyEmptyValue)
+    {
+        static async Task<bool> ColumnExistsAsync(MySqlConnection conn, string name)
+        {
+            var count = await conn.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'phieu_nhap_hang'
+                  AND COLUMN_NAME = @Name;
+                """,
+                new { Name = name });
+            return count > 0;
+        }
+
+        var targetExists = await ColumnExistsAsync(connection, columnName);
+        var legacyExists = !string.IsNullOrWhiteSpace(legacyColumnName)
+            && await ColumnExistsAsync(connection, legacyColumnName);
+
+        if (!targetExists)
+        {
+            var alterSql = legacyExists
+                ? $"ALTER TABLE `phieu_nhap_hang` CHANGE COLUMN `{legacyColumnName}` `{columnName}` {definition};"
+                : $"ALTER TABLE `phieu_nhap_hang` ADD COLUMN `{columnName}` {definition};";
+            await connection.ExecuteAsync(alterSql);
+            return;
+        }
+
+        if (!legacyExists)
+            return;
+
+        var emptyCondition = copyEmptyValue
+            ? $"(`{columnName}` IS NULL OR `{columnName}` = '')"
+            : $"`{columnName}` IS NULL";
+        await connection.ExecuteAsync(
+            $"UPDATE `phieu_nhap_hang` SET `{columnName}` = `{legacyColumnName}` " +
+            $"WHERE `{legacyColumnName}` IS NOT NULL AND {emptyCondition};");
     }
 
     public async Task EnsurePhieuNhapTrackingColumnsAsync()

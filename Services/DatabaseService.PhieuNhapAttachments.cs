@@ -11,8 +11,48 @@ namespace ShopHoa.Services;
 
 public partial class DatabaseService
 {
+    private sealed class AttachmentSaveCleanup
+    {
+        public List<string> FilesToDeleteOnRollback { get; } = [];
+        public List<string> TempFilesToDeleteOnCommit { get; } = [];
+    }
+
     private static readonly SemaphoreSlim _khoaDamBaoDinhKemPhieuNhap = new(1, 1);
     private static bool _daDamBaoDinhKemPhieuNhap;
+    private const string InsertDinhKemPhieuNhapSql = """
+    INSERT INTO dinh_kem_phieu_nhap
+    (
+        phieu_nhap_id,
+        ma_phieu_nhap,
+        ten_file_goc,
+        ten_file_luu,
+        duong_dan_tuong_doi,
+        dinh_dang,
+        dung_luong,
+        loai_chung_tu,
+        ghi_chu,
+        nguoi_tai_len_id,
+        ten_nguoi_tai_len,
+        thoi_gian_tai_len,
+        da_xoa
+    )
+    VALUES
+    (
+        @PhieuNhapId,
+        @MaPhieuNhap,
+        @TenFileGoc,
+        @TenFileLuu,
+        @DuongDanTuongDoi,
+        @DinhDang,
+        @DungLuong,
+        @LoaiChungTu,
+        @GhiChu,
+        @NguoiTaiLenId,
+        @TenNguoiTaiLen,
+        NOW(),
+        0
+    );
+    """;
 
     public async Task<bool> EnsureDinhKemPhieuNhapTableAsync()
     {
@@ -27,7 +67,25 @@ public partial class DatabaseService
 
             await using var connection = await OpenAsync();
 
-            const string createSql = """
+            await CreateDinhKemPhieuNhapTableAsync(connection);
+            await EnsureAttachmentColumnsAsync(connection);
+            _daDamBaoDinhKemPhieuNhap = true;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("EnsureDinhKemPhieuNhapTableAsync error", ex);
+            throw new InvalidOperationException("Không thể cập nhật cấu trúc bảng chứng từ phiếu nhập.", ex);
+        }
+        finally
+        {
+            _khoaDamBaoDinhKemPhieuNhap.Release();
+        }
+    }
+
+    private static async Task CreateDinhKemPhieuNhapTableAsync(MySqlConnection connection)
+    {
+        const string createSql = """
             CREATE TABLE IF NOT EXISTS `dinh_kem_phieu_nhap` (
               `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
               `phieu_nhap_id` INT UNSIGNED NOT NULL,
@@ -53,20 +111,72 @@ public partial class DatabaseService
               KEY `idx_dkpn_thoi_gian` (`thoi_gian_tai_len`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """;
+        await connection.ExecuteAsync(createSql);
+    }
 
-            await connection.ExecuteAsync(createSql);
-            _daDamBaoDinhKemPhieuNhap = true;
-            return true;
-        }
-        catch (Exception ex)
+    private static async Task EnsureAttachmentColumnsAsync(MySqlConnection connection)
+    {
+        await EnsureAttachmentColumnAsync(connection, "ten_file_goc", "en_file_goc",
+            "VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT ''", copyEmptyValue: true);
+        await EnsureAttachmentColumnAsync(connection, "ten_file_luu", "en_file_luu",
+            "VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT ''", copyEmptyValue: true);
+        await EnsureAttachmentColumnAsync(connection, "nguoi_tai_len_id", "guoi_tai_len_id",
+            "INT UNSIGNED NULL DEFAULT NULL", copyEmptyValue: false);
+        await EnsureAttachmentColumnAsync(connection, "ten_nguoi_tai_len", "en_nguoi_tai_len",
+            "VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT ''", copyEmptyValue: true);
+        await EnsureAttachmentColumnAsync(connection, "thoi_gian_tai_len", "hoi_gian_tai_len",
+            "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP", copyEmptyValue: false);
+        await EnsureAttachmentColumnAsync(connection, "thoi_gian_xoa", "hoi_gian_xoa",
+            "DATETIME NULL DEFAULT NULL", copyEmptyValue: false);
+        await EnsureAttachmentColumnAsync(connection, "nguoi_xoa_id", "guoi_xoa_id",
+            "INT UNSIGNED NULL DEFAULT NULL", copyEmptyValue: false);
+        await EnsureAttachmentColumnAsync(connection, "ten_nguoi_xoa", "en_nguoi_xoa",
+            "VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL", copyEmptyValue: true);
+    }
+
+    private static async Task EnsureAttachmentColumnAsync(
+        MySqlConnection connection,
+        string columnName,
+        string? legacyColumnName,
+        string definition,
+        bool copyEmptyValue)
+    {
+        static async Task<bool> ColumnExistsAsync(MySqlConnection conn, string name)
         {
-            SafeLog.WriteError("EnsureDinhKemPhieuNhapTableAsync error", ex);
-            return false;
+            var count = await conn.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'dinh_kem_phieu_nhap'
+                  AND COLUMN_NAME = @Name;
+                """,
+                new { Name = name });
+            return count > 0;
         }
-        finally
+
+        var targetExists = await ColumnExistsAsync(connection, columnName);
+        var legacyExists = !string.IsNullOrWhiteSpace(legacyColumnName)
+            && await ColumnExistsAsync(connection, legacyColumnName);
+
+        if (!targetExists)
         {
-            _khoaDamBaoDinhKemPhieuNhap.Release();
+            var alterSql = legacyExists
+                ? $"ALTER TABLE `dinh_kem_phieu_nhap` CHANGE COLUMN `{legacyColumnName}` `{columnName}` {definition};"
+                : $"ALTER TABLE `dinh_kem_phieu_nhap` ADD COLUMN `{columnName}` {definition};";
+            await connection.ExecuteAsync(alterSql);
+            return;
         }
+
+        if (!legacyExists)
+            return;
+
+        var emptyCondition = copyEmptyValue
+            ? $"(`{columnName}` IS NULL OR `{columnName}` = '')"
+            : $"`{columnName}` IS NULL";
+        await connection.ExecuteAsync(
+            $"UPDATE `dinh_kem_phieu_nhap` SET `{columnName}` = `{legacyColumnName}` " +
+            $"WHERE `{legacyColumnName}` IS NOT NULL AND {emptyCondition};");
     }
 
     /// <summary>
@@ -118,88 +228,74 @@ public partial class DatabaseService
     /// <summary>
     /// Lưu các chứng từ đính kèm mới vào CSDL trong transaction của phiếu nhập.
     /// </summary>
-    public async Task LuuDinhKemPhieuNhapAsync(
+    private async Task LuuDinhKemPhieuNhapAsync(
         MySqlConnection connection,
         MySqlTransaction transaction,
         uint phieuNhapId,
         string maPhieuNhap,
         IEnumerable<ChungTuItemModel> chungTus,
         uint? userId,
-        string userName)
+        string userName,
+        AttachmentSaveCleanup? cleanup = null)
     {
         await EnsureDinhKemPhieuNhapTableAsync();
 
-        const string insertSql = """
-        INSERT INTO dinh_kem_phieu_nhap
-        (
-            phieu_nhap_id,
-            ma_phieu_nhap,
-            ten_file_goc,
-            ten_file_luu,
-            duong_dan_tuong_doi,
-            dinh_dang,
-            dung_luong,
-            loai_chung_tu,
-            ghi_chu,
-            nguoi_tai_len_id,
-            ten_nguoi_tai_len,
-            thoi_gian_tai_len,
-            da_xoa
-        )
-        VALUES
-        (
-            @PhieuNhapId,
-            @MaPhieuNhap,
-            @TenFileGoc,
-            @TenFileLuu,
-            @DuongDanTuongDoi,
-            @DinhDang,
-            @DungLuong,
-            @LoaiChungTu,
-            @GhiChu,
-            @NguoiTaiLenId,
-            @TenNguoiTaiLen,
-            NOW(),
-            0
-        );
-        """;
-
         foreach (var ct in chungTus)
-        {
-            if (ct.IsExisting)
-                continue; // File cũ đã có trong DB
+            await LuuMotDinhKemPhieuNhapAsync(
+                connection, transaction, phieuNhapId, maPhieuNhap, ct, userId, userName, cleanup);
+    }
 
-            var sourceFile = !string.IsNullOrWhiteSpace(ct.DuongDanTam) && File.Exists(ct.DuongDanTam)
-                ? ct.DuongDanTam
-                : ct.DuongDanNguon;
+    private static async Task LuuMotDinhKemPhieuNhapAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        uint phieuNhapId,
+        string maPhieuNhap,
+        ChungTuItemModel ct,
+        uint? userId,
+        string userName,
+        AttachmentSaveCleanup? cleanup)
+    {
+        if (ct.IsExisting)
+            return;
 
-            if (string.IsNullOrWhiteSpace(sourceFile) || !File.Exists(sourceFile))
-                continue;
+        var sourceFile = !string.IsNullOrWhiteSpace(ct.DuongDanTam) && File.Exists(ct.DuongDanTam)
+            ? ct.DuongDanTam
+            : ct.DuongDanNguon;
 
-            // Chuyển file sang thư mục lưu trữ chính thức
-            var (relativePath, savedFileName, size) = await ChungTuStorageService.ChuyenFileChinhThucAsync(
-                sourceFile,
-                maPhieuNhap,
-                ct.TenFileGoc);
+        if (string.IsNullOrWhiteSpace(sourceFile) || !File.Exists(sourceFile))
+            throw new FileNotFoundException(
+                $"Không tìm thấy tệp chứng từ '{ct.TenFileGoc}'. Phiếu nhập chưa được lưu.",
+                sourceFile);
 
-            await connection.ExecuteAsync(
-                insertSql,
-                new
-                {
-                    PhieuNhapId = phieuNhapId,
-                    MaPhieuNhap = maPhieuNhap,
-                    ct.TenFileGoc,
-                    TenFileLuu = savedFileName,
-                    DuongDanTuongDoi = relativePath,
-                    ct.DinhDang,
-                    DungLuong = size,
-                    ct.LoaiChungTu,
-                    ct.GhiChu,
-                    NguoiTaiLenId = userId,
-                    TenNguoiTaiLen = !string.IsNullOrWhiteSpace(ct.NguoiTaiLen) ? ct.NguoiTaiLen : userName
-                },
-                transaction);
-        }
+        var (relativePath, savedFileName, size) = await ChungTuStorageService.ChuyenFileChinhThucAsync(
+            sourceFile,
+            maPhieuNhap,
+            ct.TenFileGoc);
+
+        cleanup?.FilesToDeleteOnRollback.Add(relativePath);
+        if (!string.IsNullOrWhiteSpace(ct.DuongDanTam))
+            cleanup?.TempFilesToDeleteOnCommit.Add(ct.DuongDanTam);
+
+        await connection.ExecuteAsync(
+            InsertDinhKemPhieuNhapSql,
+            new
+            {
+                PhieuNhapId = phieuNhapId,
+                MaPhieuNhap = maPhieuNhap,
+                ct.TenFileGoc,
+                TenFileLuu = savedFileName,
+                DuongDanTuongDoi = relativePath,
+                ct.DinhDang,
+                DungLuong = size,
+                ct.LoaiChungTu,
+                ct.GhiChu,
+                NguoiTaiLenId = userId,
+                TenNguoiTaiLen = !string.IsNullOrWhiteSpace(ct.NguoiTaiLen) ? ct.NguoiTaiLen : userName
+            },
+            transaction);
+
+        if (cleanup is null)
+            ChungTuStorageService.XoaFileTamNeuCo(ct.DuongDanTam);
     }
 
     /// <summary>

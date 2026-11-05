@@ -252,7 +252,10 @@ public sealed partial class DatabaseService
         if (request.NhaCungCapId is null or 0)
             throw new InvalidOperationException("Vui lòng chọn nhà cung cấp.");
 
-        await EnsureLichSuChinhSuaPhieuNhapTableAsync();
+        if (!await EnsureLichSuChinhSuaPhieuNhapTableAsync())
+            throw new InvalidOperationException("Không thể chuẩn bị bảng nhật ký phiếu nhập; thay đổi chưa được lưu.");
+        if (request.ChungTus is { Count: > 0 } && !await EnsureDinhKemPhieuNhapTableAsync())
+            throw new InvalidOperationException("Không thể chuẩn bị bảng chứng từ phiếu nhập; thay đổi chưa được lưu.");
         var hasPhuongThucColumn = await EnsurePhieuNhapPhuongThucColumnAsync();
         var hasExtraColumns = await HasPhieuNhapExtraColumnsAsync();
         var hasPhieuQuyExtraColumns = await EnsurePhieuQuyExtraColumnsAsync();
@@ -260,6 +263,7 @@ public sealed partial class DatabaseService
 
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
+        var attachmentCleanup = new AttachmentSaveCleanup();
 
         try
         {
@@ -680,7 +684,8 @@ public sealed partial class DatabaseService
                     oldPhieu.MaPhieuNhap,
                     request.ChungTus,
                     curUserId,
-                    curUserName);
+                    curUserName,
+                    attachmentCleanup);
             }
 
             // 8. CẬP NHẬT SỔ QUỸ (PHIẾU CHI)
@@ -824,6 +829,9 @@ public sealed partial class DatabaseService
 
             await transaction.CommitAsync();
 
+            foreach (var tempFile in attachmentCleanup.TempFilesToDeleteOnCommit)
+                ChungTuStorageService.XoaFileTamNeuCo(tempFile);
+
             _ = LogSubAccountActivityAsync(
                 "Chỉnh sửa phiếu nhập",
                 "PHIEU_NHAP",
@@ -835,6 +843,8 @@ public sealed partial class DatabaseService
         catch
         {
             await transaction.RollbackAsync();
+            foreach (var storedFile in attachmentCleanup.FilesToDeleteOnRollback)
+                ChungTuStorageService.XoaFileDaLuuNeuCo(storedFile);
             throw;
         }
     }

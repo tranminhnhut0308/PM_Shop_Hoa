@@ -598,7 +598,9 @@ public sealed partial class MainWindowViewModel
                 searchKeyword: InvoiceSearch,
                 khachHangId: SelectedInvoiceCustomer?.Id,
                 trangThaiThanhToan: SelectedInvoicePaymentStatus,
-                trangThaiHoaDon: SelectedInvoiceStatus);
+                trangThaiHoaDon: SelectedInvoiceStatus,
+                nhanVienId: SelectedInvoiceEmployee?.Id,
+                khachLe: SelectedInvoiceCustomer?.IsWalkIn == true);
 
             var tongSoBanGhi = yeuCau.LoaiBaoCao switch
             {
