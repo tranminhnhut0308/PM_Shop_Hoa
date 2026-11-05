@@ -33,6 +33,22 @@ public static class HoaDonPrintService
         return duongDan;
     }
 
+    private static void DongKenhLienHe(
+        StringBuilder sb,
+        IEnumerable<KenhLienHe> channels,
+        string position)
+    {
+        foreach (var channel in channels
+                     .Where(x => x.HienThi && x.ViTriHienThi == position
+                         && !string.IsNullOrWhiteSpace(x.Ten)
+                         && !string.IsNullOrWhiteSpace(x.NoiDung))
+                     .OrderBy(x => x.ThuTu))
+        {
+            sb.Append("<div class=\"store-line\"><b>").Append(Enc(channel.Ten.Trim()))
+              .Append(":</b> ").Append(Enc(channel.NoiDung.Trim())).Append("</div>");
+        }
+    }
+
     /// <summary>Dựng nội dung HTML hoàn chỉnh của hóa đơn.</summary>
     public static string TaoHtml(HoaDonBanHangReceipt receipt)
     {
@@ -64,7 +80,7 @@ public static class HoaDonPrintService
         sb.Append(".logo{display:block;max-height:18mm;max-width:60%;margin:0 auto 2mm;object-fit:contain;}");
         sb.Append(".store-name{font-size:17px;font-weight:700;letter-spacing:.2px;color:#111;text-transform:uppercase;}");
         sb.Append(".k58 .store-name{font-size:14px;}.ka4 .store-name{font-size:20px;}");
-        sb.Append(".store-line{font-size:11.5px;color:#333;margin-top:1px;word-wrap:break-word;}");
+        sb.Append(".store-line{font-size:11.5px;color:#333;margin-top:1px;word-wrap:break-word;overflow-wrap:anywhere;}");
         sb.Append(".k58 .store-line{font-size:10px;}");
         sb.Append(".title{text-align:center;font-size:16px;font-weight:700;letter-spacing:1px;margin:2mm 0 1mm;}");
         sb.Append(".k58 .title{font-size:13px;}.ka4 .title{font-size:19px;}");
@@ -78,13 +94,13 @@ public static class HoaDonPrintService
         sb.Append("table.items{table-layout:fixed;font-size:11px;}");
         sb.Append(".k58 table.items{font-size:10px;}");
         sb.Append(".ka4 table.items{font-size:12.5px;}");
-        sb.Append("table.items th{font-size:11px;font-weight:700;text-align:left;");
+        sb.Append("table.items th{font-size:11px;font-weight:700;text-align:left;overflow-wrap:anywhere;");
         sb.Append("border-bottom:1px solid #555;padding:1.4mm .8mm;color:#111;}");
         sb.Append(".k58 table.items th{font-size:9.5px;padding:1mm .4mm;}");
         sb.Append("table.items td{border-bottom:1px solid #e3e3e3;padding:1.4mm .8mm;");
         sb.Append("vertical-align:top;word-wrap:break-word;overflow-wrap:anywhere;}");
         sb.Append(".k58 table.items td{padding:1mm .4mm;}");
-        sb.Append("table.items .r{text-align:right;white-space:nowrap;}");
+        sb.Append("table.items .r{text-align:right;white-space:normal;overflow-wrap:anywhere;word-break:break-word;}");
         sb.Append("table.items .c{text-align:center;}");
         sb.Append(".item-sub{font-size:9.5px;color:#555;margin-top:.4mm;word-wrap:break-word;}");
         sb.Append(".k58 .item-sub{font-size:9px;}");
@@ -129,11 +145,8 @@ public static class HoaDonPrintService
             sb.Append("<div class=\"store-name\">").Append(Enc(tiem.TenTiem.Trim())).Append("</div>");
 
         DongThongTin(sb, tiem.DiaChiHienThi);
-        DongThongTin(sb, tiem.DienThoaiZaloHienThi);
-        DongThongTin(sb, tiem.CoFacebook ? tiem.FacebookHienThi : "");
-        DongThongTin(sb, tiem.CoThongTinNganHang ? tiem.StkHienThi : "");
-        DongThongTin(sb, tiem.Email);
-        DongThongTin(sb, tiem.WebsiteHienThi);
+        DongThongTin(sb, tiem.SoDienThoaiHienThi);
+        DongKenhLienHe(sb, tiem.KenhLienHes, KenhLienHe.ViTriDau);
         DongThongTin(sb, tiem.MaSoThueHienThi);
 
         sb.Append("</div>");
@@ -203,6 +216,8 @@ public static class HoaDonPrintService
                 sb.Append("<tr>");
                 sb.Append("<td class=\"c\">").Append(stt).Append("</td>");
                 sb.Append("<td>").Append(Enc(item.TenSanPham));
+                if (!string.IsNullOrWhiteSpace(item.GhiChu))
+                    sb.Append("<div class=\"item-sub\">").Append(Enc(item.GhiChu)).Append("</div>");
                 sb.Append("<div class=\"item-sub\">SL: ").Append(SoLuong(item.SoLuong));
 
                 if (!string.IsNullOrWhiteSpace(item.DonViTinh))
@@ -217,8 +232,8 @@ public static class HoaDonPrintService
         {
             sb.Append("<table class=\"items\">");
             sb.Append("<colgroup>");
-            sb.Append("<col style=\"width:6%\"><col style=\"width:28%\"><col style=\"width:10%\">");
-            sb.Append("<col style=\"width:8%\"><col style=\"width:22%\"><col style=\"width:26%\">");
+            sb.Append("<col style=\"width:7%\"><col style=\"width:35%\"><col style=\"width:10%\">");
+            sb.Append("<col style=\"width:8%\"><col style=\"width:18%\"><col style=\"width:22%\">");
             sb.Append("</colgroup>");
             sb.Append("<thead><tr>");
             sb.Append("<th class=\"c\">STT</th>");
@@ -234,9 +249,12 @@ public static class HoaDonPrintService
                 stt++;
                 sb.Append("<tr>");
                 sb.Append("<td class=\"c\">").Append(stt).Append("</td>");
-                sb.Append("<td>").Append(Enc(item.TenSanPham)).Append("</td>");
+                sb.Append("<td>").Append(Enc(item.TenSanPham));
+                if (!string.IsNullOrWhiteSpace(item.GhiChu))
+                    sb.Append("<div class=\"item-sub\">").Append(Enc(item.GhiChu)).Append("</div>");
+                sb.Append("</td>");
                 sb.Append("<td class=\"c\">").Append(Enc(item.DonViTinh)).Append("</td>");
-                sb.Append("<td class=\"r\">").Append(SoLuong(item.SoLuong)).Append("</td>");
+                sb.Append("<td class=\"c\">").Append(SoLuong(item.SoLuong)).Append("</td>");
                 sb.Append("<td class=\"r\">").Append(TienSo(item.DonGia)).Append("</td>");
                 sb.Append("<td class=\"r\">").Append(TienSo(item.ThanhTien)).Append("</td>");
                 sb.Append("</tr>");
@@ -278,6 +296,14 @@ public static class HoaDonPrintService
               .Append(Enc(receipt.GhiChu)).Append("</div>");
         }
 
+        DongKenhLienHe(sb, tiem.KenhLienHes, KenhLienHe.ViTriCuoi);
+
+        if (tiem.CoThongTinNganHang)
+        {
+            sb.Append("<div class=\"footer\"><b>Thông tin ngân hàng</b><br>")
+              .Append(Enc(tiem.StkHienThi)).Append("</div>");
+        }
+
         // =========================================================
         // NHÓM 5: QR + LỜI CẢM ƠN
         // =========================================================
@@ -301,13 +327,6 @@ public static class HoaDonPrintService
         }
 
         sb.Append("<div class=\"thanks\">").Append(Enc(tiem.LoiCamOnHienThi)).Append("</div>");
-
-        var lienHe = tiem.DienThoaiZaloHienThi;
-        if (!string.IsNullOrWhiteSpace(lienHe))
-            sb.Append("<div class=\"footer\">").Append(Enc(lienHe)).Append("</div>");
-
-        if (!string.IsNullOrWhiteSpace(tiem.DiaChi))
-            sb.Append("<div class=\"footer\">").Append(Enc(tiem.DiaChi.Trim())).Append("</div>");
 
         sb.Append("<div class=\"noprint\">");
         sb.Append("<button onclick=\"window.print()\">🖨 In hóa đơn</button>");

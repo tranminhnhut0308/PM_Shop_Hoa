@@ -43,6 +43,7 @@ public sealed partial class ThongTinTiem : ObservableObject
     public string Email { get; set; } = "";
     public string MaSoThue { get; set; } = "";
     public string Website { get; set; } = "";
+    public List<KenhLienHe> KenhLienHes { get; set; } = [];
 
     // =========================================================
     // THÔNG TIN NGÂN HÀNG
@@ -232,9 +233,7 @@ public sealed partial class ThongTinTiem : ObservableObject
     public bool CoThongTinLienHe =>
         !string.IsNullOrWhiteSpace(DiaChi)
         || !string.IsNullOrWhiteSpace(SoDienThoai)
-        || !string.IsNullOrWhiteSpace(Zalo)
-        || !string.IsNullOrWhiteSpace(Email)
-        || !string.IsNullOrWhiteSpace(Website)
+        || KenhLienHes.Any(x => x.HienThi && !string.IsNullOrWhiteSpace(x.NoiDung))
         || !string.IsNullOrWhiteSpace(MaSoThue);
 
     /// <summary>Khổ giấy đã chuẩn hoá, dùng cho CSS khi in.</summary>

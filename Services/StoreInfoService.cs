@@ -52,7 +52,8 @@ public sealed class StoreInfoService
         ("kho_giay_in", "varchar(10) NOT NULL DEFAULT '80mm'"),
         ("kich_thuoc_qr", "int NOT NULL DEFAULT 32"),
         ("vi_tri_qr", "varchar(10) NOT NULL DEFAULT 'center'"),
-        ("da_ap_dung_mac_dinh", "tinyint(1) NOT NULL DEFAULT 0")
+        ("da_ap_dung_mac_dinh", "tinyint(1) NOT NULL DEFAULT 0"),
+        ("da_chuyen_doi_kenh_lien_he", "tinyint(1) NOT NULL DEFAULT 0")
     ];
 
     /// <summary>
@@ -94,6 +95,7 @@ public sealed class StoreInfoService
                     kich_thuoc_qr  int          NOT NULL DEFAULT 32,
                     vi_tri_qr      varchar(10)  NOT NULL DEFAULT 'center',
                     da_ap_dung_mac_dinh tinyint(1) NOT NULL DEFAULT 0,
+                    da_chuyen_doi_kenh_lien_he tinyint(1) NOT NULL DEFAULT 0,
                     ngay_cap_nhat  datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (id),
                     CONSTRAINT ck_thong_tin_tiem_id CHECK (id = 1)
@@ -160,6 +162,7 @@ public sealed class StoreInfoService
                     macDinh.LoiCamOn
                 });
 
+            await DamBaoBangKenhLienHeAsync(connection);
             return true;
         }
         catch (Exception ex)
@@ -249,7 +252,21 @@ public sealed class StoreInfoService
 
             var info = await connection.QueryFirstOrDefaultAsync<ThongTinTiem>(sql);
 
-            return info ?? ThongTinTiem.TaoMacDinh();
+            if (info is null)
+                return ThongTinTiem.TaoMacDinh();
+
+            info.KenhLienHes = (await connection.QueryAsync<KenhLienHe>(
+                """
+                SELECT id AS Id, ten_kenh AS Ten, noi_dung AS NoiDung,
+                       hien_thi AS HienThi, vi_tri_hien_thi AS ViTriHienThi,
+                       thu_tu AS ThuTu
+                FROM thong_tin_tiem_kenh_lien_he
+                WHERE thong_tin_tiem_id = @Id
+                ORDER BY thu_tu, id;
+                """,
+                new { Id = ThongTinTiem.IdMacDinh })).ToList();
+
+            return info;
         }
         catch (Exception ex)
         {
@@ -281,9 +298,12 @@ public sealed class StoreInfoService
         await DamBaoBangAsync();
 
         await using var connection = await _taoKetNoi();
+        await using var transaction = await connection.BeginTransactionAsync();
 
         // ON DUPLICATE KEY UPDATE xử lý cả hai nhánh trong một câu lệnh: bản ghi
         // có sẵn thì cập nhật tại chỗ, chưa có thì chèn, đều không tạo dòng thứ hai.
+        // Các cột liên hệ cũ được giữ nguyên để không làm thay đổi những chứng từ
+        // khác đang dùng chúng; hóa đơn bán hàng chỉ đọc danh sách kênh mới.
         const string sql = """
         INSERT INTO thong_tin_tiem
             (id, ten_tiem, dia_chi, so_dien_thoai, zalo, facebook, email, ma_so_thue,
@@ -301,11 +321,7 @@ public sealed class StoreInfoService
             ten_tiem        = VALUES(ten_tiem),
             dia_chi         = VALUES(dia_chi),
             so_dien_thoai   = VALUES(so_dien_thoai),
-            zalo            = VALUES(zalo),
-            facebook        = VALUES(facebook),
-            email           = VALUES(email),
             ma_so_thue      = VALUES(ma_so_thue),
-            website         = VALUES(website),
             ten_ngan_hang   = VALUES(ten_ngan_hang),
             so_tai_khoan    = VALUES(so_tai_khoan),
             chu_tai_khoan   = VALUES(chu_tai_khoan),
@@ -314,7 +330,6 @@ public sealed class StoreInfoService
             loi_cam_on      = VALUES(loi_cam_on),
             hien_thi_logo   = VALUES(hien_thi_logo),
             hien_thi_qr     = VALUES(hien_thi_qr),
-            hien_thi_facebook = VALUES(hien_thi_facebook),
             hien_thi_ngan_hang = VALUES(hien_thi_ngan_hang),
             hien_thi_dia_chi_khach_hang = VALUES(hien_thi_dia_chi_khach_hang),
             kho_giay_in     = VALUES(kho_giay_in),
@@ -330,11 +345,11 @@ public sealed class StoreInfoService
             TenTiem = (info.TenTiem ?? "").Trim(),
             DiaChi = (info.DiaChi ?? "").Trim(),
             SoDienThoai = (info.SoDienThoai ?? "").Trim(),
-            Zalo = (info.Zalo ?? "").Trim(),
-            Facebook = (info.Facebook ?? "").Trim(),
-            Email = (info.Email ?? "").Trim(),
+            Zalo = "",
+            Facebook = "",
+            Email = "",
             MaSoThue = (info.MaSoThue ?? "").Trim(),
-            Website = (info.Website ?? "").Trim(),
+            Website = "",
             TenNganHang = (info.TenNganHang ?? "").Trim(),
             SoTaiKhoan = (info.SoTaiKhoan ?? "").Trim(),
             ChuTaiKhoan = (info.ChuTaiKhoan ?? "").Trim(),
@@ -343,14 +358,186 @@ public sealed class StoreInfoService
             LoiCamOn = (info.LoiCamOn ?? "").Trim(),
             HienThiLogo = info.HienThiLogo ? 1 : 0,
             HienThiQr = info.HienThiQr ? 1 : 0,
-            HienThiFacebook = info.HienThiFacebook ? 1 : 0,
+            HienThiFacebook = 0,
             HienThiNganHang = info.HienThiNganHang ? 1 : 0,
             HienThiDiaChiKhachHang = info.HienThiDiaChiKhachHang ? 1 : 0,
             KhoGiayIn = info.KhoGiayHienThi,
             KichThuocQr = info.KichThuocQrHienThi,
             ViTriQr = info.ViTriQrHienThi
-        });
+        }, transaction);
+
+        await LuuKenhLienHeAsync(connection, transaction, info.KenhLienHes);
+        await transaction.CommitAsync();
     }
+
+    private static async Task DamBaoBangKenhLienHeAsync(MySqlConnection connection)
+    {
+        await connection.ExecuteAsync(
+            """
+            CREATE TABLE IF NOT EXISTS thong_tin_tiem_kenh_lien_he (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                thong_tin_tiem_id INT(10) UNSIGNED NOT NULL DEFAULT 1,
+                ten_kenh VARCHAR(100) NOT NULL,
+                noi_dung VARCHAR(500) NOT NULL,
+                hien_thi TINYINT(1) NOT NULL DEFAULT 1,
+                vi_tri_hien_thi VARCHAR(10) NOT NULL DEFAULT 'CUOI',
+                thu_tu INT NOT NULL DEFAULT 0,
+                PRIMARY KEY (id),
+                KEY ix_tiem_kenh_thu_tu (thong_tin_tiem_id, thu_tu, id),
+                CONSTRAINT fk_tiem_kenh_thong_tin
+                    FOREIGN KEY (thong_tin_tiem_id) REFERENCES thong_tin_tiem(id)
+                    ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            """);
+
+        await using var transaction = await connection.BeginTransactionAsync();
+        var legacy = await connection.QuerySingleAsync<LegacyContact>(
+            """
+            SELECT facebook AS Facebook, zalo AS Zalo, email AS Email,
+                   website AS Website, hien_thi_facebook AS HienThiFacebook,
+                   da_chuyen_doi_kenh_lien_he AS DaChuyenDoi
+            FROM thong_tin_tiem
+            WHERE id = 1
+            FOR UPDATE;
+            """,
+            transaction: transaction);
+
+        if (legacy.DaChuyenDoi)
+        {
+            await transaction.CommitAsync();
+            return;
+        }
+
+        var oldChannels = new[]
+        {
+            new LegacyChannel("Facebook", legacy.Facebook, legacy.HienThiFacebook, KenhLienHe.ViTriCuoi),
+            new LegacyChannel("Zalo", legacy.Zalo, true, KenhLienHe.ViTriCuoi),
+            new LegacyChannel("Email", legacy.Email, true, KenhLienHe.ViTriDau),
+            new LegacyChannel("Website", legacy.Website, true, KenhLienHe.ViTriDau)
+        };
+
+        foreach (var channel in oldChannels.Where(x => !string.IsNullOrWhiteSpace(x.NoiDung)))
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO thong_tin_tiem_kenh_lien_he
+                    (thong_tin_tiem_id, ten_kenh, noi_dung, hien_thi, vi_tri_hien_thi, thu_tu)
+                VALUES
+                    (1, @Ten, @NoiDung, @HienThi, @ViTri, @ThuTu);
+                """,
+                new
+                {
+                    channel.Ten,
+                    NoiDung = channel.NoiDung.Trim(),
+                    HienThi = channel.HienThi ? 1 : 0,
+                    ViTri = channel.ViTri,
+                    ThuTu = channel.ViTri == KenhLienHe.ViTriDau ? 0 : 1
+                },
+                transaction);
+        }
+
+        await connection.ExecuteAsync(
+            "UPDATE thong_tin_tiem SET da_chuyen_doi_kenh_lien_he = 1 WHERE id = 1;",
+            transaction: transaction);
+        await transaction.CommitAsync();
+    }
+
+    private static async Task LuuKenhLienHeAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        IReadOnlyCollection<KenhLienHe> channels)
+    {
+        var ids = new List<ulong>();
+
+        foreach (var (channel, index) in channels.Select((item, index) => (item, index)))
+        {
+            var name = (channel.Ten ?? "").Trim();
+            var content = (channel.NoiDung ?? "").Trim();
+            var position = channel.ViTriHienThi == KenhLienHe.ViTriDau
+                ? KenhLienHe.ViTriDau
+                : KenhLienHe.ViTriCuoi;
+
+            if (name.Length == 0 || content.Length == 0)
+                throw new InvalidOperationException("Tên kênh và nội dung liên hệ không được để trống.");
+            if (name.Length > 100 || content.Length > 500)
+                throw new InvalidOperationException("Tên kênh tối đa 100 ký tự và nội dung tối đa 500 ký tự.");
+
+            if (channel.Id == 0)
+            {
+                await connection.ExecuteAsync(
+                    """
+                    INSERT INTO thong_tin_tiem_kenh_lien_he
+                        (thong_tin_tiem_id, ten_kenh, noi_dung, hien_thi, vi_tri_hien_thi, thu_tu)
+                    VALUES
+                        (1, @Ten, @NoiDung, @HienThi, @ViTri, @ThuTu);
+                    """,
+                    new
+                    {
+                        Ten = name,
+                        NoiDung = content,
+                        HienThi = channel.HienThi ? 1 : 0,
+                        ViTri = position,
+                        ThuTu = index
+                    },
+                    transaction);
+                channel.Id = await connection.ExecuteScalarAsync<ulong>(
+                    "SELECT LAST_INSERT_ID();", transaction: transaction);
+            }
+            else
+            {
+                var affected = await connection.ExecuteAsync(
+                    """
+                    UPDATE thong_tin_tiem_kenh_lien_he
+                    SET ten_kenh = @Ten, noi_dung = @NoiDung, hien_thi = @HienThi,
+                        vi_tri_hien_thi = @ViTri, thu_tu = @ThuTu
+                    WHERE id = @Id AND thong_tin_tiem_id = 1;
+                    """,
+                    new
+                    {
+                        channel.Id,
+                        Ten = name,
+                        NoiDung = content,
+                        HienThi = channel.HienThi ? 1 : 0,
+                        ViTri = position,
+                        ThuTu = index
+                    },
+                    transaction);
+
+                if (affected == 0 && await connection.ExecuteScalarAsync<int>(
+                        "SELECT COUNT(*) FROM thong_tin_tiem_kenh_lien_he WHERE id = @Id AND thong_tin_tiem_id = 1;",
+                        new { channel.Id }, transaction) == 0)
+                    throw new InvalidOperationException("Kênh liên hệ không thuộc cửa hàng hiện tại.");
+            }
+
+            ids.Add(channel.Id);
+        }
+
+        if (ids.Count == 0)
+        {
+            await connection.ExecuteAsync(
+                "DELETE FROM thong_tin_tiem_kenh_lien_he WHERE thong_tin_tiem_id = 1;",
+                transaction: transaction);
+        }
+        else
+        {
+            await connection.ExecuteAsync(
+                "DELETE FROM thong_tin_tiem_kenh_lien_he WHERE thong_tin_tiem_id = 1 AND id NOT IN @Ids;",
+                new { Ids = ids },
+                transaction);
+        }
+    }
+
+    private sealed class LegacyContact
+    {
+        public string Facebook { get; set; } = "";
+        public string Zalo { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Website { get; set; } = "";
+        public bool HienThiFacebook { get; set; }
+        public bool DaChuyenDoi { get; set; }
+    }
+
+    private sealed record LegacyChannel(string Ten, string NoiDung, bool HienThi, string ViTri);
 
     // =========================================================
     // HÌNH ẢNH (LOGO / QR)
