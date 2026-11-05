@@ -679,6 +679,40 @@
       <Setter Property="BorderBrush" Value="#087F6E" />
     </Style>
 
+    <!-- ============ NÚT CÔNG NỢ KHÁCH HÀNG / NHÀ CUNG CẤP ============ -->
+    <Style Selector="Button.debt-primary">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="16,9" />
+      <Setter Property="MinWidth" Value="170" />
+      <Setter Property="Height" Value="38" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.debt-primary:pointerover">
+      <Setter Property="Background" Value="#056B5D" />
+    </Style>
+
+    <Style Selector="Button.debt-secondary">
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="16,9" />
+      <Setter Property="MinWidth" Value="170" />
+      <Setter Property="Height" Value="38" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.debt-secondary:pointerover">
+      <Setter Property="Background" Value="#E6F5F1" />
+    </Style>
+
     <!-- ============ NÚT THANH TOÁN CÔNG NỢ PHIẾU NHẬP (TRÊN BÁO CÁO) ============ -->
     <!-- Nút xanh có cả icon + chữ "Thanh toán", kích thước đồng đều, có hiệu ứng hover -->
     <Style Selector="Button.payRowButton">
@@ -3168,7 +3202,7 @@
                               </StackPanel>
 
                             <!-- TAB: THÔNG TIN / LỊCH SỬ MUA HÀNG / CÔNG NỢ -->
-                            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                            <Grid Margin="0,0,0,6">
                               <StackPanel Orientation="Horizontal">
 
                                 <!-- TAB 1: THÔNG TIN -->
@@ -3248,31 +3282,6 @@
 
                               </StackPanel>
 
-                              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <Button Content="💵 Thanh toán công nợ"
-                                        Padding="14,8"
-                                        CornerRadius="8"
-                                        Background="#087F6E"
-                                        Foreground="White"
-                                        FontWeight="SemiBold"
-                                        BorderThickness="0"
-                                        Cursor="Hand"
-                                        IsEnabled="{Binding ElementName=RootWindow, Path=DataContext.CanCollectCustomerDebt}"
-                                        ToolTip.Tip="Nhập số tiền khách trả, hệ thống tự trừ vào các hóa đơn còn nợ"
-                                        Command="{Binding ElementName=RootWindow, Path=DataContext.ThuNoKhachHangCommand}"
-                                        CommandParameter="{Binding}" />
-                                <Button Content="🧾 Lịch sử thanh toán"
-                                        Padding="14,8"
-                                        CornerRadius="8"
-                                        Background="White"
-                                        Foreground="#087F6E"
-                                        BorderBrush="#087F6E"
-                                        BorderThickness="1"
-                                        Cursor="Hand"
-                                        ToolTip.Tip="Xem toàn bộ lịch sử thanh toán công nợ của khách hàng"
-                                        Command="{Binding ElementName=RootWindow, Path=DataContext.XemLichSuThanhToanKhachHangCommand}"
-                                        CommandParameter="{Binding}" />
-                              </StackPanel>
                             </Grid>
 
                               <!-- TAB 1: THÔNG TIN -->
@@ -3413,18 +3422,6 @@
                               <!-- TAB 3: CÔNG NỢ -->
                               <StackPanel IsVisible="{Binding Detail.IsTabCongNo}" Spacing="12">
 
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                  <Button Classes="toolbar-action"
-                                    Content="Thanh toán công nợ"
-                                    IsEnabled="{Binding ElementName=RootWindow, Path=DataContext.CanCollectCustomerDebt}"
-                                    Command="{Binding ElementName=RootWindow, Path=DataContext.ThuNoKhachHangCommand}"
-                                    CommandParameter="{Binding}" />
-                                  <Button Classes="toolbar-action"
-                                    Content="Lịch sử thanh toán"
-                                    Command="{Binding ElementName=RootWindow, Path=DataContext.XemLichSuThanhToanKhachHangCommand}"
-                                    CommandParameter="{Binding}" />
-                                </StackPanel>
-
                                 <Border Classes="statBox" Background="White"
                                   IsVisible="{Binding Detail.HasCongNoData}">
                                   <Grid ColumnDefinitions="*,*,*" ColumnSpacing="14">
@@ -3455,33 +3452,22 @@
                                 <StackPanel IsVisible="{Binding Detail.HasCongNoData}" Spacing="4">
                                   <TextBlock Text="{Binding Detail.NguonCongNoText}" FontSize="12"
                                     Foreground="#61736E" />
-                                  <TextBlock Text="{Binding Detail.SoLanGhiCongNoText}" FontSize="12"
+                                  <TextBlock Text="{Binding Detail.SoLanGhiCongNoText, TargetNullValue='0'}" FontSize="12"
                                     Foreground="#667A74" />
                                   <TextBlock FontSize="12" Foreground="#667A74"
                                     Text="{Binding Detail.LanGhiCongNoText, StringFormat='Lần ghi công nợ gần nhất: {0}'}" />
                                 </StackPanel>
 
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                                  <Button Content="💵 Thanh toán công nợ"
-                                    Padding="16,8"
-                                    CornerRadius="8"
-                                    Background="#087F6E"
-                                    Foreground="White"
-                                    FontWeight="SemiBold"
-                                    BorderThickness="0"
-                                    Cursor="Hand"
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                  <Button Classes="debt-primary"
+                                    Content="Thanh toán công nợ"
                                     IsEnabled="{Binding ElementName=RootWindow, Path=DataContext.CanCollectCustomerDebt}"
                                     ToolTip.Tip="Nhập số tiền khách trả, hệ thống tự trừ vào các hóa đơn còn nợ"
                                     Command="{Binding ElementName=RootWindow, Path=DataContext.ThuNoKhachHangCommand}"
                                     CommandParameter="{Binding}" />
-                                  <Button Content="🧾 Lịch sử thanh toán"
-                                    Padding="16,8"
-                                    CornerRadius="8"
-                                    Background="White"
-                                    Foreground="#087F6E"
-                                    BorderBrush="#087F6E"
-                                    BorderThickness="1"
-                                    Cursor="Hand"
+                                  <Button Classes="debt-secondary"
+                                    Content="Lịch sử thanh toán"
+                                    ToolTip.Tip="Xem toàn bộ lịch sử thanh toán công nợ của khách hàng"
                                     Command="{Binding ElementName=RootWindow, Path=DataContext.XemLichSuThanhToanKhachHangCommand}"
                                     CommandParameter="{Binding}" />
                                 </StackPanel>
@@ -3610,33 +3596,74 @@
 
                 <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12"
                   VerticalAlignment="Center">
-                  <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <TextBlock Text="Thời gian" FontSize="12" FontWeight="SemiBold"
                       Foreground="#4F6861" VerticalAlignment="Center" />
-                    <ComboBox ItemsSource="{Binding InvoiceDatePresets}"
+                    <ComboBox x:Name="InvoiceDatePresetBox" ItemsSource="{Binding InvoiceDatePresets}"
                       SelectedItem="{Binding SelectedInvoiceDatePreset, Mode=TwoWay}"
-                      Width="160" Height="34" FontSize="12"
+                      Width="190" Height="36" FontSize="12"
                       VerticalContentAlignment="Center" />
+                    <Button Content="▦" Width="36" Height="36" Padding="0"
+                      Classes="toolbar-action" ToolTip.Tip="Chọn khoảng ngày"
+                      IsVisible="{Binding IsInvoiceCustomDatePreset}"
+                      Command="{Binding MoChonKhoangNgayHoaDonCommand}" />
                   </StackPanel>
                   <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5"
                     HorizontalAlignment="Center" VerticalAlignment="Center">
                     <ToggleButton Classes="locChip" Content="Tất cả"
+                      Height="36"
                       IsChecked="{Binding IsInvoicePaymentAll, Mode=OneWay}"
                       Command="{Binding LocThanhToanHoaDonCommand}" CommandParameter="Tất cả" />
                     <ToggleButton Classes="locChip" Content="Chưa thanh toán"
+                      Height="36"
                       IsChecked="{Binding IsInvoicePaymentUnpaid, Mode=OneWay}"
                       Command="{Binding LocThanhToanHoaDonCommand}" CommandParameter="Chưa thanh toán" />
                     <ToggleButton Classes="locChip" Content="Đã thanh toán"
+                      Height="36"
                       IsChecked="{Binding IsInvoicePaymentPaid, Mode=OneWay}"
                       Command="{Binding LocThanhToanHoaDonCommand}" CommandParameter="Đã thanh toán" />
                     <ToggleButton Classes="locChip" Content="Thanh toán một phần"
+                      Height="36"
                       IsChecked="{Binding IsInvoicePaymentPartial, Mode=OneWay}"
                       Command="{Binding LocThanhToanHoaDonCommand}" CommandParameter="Thanh toán một phần" />
                   </StackPanel>
                   <Button x:Name="InvoiceAdvancedFilterButton" Grid.Column="2"
                     Classes="toolbar-action" Content="{Binding InvoiceAdvancedFilterCountText}"
-                    Height="34" Padding="12,0"
+                    Height="36" Padding="14,0"
                     Command="{Binding ToggleBoLocHoaDonCommand}" />
+
+                  <Popup PlacementTarget="InvoiceDatePresetBox" Placement="Bottom"
+                    IsLightDismissEnabled="False"
+                    IsOpen="{Binding IsInvoiceCustomDatePickerOpen, Mode=TwoWay}">
+                    <Border Background="White" BorderBrush="#D8E5E0" BorderThickness="1"
+                      CornerRadius="10" Padding="16" Width="420"
+                      BoxShadow="0 6 18 #220A352E">
+                      <StackPanel Spacing="12">
+                        <TextBlock Text="Chọn khoảng ngày" FontSize="15" FontWeight="Bold"
+                          Foreground="#164B40" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                          <StackPanel Spacing="5">
+                            <TextBlock Text="Từ ngày" FontSize="12" FontWeight="SemiBold" />
+                            <DatePicker Classes="sq-date" Height="36"
+                              SelectedDate="{Binding InvoiceCustomStartDateDraft, Mode=TwoWay}" />
+                          </StackPanel>
+                          <StackPanel Grid.Column="1" Spacing="5">
+                            <TextBlock Text="Đến ngày" FontSize="12" FontWeight="SemiBold" />
+                            <DatePicker Classes="sq-date" Height="36"
+                              SelectedDate="{Binding InvoiceCustomEndDateDraft, Mode=TwoWay}" />
+                          </StackPanel>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                          <Button Classes="toolbar-action" Content="Đặt lại" Height="34"
+                            Command="{Binding DatLaiKhoangNgayHoaDonCommand}" />
+                          <Button Classes="toolbar-action" Content="Hủy" Height="34"
+                            Command="{Binding HuyChonKhoangNgayHoaDonCommand}" />
+                          <Button Classes="toolbar-primary" Content="Áp dụng" Height="34"
+                            Command="{Binding ApDungKhoangNgayHoaDonCommand}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                  </Popup>
 
                   <Popup Grid.Column="2" PlacementTarget="InvoiceAdvancedFilterButton"
                     Placement="Bottom" IsLightDismissEnabled="True"
@@ -3647,15 +3674,6 @@
                       <StackPanel Spacing="12">
                         <TextBlock Text="Bộ lọc khác" FontSize="15" FontWeight="Bold"
                           Foreground="#164B40" />
-                        <StackPanel Orientation="Horizontal" Spacing="7"
-                          IsVisible="{Binding IsInvoiceCustomDatePreset}">
-                          <TextBlock Text="Từ ngày" FontSize="12" VerticalAlignment="Center" />
-                          <DatePicker Classes="sq-date" Width="150"
-                            SelectedDate="{Binding InvoiceFilterStartDate, Mode=TwoWay}" />
-                          <TextBlock Text="Đến ngày" FontSize="12" VerticalAlignment="Center" />
-                          <DatePicker Classes="sq-date" Width="150"
-                            SelectedDate="{Binding InvoiceFilterEndDate, Mode=TwoWay}" />
-                        </StackPanel>
                         <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto"
                           ColumnSpacing="12" RowSpacing="10">
                           <StackPanel Spacing="5">
@@ -4697,18 +4715,6 @@
                               <!-- TAB 3: CÔNG NỢ -->
                               <StackPanel IsVisible="{Binding Detail.IsTabCongNo}" Spacing="12">
 
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                  <Button Classes="toolbar-action"
-                                    Content="Thanh toán công nợ"
-                                    IsEnabled="{Binding ElementName=RootWindow, Path=DataContext.CanPaySupplierDebt}"
-                                    Command="{Binding ElementName=RootWindow, Path=DataContext.ThanhToanCongNoNhaCungCapCommand}"
-                                    CommandParameter="{Binding}" />
-                                  <Button Classes="toolbar-action"
-                                    Content="Lịch sử thanh toán"
-                                    Command="{Binding ElementName=RootWindow, Path=DataContext.XemLichSuThanhToanNhaCungCapCommand}"
-                                    CommandParameter="{Binding}" />
-                                </StackPanel>
-
                                 <Border Classes="statBox" Background="White"
                                   IsVisible="{Binding Detail.HasCongNoData}">
                                   <Grid ColumnDefinitions="*,*,*" ColumnSpacing="14">
@@ -4743,10 +4749,24 @@
                                 <StackPanel IsVisible="{Binding Detail.HasCongNoData}" Spacing="4">
                                   <TextBlock Text="{Binding Detail.NguonCongNoText}"
                                     FontSize="12" Foreground="#61736E" />
-                                  <TextBlock Text="{Binding Detail.SoLanGhiCongNoText}"
+                                  <TextBlock Text="{Binding Detail.SoLanGhiCongNoText, TargetNullValue='0'}"
                                     FontSize="12" Foreground="#667A74" />
                                   <TextBlock FontSize="12" Foreground="#667A74"
                                     Text="{Binding Detail.LanGhiCongNoText, StringFormat='Lần ghi công nợ gần nhất: {0}'}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                  <Button Classes="debt-primary"
+                                    Content="Thanh toán công nợ"
+                                    IsEnabled="{Binding ElementName=RootWindow, Path=DataContext.CanPaySupplierDebt}"
+                                    ToolTip.Tip="Nhập số tiền trả nhà cung cấp, hệ thống tự trừ vào các phiếu nhập còn nợ"
+                                    Command="{Binding ElementName=RootWindow, Path=DataContext.ThanhToanCongNoNhaCungCapCommand}"
+                                    CommandParameter="{Binding}" />
+                                  <Button Classes="debt-secondary"
+                                    Content="Lịch sử thanh toán"
+                                    ToolTip.Tip="Xem toàn bộ lịch sử thanh toán công nợ của nhà cung cấp"
+                                    Command="{Binding ElementName=RootWindow, Path=DataContext.XemLichSuThanhToanNhaCungCapCommand}"
+                                    CommandParameter="{Binding}" />
                                 </StackPanel>
 
                                 <TextBlock Text="Sổ cái công nợ" Foreground="#61736E"

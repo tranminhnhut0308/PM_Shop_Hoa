@@ -4798,8 +4798,14 @@ public sealed partial class DatabaseService
             .Replace("!", "!!").Replace("%", "!%").Replace("_", "!_");
         var phoneDigits = new string(rawSearch.Where(char.IsDigit).ToArray());
 
-        DateTime? tuNgayDau = tuNgay?.Date;
-        DateTime? denNgaySau = denNgay?.Date.AddDays(1);
+        // Invoice timestamps are stored as Vietnam-local wall-clock values; keep
+        // filter parameters Unspecified so the connector does not shift them by machine timezone.
+        DateTime? tuNgayDau = tuNgay.HasValue
+            ? DateTime.SpecifyKind(tuNgay.Value.Date, DateTimeKind.Unspecified)
+            : null;
+        DateTime? denNgaySau = denNgay.HasValue
+            ? DateTime.SpecifyKind(denNgay.Value.Date.AddDays(1), DateTimeKind.Unspecified)
+            : null;
 
         var dieuKien = new List<string>();
 

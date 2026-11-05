@@ -460,11 +460,12 @@ public sealed partial class MainWindowViewModel
         if (ExpandedSupplierRow is not null && !ReferenceEquals(ExpandedSupplierRow, row))
             ExpandedSupplierRow.IsExpanded = false;
 
-        ExpandedSupplierRow = row;
-        row.IsExpanded = true;
-
         if (row.Detail is not null)
+        {
+            ExpandedSupplierRow = row;
+            row.IsExpanded = true;
             return;
+        }
 
         var detail = new NhaCungCapDetailViewModel
         {
@@ -472,6 +473,8 @@ public sealed partial class MainWindowViewModel
         };
 
         row.Detail = detail;
+        ExpandedSupplierRow = row;
+        row.IsExpanded = true;
 
         detail.IsLoading = true;
 

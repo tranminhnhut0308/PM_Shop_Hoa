@@ -833,14 +833,14 @@ public partial class MainWindowViewModel : ObservableObject
             SelectedCustomer.Detail = null;
         }
 
-        SelectedCustomer = row;
-        SelectedCustomerId = row.CustomerId;
-        row.IsExpanded = true;
-
         var detail = row.Detail ?? new KhachHangDetailViewModel();
         row.Detail = detail;
         detail.SelectedTab = "thongtin";
         detail.IsLoading = true;
+
+        SelectedCustomer = row;
+        SelectedCustomerId = row.CustomerId;
+        row.IsExpanded = true;
 
         StatusMessage = $"Đang tải chi tiết {row.TenKhachHang}...";
 
@@ -7757,7 +7757,9 @@ public partial class MainWindowViewModel : ObservableObject
         set
         {
             IsInvoiceCalendarOpen = false;
-            if (SetProperty(ref _invoiceFilterDate, value?.Date))
+            if (SetProperty(
+                ref _invoiceFilterDate,
+                value.HasValue ? VietnameseCalendar.FromCalendarDate(value.Value) : null))
             {
                 OnPropertyChanged(nameof(InvoiceFilterDateText));
                 OnPropertyChanged(nameof(IsInvoiceDateToday));
@@ -7771,10 +7773,10 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     public bool IsInvoiceDateToday =>
-        InvoiceFilterDate?.Date == DateTime.Today;
+        InvoiceFilterDate?.Date == VietnameseCalendar.Today().Date;
 
     public bool IsInvoiceDateYesterday =>
-        InvoiceFilterDate?.Date == DateTime.Today.AddDays(-1);
+        InvoiceFilterDate?.Date == VietnameseCalendar.Today().Date.AddDays(-1);
 
     /// <summary>Đang xem tất cả các ngày (không lọc theo ngày).</summary>
     public bool IsInvoiceDateAll =>
@@ -7783,13 +7785,13 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void SetInvoiceDateToday()
     {
-        InvoiceFilterDate = DateTimeOffset.Now.Date;
+        InvoiceFilterDate = VietnameseCalendar.Today();
     }
 
     [RelayCommand]
     private void SetInvoiceDateYesterday()
     {
-        InvoiceFilterDate = new DateTimeOffset(DateTime.Today.AddDays(-1));
+        InvoiceFilterDate = VietnameseCalendar.FromDateTime(VietnameseCalendar.Today().Date.AddDays(-1));
     }
 
     [RelayCommand]
@@ -8044,4 +8046,3 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
 }
-
