@@ -51,12 +51,8 @@ public sealed partial class MainWindowViewModel
         "Hôm nay",
         "Hôm qua",
         "7 ngày gần nhất",
-        "30 ngày qua",
-        "Tuần này",
         "Tháng này",
         "Tháng trước",
-        "Quý này",
-        "Năm nay",
         "Mọi ngày",
         "Tùy chọn"
     ];
@@ -70,7 +66,7 @@ public sealed partial class MainWindowViewModel
             {
                 if (!_dangCapNhatPresetNgay && !string.IsNullOrWhiteSpace(value) && value != "Tùy chọn")
                 {
-                    ApDungPresetNgayHoaDon(value, tuDongTim: false);
+                    ApDungPresetNgayHoaDon(value);
                 }
                 OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
                 OnPropertyChanged(nameof(InvoiceDateFilterText));
@@ -96,6 +92,11 @@ public sealed partial class MainWindowViewModel
                     _selectedInvoiceDatePreset = "Tùy chọn";
                     OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
                     OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
+                    if (InvoiceFilterStartDate.HasValue && InvoiceFilterEndDate.HasValue)
+                    {
+                        InvoicePage = 1;
+                        _ = SearchInvoicesAsync(giuTrang: true);
+                    }
                 }
             }
         }
@@ -117,6 +118,11 @@ public sealed partial class MainWindowViewModel
                     _selectedInvoiceDatePreset = "Tùy chọn";
                     OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
                     OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
+                    if (InvoiceFilterStartDate.HasValue && InvoiceFilterEndDate.HasValue)
+                    {
+                        InvoicePage = 1;
+                        _ = SearchInvoicesAsync(giuTrang: true);
+                    }
                 }
             }
         }
@@ -193,6 +199,7 @@ public sealed partial class MainWindowViewModel
             if (SetProperty(ref _selectedInvoiceStatus, value))
             {
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+                CapNhatInvoiceActiveFilterChips();
             }
         }
     }
@@ -208,6 +215,7 @@ public sealed partial class MainWindowViewModel
             if (SetProperty(ref _selectedInvoiceCustomer, value))
             {
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+                CapNhatInvoiceActiveFilterChips();
             }
         }
     }
@@ -215,6 +223,10 @@ public sealed partial class MainWindowViewModel
     public ObservableCollection<HoaDonNhanVienFilterOption> InvoiceEmployeeOptions { get; } = [];
     public ObservableCollection<InvoiceFilterChip> InvoiceActiveFilterChips { get; } = [];
     public bool HasAppliedInvoiceFilters => InvoiceActiveFilterChips.Count > 0;
+    public string InvoiceAdvancedFilterCountText =>
+        HasInvoiceAdvancedFilters
+            ? $"Bộ lọc khác ({InvoiceActiveFilterChips.Count})"
+            : "Bộ lọc khác";
 
     public string InvoiceDateCompactText
     {
@@ -323,16 +335,8 @@ public sealed partial class MainWindowViewModel
     private void CapNhatInvoiceActiveFilterChips()
     {
         InvoiceActiveFilterChips.Clear();
-        if (!string.IsNullOrWhiteSpace(InvoiceSearch))
-            InvoiceActiveFilterChips.Add(new("search", $"Từ khóa: {InvoiceSearch.Trim()}"));
-
-        if (InvoiceFilterStartDate.HasValue || InvoiceFilterEndDate.HasValue)
-            InvoiceActiveFilterChips.Add(new("date", InvoiceDateCompactText.Replace("📅 ", "")));
-
         if (SelectedInvoiceStatus != "Tất cả")
             InvoiceActiveFilterChips.Add(new("invoice-status", $"Hóa đơn: {SelectedInvoiceStatus}"));
-        if (SelectedInvoicePaymentStatus != "Tất cả")
-            InvoiceActiveFilterChips.Add(new("payment-status", $"Thanh toán: {SelectedInvoicePaymentStatus}"));
 
         if (SelectedInvoiceCustomer is { IsWalkIn: true })
             InvoiceActiveFilterChips.Add(new("customer", "Khách hàng: Khách lẻ"));
@@ -348,6 +352,7 @@ public sealed partial class MainWindowViewModel
 
         OnPropertyChanged(nameof(HasInvoiceAdvancedFilters));
         OnPropertyChanged(nameof(HasAppliedInvoiceFilters));
+        OnPropertyChanged(nameof(InvoiceAdvancedFilterCountText));
         OnPropertyChanged(nameof(InvoiceDateCompactText));
         OnPropertyChanged(nameof(IsInvoicePaymentAll));
         OnPropertyChanged(nameof(IsInvoicePaymentPaid));
@@ -363,6 +368,7 @@ public sealed partial class MainWindowViewModel
             if (SetProperty(ref _selectedInvoiceEmployee, value))
             {
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+                CapNhatInvoiceActiveFilterChips();
             }
         }
     }
@@ -416,13 +422,13 @@ public sealed partial class MainWindowViewModel
     partial void OnInvoiceFilterMinTotalChanged(string value)
     {
         OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-        OnPropertyChanged(nameof(HasInvoiceAdvancedFilters));
+        CapNhatInvoiceActiveFilterChips();
     }
 
     partial void OnInvoiceFilterMaxTotalChanged(string value)
     {
         OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-        OnPropertyChanged(nameof(HasInvoiceAdvancedFilters));
+        CapNhatInvoiceActiveFilterChips();
     }
 
     private void DatLichTimHoaDon()
