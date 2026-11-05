@@ -230,9 +230,18 @@ internal class Program
         await conn.OpenAsync();
 
         // Thiết lập phiên làm việc có quyền Quản trị với ID người dùng thực trong DB
-        var userDb = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ten_dang_nhap FROM nguoi_dung LIMIT 1");
+        var userDb = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ten_dang_nhap, chi_nhanh_id FROM nguoi_dung LIMIT 1");
         uint currentUserId = userDb != null ? (uint)userDb.id : 1;
-        Session.SetCurrentUser(new NguoiDung { Id = currentUserId, TenDangNhap = userDb?.ten_dang_nhap ?? "admin", MaVaiTro = Quyen.QuanTri });
+        uint currentBranchId = userDb?.chi_nhanh_id != null
+            ? (uint)userDb.chi_nhanh_id
+            : await conn.ExecuteScalarAsync<uint>("SELECT id FROM chi_nhanh ORDER BY id LIMIT 1");
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = currentUserId,
+            TenDangNhap = userDb?.ten_dang_nhap ?? "admin",
+            MaVaiTro = Quyen.QuanTri,
+            ChiNhanhId = currentBranchId
+        });
 
         // Lấy 1 sản phẩm có sẵn để test
         var sp = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ma_san_pham, ten_san_pham, gia_von, COALESCE(ton_kho_excel, 0) AS ton_kho FROM san_pham WHERE trang_thai = 1 LIMIT 1");
@@ -248,6 +257,7 @@ internal class Program
         var phieu = new PhieuNhapHang
         {
             MaPhieuNhap = "", // Rỗng, hệ thống phải tự sinh trong transaction!
+            ChiNhanhId = currentBranchId,
             ThoiGianNhap = DateTime.Now,
             NhaCungCapId = nccId,
             TongTienHang = 50000,
@@ -274,7 +284,16 @@ internal class Program
             }
         };
 
-        decimal tonKhoTruoc = await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @id", new { id = spId });
+        // Tồn kho nghiệp vụ lấy từ bảng ton_kho (nguồn cập nhật của phiếu nhập),
+        // không chỉ từ cột cache san_pham.ton_kho_excel.
+        var tonKhoRowTruoc = await conn.QueryFirstOrDefaultAsync<dynamic>(
+            "SELECT so_luong_ton, gia_von_binh_quan FROM ton_kho WHERE chi_nhanh_id = @ChiNhanhId AND san_pham_id = @SanPhamId",
+            new { ChiNhanhId = currentBranchId, SanPhamId = spId });
+        decimal tonKhoTruoc = tonKhoRowTruoc != null
+            ? (decimal)tonKhoRowTruoc.so_luong_ton
+            : await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @id", new { id = spId });
+        decimal sanPhamTonTruoc = await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @id", new { id = spId });
+        decimal? giaVonBinhQuanTruoc = tonKhoRowTruoc != null ? (decimal)tonKhoRowTruoc.gia_von_binh_quan : null;
         uint savedId = 0;
         try
         {
@@ -284,23 +303,42 @@ internal class Program
                 throw new Exception($"Phiếu nhập sau khi lưu không được cấp ID hoặc mã hợp lệ! Id={savedId}, Ma={phieu.MaPhieuNhap}");
             }
 
-            // Kiểm tra tồn kho sau khi lưu phải tăng 1
-            decimal tonKhoSau = await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @id", new { id = spId });
-            if (tonKhoSau != tonKhoTruoc + 1)
+            // Kiểm tra tồn kho sau khi lưu phải tăng 1 ở cả ton_kho và cache san_pham.
+            var tonKhoRowSau = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT so_luong_ton FROM ton_kho WHERE chi_nhanh_id = @ChiNhanhId AND san_pham_id = @SanPhamId",
+                new { ChiNhanhId = currentBranchId, SanPhamId = spId });
+            decimal tonKhoSau = tonKhoRowSau != null ? (decimal)tonKhoRowSau.so_luong_ton : 0m;
+            decimal sanPhamTonSau = await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @id", new { id = spId });
+            if (tonKhoSau != tonKhoTruoc + 1 || sanPhamTonSau != tonKhoTruoc + 1)
             {
-                throw new Exception($"Tồn kho không tăng đúng: trước={tonKhoTruoc}, sau={tonKhoSau}");
+                throw new Exception($"Tồn kho không tăng đúng: ton_kho trước={tonKhoTruoc}, sau={tonKhoSau}; san_pham sau={sanPhamTonSau}");
             }
         }
         finally
         {
-            // Cleanup: Xóa phiếu test, chi tiết phiếu và lịch sử kho test, hoàn lại tồn kho
+            // Cleanup: Xóa phiếu test, chi tiết, công nợ và lịch sử kho test, hoàn lại tồn kho
             if (savedId > 0)
             {
+                await conn.ExecuteAsync("DELETE FROM lich_su_chinh_sua_phieu_nhap WHERE phieu_nhap_id = @id", new { id = savedId });
+                await conn.ExecuteAsync("DELETE FROM lich_su_cong_no_nha_cung_cap WHERE ma_chung_tu = @ma", new { ma = phieu.MaPhieuNhap });
+                await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE phieu_nhap_hang_id = @id OR ma_phieu_nhap = @ma", new { id = savedId, ma = phieu.MaPhieuNhap });
                 await conn.ExecuteAsync("DELETE FROM chi_tiet_phieu_nhap_hang WHERE phieu_nhap_id = @id", new { id = savedId });
                 await conn.ExecuteAsync("DELETE FROM phieu_nhap_hang WHERE id = @id", new { id = savedId });
-                await conn.ExecuteAsync("DELETE FROM lich_su_nhap_xuat_kho WHERE loai_chung_tu = 'PHIEU_NHAP' AND ma_chung_tu = @ma", new { ma = phieu.MaPhieuNhap });
+                await conn.ExecuteAsync("DELETE FROM lich_su_nhap_xuat_kho WHERE loai_chung_tu IN ('PHIEU_NHAP', 'PHIEU_NHAP_HANG') AND ma_chung_tu = @ma", new { ma = phieu.MaPhieuNhap });
             }
-            await conn.ExecuteAsync("UPDATE san_pham SET ton_kho_excel = @tonKho WHERE id = @id", new { tonKho = tonKhoTruoc, id = spId });
+            if (tonKhoRowTruoc != null)
+            {
+                await conn.ExecuteAsync(
+                    "UPDATE ton_kho SET so_luong_ton = @Ton, gia_von_binh_quan = @Gia WHERE chi_nhanh_id = @ChiNhanhId AND san_pham_id = @SanPhamId",
+                    new { Ton = tonKhoTruoc, Gia = giaVonBinhQuanTruoc ?? 0m, ChiNhanhId = currentBranchId, SanPhamId = spId });
+            }
+            else
+            {
+                await conn.ExecuteAsync(
+                    "DELETE FROM ton_kho WHERE chi_nhanh_id = @ChiNhanhId AND san_pham_id = @SanPhamId",
+                    new { ChiNhanhId = currentBranchId, SanPhamId = spId });
+            }
+            await conn.ExecuteAsync("UPDATE san_pham SET ton_kho_excel = @tonKho WHERE id = @id", new { tonKho = sanPhamTonTruoc, id = spId });
         }
 
         Console.WriteLine($"PASSED (Cấp mã tự động: {phieu.MaPhieuNhap}, ID: {savedId}, Tồn kho cập nhật chính xác, Đã dọn dẹp) ✓");

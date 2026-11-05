@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:vm="using:ShopHoa.ViewModels"
   xmlns:models="using:ShopHoa.Models"
@@ -7090,10 +7090,49 @@
 
           <Button Grid.Column="4"
             Classes="toolbar-action"
-            Content="⚙  Tuỳ chọn"
-            Command="{Binding TimKiemBaoCaoPhieuNhapCommand}"
+            Content="⚙  Tùy chỉnh hiển thị"
+            ToolTip.Tip="Cấu hình bật/tắt các cột hiển thị trong bảng phiếu nhập"
             VerticalAlignment="Center"
-            Margin="0" />
+            Margin="0">
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedRight">
+                <Border Background="White"
+                  BorderBrush="#D8E5E0"
+                  BorderThickness="1"
+                  CornerRadius="10"
+                  Padding="16"
+                  Width="240"
+                  BoxShadow="0 4 16 #150A352E">
+                  <StackPanel Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="Cột hiển thị"
+                        FontSize="13"
+                        FontWeight="Bold"
+                        Foreground="#163F38"
+                        VerticalAlignment="Center" />
+                      <Button Grid.Column="1"
+                        Classes="toolbar-action"
+                        Content="Mặc định"
+                        FontSize="11"
+                        Padding="8,3"
+                        Command="{Binding DatLaiCotPhieuNhapCommand}"
+                        ToolTip.Tip="Bật lại toàn bộ các cột về mặc định" />
+                    </Grid>
+                    <Separator Height="1" Background="#E2ECE8" Margin="0,2" />
+                    <CheckBox Content="Mã nhập hàng" IsChecked="{Binding HienThiCotPhieuNhapMaPhieu, Mode=TwoWay}" />
+                    <CheckBox Content="Thời gian" IsChecked="{Binding HienThiCotPhieuNhapThoiGian, Mode=TwoWay}" />
+                    <CheckBox Content="Mã NCC" IsChecked="{Binding HienThiCotPhieuNhapMaNcc, Mode=TwoWay}" />
+                    <CheckBox Content="Nhà cung cấp" IsChecked="{Binding HienThiCotPhieuNhapTenNcc, Mode=TwoWay}" />
+                    <CheckBox Content="Phương thức / Quỹ" IsChecked="{Binding HienThiCotPhieuNhapPhuongThuc, Mode=TwoWay}" />
+                    <CheckBox Content="Còn nợ" IsChecked="{Binding HienThiCotPhieuNhapConNo, Mode=TwoWay}" />
+                    <CheckBox Content="Trạng thái phiếu" IsChecked="{Binding HienThiCotPhieuNhapTrangThai, Mode=TwoWay}" />
+                    <CheckBox Content="Thanh toán" IsChecked="{Binding HienThiCotPhieuNhapThanhToan, Mode=TwoWay}" />
+                    <CheckBox Content="Thao tác" IsChecked="{Binding HienThiCotPhieuNhapThaoTac, Mode=TwoWay}" />
+                  </StackPanel>
+                </Border>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
 
           <Button Grid.Column="5"
             Classes="toolbar-action"
@@ -7131,32 +7170,61 @@
             </Grid>
 
             <StackPanel Spacing="6">
-              <TextBlock Text="Thời gian"
-                FontSize="12"
-                FontWeight="SemiBold"
-                Foreground="#52645E" />
+              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="Thời gian"
+                  FontSize="12"
+                  FontWeight="SemiBold"
+                  Foreground="#52645E"
+                  VerticalAlignment="Center" />
+
+                <!-- Badge hiển thị nổi bật ngày/khoảng thời gian đang lọc -->
+                <Border Background="#E6F4F1"
+                  BorderBrush="#A5D6A7"
+                  BorderThickness="1"
+                  CornerRadius="12"
+                  Padding="10,3"
+                  VerticalAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                    <TextBlock Text="Đang xem:"
+                      FontSize="11.5"
+                      FontWeight="SemiBold"
+                      Foreground="#0D5C4A"
+                      VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding BaoCaoPhieuNhapDateDisplayText}"
+                      FontSize="11.5"
+                      FontWeight="Bold"
+                      Foreground="#087F6E"
+                      VerticalAlignment="Center" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
 
               <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Classes="filterChip purchaseFilter"
                   Classes.active="{Binding IsBaoCaoPhieuNhapDateToday}"
                   Content="Hôm nay"
+                  ToolTip.Tip="Lọc các phiếu nhập trong ngày hôm nay"
                   Command="{Binding SetBaoCaoPhieuNhapDateTodayCommand}" />
                 <Button Classes="filterChip purchaseFilter"
                   Classes.active="{Binding IsBaoCaoPhieuNhapDateYesterday}"
                   Content="Hôm qua"
+                  ToolTip.Tip="Lọc các phiếu nhập trong ngày hôm qua"
                   Command="{Binding SetBaoCaoPhieuNhapDateYesterdayCommand}" />
                 <Button Classes="filterChip purchaseFilter"
                   Classes.active="{Binding IsBaoCaoPhieuNhapDateLast7Days}"
                   Content="7 ngày gần nhất"
+                  ToolTip.Tip="Lọc các phiếu nhập trong 7 ngày gần nhất tính đến hôm nay"
                   Command="{Binding SetBaoCaoPhieuNhapDateLast7DaysCommand}" />
                 <Button Classes="filterChip purchaseFilter"
                   Classes.active="{Binding IsBaoCaoPhieuNhapDateThisMonth}"
                   Content="Tháng này"
+                  ToolTip.Tip="Lọc các phiếu nhập từ ngày đầu tháng đến hiện tại"
                   Command="{Binding SetBaoCaoPhieuNhapDateThisMonthCommand}" />
 
                 <Button Classes="filterChip purchaseFilter"
                   Classes.active="{Binding IsBaoCaoPhieuNhapDateCustom}"
-                  Content="Tùy chọn">
+                  Content="Tùy chọn"
+                  ToolTip.Tip="Tùy chọn khoảng ngày bắt đầu và kết thúc">
                   <Button.Flyout>
                     <Flyout Placement="Bottom">
                       <Border Background="White"
@@ -7164,24 +7232,39 @@
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="14"
-                        Width="300">
+                        Width="320">
                         <StackPanel Spacing="8">
-                          <TextBlock Text="Khoảng ngày"
+                          <TextBlock Text="Chọn khoảng thời gian"
                             FontSize="13"
                             FontWeight="SemiBold"
                             Foreground="#163F38" />
                           <TextBlock Text="Từ ngày" FontSize="11" Foreground="#61736E" />
-                          <DatePicker SelectedDate="{Binding BaoCaoPhieuNhapTuNgay, Mode=TwoWay}"
+                          <DatePicker SelectedDate="{Binding BaoCaoPhieuNhapTuNgayChon, Mode=TwoWay}"
                             HorizontalAlignment="Stretch" />
                           <TextBlock Text="Đến ngày" FontSize="11" Foreground="#61736E" />
-                          <DatePicker SelectedDate="{Binding BaoCaoPhieuNhapDenNgay, Mode=TwoWay}"
+                          <DatePicker SelectedDate="{Binding BaoCaoPhieuNhapDenNgayChon, Mode=TwoWay}"
                             HorizontalAlignment="Stretch" />
-                          <Button Classes="toolbar-primary"
-                            Content="Áp dụng"
-                            HorizontalAlignment="Right"
-                            IsEnabled="{Binding CoKhoangNgayBaoCaoPhieuNhap}"
-                            Command="{Binding ApDungKhoangNgayBaoCaoPhieuNhapCommand}"
-                            Margin="0" />
+
+                          <!-- Thông báo kiểm tra lỗi ngày bắt đầu > ngày kết thúc -->
+                          <TextBlock Text="{Binding BaoCaoPhieuNhapDateErrorMessage}"
+                            FontSize="11"
+                            Foreground="#D64545"
+                            FontWeight="SemiBold"
+                            IsVisible="{Binding BaoCaoPhieuNhapDateErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                          <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+                            <Button Grid.Column="1"
+                              Classes="toolbar-action"
+                              Content="Hủy"
+                              Command="{Binding HuyKhoangNgayBaoCaoPhieuNhapCommand}"
+                              Margin="0" />
+                            <Button Grid.Column="2"
+                              Classes="toolbar-primary"
+                              Content="Áp dụng"
+                              IsEnabled="{Binding CoKhoangNgayChonHopLe}"
+                              Command="{Binding ApDungKhoangNgayBaoCaoPhieuNhapCommand}"
+                              Margin="0" />
+                          </Grid>
                         </StackPanel>
                       </Border>
                     </Flyout>
@@ -7191,19 +7274,22 @@
                 <Button Classes="filterChip purchaseFilter"
                   Classes.active="{Binding IsBaoCaoPhieuNhapDateAll}"
                   Content="Mọi ngày"
+                  ToolTip.Tip="Hiển thị phiếu nhập ở tất cả thời gian (không lọc ngày)"
                   Command="{Binding SetBaoCaoPhieuNhapDateAllCommand}" />
 
                 <Button Classes="purchasePageButton"
                   Margin="0,0,6,0"
                   Content="◀"
                   VerticalContentAlignment="Center"
-                  ToolTip.Tip="Khoảng ngày trước"
+                  IsEnabled="{Binding CanBaoCaoPhieuNhapDatePrev}"
+                  ToolTip.Tip="{Binding BaoCaoPhieuNhapDatePrevTooltip}"
                   Command="{Binding BaoCaoPhieuNhapDatePrevDayCommand}" />
                 <Button Classes="purchasePageButton"
                   Margin="0,0,6,0"
                   Content="▶"
                   VerticalContentAlignment="Center"
-                  ToolTip.Tip="Khoảng ngày sau"
+                  IsEnabled="{Binding CanBaoCaoPhieuNhapDateNext}"
+                  ToolTip.Tip="{Binding BaoCaoPhieuNhapDateNextTooltip}"
                   Command="{Binding BaoCaoPhieuNhapDateNextDayCommand}" />
               </WrapPanel>
             </StackPanel>
@@ -7264,35 +7350,40 @@
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapMaPhieu}" />
 
                 <TextBlock Grid.Column="1"
                   Text="THỜI GIAN"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapThoiGian}" />
 
                 <TextBlock Grid.Column="2"
                   Text="MÃ NCC"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapMaNcc}" />
 
                 <TextBlock Grid.Column="3"
                   Text="NHÀ CUNG CẤP"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapTenNcc}" />
 
                 <TextBlock Grid.Column="4"
                   Text="PHƯƠNG THỨC / QUỸ"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapPhuongThuc}" />
 
                 <TextBlock Grid.Column="5"
                   Text="CÒN NỢ"
@@ -7300,7 +7391,8 @@
                   Foreground="#164B40"
                   FontSize="12"
                   HorizontalAlignment="Right"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapConNo}" />
 
                 <TextBlock Grid.Column="6"
                   Text="TRẠNG THÁI"
@@ -7308,7 +7400,8 @@
                   Foreground="#164B40"
                   FontSize="12"
                   HorizontalAlignment="Center"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapTrangThai}" />
 
                 <TextBlock Grid.Column="7"
                   Text="THANH TOÁN"
@@ -7316,7 +7409,8 @@
                   Foreground="#164B40"
                   FontSize="12"
                   HorizontalAlignment="Center"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapThanhToan}" />
 
                 <TextBlock Grid.Column="8"
                   Text="THAO TÁC"
@@ -7324,7 +7418,8 @@
                   Foreground="#164B40"
                   FontSize="12"
                   HorizontalAlignment="Center"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapThaoTac}" />
               </Grid>
             </Border>
 
@@ -7367,7 +7462,8 @@
                         ColumnSpacing="10"
                         VerticalAlignment="Center">
 
-                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapMaPhieu}">
                           <Button
                             Background="Transparent"
                             BorderThickness="0"
@@ -7400,25 +7496,29 @@
                           Text="{Binding ThoiGianNhapText}"
                           Foreground="#667A74"
                           FontSize="12"
-                          VerticalAlignment="Center" />
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapThoiGian}" />
 
                         <TextBlock Grid.Column="2"
                           Text="{Binding MaNhaCungCap}"
                           Foreground="#667A74"
                           FontSize="12"
-                          VerticalAlignment="Center" />
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapMaNcc}" />
 
                         <TextBlock Grid.Column="3"
                           Text="{Binding TenNhaCungCap}"
                           Foreground="#263B35"
                           FontWeight="Medium"
                           TextTrimming="CharacterEllipsis"
-                          VerticalAlignment="Center" />
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapTenNcc}" />
 
                         <!-- PHƯƠNG THỨC / QUỸ CHI TRẢ -->
                         <StackPanel Grid.Column="4"
                           VerticalAlignment="Center"
-                          Spacing="2">
+                          Spacing="2"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapPhuongThuc}">
                           <TextBlock Text="{Binding PhuongThucThanhToanHienThi}"
                             FontSize="12"
                             FontWeight="SemiBold"
@@ -7435,7 +7535,8 @@
                           FontWeight="SemiBold"
                           Foreground="#D64545"
                           HorizontalAlignment="Right"
-                          VerticalAlignment="Center" />
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapConNo}" />
 
                         <!-- BADGE TRẠNG THÁI PHIẾU -->
                         <Border Grid.Column="6"
@@ -7444,7 +7545,8 @@
                           MinWidth="96"
                           HorizontalAlignment="Center"
                           VerticalAlignment="Center"
-                          Background="{Binding TrangThaiBadgeBrush}">
+                          Background="{Binding TrangThaiBadgeBrush}"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapTrangThai}">
                           <TextBlock Text="{Binding TrangThaiHienThi}"
                             FontSize="11"
                             FontWeight="SemiBold"
@@ -7460,7 +7562,8 @@
                           MinWidth="132"
                           HorizontalAlignment="Center"
                           VerticalAlignment="Center"
-                          Background="{Binding TrangThaiThanhToanBadgeBrush}">
+                          Background="{Binding TrangThaiThanhToanBadgeBrush}"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapThanhToan}">
                           <TextBlock Text="{Binding TrangThaiThanhToanHienThi}"
                             FontSize="11"
                             FontWeight="SemiBold"
@@ -7474,7 +7577,8 @@
                           Orientation="Horizontal"
                           Spacing="6"
                           HorizontalAlignment="Center"
-                          VerticalAlignment="Center">
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapThaoTac}">
                           <Button
                             Classes="payRowButton"
                             Width="108"

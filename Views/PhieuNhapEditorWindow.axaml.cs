@@ -68,8 +68,13 @@ public partial class PhieuNhapEditorWindow : Window
             AcbNhaCungCap.Text = selectedSupplier.DisplayText;
         }
 
-        // 4. Số HĐ đầu vào & Ghi chú
+        // 4. Số HĐ đầu vào, ngày hóa đơn, người giao hàng & Ghi chú
         TxtSoHoaDon.Text = _request.SoHoaDonDauVao ?? "";
+        DpNgayHoaDon.SelectedDate = _request.NgayHoaDonDauVao.HasValue
+            ? new DateTimeOffset(_request.NgayHoaDonDauVao.Value)
+            : null;
+        TxtTenNguoiGiaoHang.Text = _request.TenNguoiGiaoHang ?? "";
+        TxtSdtNguoiGiaoHang.Text = _request.SdtNguoiGiaoHang ?? "";
         TxtGhiChu.Text = _request.GhiChu ?? "";
 
         // 5. Phương thức thanh toán
@@ -289,6 +294,17 @@ public partial class PhieuNhapEditorWindow : Window
             }
 
             _request.SoHoaDonDauVao = TxtSoHoaDon.Text?.Trim();
+            if (DpNgayHoaDon.SelectedDate.HasValue)
+            {
+                var ngayHoaDon = DpNgayHoaDon.SelectedDate.Value.DateTime;
+                _request.NgayHoaDonDauVao = ngayHoaDon.Date;
+            }
+            else
+            {
+                _request.NgayHoaDonDauVao = null;
+            }
+            _request.TenNguoiGiaoHang = TxtTenNguoiGiaoHang.Text?.Trim();
+            _request.SdtNguoiGiaoHang = TxtSdtNguoiGiaoHang.Text?.Trim();
             _request.GhiChu = TxtGhiChu.Text?.Trim();
             _request.PhuongThucThanhToan = CbbPhuongThuc.SelectedIndex == 1 ? "CHUYEN_KHOAN" : "TIEN_MAT";
             _request.ChiPhiKhac = NumChiPhiKhac.Value ?? 0m;

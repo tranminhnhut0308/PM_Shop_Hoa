@@ -15,13 +15,13 @@ public sealed class HuyPhieuNhapYeuCau
 
     /// <summary>
     /// Phương án xử lý khoản tiền đã thanh toán (nếu DaThanhToan > 0):
-    /// HOAN_TIEN_MAT = Nhà cung cấp hoàn trả tiền mặt về quỹ tiệm (tạo phiếu thu tiền mặt),
-    /// HOAN_CHUYEN_KHOAN = Nhà cung cấp hoàn trả chuyển khoản về tài khoản tiệm (tạo phiếu thu chuyển khoản),
-    /// TREO_CONG_NO = Nhà cung cấp giữ tiền làm khoản trả trước / trừ nợ sau (không tạo phiếu thu, số dư công nợ NCC tự giảm).
+    /// HOAN_TIEN_MAT = Hoàn tiền cho nhà cung cấp bằng tiền mặt (tạo phiếu chi),
+    /// HOAN_CHUYEN_KHOAN = Hoàn tiền cho nhà cung cấp bằng chuyển khoản (tạo phiếu chi),
+    /// TREO_CONG_NO = Giữ khoản tiền làm trả trước / cấn trừ công nợ sau (không tạo phiếu quỹ).
     /// </summary>
     public string PhuongAnTien { get; set; } = "HOAN_TIEN_MAT";
 
-    public bool HoanTienVeQuy
+    public bool HoanTienChoNhaCungCap
     {
         get => PhuongAnTien == "HOAN_TIEN_MAT" || PhuongAnTien == "HOAN_CHUYEN_KHOAN";
         set

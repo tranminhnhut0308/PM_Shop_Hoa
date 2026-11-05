@@ -255,6 +255,7 @@ public sealed partial class DatabaseService
         await EnsureLichSuChinhSuaPhieuNhapTableAsync();
         var hasPhuongThucColumn = await EnsurePhieuNhapPhuongThucColumnAsync();
         var hasExtraColumns = await HasPhieuNhapExtraColumnsAsync();
+        var hasDvtExcel = await EnsureChiTietPhieuNhapDonViTinhExcelAsync();
         var hasPhieuQuyExtraColumns = await EnsurePhieuQuyExtraColumnsAsync();
         var hasPhieuQuyPhieuNhapColumns = await EnsurePhieuQuyPhieuNhapColumnsAsync();
 
@@ -264,7 +265,20 @@ public sealed partial class DatabaseService
         try
         {
             // 1. KHÓA PHIẾU NHẬP ĐỂ ĐỌC DỮ LIỆU CŨ
-            const string selectOldPhieuSql = """
+            // Chỉ select các cột mở rộng thực sự tồn tại; database thiếu
+            // ma_dat_hang_nhap từng làm cả câu UPDATE bị lỗi unknown column.
+            var oldExtraSelect = (hasPhuongThucColumn
+                    ? ",\n                p.phuong_thuc_thanh_toan AS PhuongThucThanhToan"
+                    : string.Empty)
+                + (hasExtraColumns
+                    ? ",\n                p.so_hoa_don_dau_vao     AS SoHoaDonDauVao,"
+                      + "\n                p.ngay_hoa_don_dau_vao   AS NgayHoaDonDauVao,"
+                      + "\n                p.ten_nguoi_giao_hang    AS TenNguoiGiaoHang,"
+                      + "\n                p.sdt_nguoi_giao_hang    AS SdtNguoiGiaoHang,"
+                      + "\n                p.ma_dat_hang_nhap       AS MaDatHangNhap"
+                    : string.Empty);
+
+            var selectOldPhieuSql = $"""
             SELECT
                 p.id                     AS Id,
                 p.ma_phieu_nhap          AS MaPhieuNhap,
@@ -279,13 +293,7 @@ public sealed partial class DatabaseService
                 p.da_thanh_toan          AS DaThanhToan,
                 p.con_no                 AS ConNo,
                 p.trang_thai             AS TrangThai,
-                p.ghi_chu                AS GhiChu,
-                p.so_hoa_don_dau_vao     AS SoHoaDonDauVao,
-                p.ngay_hoa_don_dau_vao   AS NgayHoaDonDauVao,
-                p.ten_nguoi_giao_hang    AS TenNguoiGiaoHang,
-                p.sdt_nguoi_giao_hang    AS SdtNguoiGiaoHang,
-                p.ma_dat_hang_nhap       AS MaDatHangNhap,
-                p.phuong_thuc_thanh_toan AS PhuongThucThanhToan
+                p.ghi_chu                AS GhiChu{oldExtraSelect}
             FROM phieu_nhap_hang p
             LEFT JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
             WHERE p.id = @Id
@@ -494,15 +502,16 @@ public sealed partial class DatabaseService
                 new { PhieuNhapId = request.PhieuNhapId },
                 transaction);
 
-            const string insertDetailSql = """
+            var dvtColumn = hasDvtExcel ? "don_vi_tinh_excel,\n                " : "";
+            var dvtValue = hasDvtExcel ? "@DonViTinh,\n                " : "";
+            var insertDetailSql = $"""
             INSERT INTO chi_tiet_phieu_nhap_hang
             (
                 phieu_nhap_id,
                 san_pham_id,
                 ma_san_pham,
                 ten_san_pham,
-                don_vi_tinh_excel,
-                so_luong,
+                {dvtColumn}so_luong,
                 don_gia_nhap,
                 giam_gia,
                 thanh_tien,
@@ -514,8 +523,7 @@ public sealed partial class DatabaseService
                 @SanPhamId,
                 @MaSanPham,
                 @TenSanPham,
-                @DonViTinh,
-                @SoLuong,
+                {dvtValue}@SoLuong,
                 @DonGiaNhap,
                 @GiamGia,
                 @ThanhTien,
@@ -599,6 +607,10 @@ public sealed partial class DatabaseService
             if ((oldPhieu.SdtNguoiGiaoHang ?? "") != (request.SdtNguoiGiaoHang ?? ""))
             {
                 thayDoiLines.Add($"• SĐT người giao hàng: '{oldPhieu.SdtNguoiGiaoHang ?? "—"}' → '{request.SdtNguoiGiaoHang ?? "—"}'");
+            }
+            if ((oldPhieu.MaDatHangNhap ?? "") != (request.MaDatHangNhap ?? ""))
+            {
+                thayDoiLines.Add($"• Mã đặt hàng nhập: '{oldPhieu.MaDatHangNhap ?? "—"}' → '{request.MaDatHangNhap ?? "—"}'");
             }
 
             // 6. CẬP NHẬT HEADER PHIẾU NHẬP
@@ -708,6 +720,11 @@ public sealed partial class DatabaseService
                 oldPhieu.ConNo,
                 oldPhieu.PhuongThucThanhToan,
                 oldPhieu.GhiChu,
+                oldPhieu.SoHoaDonDauVao,
+                oldPhieu.NgayHoaDonDauVao,
+                oldPhieu.TenNguoiGiaoHang,
+                oldPhieu.SdtNguoiGiaoHang,
+                oldPhieu.MaDatHangNhap,
                 Items = oldItems
             });
 
@@ -725,6 +742,11 @@ public sealed partial class DatabaseService
                 ConNo = newConNo,
                 request.PhuongThucThanhToan,
                 request.GhiChu,
+                request.SoHoaDonDauVao,
+                request.NgayHoaDonDauVao,
+                request.TenNguoiGiaoHang,
+                request.SdtNguoiGiaoHang,
+                request.MaDatHangNhap,
                 Items = dongHopLe
             });
 

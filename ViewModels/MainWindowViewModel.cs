@@ -4035,13 +4035,182 @@ public partial class MainWindowViewModel : ObservableObject
     public bool IsBaoCaoPhieuNhapDateThisMonth => _baoCaoPhieuNhapKieuNgay == "THIS_MONTH";
     public bool IsBaoCaoPhieuNhapDateCustom => _baoCaoPhieuNhapKieuNgay == "CUSTOM";
     public bool IsBaoCaoPhieuNhapDateAll => _baoCaoPhieuNhapKieuNgay == "ALL";
+
+    /// <summary>Chuỗi hiển thị ngày hoặc khoảng thời gian đang lọc.</summary>
+    public string BaoCaoPhieuNhapDateDisplayText
+    {
+        get
+        {
+            if (_baoCaoPhieuNhapKieuNgay == "ALL" || (!BaoCaoPhieuNhapTuNgay.HasValue && !BaoCaoPhieuNhapDenNgay.HasValue))
+                return "Mọi ngày";
+
+            var tu = BaoCaoPhieuNhapTuNgay?.Date;
+            var den = BaoCaoPhieuNhapDenNgay?.Date;
+
+            if (tu.HasValue && den.HasValue)
+            {
+                if (tu.Value == den.Value)
+                    return tu.Value.ToString("dd/MM/yyyy");
+
+                return $"{tu.Value:dd/MM/yyyy} - {den.Value:dd/MM/yyyy}";
+            }
+
+            if (tu.HasValue)
+                return $"Từ {tu.Value:dd/MM/yyyy}";
+
+            return $"Đến {den!.Value:dd/MM/yyyy}";
+        }
+    }
+
+    /// <summary>Tooltip giải thích cho nút lùi ngày/khoảng thời gian.</summary>
+    public string BaoCaoPhieuNhapDatePrevTooltip
+    {
+        get
+        {
+            return _baoCaoPhieuNhapKieuNgay switch
+            {
+                "ALL" => "Không sử dụng điều hướng khi xem mọi ngày",
+                "TODAY" or "YESTERDAY" => "Lùi về 1 ngày trước",
+                "LAST_7_DAYS" => "Lùi về 7 ngày trước",
+                "THIS_MONTH" => "Lùi về tháng trước",
+                "CUSTOM" => "Lùi về khoảng thời gian trước",
+                _ => "Lùi về ngày/khoảng trước"
+            };
+        }
+    }
+
+    /// <summary>Tooltip giải thích cho nút tiến ngày/khoảng thời gian.</summary>
+    public string BaoCaoPhieuNhapDateNextTooltip
+    {
+        get
+        {
+            if (!CanBaoCaoPhieuNhapDateNext)
+            {
+                if (_baoCaoPhieuNhapKieuNgay == "ALL")
+                    return "Không sử dụng điều hướng khi xem mọi ngày";
+                return "Đã ở ngày hiện tại, không thể chuyển sang ngày tương lai";
+            }
+
+            return _baoCaoPhieuNhapKieuNgay switch
+            {
+                "TODAY" or "YESTERDAY" => "Tiến sang 1 ngày tiếp theo",
+                "LAST_7_DAYS" => "Tiến sang 7 ngày tiếp theo",
+                "THIS_MONTH" => "Tiến sang tháng tiếp theo",
+                "CUSTOM" => "Tiến sang khoảng thời gian tiếp theo",
+                _ => "Tiến sang ngày/khoảng sau"
+            };
+        }
+    }
+
+    /// <summary>Kiểm tra xem có thể tiến sang ngày/khoảng thời gian tiếp theo hay không (chặn tương lai).</summary>
+    public bool CanBaoCaoPhieuNhapDateNext
+    {
+        get
+        {
+            if (_baoCaoPhieuNhapKieuNgay == "ALL")
+                return false;
+
+            var den = BaoCaoPhieuNhapDenNgay?.Date ?? DateTime.Today;
+            return den < DateTime.Today;
+        }
+    }
+
+    /// <summary>Kiểm tra có thể lùi ngày hay không (chặn khi chọn ALL).</summary>
+    public bool CanBaoCaoPhieuNhapDatePrev => _baoCaoPhieuNhapKieuNgay != "ALL";
+
+    // Cấu hình ẩn/hiện cột bảng danh sách phiếu nhập
+    [ObservableProperty] private bool hienThiCotPhieuNhapMaPhieu = true;
+    [ObservableProperty] private bool hienThiCotPhieuNhapThoiGian = true;
+    [ObservableProperty] private bool hienThiCotPhieuNhapMaNcc = true;
+    [ObservableProperty] private bool hienThiCotPhieuNhapTenNcc = true;
+    [ObservableProperty] private bool hienThiCotPhieuNhapPhuongThuc = true;
+    [ObservableProperty] private bool hienThiCotPhieuNhapConNo = true;
+    [ObservableProperty] private bool hienThiCotPhieuNhapTrangThai = true;
+    [ObservableProperty] private bool hienThiCotPhieuNhapThanhToan = true;
+    [ObservableProperty] private bool hienThiCotPhieuNhapThaoTac = true;
+
+    [RelayCommand]
+    private void DatLaiCotPhieuNhap()
+    {
+        HienThiCotPhieuNhapMaPhieu = true;
+        HienThiCotPhieuNhapThoiGian = true;
+        HienThiCotPhieuNhapMaNcc = true;
+        HienThiCotPhieuNhapTenNcc = true;
+        HienThiCotPhieuNhapPhuongThuc = true;
+        HienThiCotPhieuNhapConNo = true;
+        HienThiCotPhieuNhapTrangThai = true;
+        HienThiCotPhieuNhapThanhToan = true;
+        HienThiCotPhieuNhapThaoTac = true;
+    }
+
+    // Biến tạm để chọn ngày trong popover Tùy chọn (cho phép Áp dụng hoặc Hủy)
+    private DateTimeOffset? _baoCaoPhieuNhapTuNgayChon;
+    private DateTimeOffset? _baoCaoPhieuNhapDenNgayChon;
+    private string _baoCaoPhieuNhapDateErrorMessage = "";
+
+    public DateTimeOffset? BaoCaoPhieuNhapTuNgayChon
+    {
+        get => _baoCaoPhieuNhapTuNgayChon ?? BaoCaoPhieuNhapTuNgay ?? DateTimeOffset.Now;
+        set
+        {
+            if (SetProperty(ref _baoCaoPhieuNhapTuNgayChon, value?.Date))
+            {
+                CapNhatKiemTraKhoangNgayChon();
+            }
+        }
+    }
+
+    public DateTimeOffset? BaoCaoPhieuNhapDenNgayChon
+    {
+        get => _baoCaoPhieuNhapDenNgayChon ?? BaoCaoPhieuNhapDenNgay ?? DateTimeOffset.Now;
+        set
+        {
+            if (SetProperty(ref _baoCaoPhieuNhapDenNgayChon, value?.Date))
+            {
+                CapNhatKiemTraKhoangNgayChon();
+            }
+        }
+    }
+
+    public string BaoCaoPhieuNhapDateErrorMessage
+    {
+        get => _baoCaoPhieuNhapDateErrorMessage;
+        private set => SetProperty(ref _baoCaoPhieuNhapDateErrorMessage, value);
+    }
+
+    public bool CoKhoangNgayChonHopLe =>
+        BaoCaoPhieuNhapTuNgayChon.HasValue
+        && BaoCaoPhieuNhapDenNgayChon.HasValue
+        && BaoCaoPhieuNhapTuNgayChon.Value.Date <= BaoCaoPhieuNhapDenNgayChon.Value.Date;
+
+    private void CapNhatKiemTraKhoangNgayChon()
+    {
+        if (BaoCaoPhieuNhapTuNgayChon.HasValue && BaoCaoPhieuNhapDenNgayChon.HasValue
+            && BaoCaoPhieuNhapTuNgayChon.Value.Date > BaoCaoPhieuNhapDenNgayChon.Value.Date)
+        {
+            BaoCaoPhieuNhapDateErrorMessage = "Ngày bắt đầu không được lớn hơn ngày kết thúc";
+        }
+        else
+        {
+            BaoCaoPhieuNhapDateErrorMessage = "";
+        }
+        OnPropertyChanged(nameof(CoKhoangNgayChonHopLe));
+    }
+
     public DateTimeOffset? BaoCaoPhieuNhapTuNgay
     {
         get => _baoCaoPhieuNhapTuNgay;
         set
         {
             if (SetProperty(ref _baoCaoPhieuNhapTuNgay, value?.Date))
+            {
                 OnPropertyChanged(nameof(CoKhoangNgayBaoCaoPhieuNhap));
+                OnPropertyChanged(nameof(BaoCaoPhieuNhapDateDisplayText));
+                OnPropertyChanged(nameof(CanBaoCaoPhieuNhapDateNext));
+                OnPropertyChanged(nameof(CanBaoCaoPhieuNhapDatePrev));
+                OnPropertyChanged(nameof(BaoCaoPhieuNhapDatePrevTooltip));
+                OnPropertyChanged(nameof(BaoCaoPhieuNhapDateNextTooltip));
+            }
         }
     }
 
@@ -4051,7 +4220,14 @@ public partial class MainWindowViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _baoCaoPhieuNhapDenNgay, value?.Date))
+            {
                 OnPropertyChanged(nameof(CoKhoangNgayBaoCaoPhieuNhap));
+                OnPropertyChanged(nameof(BaoCaoPhieuNhapDateDisplayText));
+                OnPropertyChanged(nameof(CanBaoCaoPhieuNhapDateNext));
+                OnPropertyChanged(nameof(CanBaoCaoPhieuNhapDatePrev));
+                OnPropertyChanged(nameof(BaoCaoPhieuNhapDatePrevTooltip));
+                OnPropertyChanged(nameof(BaoCaoPhieuNhapDateNextTooltip));
+            }
         }
     }
 
@@ -7667,67 +7843,146 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task ApDungKhoangNgayBaoCaoPhieuNhapAsync()
     {
-        if (!CoKhoangNgayBaoCaoPhieuNhap)
+        if (!CoKhoangNgayChonHopLe)
             return;
 
         await ApDungKhoangNgayBaoCaoPhieuNhapAsync(
             "CUSTOM",
-            BaoCaoPhieuNhapTuNgay!.Value.Date,
-            BaoCaoPhieuNhapDenNgay!.Value.Date);
+            BaoCaoPhieuNhapTuNgayChon!.Value.Date,
+            BaoCaoPhieuNhapDenNgayChon!.Value.Date);
+    }
+
+    [RelayCommand]
+    private void HuyKhoangNgayBaoCaoPhieuNhap()
+    {
+        // Khôi phục lại ngày chọn theo ngày đang áp dụng
+        _baoCaoPhieuNhapTuNgayChon = BaoCaoPhieuNhapTuNgay;
+        _baoCaoPhieuNhapDenNgayChon = BaoCaoPhieuNhapDenNgay;
+        BaoCaoPhieuNhapDateErrorMessage = "";
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapTuNgayChon));
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapDenNgayChon));
+        OnPropertyChanged(nameof(CoKhoangNgayChonHopLe));
     }
 
     [RelayCommand]
     private async Task BaoCaoPhieuNhapDatePrevDayAsync()
     {
+        if (_baoCaoPhieuNhapKieuNgay == "ALL")
+            return;
+
         var start = BaoCaoPhieuNhapTuNgay?.Date;
         var end = BaoCaoPhieuNhapDenNgay?.Date;
 
         if (!start.HasValue || !end.HasValue)
         {
-            end = DateTime.Today.AddDays(-1);
-            start = end;
+            var yesterday = DateTime.Today.AddDays(-1);
+            await ApDungKhoangNgayBaoCaoPhieuNhapAsync("YESTERDAY", yesterday, yesterday);
+            return;
+        }
+
+        DateTime nextStart;
+        DateTime nextEnd;
+
+        if (_baoCaoPhieuNhapKieuNgay == "THIS_MONTH")
+        {
+            // Dịch chuyển sang tháng trước
+            var prevMonthStart = new DateTime(start.Value.Year, start.Value.Month, 1).AddMonths(-1);
+            var prevMonthEnd = prevMonthStart.AddMonths(1).AddDays(-1);
+            nextStart = prevMonthStart;
+            nextEnd = prevMonthEnd;
+        }
+        else if (_baoCaoPhieuNhapKieuNgay == "LAST_7_DAYS")
+        {
+            // Dịch chuyển 7 ngày trước đó
+            var duration = 7;
+            nextStart = start.Value.AddDays(-duration);
+            nextEnd = end.Value.AddDays(-duration);
         }
         else
         {
-            start = start.Value.AddDays(-1);
-            end = end.Value.AddDays(-1);
+            // Nếu 1 ngày hoặc tùy chọn:
+            var diff = (end.Value - start.Value).Days;
+            if (diff == 0)
+            {
+                nextStart = start.Value.AddDays(-1);
+                nextEnd = end.Value.AddDays(-1);
+            }
+            else
+            {
+                // Dịch chuyển cả khoảng thời gian tương ứng
+                var shift = diff + 1;
+                nextStart = start.Value.AddDays(-shift);
+                nextEnd = end.Value.AddDays(-shift);
+            }
         }
 
-        await ApDungKhoangNgayBaoCaoPhieuNhapAsync(
-            KieuNgayBaoCaoPhieuNhap(start, end),
-            start,
-            end);
+        var kieuNgayMoi = KieuNgayBaoCaoPhieuNhap(nextStart, nextEnd, _baoCaoPhieuNhapKieuNgay);
+        await ApDungKhoangNgayBaoCaoPhieuNhapAsync(kieuNgayMoi, nextStart, nextEnd);
     }
 
     [RelayCommand]
     private async Task BaoCaoPhieuNhapDateNextDayAsync()
     {
+        if (!CanBaoCaoPhieuNhapDateNext)
+            return;
+
         var start = BaoCaoPhieuNhapTuNgay?.Date;
         var end = BaoCaoPhieuNhapDenNgay?.Date;
         var today = DateTime.Today;
 
         if (!start.HasValue || !end.HasValue)
+            return;
+
+        DateTime nextStart;
+        DateTime nextEnd;
+
+        if (_baoCaoPhieuNhapKieuNgay == "THIS_MONTH")
         {
-            start = today;
-            end = today;
+            // Dịch chuyển sang tháng kế tiếp, chặn không vượt quá ngày hôm nay
+            var nextMonthStart = new DateTime(start.Value.Year, start.Value.Month, 1).AddMonths(1);
+            var nextMonthEnd = nextMonthStart.AddMonths(1).AddDays(-1);
+            if (nextMonthEnd > today)
+                nextMonthEnd = today;
+            nextStart = nextMonthStart;
+            nextEnd = nextMonthEnd;
         }
-        else if (end.Value < today)
+        else if (_baoCaoPhieuNhapKieuNgay == "LAST_7_DAYS")
         {
-            start = start.Value.AddDays(1);
-            end = end.Value.AddDays(1);
+            var duration = 7;
+            nextStart = start.Value.AddDays(duration);
+            nextEnd = end.Value.AddDays(duration);
+            if (nextEnd > today)
+            {
+                nextEnd = today;
+                nextStart = today.AddDays(-6);
+            }
+        }
+        else
+        {
+            var diff = (end.Value - start.Value).Days;
+            if (diff == 0)
+            {
+                nextStart = start.Value.AddDays(1);
+                nextEnd = end.Value.AddDays(1);
+            }
+            else
+            {
+                var shift = diff + 1;
+                nextStart = start.Value.AddDays(shift);
+                nextEnd = end.Value.AddDays(shift);
+                if (nextEnd > today)
+                {
+                    nextEnd = today;
+                    nextStart = today.AddDays(-diff);
+                }
+            }
         }
 
-        if (end > today)
-        {
-            var duration = end.Value.Subtract(start!.Value).Days;
-            end = today;
-            start = today.AddDays(-duration);
-        }
+        if (nextEnd > today)
+            nextEnd = today;
 
-        await ApDungKhoangNgayBaoCaoPhieuNhapAsync(
-            KieuNgayBaoCaoPhieuNhap(start, end),
-            start,
-            end);
+        var kieuNgayMoi = KieuNgayBaoCaoPhieuNhap(nextStart, nextEnd, _baoCaoPhieuNhapKieuNgay);
+        await ApDungKhoangNgayBaoCaoPhieuNhapAsync(kieuNgayMoi, nextStart, nextEnd);
     }
 
     private async Task ApDungKhoangNgayBaoCaoPhieuNhapAsync(
@@ -7740,6 +7995,15 @@ public partial class MainWindowViewModel : ObservableObject
 
         BaoCaoPhieuNhapTuNgay = tuNgay;
         BaoCaoPhieuNhapDenNgay = denNgay;
+
+        // Đồng bộ biến chọn trong popover Tùy chọn
+        _baoCaoPhieuNhapTuNgayChon = tuNgay;
+        _baoCaoPhieuNhapDenNgayChon = denNgay;
+        BaoCaoPhieuNhapDateErrorMessage = "";
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapTuNgayChon));
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapDenNgayChon));
+        OnPropertyChanged(nameof(CoKhoangNgayChonHopLe));
+
         DoiKieuNgayBaoCaoPhieuNhap(kieuNgay);
         BaoCaoPhieuNhapPage = 1;
         await LoadBaoCaoPhieuNhapAsync();
@@ -7747,9 +8011,6 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void DoiKieuNgayBaoCaoPhieuNhap(string kieuNgay)
     {
-        if (_baoCaoPhieuNhapKieuNgay == kieuNgay)
-            return;
-
         _baoCaoPhieuNhapKieuNgay = kieuNgay;
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateToday));
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateYesterday));
@@ -7757,9 +8018,14 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateThisMonth));
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateCustom));
         OnPropertyChanged(nameof(IsBaoCaoPhieuNhapDateAll));
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapDateDisplayText));
+        OnPropertyChanged(nameof(CanBaoCaoPhieuNhapDateNext));
+        OnPropertyChanged(nameof(CanBaoCaoPhieuNhapDatePrev));
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapDatePrevTooltip));
+        OnPropertyChanged(nameof(BaoCaoPhieuNhapDateNextTooltip));
     }
 
-    private static string KieuNgayBaoCaoPhieuNhap(DateTime? tuNgay, DateTime? denNgay)
+    private static string KieuNgayBaoCaoPhieuNhap(DateTime? tuNgay, DateTime? denNgay, string? currentKieu = null)
     {
         if (!tuNgay.HasValue || !denNgay.HasValue)
             return "ALL";

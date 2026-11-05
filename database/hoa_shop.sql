@@ -81,6 +81,7 @@ CREATE TABLE `chi_tiet_phieu_nhap_hang` (
   `san_pham_id` int(10) UNSIGNED NOT NULL,
   `ma_san_pham` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `ten_san_pham` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `don_vi_tinh_excel` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `so_luong` decimal(15,3) NOT NULL DEFAULT '0.000',
   `don_gia_nhap` decimal(15,2) NOT NULL DEFAULT '0.00',
   `giam_gia` decimal(15,2) NOT NULL DEFAULT '0.00',
@@ -520,6 +521,11 @@ CREATE TABLE `phieu_nhap_hang` (
   `tong_mua_da_ghi_nhan` tinyint(1) NOT NULL DEFAULT '1',
   `trang_thai` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'DA_NHAP_HANG',
   `ghi_chu` text COLLATE utf8mb4_unicode_ci,
+  `so_hoa_don_dau_vao` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ma_dat_hang_nhap` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `ngay_hoa_don_dau_vao` date DEFAULT NULL,
+  `ten_nguoi_giao_hang` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sdt_nguoi_giao_hang` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `ngay_tao` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `ngay_cap_nhat` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

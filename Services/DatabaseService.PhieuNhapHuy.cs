@@ -120,7 +120,8 @@ public sealed partial class DatabaseService
     /// </summary>
     public async Task<KiemTraHuyPhieuNhapResult> KiemTraDieuKienHuyPhieuNhapAsync(uint phieuNhapId)
     {
-        await EnsureHuyPhieuNhapSchemaAsync();
+        if (!await EnsureHuyPhieuNhapSchemaAsync())
+            throw new InvalidOperationException("Không thể chuẩn bị cấu trúc kiểm tra hủy phiếu nhập.");
 
         if (phieuNhapId == 0)
             throw new ArgumentException("Mã ID phiếu nhập không hợp lệ.", nameof(phieuNhapId));
@@ -229,7 +230,7 @@ public sealed partial class DatabaseService
     /// Xử lý Hủy phiếu nhập hàng theo đúng nghiệp vụ kế toán và kho:
     /// 1. Tồn kho: Trừ số lượng tồn kho đã tăng từ phiếu nhập (kiểm tra tồn hiện tại, chặn tồn âm). Ghi nhật ký xuất kho.
     /// 2. Công nợ NCC: Hoàn tác giá trị công nợ phát sinh (ghi có sổ cái công nợ NCC). Không xóa lịch sử cũ.
-    /// 3. Sổ quỹ & Thanh toán: Nếu DaThanhToan > 0 và chọn hoàn tiền -> tạo phiếu thu hoàn tiền vào sổ quỹ, ghi đối ứng công nợ. Không xóa phiếu chi cũ.
+    /// 3. Sổ quỹ & Thanh toán: Nếu DaThanhToan > 0 và chọn hoàn tiền -> tạo phiếu chi vào sổ quỹ, ghi đối ứng công nợ. Không xóa lịch sử thanh toán cũ.
     /// 4. Trạng thái phiếu: Cập nhật trang_thai = 'DA_HUY', lưu lý do, người hủy, thời gian hủy.
     /// 5. Ghi vết kiểm toán bất biến vào lich_su_huy_phieu_nhap và lich_su_chinh_sua_phieu_nhap.
     /// Toàn bộ thực hiện trong MỘT Transaction an toàn.
@@ -250,8 +251,10 @@ public sealed partial class DatabaseService
         if (string.IsNullOrWhiteSpace(yeuCau.LyDoHuy))
             throw new InvalidOperationException("Vui lòng nhập lý do hủy phiếu nhập hàng (bắt buộc).");
 
-        await EnsureHuyPhieuNhapSchemaAsync();
-        await EnsureLichSuChinhSuaPhieuNhapTableAsync();
+        if (!await EnsureHuyPhieuNhapSchemaAsync())
+            throw new InvalidOperationException("Không thể chuẩn bị cấu trúc lưu lịch sử hủy phiếu nhập.");
+        if (!await EnsureLichSuChinhSuaPhieuNhapTableAsync())
+            throw new InvalidOperationException("Không thể chuẩn bị bảng lịch sử chỉnh sửa phiếu nhập.");
         var hasPhieuQuyExtraColumns = await EnsurePhieuQuyExtraColumnsAsync();
         var hasPhieuQuyPhieuNhapColumns = await EnsurePhieuQuyPhieuNhapColumnsAsync();
 
@@ -259,6 +262,10 @@ public sealed partial class DatabaseService
         var userName = !string.IsNullOrWhiteSpace(yeuCau.TenNguoiHuy)
             ? yeuCau.TenNguoiHuy
             : (Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap ?? "Hệ thống");
+        var thoiGianHuy = DateTime.Now;
+
+        if (yeuCau.PhuongAnTien is not ("HOAN_TIEN_MAT" or "HOAN_CHUYEN_KHOAN" or "TREO_CONG_NO"))
+            throw new InvalidOperationException("Phương án xử lý tiền khi hủy phiếu nhập không hợp lệ.");
 
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -303,6 +310,8 @@ public sealed partial class DatabaseService
             {
                 throw new InvalidOperationException($"Phiếu nhập {phieu.MaPhieuNhap} đã bị hủy trước đó.");
             }
+            if (string.Equals(phieu.TrangThai, "LUU_TAM", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Phiếu nhập lưu tạm chưa cập nhật tồn kho hay công nợ, không thể hủy theo quy trình nghiệp vụ.");
 
             var branchId = phieu.ChiNhanhId != 0 ? phieu.ChiNhanhId : (Session.CurrentUser?.ChiNhanhId ?? 1);
 
@@ -493,73 +502,118 @@ public sealed partial class DatabaseService
             }
 
             // 5. Thanh toán và sổ quỹ: Xử lý tiền đã thanh toán (nếu có)
-            string? maPhieuThuHoan = null;
+            string? maPhieuChiHoan = null;
             decimal soTienHoan = 0m;
 
-            if (phieu.DaThanhToan > 0)
+            if (phieu.DaThanhToan > 0 &&
+                yeuCau.PhuongAnTien is "HOAN_TIEN_MAT" or "HOAN_CHUYEN_KHOAN")
             {
                 soTienHoan = phieu.DaThanhToan;
+                maPhieuChiHoan = await SinhMaPhieuChiTrongGiaoDichAsync(connection, transaction);
+                var phuongThucHoan = yeuCau.PhuongAnTien == "HOAN_CHUYEN_KHOAN"
+                    ? "CHUYEN_KHOAN"
+                    : "TIEN_MAT";
+                var tenNcc = string.IsNullOrWhiteSpace(phieu.TenNhaCungCap)
+                    ? "Nhà cung cấp"
+                    : phieu.TenNhaCungCap;
+                var idNhomChi = await LayIdNhomChiPhiTheoMaAsync(
+                    connection,
+                    transaction,
+                    "CHI_NHA_CUNG_CAP");
+                var noiDung = "Hoàn tiền khi hủy phiếu nhập hàng";
+                var ghiChu = $"Hoàn tiền {soTienHoan:N0} đ cho nhà cung cấp {tenNcc} "
+                    + $"khi hủy phiếu nhập {phieu.MaPhieuNhap}. Lý do: {yeuCau.LyDoHuy.Trim()}";
 
-                if (yeuCau.PhuongAnTien is "HOAN_TIEN_MAT" or "HOAN_CHUYEN_KHOAN")
+                var columns = new List<string>
                 {
-                    // Tạo phiếu thu tiền hoàn từ NCC vào sổ quỹ
-                    maPhieuThuHoan = await SinhMaPhieuThuTrongGiaoDichAsync(connection, transaction);
-                    var phuongThucHoan = yeuCau.PhuongAnTien == "HOAN_CHUYEN_KHOAN" ? "CHUYEN_KHOAN" : "TIEN_MAT";
-                    var tenNcc = string.IsNullOrWhiteSpace(phieu.TenNhaCungCap) ? "Nhà cung cấp" : phieu.TenNhaCungCap;
+                    "ma_phieu_chi",
+                    "chi_nhanh_id",
+                    "nhom_chi_phi_id",
+                    "so_tien",
+                    "phuong_thuc",
+                    "noi_dung",
+                    "thoi_gian_chi",
+                    "nguoi_thuc_hien_id",
+                    "trang_thai"
+                };
+                var values = new List<string>
+                {
+                    "@MaPhieuChi",
+                    "@ChiNhanhId",
+                    "@NhomChiPhiId",
+                    "@SoTien",
+                    "@PhuongThuc",
+                    "@NoiDung",
+                    "@ThoiGian",
+                    "@NguoiThucHienId",
+                    "'HOAN_THANH'"
+                };
 
-                    const string insertPhieuThuSql = """
-                    INSERT INTO phieu_thu
-                    (
-                        ma_phieu_thu, chi_nhanh_id, so_tien, phuong_thuc,
-                        noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_thu,
-                        nguoi_thuc_hien_id, trang_thai
-                    )
-                    VALUES
-                    (
-                        @MaPhieuThu, @ChiNhanhId, @SoTien, @PhuongThuc,
-                        @NoiDung, @NguoiNopNhan, @GhiChu, NOW(),
-                        @NguoiThucHienId, 'HOAN_THANH'
-                    );
-                    """;
-
-                    await connection.ExecuteAsync(
-                        insertPhieuThuSql,
-                        new
-                        {
-                            MaPhieuThu = maPhieuThuHoan,
-                            ChiNhanhId = branchId,
-                            SoTien = soTienHoan,
-                            PhuongThuc = phuongThucHoan,
-                            NoiDung = $"Thu hoàn tiền do hủy phiếu nhập {phieu.MaPhieuNhap}",
-                            NguoiNopNhan = tenNcc,
-                            GhiChu = $"Thu lại khoản tiền đã thanh toán ({soTienHoan:N0} đ) cho phiếu nhập {phieu.MaPhieuNhap} do hủy phiếu. Lý do hủy: {yeuCau.LyDoHuy.Trim()}",
-                            NguoiThucHienId = userId
-                        },
-                        transaction);
-
-                    // Khi NCC hoàn tiền mặt/ngân hàng, ghi nhận đối ứng vào sổ cái công nợ:
-                    // Vì đã giảm toàn bộ nợ ở bước 4, khi nhận lại tiền ta ghi tăng nợ để số dư công nợ về đúng 0.
-                    if (phieu.NhaCungCapId is uint nccId2 && nccId2 > 0)
-                    {
-                        await GhiMotDongCongNoNhaCungCapAsync(
-                            connection,
-                            transaction,
-                            nccId2,
-                            branchId,
-                            "HOAN_TIEN_NHAP",
-                            phieu.MaPhieuNhap,
-                            soTienHoan, // phat_sinh_no
-                            0,          // phat_sinh_co
-                            DateTime.Now,
-                            userId,
-                            $"Nhà cung cấp hoàn lại tiền đã thanh toán ({soTienHoan:N0} đ) theo phiếu thu {maPhieuThuHoan}");
-                    }
+                if (hasPhieuQuyExtraColumns)
+                {
+                    columns.Add("nguoi_nop_nhan");
+                    values.Add("@NguoiNopNhan");
+                    columns.Add("ghi_chu");
+                    values.Add("@GhiChu");
                 }
                 else
                 {
-                    // TREO_CONG_NO: NCC giữ tiền làm khoản trả trước, không tạo phiếu thu sổ quỹ
-                    // Công nợ của NCC tự động có số dư âm (NCC nợ lại tiệm).
+                    noiDung += $" - {tenNcc}";
                 }
+
+                if (hasPhieuQuyPhieuNhapColumns)
+                {
+                    columns.Add("phieu_nhap_hang_id");
+                    values.Add("@PhieuNhapId");
+                    columns.Add("ma_phieu_nhap");
+                    values.Add("@MaPhieuNhap");
+                }
+                else
+                {
+                    noiDung += $" - {phieu.MaPhieuNhap}";
+                }
+
+                await connection.ExecuteAsync(
+                    $"""
+                    INSERT INTO phieu_chi ({string.Join(", ", columns)})
+                    VALUES ({string.Join(", ", values)});
+                    """,
+                    new
+                    {
+                        MaPhieuChi = maPhieuChiHoan,
+                        ChiNhanhId = branchId,
+                        NhomChiPhiId = idNhomChi,
+                        SoTien = soTienHoan,
+                        PhuongThuc = phuongThucHoan,
+                        NoiDung = noiDung,
+                        ThoiGian = thoiGianHuy,
+                        NguoiThucHienId = userId,
+                        NguoiNopNhan = tenNcc,
+                        GhiChu = ghiChu,
+                        PhieuNhapId = yeuCau.PhieuNhapId,
+                        MaPhieuNhap = phieu.MaPhieuNhap
+                    },
+                    transaction);
+
+                if (phieu.NhaCungCapId is uint nccId2 && nccId2 > 0)
+                {
+                    await GhiMotDongCongNoNhaCungCapAsync(
+                        connection,
+                        transaction,
+                        nccId2,
+                        branchId,
+                        "HOAN_TIEN_NHAP",
+                        phieu.MaPhieuNhap,
+                        soTienHoan,
+                        0,
+                        thoiGianHuy,
+                        userId,
+                        $"Hoàn tiền {soTienHoan:N0} đ cho nhà cung cấp theo phiếu chi {maPhieuChiHoan}.");
+                }
+            }
+            else if (phieu.DaThanhToan > 0)
+            {
+                // Nhà cung cấp giữ khoản trả trước; không phát sinh phiếu quỹ mới.
             }
 
             // 6. Cập nhật trạng thái phiếu nhập thành ĐÃ HỦY
@@ -570,15 +624,16 @@ public sealed partial class DatabaseService
                 ly_do_huy              = @LyDoHuy,
                 nguoi_huy_id           = @NguoiHuyId,
                 ten_nguoi_huy          = @TenNguoiHuy,
-                thoi_gian_huy          = NOW(),
+                thoi_gian_huy          = @ThoiGianHuy,
                 phuong_an_tien_khi_huy = @PhuongAnTien,
                 so_tien_hoan           = @SoTienHoan,
                 ma_phieu_thu_hoan      = @MaPhieuThuHoan,
-                ngay_cap_nhat          = NOW()
-            WHERE id = @Id;
+                ngay_cap_nhat          = @ThoiGianHuy
+            WHERE id = @Id
+              AND trang_thai NOT IN ('DA_HUY', 'HUY');
             """;
 
-            await connection.ExecuteAsync(
+            var affected = await connection.ExecuteAsync(
                 updatePhieuSql,
                 new
                 {
@@ -589,9 +644,12 @@ public sealed partial class DatabaseService
                     TenNguoiHuy = userName,
                     PhuongAnTien = yeuCau.PhuongAnTien,
                     SoTienHoan = soTienHoan,
-                    MaPhieuThuHoan = maPhieuThuHoan
+                    MaPhieuThuHoan = maPhieuChiHoan,
+                    ThoiGianHuy = thoiGianHuy
                 },
                 transaction);
+            if (affected != 1)
+                throw new InvalidOperationException("Phiếu nhập đã được hủy hoặc thay đổi trong lúc xử lý.");
 
             // 7. Ghi vết kiểm toán bất biến vào lich_su_huy_phieu_nhap
             var snapshotJson = JsonSerializer.Serialize(new
@@ -599,7 +657,7 @@ public sealed partial class DatabaseService
                 Phieu = phieu,
                 Items = items,
                 Yeucau = yeuCau,
-                MaPhieuThuHoan = maPhieuThuHoan,
+                MaPhieuChiHoan = maPhieuChiHoan,
                 SoTienHoan = soTienHoan
             });
 
@@ -632,7 +690,7 @@ public sealed partial class DatabaseService
                     DaThanhToan = phieu.DaThanhToan,
                     ConNo = phieu.ConNo,
                     SoTienHoan = soTienHoan,
-                    MaPhieuThuHoan = maPhieuThuHoan,
+                    MaPhieuThuHoan = maPhieuChiHoan,
                     LyDo = yeuCau.LyDoHuy.Trim(),
                     NguoiThucHienId = userId,
                     TenNguoiThucHien = userName,
@@ -676,9 +734,18 @@ public sealed partial class DatabaseService
 
             await transaction.CommitAsync();
         }
-        catch
+        catch (Exception ex)
         {
-            await transaction.RollbackAsync();
+            try
+            {
+                await transaction.RollbackAsync();
+            }
+            catch (Exception rollbackEx)
+            {
+                SafeLog.WriteError("Không rollback được giao dịch hủy phiếu nhập", rollbackEx);
+            }
+
+            SafeLog.WriteError("Lỗi hủy phiếu nhập hàng", ex);
             throw;
         }
     }
@@ -688,7 +755,7 @@ public sealed partial class DatabaseService
     /// 1. Kiểm tra trạng thái hiện tại (phải là DA_HUY).
     /// 2. Cộng lại tồn kho cho các sản phẩm.
     /// 3. Khôi phục công nợ nhà cung cấp.
-    /// 4. Nếu lúc hủy đã hoàn tiền (tạo phiếu thu) -> tạo phiếu chi để chi trả lại cho NCC.
+    /// 4. Đảo giao dịch hoàn tiền vào đúng chiều Sổ quỹ (phiếu thu nếu lúc hủy đã tạo phiếu chi).
     /// 5. Đổi trạng thái phiếu về DA_NHAP_HANG (hoặc trạng thái trước khi hủy).
     /// 6. Ghi vết kiểm toán vào lich_su_huy_phieu_nhap và lich_su_chinh_sua_phieu_nhap.
     /// Toàn bộ thực hiện trong MỘT Transaction an toàn.
@@ -706,8 +773,12 @@ public sealed partial class DatabaseService
         if (yeuCau.PhieuNhapId == 0)
             throw new ArgumentException("Mã ID phiếu nhập không hợp lệ.", nameof(yeuCau));
 
-        await EnsureHuyPhieuNhapSchemaAsync();
-        await EnsureLichSuChinhSuaPhieuNhapTableAsync();
+        if (!await EnsureHuyPhieuNhapSchemaAsync())
+            throw new InvalidOperationException("Không thể chuẩn bị cấu trúc lưu lịch sử hủy phiếu nhập.");
+        if (!await EnsureLichSuChinhSuaPhieuNhapTableAsync())
+            throw new InvalidOperationException("Không thể chuẩn bị bảng lịch sử chỉnh sửa phiếu nhập.");
+        var hasPhieuQuyExtraColumns = await EnsurePhieuQuyExtraColumnsAsync();
+        var hasPhieuQuyPhieuNhapColumns = await EnsurePhieuQuyPhieuNhapColumnsAsync();
 
         var userId = yeuCau.NguoiKhoiPhucId ?? Session.CurrentUser?.Id;
         var userName = !string.IsNullOrWhiteSpace(yeuCau.TenNguoiKhoiPhuc)
@@ -768,6 +839,7 @@ public sealed partial class DatabaseService
             decimal conNo = ToDecimal(phieu.ConNo);
             decimal soTienHoan = ToDecimal(phieu.SoTienHoan);
             string? maPhieuThuHoan = phieu.MaPhieuThuHoan;
+            string? phuongAnTienKhiHuy = (string?)phieu.PhuongAnTienKhiHuy;
             uint? nccId = phieu.NhaCungCapId != null ? (uint)phieu.NhaCungCapId : null;
             string maPhieuNhap = phieu.MaPhieuNhap ?? "";
 
@@ -948,38 +1020,89 @@ public sealed partial class DatabaseService
                     $"Khôi phục phiếu nhập {maPhieuNhap} (khôi phục khoản nợ {tongTienNhap:N0} đ). Lý do: {yeuCau.LyDoKhoiPhuc.Trim()}");
             }
 
-            // 5. Sổ quỹ & hoàn tiền: Nếu lúc hủy đã thu hoàn tiền về quỹ -> tạo phiếu chi để chi trả lại cho NCC
+            // 5. Đảo phiếu quỹ hoàn tiền do lần hủy đã tạo.
             if (soTienHoan > 0 && !string.IsNullOrWhiteSpace(maPhieuThuHoan))
             {
-                var maPhieuChiMoi = await SinhMaPhieuChiTrongGiaoDichAsync(connection, transaction);
+                var giaoDichHuyLaPhieuChi = maPhieuThuHoan.StartsWith("PC", StringComparison.OrdinalIgnoreCase);
+                var maPhieuQuyMoi = giaoDichHuyLaPhieuChi
+                    ? await SinhMaPhieuThuTrongGiaoDichAsync(connection, transaction)
+                    : await SinhMaPhieuChiTrongGiaoDichAsync(connection, transaction);
                 var tenNcc = phieu.TenNhaCungCap ?? "Nhà cung cấp";
-
-                const string insertPhieuChiSql = """
-                INSERT INTO phieu_chi
-                (
-                    ma_phieu_chi, chi_nhanh_id, so_tien, phuong_thuc,
-                    noi_dung, nguoi_nop_nhan, ghi_chu, thoi_gian_chi,
-                    nguoi_thuc_hien_id, trang_thai
-                )
-                VALUES
-                (
-                    @MaPhieuChi, @ChiNhanhId, @SoTien, 'TIEN_MAT',
-                    @NoiDung, @NguoiNopNhan, @GhiChu, NOW(),
-                    @NguoiThucHienId, 'HOAN_THANH'
-                );
-                """;
+                var phuongThuc = phuongAnTienKhiHuy == "HOAN_CHUYEN_KHOAN"
+                    ? "CHUYEN_KHOAN"
+                    : "TIEN_MAT";
+                var loaiPhieu = giaoDichHuyLaPhieuChi ? "THU" : "CHI";
+                var coCotLoaiPhieu = await connection.ExecuteScalarAsync<bool>(
+                    """
+                    SELECT COUNT(*) > 0
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'phieu_chi'
+                      AND COLUMN_NAME = 'loai_phieu';
+                    """,
+                    transaction: transaction);
+                var columns = new List<string>
+                {
+                    "ma_phieu_chi",
+                    "chi_nhanh_id",
+                    "so_tien",
+                    "phuong_thuc",
+                    "noi_dung",
+                    "thoi_gian_chi",
+                    "nguoi_thuc_hien_id",
+                    "trang_thai"
+                };
+                var values = new List<string>
+                {
+                    "@MaPhieuChi",
+                    "@ChiNhanhId",
+                    "@SoTien",
+                    "@PhuongThuc",
+                    "@NoiDung",
+                    "NOW()",
+                    "@NguoiThucHienId",
+                    "'HOAN_THANH'"
+                };
+                if (coCotLoaiPhieu)
+                {
+                    columns.Add("loai_phieu");
+                    values.Add("@LoaiPhieu");
+                }
+                if (hasPhieuQuyExtraColumns)
+                {
+                    columns.Add("nguoi_nop_nhan");
+                    values.Add("@NguoiNopNhan");
+                    columns.Add("ghi_chu");
+                    values.Add("@GhiChu");
+                }
+                if (hasPhieuQuyPhieuNhapColumns)
+                {
+                    columns.Add("phieu_nhap_hang_id");
+                    values.Add("@PhieuNhapId");
+                    columns.Add("ma_phieu_nhap");
+                    values.Add("@MaPhieuNhap");
+                }
 
                 await connection.ExecuteAsync(
-                    insertPhieuChiSql,
+                    $"""
+                    INSERT INTO phieu_chi ({string.Join(", ", columns)})
+                    VALUES ({string.Join(", ", values)});
+                    """,
                     new
                     {
-                        MaPhieuChi = maPhieuChiMoi,
+                        MaPhieuChi = maPhieuQuyMoi,
                         ChiNhanhId = branchId,
                         SoTien = soTienHoan,
-                        NoiDung = $"Chi trả lại tiền cho NCC khi khôi phục phiếu nhập {maPhieuNhap}",
+                        PhuongThuc = phuongThuc,
+                        NoiDung = giaoDichHuyLaPhieuChi
+                            ? $"Nhận lại tiền hoàn khi khôi phục phiếu nhập {maPhieuNhap}"
+                            : $"Chi trả lại tiền cho nhà cung cấp khi khôi phục phiếu nhập {maPhieuNhap}",
+                        LoaiPhieu = loaiPhieu,
                         NguoiNopNhan = tenNcc,
-                        GhiChu = $"Chi trả lại tiền đã hoàn ({soTienHoan:N0} đ theo PT {maPhieuThuHoan}) khi khôi phục phiếu nhập {maPhieuNhap}. Lý do: {yeuCau.LyDoKhoiPhuc.Trim()}",
-                        NguoiThucHienId = userId
+                        GhiChu = $"Đảo phiếu quỹ {maPhieuThuHoan} ({soTienHoan:N0} đ) khi khôi phục phiếu nhập {maPhieuNhap}. Lý do: {yeuCau.LyDoKhoiPhuc.Trim()}",
+                        NguoiThucHienId = userId,
+                        PhieuNhapId = yeuCau.PhieuNhapId,
+                        MaPhieuNhap = maPhieuNhap
                     },
                     transaction);
 
@@ -997,7 +1120,7 @@ public sealed partial class DatabaseService
                         soTienHoan, // phat_sinh_co: giảm nợ
                         DateTime.Now,
                         userId,
-                        $"Chi trả lại tiền nhập hàng {soTienHoan:N0} đ cho NCC theo phiếu chi {maPhieuChiMoi}");
+                        $"Đảo giao dịch hoàn tiền {soTienHoan:N0} đ theo phiếu quỹ {maPhieuQuyMoi}");
                 }
             }
 

@@ -83,6 +83,30 @@ public sealed class PhieuNhapHangDetail
 
     public string? MaSoThueNhaCungCap { get; set; }
 
+    public string DiaChiNhaCungCapHienThi =>
+        string.IsNullOrWhiteSpace(DiaChiNhaCungCap) ? "—" : DiaChiNhaCungCap!.Trim();
+
+    public string SoDienThoaiNhaCungCapHienThi =>
+        string.IsNullOrWhiteSpace(SoDienThoaiNhaCungCap) ? "—" : SoDienThoaiNhaCungCap!.Trim();
+
+    public string MaSoThueNhaCungCapHienThi =>
+        string.IsNullOrWhiteSpace(MaSoThueNhaCungCap) ? "—" : MaSoThueNhaCungCap!.Trim();
+
+    public string SoHoaDonDauVaoHienThi =>
+        string.IsNullOrWhiteSpace(SoHoaDonDauVao) ? "—" : SoHoaDonDauVao!.Trim();
+
+    public string TenNguoiGiaoHangHienThi =>
+        string.IsNullOrWhiteSpace(TenNguoiGiaoHang) ? "—" : TenNguoiGiaoHang!.Trim();
+
+    public string SdtNguoiGiaoHangHienThi =>
+        string.IsNullOrWhiteSpace(SdtNguoiGiaoHang) ? "—" : SdtNguoiGiaoHang!.Trim();
+
+    public string MaDatHangNhapHienThi =>
+        string.IsNullOrWhiteSpace(MaDatHangNhap) ? "—" : MaDatHangNhap!.Trim();
+
+    public string GhiChuHienThi =>
+        string.IsNullOrWhiteSpace(GhiChu) ? "—" : GhiChu!.Trim();
+
     public List<DinhKemPhieuNhap> DinhKems { get; set; } = [];
 
     public bool CoDinhKem => DinhKems.Count > 0;
@@ -255,11 +279,11 @@ public sealed class PhieuNhapHangDetailItem
 
     public string SoLuongText => SoLuong.ToString("0.###", Vi);
 
-    public string DonGiaNhapText => DonGiaNhap.ToString("N0", Vi);
+    public string DonGiaNhapText => DonGiaNhap.ToString("N0", Vi) + " đ";
 
-    public string GiamGiaText => GiamGia.ToString("N0", Vi);
+    public string GiamGiaText => GiamGia.ToString("N0", Vi) + " đ";
 
-    public string ThanhTienText => ThanhTien.ToString("N0", Vi);
+    public string ThanhTienText => ThanhTien.ToString("N0", Vi) + " đ";
 }
 
 /// <summary>
