@@ -4788,12 +4788,15 @@ public sealed partial class DatabaseService
         string? trangThaiHoaDon,
         uint? khachHangId,
         uint? nhanVienId,
-        bool khachLe)
+        bool khachLe,
+        decimal? tongTienTu = null,
+        decimal? tongTienDen = null)
     {
         var rawSearch = (search ?? "").Trim();
         var escapedSearch = rawSearch.Replace("!", "!!").Replace("%", "!%").Replace("_", "!_");
         var normalizedSearch = ProductSearchHelper.ChuanHoa(rawSearch)
             .Replace("!", "!!").Replace("%", "!%").Replace("_", "!_");
+        var phoneDigits = new string(rawSearch.Where(char.IsDigit).ToArray());
 
         DateTime? tuNgayDau = tuNgay?.Date;
         DateTime? denNgaySau = denNgay?.Date.AddDays(1);
@@ -4803,28 +4806,21 @@ public sealed partial class DatabaseService
         if (!string.IsNullOrWhiteSpace(rawSearch))
         {
             var tenKhachHangExpr = BieuThucChuanHoaSql("COALESCE(kh.ten_khach_hang, 'Khach le')");
-            var ghiChuExpr = BieuThucChuanHoaSql("COALESCE(hd.ghi_chu, '')");
-            var tenSanPhamExpr = BieuThucChuanHoaSql("COALESCE(ct.ten_san_pham, '')");
+            var maHoaDonExpr = BieuThucChuanHoaSql("COALESCE(hd.ma_hoa_don, '')");
+            var maKhachHangExpr = BieuThucChuanHoaSql("COALESCE(kh.ma_khach_hang, '')");
+            var soDienThoaiExpr = BieuThucChuanHoaSql("COALESCE(kh.so_dien_thoai, '')");
+            const string soDienThoaiDigitsExpr =
+                "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(kh.so_dien_thoai, ''), ' ', ''), '-', ''), '.', ''), '+', ''), '/', '')";
 
             dieuKien.Add($"""
                 (
                     hd.ma_hoa_don LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
+                    OR {maHoaDonExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
                     OR kh.ma_khach_hang LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
-                    OR kh.ten_khach_hang LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
+                    OR {maKhachHangExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
+                    OR {soDienThoaiExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
+                    OR (@SearchPhoneDigits <> '' AND {soDienThoaiDigitsExpr} LIKE CONCAT('%', @SearchPhoneDigits, '%') ESCAPE '!')
                     OR {tenKhachHangExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
-                    OR kh.so_dien_thoai LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
-                    OR hd.ghi_chu LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
-                    OR {ghiChuExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
-                    OR EXISTS (
-                        SELECT 1
-                        FROM chi_tiet_hoa_don_ban_hang ct
-                        WHERE ct.hoa_don_id = hd.id
-                          AND (
-                              COALESCE(ct.ma_san_pham, '') LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
-                              OR ct.ten_san_pham LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
-                              OR {tenSanPhamExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
-                          )
-                    )
                 )
                 """);
         }
@@ -4838,6 +4834,12 @@ public sealed partial class DatabaseService
         {
             dieuKien.Add("hd.thoi_gian_ban < @DenNgaySau");
         }
+
+        if (tongTienTu.HasValue)
+            dieuKien.Add("hd.khach_can_tra >= @TongTienTu");
+
+        if (tongTienDen.HasValue)
+            dieuKien.Add("hd.khach_can_tra <= @TongTienDen");
 
         if (khachHangId.HasValue && khachHangId.Value > 0)
         {
@@ -4856,7 +4858,7 @@ public sealed partial class DatabaseService
         var ttHd = (trangThaiHoaDon ?? "").Trim().ToUpperInvariant();
         if (ttHd is "HOAN_THANH")
         {
-            dieuKien.Add("hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY')");
+            dieuKien.Add("hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')");
         }
         else if (ttHd is "DA_HUY" or "HUY")
         {
@@ -4889,10 +4891,13 @@ public sealed partial class DatabaseService
         {
             SearchRaw = escapedSearch,
             SearchNormalized = normalizedSearch,
+            SearchPhoneDigits = phoneDigits,
             TuNgayDau = tuNgayDau,
             DenNgaySau = denNgaySau,
             KhachHangId = khachHangId,
-            NhanVienId = nhanVienId
+            NhanVienId = nhanVienId,
+            TongTienTu = tongTienTu,
+            TongTienDen = tongTienDen
         };
 
         return (whereClause, paramObj);
@@ -4908,7 +4913,9 @@ public sealed partial class DatabaseService
         uint? nhanVienId = null,
         bool khachLe = false,
         int page = 1,
-        int pageSize = 20)
+        int pageSize = 20,
+        decimal? tongTienTu = null,
+        decimal? tongTienDen = null)
     {
         var coCotHuy = await EnsureHuyHoaDonSchemaAsync();
         await EnsureHoaDonFilterIndexesAsync();
@@ -4916,14 +4923,15 @@ public sealed partial class DatabaseService
         await using var connection = await OpenAsync();
 
         var (whereClause, paramObj) = XayDungDieuKienLocHoaDon(
-            search, tuNgay, denNgay, trangThaiThanhToan, trangThaiHoaDon, khachHangId, nhanVienId, khachLe);
+            search, tuNgay, denNgay, trangThaiThanhToan, trangThaiHoaDon, khachHangId, nhanVienId,
+            khachLe, tongTienTu, tongTienDen);
 
         var summarySql = $"""
             SELECT
                 COUNT(*) AS TongSoLuong,
-                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') THEN hd.khach_can_tra ELSE 0 END), 0) AS TongDoanhThu,
-                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS TongDaThanhToan,
-                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') THEN hd.con_no ELSE 0 END), 0) AS TongConNo,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.khach_can_tra ELSE 0 END), 0) AS TongDoanhThu,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS TongDaThanhToan,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.con_no ELSE 0 END), 0) AS TongConNo,
                 COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY') THEN 1 ELSE 0 END), 0) AS TongDaHuy
             FROM hoa_don_ban_hang hd
             LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
