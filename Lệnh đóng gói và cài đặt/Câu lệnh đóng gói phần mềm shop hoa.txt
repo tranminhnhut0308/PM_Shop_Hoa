@@ -1,8 +1,8 @@
-Câu lệnh đóng gói : cd D:\shophoa ( tùy vào đường dẫn source mỗi máy có đường dẫn khác nhau ) .\pack.ps1 -Version 1.0.3
+Câu lệnh đóng gói : cd D:\shophoa ( tùy vào đường dẫn source mỗi máy có đường dẫn khác nhau )
 
-.\pack.ps1 -Version 1.0.7
+.\pack.ps1 -Version 1.0.9
 
-./pack.sh -Version 1.0.7  linux 
+./pack.sh -Version 1.0.8  linux 
 
 
 Câu lệnh cài phần mềm trên máy khách : 
