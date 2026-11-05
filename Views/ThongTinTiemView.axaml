@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:vm="using:ShopHoa.ViewModels"
+  xmlns:models="using:ShopHoa.Models"
   x:Class="ShopHoa.Views.ThongTinTiemView"
   x:DataType="vm:ThongTinTiemViewModel">
 
@@ -160,44 +161,12 @@
                   AcceptsReturn="True" TextWrapping="Wrap" MinHeight="58" />
               </StackPanel>
 
-              <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="ttLabel" Text="Số điện thoại" />
-                  <TextBox Classes="ttInput" Text="{Binding SoDienThoai, Mode=TwoWay}"
-                    IsEnabled="{Binding CanChinhSua}"
-                    Watermark="0357 886 765" />
-                </StackPanel>
-
-                <StackPanel Grid.Column="1" Spacing="5">
-                  <TextBlock Classes="ttLabel" Text="Zalo" />
-                  <TextBox Classes="ttInput" Text="{Binding Zalo, Mode=TwoWay}"
-                    IsEnabled="{Binding CanChinhSua}"
-                    Watermark="0376 879 469" />
-                </StackPanel>
-              </Grid>
-
               <StackPanel Spacing="5">
-                <TextBlock Classes="ttLabel" Text="Facebook" />
-                <TextBox Classes="ttInput" Text="{Binding Facebook, Mode=TwoWay}"
+                <TextBlock Classes="ttLabel" Text="Số điện thoại" />
+                <TextBox Classes="ttInput" Text="{Binding SoDienThoai, Mode=TwoWay}"
                   IsEnabled="{Binding CanChinhSua}"
-                  Watermark="Ví dụ: Vựa Hoa Nhà Huy Cần Thơ" />
+                  Watermark="0357 886 765" />
               </StackPanel>
-
-              <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-                <StackPanel Spacing="5">
-                  <TextBlock Classes="ttLabel" Text="Email" />
-                  <TextBox Classes="ttInput" Text="{Binding Email, Mode=TwoWay}"
-                    IsEnabled="{Binding CanChinhSua}"
-                    Watermark="shop@example.com" />
-                </StackPanel>
-
-                <StackPanel Grid.Column="1" Spacing="5">
-                  <TextBlock Classes="ttLabel" Text="Website" />
-                  <TextBox Classes="ttInput" Text="{Binding Website, Mode=TwoWay}"
-                    IsEnabled="{Binding CanChinhSua}"
-                    Watermark="shophoa.vn" />
-                </StackPanel>
-              </Grid>
 
               <StackPanel Spacing="5">
                 <TextBlock Classes="ttLabel" Text="Mã số thuế" />
@@ -209,10 +178,87 @@
             </StackPanel>
           </Border>
 
-          <!-- 2. TÀI KHOẢN NGÂN HÀNG -->
+          <!-- 2. KÊNH LIÊN HỆ -->
+          <Border Classes="ttCard" Padding="16" IsEnabled="{Binding CanChinhSua}">
+            <StackPanel Spacing="12">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="ttSection" Text="2. KÊNH LIÊN HỆ" />
+                  <TextBlock Classes="ttHint"
+                    Text="Quản lý Facebook, Zalo, Website và mọi kênh tùy chọn. Tắt checkbox để không in kênh đó." />
+                </StackPanel>
+                <Button Grid.Column="1" Classes="ttSecondary" Content="+ Thêm kênh liên hệ"
+                  IsEnabled="{Binding CanChinhSua}"
+                  Command="{Binding ThemKenhCommand}" />
+              </Grid>
+
+              <ItemsControl ItemsSource="{Binding DanhSachKenhLienHe}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="models:KenhLienHe">
+                    <Border Background="#F8FBFA" BorderBrush="#E2ECE8" BorderThickness="1"
+                      CornerRadius="8" Padding="10" Margin="0,0,0,7">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <StackPanel Spacing="4">
+                          <CheckBox Classes="ttCheck" Content="{Binding Ten}"
+                            IsChecked="{Binding HienThi, Mode=TwoWay}" />
+                          <TextBlock Text="{Binding NoiDung}" FontSize="11"
+                            Foreground="#667A73" TextWrapping="Wrap" />
+                          <TextBlock Text="{Binding ViTriText}" FontSize="10"
+                            Foreground="#087F6E" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
+                          VerticalAlignment="Center">
+                          <Button Classes="ttSecondary" Content="↑" Padding="8,5"
+                            Click="DuaKenhLen_Click" />
+                          <Button Classes="ttSecondary" Content="↓" Padding="8,5"
+                            Click="DuaKenhXuong_Click" />
+                          <Button Classes="ttSecondary" Content="Sửa" Padding="8,5"
+                            Click="SuaKenh_Click" />
+                          <Button Classes="ttSecondary" Content="Xóa" Padding="8,5"
+                            Click="XoaKenh_Click" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <Border IsVisible="{Binding DangSuaKenh}" Background="#F2F8F6"
+                BorderBrush="#D8E5E0" BorderThickness="1" CornerRadius="10" Padding="12">
+                <StackPanel Spacing="9">
+                  <TextBlock Classes="ttSection" Text="Thông tin kênh" />
+                  <StackPanel Spacing="4">
+                    <TextBlock Classes="ttLabel" Text="Tên kênh" />
+                    <TextBox Classes="ttInput" Text="{Binding TenKenhNhap, Mode=TwoWay}"
+                      Watermark="Facebook, Zalo, Instagram, Website..." />
+                  </StackPanel>
+                  <StackPanel Spacing="4">
+                    <TextBlock Classes="ttLabel" Text="Nội dung liên hệ" />
+                    <TextBox Classes="ttInput" Text="{Binding NoiDungKenhNhap, Mode=TwoWay}"
+                      Watermark="Tên tài khoản, số điện thoại hoặc địa chỉ website" />
+                  </StackPanel>
+                  <StackPanel Spacing="4">
+                    <TextBlock Classes="ttLabel" Text="Vị trí hiển thị" />
+                    <ComboBox Classes="ttCombo" ItemsSource="{Binding ViTriKenhOptions}"
+                      SelectedItem="{Binding ViTriKenhChon, Mode=TwoWay}" />
+                  </StackPanel>
+                  <CheckBox Classes="ttCheck" Content="Hiển thị trên hóa đơn"
+                    IsChecked="{Binding HienThiKenhNhap, Mode=TwoWay}" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="ttPrimary" Content="Lưu kênh"
+                      Command="{Binding LuuKenhCommand}" />
+                    <Button Classes="ttSecondary" Content="Hủy"
+                      Command="{Binding HuySuaKenhCommand}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </Border>
+
+          <!-- 3. TÀI KHOẢN NGÂN HÀNG -->
           <Border Classes="ttCard" Padding="16">
             <StackPanel Spacing="13">
-              <TextBlock Classes="ttSection" Text="2. TÀI KHOẢN NGÂN HÀNG" />
+              <TextBlock Classes="ttSection" Text="3. TÀI KHOẢN NGÂN HÀNG" />
 
               <StackPanel Spacing="5">
                 <TextBlock Classes="ttLabel" Text="Tên ngân hàng" />
@@ -238,14 +284,14 @@
               </Grid>
 
               <TextBlock Classes="ttHint"
-                Text="Thông tin này được in ở đầu hóa đơn để khách chuyển khoản. Không tự tạo QR từ số tài khoản — hãy tải ảnh QR của cửa hàng ở cột bên phải." />
+                Text="Thông tin ngân hàng được in ở cuối hóa đơn. Không tự tạo QR từ số tài khoản — hãy tải ảnh QR của cửa hàng ở cột bên phải." />
             </StackPanel>
           </Border>
 
-          <!-- 3. TÙY CHỈNH MẪU IN -->
+          <!-- 4. TÙY CHỈNH MẪU IN -->
           <Border Classes="ttCard" Padding="16">
             <StackPanel Spacing="13">
-              <TextBlock Classes="ttSection" Text="3. TÙY CHỈNH MẪU IN" />
+              <TextBlock Classes="ttSection" Text="4. TÙY CHỈNH MẪU IN" />
 
               <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                 <StackPanel Spacing="5">
@@ -285,14 +331,10 @@
                   IsChecked="{Binding HienThiQr, Mode=TwoWay}"
                   IsEnabled="{Binding CanChinhSua}" />
                 <CheckBox Classes="ttCheck" Grid.Row="1" Grid.Column="0"
-                  Content="Hiển thị Facebook"
-                  IsChecked="{Binding HienThiFacebook, Mode=TwoWay}"
-                  IsEnabled="{Binding CanChinhSua}" />
-                <CheckBox Classes="ttCheck" Grid.Row="1" Grid.Column="1"
                   Content="Hiển thị thông tin ngân hàng"
                   IsChecked="{Binding HienThiNganHang, Mode=TwoWay}"
                   IsEnabled="{Binding CanChinhSua}" />
-                <CheckBox Classes="ttCheck" Grid.Row="2" Grid.Column="0"
+                <CheckBox Classes="ttCheck" Grid.Row="1" Grid.Column="1"
                   Content="Hiển thị địa chỉ khách hàng"
                   IsChecked="{Binding HienThiDiaChiKhachHang, Mode=TwoWay}"
                   IsEnabled="{Binding CanChinhSua}" />
@@ -312,10 +354,10 @@
             </StackPanel>
           </Border>
 
-          <!-- 4. LƯU Ý -->
+          <!-- 5. LƯU Ý -->
           <Border Classes="ttCard" Padding="16">
             <StackPanel Spacing="9">
-              <TextBlock Classes="ttSection" Text="4. LƯU Ý" />
+              <TextBlock Classes="ttSection" Text="5. LƯU Ý" />
               <TextBlock Classes="ttHint"
                 Text="• Thông tin được lưu vào một bản ghi duy nhất trong database. Bấm Lưu nhiều lần vẫn chỉ cập nhật đúng bản ghi đó, không sinh thêm bản ghi." />
               <TextBlock Classes="ttHint"
@@ -431,10 +473,21 @@
                     HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
                   <TextBlock Text="{Binding SoDienThoai}" FontSize="11" Foreground="#61736E"
                     HorizontalAlignment="Center" />
-                  <TextBlock Text="{Binding Zalo, StringFormat='Zalo: {0}'}" FontSize="11"
-                    Foreground="#61736E" HorizontalAlignment="Center" />
-                  <TextBlock Text="{Binding Facebook}" FontSize="11" Foreground="#61736E"
-                    HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
+                  <ItemsControl ItemsSource="{Binding DanhSachKenhLienHe}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="models:KenhLienHe">
+                        <StackPanel IsVisible="{Binding HienThi}" Spacing="1" Margin="0,2">
+                          <TextBlock Text="{Binding Ten}" FontSize="10.5" FontWeight="SemiBold"
+                            Foreground="#61736E" HorizontalAlignment="Center" />
+                          <TextBlock Text="{Binding NoiDung}" FontSize="11"
+                            Foreground="#61736E" HorizontalAlignment="Center"
+                            TextWrapping="Wrap" TextAlignment="Center" />
+                          <TextBlock Text="{Binding ViTriText}" FontSize="9"
+                            Foreground="#087F6E" HorizontalAlignment="Center" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
                   <TextBlock Text="{Binding TenNganHang}" FontSize="11" Foreground="#61736E"
                     HorizontalAlignment="Center" />
                   <TextBlock Text="{Binding SoTaiKhoan}" FontSize="11" Foreground="#61736E"

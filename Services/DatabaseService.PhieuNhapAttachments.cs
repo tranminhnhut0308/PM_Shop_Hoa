@@ -114,6 +114,7 @@ public partial class DatabaseService
         await connection.ExecuteAsync(createSql);
     }
 
+<<<<<<< HEAD
     private static async Task EnsureAttachmentColumnsAsync(MySqlConnection connection)
     {
         await EnsureAttachmentColumnAsync(connection, "ten_file_goc", "en_file_goc",
@@ -142,6 +143,64 @@ public partial class DatabaseService
         bool copyEmptyValue)
     {
         static async Task<bool> ColumnExistsAsync(MySqlConnection conn, string name)
+=======
+            await connection.ExecuteAsync(createSql);
+
+            // Sửa các cột bị lỗi chính tả do migration Issue #61 cũ tạo ra
+            // (en_file_goc, hoi_gian_tai_len, ...). Ưu tiên RENAME/CHANGE để
+            // giữ nguyên dữ liệu chứng từ đã lưu.
+            var expectedColumns = new (string Name, string LegacyName, string Definition)[]
+            {
+                ("ten_file_goc", "en_file_goc", "VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL"),
+                ("ten_file_luu", "en_file_luu", "VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL"),
+                ("nguoi_tai_len_id", "guoi_tai_len_id", "INT UNSIGNED NULL DEFAULT NULL"),
+                ("ten_nguoi_tai_len", "en_nguoi_tai_len", "VARCHAR(150) COLLATE utf8mb4_unicode_ci NULL DEFAULT ''"),
+                ("thoi_gian_tai_len", "hoi_gian_tai_len", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"),
+                ("thoi_gian_xoa", "hoi_gian_xoa", "DATETIME NULL DEFAULT NULL"),
+                ("nguoi_xoa_id", "guoi_xoa_id", "INT UNSIGNED NULL DEFAULT NULL"),
+                ("ten_nguoi_xoa", "en_nguoi_xoa", "VARCHAR(150) COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL")
+            };
+
+            var existingColumns = (await connection.QueryAsync<string>(
+                """
+                SELECT COLUMN_NAME
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'dinh_kem_phieu_nhap';
+                """)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (name, legacyName, definition) in expectedColumns)
+            {
+                if (existingColumns.Contains(name))
+                    continue;
+
+                try
+                {
+                    if (existingColumns.Contains(legacyName))
+                    {
+                        await connection.ExecuteAsync(
+                            $"ALTER TABLE dinh_kem_phieu_nhap CHANGE COLUMN `{legacyName}` `{name}` {definition};");
+                        existingColumns.Remove(legacyName);
+                    }
+                    else
+                    {
+                        await connection.ExecuteAsync(
+                            $"ALTER TABLE dinh_kem_phieu_nhap ADD COLUMN `{name}` {definition};");
+                    }
+
+                    existingColumns.Add(name);
+                }
+                catch (Exception ex)
+                {
+                    SafeLog.WriteError($"Loi sua cot dinh kem {name}", ex);
+                }
+            }
+
+            _daDamBaoDinhKemPhieuNhap = true;
+            return true;
+        }
+        catch (Exception ex)
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
         {
             var count = await conn.ExecuteScalarAsync<long>(
                 """

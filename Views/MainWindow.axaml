@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:vm="using:ShopHoa.ViewModels"
   xmlns:models="using:ShopHoa.Models"
@@ -677,6 +677,40 @@
     <Style Selector="Button.toolbar-action:focus /template/ Border">
       <Setter Property="Background" Value="White" />
       <Setter Property="BorderBrush" Value="#087F6E" />
+    </Style>
+
+    <!-- ============ NÚT CÔNG NỢ KHÁCH HÀNG / NHÀ CUNG CẤP ============ -->
+    <Style Selector="Button.debt-primary">
+      <Setter Property="Background" Value="#087F6E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="16,9" />
+      <Setter Property="MinWidth" Value="170" />
+      <Setter Property="Height" Value="38" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.debt-primary:pointerover">
+      <Setter Property="Background" Value="#056B5D" />
+    </Style>
+
+    <Style Selector="Button.debt-secondary">
+      <Setter Property="Background" Value="White" />
+      <Setter Property="Foreground" Value="#087F6E" />
+      <Setter Property="BorderBrush" Value="#087F6E" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="16,9" />
+      <Setter Property="MinWidth" Value="170" />
+      <Setter Property="Height" Value="38" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.debt-secondary:pointerover">
+      <Setter Property="Background" Value="#E6F5F1" />
     </Style>
 
     <!-- ============ NÚT THANH TOÁN CÔNG NỢ PHIẾU NHẬP (TRÊN BÁO CÁO) ============ -->
@@ -3168,7 +3202,11 @@
                               </StackPanel>
 
                             <!-- TAB: THÔNG TIN / LỊCH SỬ MUA HÀNG / CÔNG NỢ -->
+<<<<<<< HEAD
                             <StackPanel Spacing="8" Margin="0,0,0,6">
+=======
+                            <Grid Margin="0,0,0,6">
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
                               <StackPanel Orientation="Horizontal">
 
                                 <!-- TAB 1: THÔNG TIN -->
@@ -3248,6 +3286,7 @@
 
                               </StackPanel>
 
+<<<<<<< HEAD
                               <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                                           Spacing="8" IsVisible="{Binding Detail.IsTabCongNo}">
                                 <Button Content="💵 Thanh toán công nợ"
@@ -3275,6 +3314,9 @@
                                         CommandParameter="{Binding}" />
                               </StackPanel>
                             </StackPanel>
+=======
+                            </Grid>
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
 
                               <!-- TAB 1: THÔNG TIN -->
                               <Grid IsVisible="{Binding Detail.IsTabThongTin}"
@@ -3414,6 +3456,32 @@
                               <!-- TAB 3: CÔNG NỢ -->
                               <StackPanel IsVisible="{Binding Detail.IsTabCongNo}" Spacing="12">
 
+<<<<<<< HEAD
+=======
+                                <Border Classes="statBox" Background="White"
+                                  IsVisible="{Binding Detail.HasCongNoData}">
+                                  <Grid ColumnDefinitions="*,*,*" ColumnSpacing="14">
+                                    <StackPanel>
+                                      <TextBlock Text="Tổng tiền đã mua" FontSize="11"
+                                        Foreground="#61736E" />
+                                      <TextBlock Text="{Binding Detail.TongTienDaMuaText}" FontSize="18"
+                                        FontWeight="Bold" Foreground="#163F38" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                      <TextBlock Text="Đã thanh toán" FontSize="11"
+                                        Foreground="#61736E" />
+                                      <TextBlock Text="{Binding Detail.TongDaThanhToanText}" FontSize="18"
+                                        FontWeight="Bold" Foreground="#087F6E" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                      <TextBlock Text="Còn nợ" FontSize="11" Foreground="#61736E" />
+                                      <TextBlock Text="{Binding Detail.TongCongNoText}" FontSize="18"
+                                        FontWeight="Bold" Foreground="#D64545" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                  </Grid>
+                                </Border>
+
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
                                 <TextBlock Text="{Binding Detail.CongNoRongText}"
                                   IsVisible="{Binding !Detail.HasCongNoData}"
                                   Foreground="#98A2B3" FontSize="13" />
@@ -3421,12 +3489,29 @@
                                 <StackPanel IsVisible="{Binding Detail.HasCongNoData}" Spacing="4">
                                   <TextBlock Text="{Binding Detail.NguonCongNoText}" FontSize="12"
                                     Foreground="#61736E" />
-                                  <TextBlock Text="{Binding Detail.SoLanGhiCongNoText}" FontSize="12"
+                                  <TextBlock Text="{Binding Detail.SoLanGhiCongNoText, TargetNullValue='0'}" FontSize="12"
                                     Foreground="#667A74" />
                                   <TextBlock FontSize="12" Foreground="#667A74"
                                     Text="{Binding Detail.LanGhiCongNoText, StringFormat='Lần ghi công nợ gần nhất: {0}'}" />
                                 </StackPanel>
 
+<<<<<<< HEAD
+=======
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                  <Button Classes="debt-primary"
+                                    Content="Thanh toán công nợ"
+                                    IsEnabled="{Binding ElementName=RootWindow, Path=DataContext.CanCollectCustomerDebt}"
+                                    ToolTip.Tip="Nhập số tiền khách trả, hệ thống tự trừ vào các hóa đơn còn nợ"
+                                    Command="{Binding ElementName=RootWindow, Path=DataContext.ThuNoKhachHangCommand}"
+                                    CommandParameter="{Binding}" />
+                                  <Button Classes="debt-secondary"
+                                    Content="Lịch sử thanh toán"
+                                    ToolTip.Tip="Xem toàn bộ lịch sử thanh toán công nợ của khách hàng"
+                                    Command="{Binding ElementName=RootWindow, Path=DataContext.XemLichSuThanhToanKhachHangCommand}"
+                                    CommandParameter="{Binding}" />
+                                </StackPanel>
+
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
                               </StackPanel>
 
                             </StackPanel>
@@ -3532,19 +3617,23 @@
               BorderBrush="#E2ECE8"
               BorderThickness="1"
               CornerRadius="12"
-              Padding="14,12"
+              Padding="12,10"
               BoxShadow="0 2 8 #080A352E">
+<<<<<<< HEAD
               <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
 
                 <!-- HÀNG 1: TÌM KIẾM HÓA ĐƠN -->
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" VerticalAlignment="Center">
+=======
+              <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" VerticalAlignment="Center">
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
                   <TextBox x:Name="InvoiceSearchBox" Classes="searchInput"
-                    Watermark="🔍 Tìm theo mã hóa đơn, mã/tên/SĐT khách hàng, ghi chú..."
+                    Watermark="🔍 Mã hóa đơn, tên, mã hoặc số điện thoại khách hàng..."
                     Text="{Binding InvoiceSearch, Mode=TwoWay}"
-                    Height="38"
-                    VerticalContentAlignment="Center"
-                    Padding="12,0"
+                    Height="36" VerticalContentAlignment="Center" Padding="12,0"
                     KeyDown="OnInvoiceSearchKeyDown" />
+<<<<<<< HEAD
 
                   <Button Grid.Column="1"
                     Classes="toolbar-action"
@@ -3596,35 +3685,95 @@
                   <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,8,4">
                     <TextBlock Text="Nhanh:" FontSize="12" FontWeight="SemiBold" Foreground="#4F6861" VerticalAlignment="Center" />
                     <ComboBox ItemsSource="{Binding InvoiceDatePresets}"
+=======
+                  <Button Grid.Column="1" Content="×" Width="36" Height="36" Padding="0"
+                    Classes="toolbar-action" ToolTip.Tip="Xóa nội dung tìm kiếm"
+                    Command="{Binding XoaNoiDungTimHoaDonCommand}" />
+                  <Button Grid.Column="2" Classes="toolbar-primary" Content="Tìm kiếm"
+                    Height="36" Padding="14,0" Command="{Binding SearchInvoicesCommand}"
+                    ToolTip.Tip="Tìm hóa đơn (Enter)" />
+                </Grid>
+
+                <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12"
+                  VerticalAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="Thời gian" FontSize="12" FontWeight="SemiBold"
+                      Foreground="#4F6861" VerticalAlignment="Center" />
+                    <ComboBox x:Name="InvoiceDatePresetBox" ItemsSource="{Binding InvoiceDatePresets}"
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
                       SelectedItem="{Binding SelectedInvoiceDatePreset, Mode=TwoWay}"
-                      Width="135" Height="34" FontSize="12"
-                      VerticalContentAlignment="Center"
-                      ToolTip.Tip="Chọn nhanh khoảng thời gian" />
+                      Width="170" Height="36" FontSize="12"
+                      VerticalContentAlignment="Center" />
+                    <Button Content="▦" Width="36" Height="36" Padding="0"
+                      Classes="toolbar-action" ToolTip.Tip="Chọn khoảng ngày"
+                      IsVisible="{Binding IsInvoiceCustomDatePreset}"
+                      Command="{Binding MoChonKhoangNgayHoaDonCommand}" />
+                    <TextBlock Text="{Binding InvoiceDateCompactText}" Width="170"
+                      TextTrimming="CharacterEllipsis" FontSize="11" Foreground="#4F6861"
+                      VerticalAlignment="Center" ToolTip.Tip="{Binding InvoiceDateFilterText}" />
+                    <Button Content="×" Width="28" Height="36" Padding="0"
+                      Classes="toolbar-action" ToolTip.Tip="Xóa lọc thời gian"
+                      IsVisible="{Binding HasInvoiceDateFilter}"
+                      Command="{Binding DatLaiKhoangNgayHoaDonCommand}" />
                   </StackPanel>
-                </WrapPanel>
-
-                <!-- HÀNG 3: TRẠNG THÁI THANH TOÁN + TRẠNG THÁI HÓA ĐƠN + KHÁCH HÀNG -->
-                <WrapPanel VerticalAlignment="Center">
-                  <!-- Trạng thái thanh toán -->
-                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,4">
-                    <TextBlock Text="Thanh toán:" FontSize="12" FontWeight="SemiBold" Foreground="#4F6861" VerticalAlignment="Center" />
-                    <ComboBox ItemsSource="{Binding InvoicePaymentStatusOptions}"
-                      SelectedItem="{Binding SelectedInvoicePaymentStatus, Mode=TwoWay}"
-                      Width="160" Height="34" FontSize="12"
-                      VerticalContentAlignment="Center"
-                      ToolTip.Tip="Lọc theo tình trạng thanh toán" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ToggleButton Classes="locChip" Content="Tất cả"
+                      Height="36"
+                      IsChecked="{Binding IsInvoicePaymentAll, Mode=OneWay}"
+                      Command="{Binding LocThanhToanHoaDonCommand}" CommandParameter="Tất cả" />
+                    <ToggleButton Classes="locChip" Content="Chưa thanh toán"
+                      Height="36"
+                      IsChecked="{Binding IsInvoicePaymentUnpaid, Mode=OneWay}"
+                      Command="{Binding LocThanhToanHoaDonCommand}" CommandParameter="Chưa thanh toán" />
+                    <ToggleButton Classes="locChip" Content="Đã thanh toán"
+                      Height="36"
+                      IsChecked="{Binding IsInvoicePaymentPaid, Mode=OneWay}"
+                      Command="{Binding LocThanhToanHoaDonCommand}" CommandParameter="Đã thanh toán" />
+                    <ToggleButton Classes="locChip" Content="Thanh toán một phần"
+                      Height="36"
+                      IsChecked="{Binding IsInvoicePaymentPartial, Mode=OneWay}"
+                      Command="{Binding LocThanhToanHoaDonCommand}" CommandParameter="Thanh toán một phần" />
                   </StackPanel>
+                  <Button x:Name="InvoiceAdvancedFilterButton" Grid.Column="2"
+                    Classes="toolbar-action" Content="{Binding InvoiceAdvancedFilterCountText}"
+                    Height="36" Padding="14,0"
+                    Command="{Binding ToggleBoLocHoaDonCommand}" />
 
-                  <!-- Trạng thái hóa đơn -->
-                  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,4">
-                    <TextBlock Text="Trạng thái HĐ:" FontSize="12" FontWeight="SemiBold" Foreground="#4F6861" VerticalAlignment="Center" />
-                    <ComboBox ItemsSource="{Binding InvoiceStatusOptions}"
-                      SelectedItem="{Binding SelectedInvoiceStatus, Mode=TwoWay}"
-                      Width="135" Height="34" FontSize="12"
-                      VerticalContentAlignment="Center"
-                      ToolTip.Tip="Lọc theo trạng thái hóa đơn" />
-                  </StackPanel>
+                  <Popup PlacementTarget="InvoiceDatePresetBox" Placement="Bottom"
+                    IsLightDismissEnabled="False"
+                    IsOpen="{Binding IsInvoiceCustomDatePickerOpen, Mode=TwoWay}">
+                    <Border Background="White" BorderBrush="#D8E5E0" BorderThickness="1"
+                      CornerRadius="10" Padding="16" Width="420"
+                      BoxShadow="0 6 18 #220A352E">
+                      <StackPanel Spacing="12">
+                        <TextBlock Text="Chọn khoảng ngày" FontSize="15" FontWeight="Bold"
+                          Foreground="#164B40" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                          <StackPanel Spacing="5">
+                            <TextBlock Text="Từ ngày" FontSize="12" FontWeight="SemiBold" />
+                            <DatePicker Classes="sq-date" Height="36"
+                              SelectedDate="{Binding InvoiceCustomStartDateDraft, Mode=TwoWay}" />
+                          </StackPanel>
+                          <StackPanel Grid.Column="1" Spacing="5">
+                            <TextBlock Text="Đến ngày" FontSize="12" FontWeight="SemiBold" />
+                            <DatePicker Classes="sq-date" Height="36"
+                              SelectedDate="{Binding InvoiceCustomEndDateDraft, Mode=TwoWay}" />
+                          </StackPanel>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                          <Button Classes="toolbar-action" Content="Đặt lại" Height="34"
+                            Command="{Binding DatLaiKhoangNgayHoaDonCommand}" />
+                          <Button Classes="toolbar-action" Content="Hủy" Height="34"
+                            Command="{Binding HuyChonKhoangNgayHoaDonCommand}" />
+                          <Button Classes="toolbar-primary" Content="Áp dụng" Height="34"
+                            Command="{Binding ApDungKhoangNgayHoaDonCommand}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                  </Popup>
 
+<<<<<<< HEAD
                   <!-- Khách hàng -->
                   <StackPanel Spacing="4" VerticalAlignment="Center" Margin="0,0,8,4">
                     <TextBlock Text="Khách hàng" FontSize="12" FontWeight="SemiBold" Foreground="#4F6861" />
@@ -3669,20 +3818,111 @@
                 <!-- HÀNG 5: BĂNG THÔNG TIN TỔNG HỢP & THỐNG KÊ -->
                 <Border Grid.Row="4" Background="#F4FAF8" BorderBrush="#D1E9E2" BorderThickness="1"
                   CornerRadius="8" Padding="12,7">
+=======
+                  <Popup Grid.Column="2" PlacementTarget="InvoiceAdvancedFilterButton"
+                    Placement="Bottom" IsLightDismissEnabled="True"
+                    IsOpen="{Binding IsInvoiceAdvancedFiltersExpanded, Mode=TwoWay}">
+                    <Border Background="White" BorderBrush="#D8E5E0" BorderThickness="1"
+                      CornerRadius="10" Padding="16" Width="560"
+                      BoxShadow="0 6 18 #220A352E">
+                      <StackPanel Spacing="12">
+                        <TextBlock Text="Bộ lọc khác" FontSize="15" FontWeight="Bold"
+                          Foreground="#164B40" />
+                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto"
+                          ColumnSpacing="12" RowSpacing="10">
+                          <StackPanel Spacing="5">
+                            <TextBlock Text="Trạng thái hóa đơn" FontSize="12" FontWeight="SemiBold" />
+                            <ComboBox ItemsSource="{Binding InvoiceStatusOptions}"
+                              SelectedItem="{Binding SelectedInvoiceStatus, Mode=TwoWay}"
+                              Height="34" FontSize="12" />
+                          </StackPanel>
+                          <StackPanel Grid.Column="1" Spacing="5">
+                            <TextBlock Text="Khách hàng" FontSize="12" FontWeight="SemiBold" />
+                            <ComboBox ItemsSource="{Binding InvoiceCustomerOptions}"
+                              SelectedItem="{Binding SelectedInvoiceCustomer, Mode=TwoWay}"
+                              Height="34" FontSize="12">
+                              <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                  <TextBlock Text="{Binding DisplayText}" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                              </ComboBox.ItemTemplate>
+                            </ComboBox>
+                          </StackPanel>
+                          <StackPanel Grid.Row="1" Spacing="5">
+                            <TextBlock Text="Nhân viên" FontSize="12" FontWeight="SemiBold" />
+                            <ComboBox ItemsSource="{Binding InvoiceEmployeeOptions}"
+                              SelectedItem="{Binding SelectedInvoiceEmployee, Mode=TwoWay}"
+                              Height="34" FontSize="12">
+                              <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                  <TextBlock Text="{Binding DisplayText}" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                              </ComboBox.ItemTemplate>
+                            </ComboBox>
+                          </StackPanel>
+                          <StackPanel Grid.Row="1" Grid.Column="1" Spacing="5">
+                            <TextBlock Text="Tổng tiền" FontSize="12" FontWeight="SemiBold" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                              <TextBox Classes="searchInput" Height="34"
+                                Text="{Binding InvoiceFilterMinTotal, Mode=TwoWay}"
+                                Watermark="Từ" VerticalContentAlignment="Center" />
+                              <TextBox Grid.Column="1" Classes="searchInput" Height="34"
+                                Text="{Binding InvoiceFilterMaxTotal, Mode=TwoWay}"
+                                Watermark="Đến" VerticalContentAlignment="Center" />
+                            </Grid>
+                          </StackPanel>
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding InvoiceActiveFilterChips}"
+                          IsVisible="{Binding HasAppliedInvoiceFilters}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <Border Background="#F2F8F6" BorderBrush="#D8E5E0" BorderThickness="1"
+                                CornerRadius="12" Padding="8,3" Margin="0,0,6,0">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                  <TextBlock Text="{Binding Text}" FontSize="11" Foreground="#344B45"
+                                    VerticalAlignment="Center" />
+                                  <Button Content="×" Padding="0" Width="16" Height="16"
+                                    FontSize="12" Background="Transparent" BorderThickness="0"
+                                    Foreground="#61736E" VerticalAlignment="Center"
+                                    Command="{Binding #RootWindow.DataContext.XoaChipLocHoaDonCommand}"
+                                    CommandParameter="{Binding Key}" />
+                                </StackPanel>
+                              </Border>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                          <Button Classes="toolbar-action" Content="Đặt lại" Height="34"
+                            Command="{Binding ClearInvoiceSearchCommand}" />
+                          <Button Classes="toolbar-action" Content="Đóng" Height="34"
+                            Command="{Binding DongBoLocHoaDonCommand}" />
+                          <Button Classes="toolbar-primary" Content="Áp dụng" Height="34"
+                            Command="{Binding ApDungBoLocHoaDonCommand}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                  </Popup>
+                </Grid>
+
+                <Border Grid.Row="2" Background="#F4FAF8" BorderBrush="#D1E9E2"
+                  BorderThickness="1" CornerRadius="8" Padding="12,7">
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
                   <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                       <TextBlock Text="🧾" FontSize="13" VerticalAlignment="Center" />
-                      <TextBlock Text="Tổng cộng:" FontSize="12" FontWeight="SemiBold" Foreground="#164B40" VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding InvoiceTongSoLuongText}" FontSize="12" FontWeight="Bold" Foreground="#0A8C78" VerticalAlignment="Center" />
+                      <TextBlock Text="Tổng cộng:" FontSize="12" FontWeight="SemiBold"
+                        Foreground="#164B40" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding InvoiceTongSoLuongText}" FontSize="12"
+                        FontWeight="Bold" Foreground="#0A8C78" VerticalAlignment="Center" />
                     </StackPanel>
-
-                    <TextBlock Grid.Column="2"
-                      Text="{Binding InvoiceSummaryText}"
-                      FontSize="12" FontWeight="SemiBold"
-                      Foreground="#164B40" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{Binding InvoiceSummaryText}"
+                      FontSize="12" FontWeight="SemiBold" Foreground="#164B40"
+                      VerticalAlignment="Center" />
                   </Grid>
                 </Border>
-
               </Grid>
             </Border>
 
@@ -3706,7 +3946,7 @@
                   BorderBrush="#D5EAE3"
                   BorderThickness="0,0,0,1"
                   Padding="16,12">
-                  <Grid ColumnDefinitions="185,135,*,135,125,125,125,112,48" ColumnSpacing="10">
+                  <Grid ColumnDefinitions="185,135,*,135,125,125,125,174,48" ColumnSpacing="10">
                     <TextBlock Text="MÃ HÓA ĐƠN" FontWeight="Bold" Foreground="#164B40"
                       FontSize="12" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="1" Text="THỜI GIAN" FontWeight="Bold"
@@ -3752,7 +3992,7 @@
                       <Border BorderBrush="#EEF3F1" BorderThickness="0,0,0,1" Padding="16,12"
                         Background="Transparent"
                         DoubleTapped="InvoiceRow_OnDoubleTapped">
-                        <Grid ColumnDefinitions="185,135,*,135,125,125,125,112,48" ColumnSpacing="10"
+                        <Grid ColumnDefinitions="185,135,*,135,125,125,125,174,48" ColumnSpacing="10"
                           VerticalAlignment="Center">
 
                           <!-- Mã hóa đơn: bấm để xem chi tiết hóa đơn -->
@@ -3856,9 +4096,10 @@
                             VerticalAlignment="Center" />
 
                           <!-- CỘT THAO TÁC (THU NỢ + HỦY + TẠO LẠI) -->
-                          <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="6"
+                          <Grid Grid.Column="7" ColumnDefinitions="46,46,60" ColumnSpacing="4"
+                            Width="160" MinWidth="160"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Button
+                            <Button Grid.Column="0"
                               IsVisible="{Binding ConNoDuong}"
                               Content="Thu"
                               Width="46" Height="26"
@@ -3876,7 +4117,7 @@
                               Command="{Binding ElementName=RootWindow, Path=DataContext.ThuNoHoaDonCommand}"
                               CommandParameter="{Binding}" />
 
-                            <Button
+                            <Button Grid.Column="1"
                               IsVisible="{Binding CoTheHuy}"
                               Content="Hủy"
                               Width="46" Height="26"
@@ -3894,7 +4135,7 @@
                               Command="{Binding ElementName=RootWindow, Path=DataContext.HuyHoaDonCommand}"
                               CommandParameter="{Binding}" />
 
-                            <Button
+                            <Button Grid.Column="2"
                               IsVisible="{Binding LaHoaDonDaHuy}"
                               Content="Tạo lại"
                               Width="60" Height="26"
@@ -3911,7 +4152,7 @@
                               VerticalContentAlignment="Center"
                               Command="{Binding ElementName=RootWindow, Path=DataContext.TaoLaiHoaDonDaHuyCommand}"
                               CommandParameter="{Binding}" />
-                          </StackPanel>
+                          </Grid>
 
                           <!-- CỘT XEM: ô cố định 48px, nút luôn nằm chính giữa -->
                           <Button Grid.Column="8"
@@ -4629,18 +4870,6 @@
                               <!-- TAB 3: CÔNG NỢ -->
                               <StackPanel IsVisible="{Binding Detail.IsTabCongNo}" Spacing="12">
 
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                  <Button Classes="toolbar-action"
-                                    Content="Thanh toán công nợ"
-                                    IsEnabled="{Binding ElementName=RootWindow, Path=DataContext.CanPaySupplierDebt}"
-                                    Command="{Binding ElementName=RootWindow, Path=DataContext.ThanhToanCongNoNhaCungCapCommand}"
-                                    CommandParameter="{Binding}" />
-                                  <Button Classes="toolbar-action"
-                                    Content="Lịch sử thanh toán"
-                                    Command="{Binding ElementName=RootWindow, Path=DataContext.XemLichSuThanhToanNhaCungCapCommand}"
-                                    CommandParameter="{Binding}" />
-                                </StackPanel>
-
                                 <Border Classes="statBox" Background="White"
                                   IsVisible="{Binding Detail.HasCongNoData}">
                                   <Grid ColumnDefinitions="*,*,*" ColumnSpacing="14">
@@ -4675,10 +4904,24 @@
                                 <StackPanel IsVisible="{Binding Detail.HasCongNoData}" Spacing="4">
                                   <TextBlock Text="{Binding Detail.NguonCongNoText}"
                                     FontSize="12" Foreground="#61736E" />
-                                  <TextBlock Text="{Binding Detail.SoLanGhiCongNoText}"
+                                  <TextBlock Text="{Binding Detail.SoLanGhiCongNoText, TargetNullValue='0'}"
                                     FontSize="12" Foreground="#667A74" />
                                   <TextBlock FontSize="12" Foreground="#667A74"
                                     Text="{Binding Detail.LanGhiCongNoText, StringFormat='Lần ghi công nợ gần nhất: {0}'}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                  <Button Classes="debt-primary"
+                                    Content="Thanh toán công nợ"
+                                    IsEnabled="{Binding ElementName=RootWindow, Path=DataContext.CanPaySupplierDebt}"
+                                    ToolTip.Tip="Nhập số tiền trả nhà cung cấp, hệ thống tự trừ vào các phiếu nhập còn nợ"
+                                    Command="{Binding ElementName=RootWindow, Path=DataContext.ThanhToanCongNoNhaCungCapCommand}"
+                                    CommandParameter="{Binding}" />
+                                  <Button Classes="debt-secondary"
+                                    Content="Lịch sử thanh toán"
+                                    ToolTip.Tip="Xem toàn bộ lịch sử thanh toán công nợ của nhà cung cấp"
+                                    Command="{Binding ElementName=RootWindow, Path=DataContext.XemLichSuThanhToanNhaCungCapCommand}"
+                                    CommandParameter="{Binding}" />
                                 </StackPanel>
 
                                 <TextBlock Text="Sổ cái công nợ" Foreground="#61736E"
@@ -7056,10 +7299,49 @@
 
           <Button Grid.Column="4"
             Classes="toolbar-action"
-            Content="⚙  Tuỳ chọn"
-            Command="{Binding TimKiemBaoCaoPhieuNhapCommand}"
+            Content="⚙  Tùy chỉnh hiển thị"
+            ToolTip.Tip="Cấu hình bật/tắt các cột hiển thị trong bảng phiếu nhập"
             VerticalAlignment="Center"
-            Margin="0" />
+            Margin="0">
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedRight">
+                <Border Background="White"
+                  BorderBrush="#D8E5E0"
+                  BorderThickness="1"
+                  CornerRadius="10"
+                  Padding="16"
+                  Width="240"
+                  BoxShadow="0 4 16 #150A352E">
+                  <StackPanel Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="Cột hiển thị"
+                        FontSize="13"
+                        FontWeight="Bold"
+                        Foreground="#163F38"
+                        VerticalAlignment="Center" />
+                      <Button Grid.Column="1"
+                        Classes="toolbar-action"
+                        Content="Mặc định"
+                        FontSize="11"
+                        Padding="8,3"
+                        Command="{Binding DatLaiCotPhieuNhapCommand}"
+                        ToolTip.Tip="Bật lại toàn bộ các cột về mặc định" />
+                    </Grid>
+                    <Separator Height="1" Background="#E2ECE8" Margin="0,2" />
+                    <CheckBox Content="Mã nhập hàng" IsChecked="{Binding HienThiCotPhieuNhapMaPhieu, Mode=TwoWay}" />
+                    <CheckBox Content="Thời gian" IsChecked="{Binding HienThiCotPhieuNhapThoiGian, Mode=TwoWay}" />
+                    <CheckBox Content="Mã NCC" IsChecked="{Binding HienThiCotPhieuNhapMaNcc, Mode=TwoWay}" />
+                    <CheckBox Content="Nhà cung cấp" IsChecked="{Binding HienThiCotPhieuNhapTenNcc, Mode=TwoWay}" />
+                    <CheckBox Content="Phương thức / Quỹ" IsChecked="{Binding HienThiCotPhieuNhapPhuongThuc, Mode=TwoWay}" />
+                    <CheckBox Content="Còn nợ" IsChecked="{Binding HienThiCotPhieuNhapConNo, Mode=TwoWay}" />
+                    <CheckBox Content="Trạng thái phiếu" IsChecked="{Binding HienThiCotPhieuNhapTrangThai, Mode=TwoWay}" />
+                    <CheckBox Content="Thanh toán" IsChecked="{Binding HienThiCotPhieuNhapThanhToan, Mode=TwoWay}" />
+                    <CheckBox Content="Thao tác" IsChecked="{Binding HienThiCotPhieuNhapThaoTac, Mode=TwoWay}" />
+                  </StackPanel>
+                </Border>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
 
           <Button Grid.Column="5"
             Classes="toolbar-action"
@@ -7097,32 +7379,61 @@
             </Grid>
 
             <StackPanel Spacing="6">
-              <TextBlock Text="Thời gian"
-                FontSize="12"
-                FontWeight="SemiBold"
-                Foreground="#52645E" />
+              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="Thời gian"
+                  FontSize="12"
+                  FontWeight="SemiBold"
+                  Foreground="#52645E"
+                  VerticalAlignment="Center" />
+
+                <!-- Badge hiển thị nổi bật ngày/khoảng thời gian đang lọc -->
+                <Border Background="#E6F4F1"
+                  BorderBrush="#A5D6A7"
+                  BorderThickness="1"
+                  CornerRadius="12"
+                  Padding="10,3"
+                  VerticalAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                    <TextBlock Text="Đang xem:"
+                      FontSize="11.5"
+                      FontWeight="SemiBold"
+                      Foreground="#0D5C4A"
+                      VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding BaoCaoPhieuNhapDateDisplayText}"
+                      FontSize="11.5"
+                      FontWeight="Bold"
+                      Foreground="#087F6E"
+                      VerticalAlignment="Center" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
 
               <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Classes="filterChip purchaseFilter"
                   Classes.active="{Binding IsBaoCaoPhieuNhapDateToday}"
                   Content="Hôm nay"
+                  ToolTip.Tip="Lọc các phiếu nhập trong ngày hôm nay"
                   Command="{Binding SetBaoCaoPhieuNhapDateTodayCommand}" />
                 <Button Classes="filterChip purchaseFilter"
                   Classes.active="{Binding IsBaoCaoPhieuNhapDateYesterday}"
                   Content="Hôm qua"
+                  ToolTip.Tip="Lọc các phiếu nhập trong ngày hôm qua"
                   Command="{Binding SetBaoCaoPhieuNhapDateYesterdayCommand}" />
                 <Button Classes="filterChip purchaseFilter"
                   Classes.active="{Binding IsBaoCaoPhieuNhapDateLast7Days}"
                   Content="7 ngày gần nhất"
+                  ToolTip.Tip="Lọc các phiếu nhập trong 7 ngày gần nhất tính đến hôm nay"
                   Command="{Binding SetBaoCaoPhieuNhapDateLast7DaysCommand}" />
                 <Button Classes="filterChip purchaseFilter"
                   Classes.active="{Binding IsBaoCaoPhieuNhapDateThisMonth}"
                   Content="Tháng này"
+                  ToolTip.Tip="Lọc các phiếu nhập từ ngày đầu tháng đến hiện tại"
                   Command="{Binding SetBaoCaoPhieuNhapDateThisMonthCommand}" />
 
                 <Button Classes="filterChip purchaseFilter"
                   Classes.active="{Binding IsBaoCaoPhieuNhapDateCustom}"
-                  Content="Tùy chọn">
+                  Content="Tùy chọn"
+                  ToolTip.Tip="Tùy chọn khoảng ngày bắt đầu và kết thúc">
                   <Button.Flyout>
                     <Flyout Placement="Bottom">
                       <Border Background="White"
@@ -7130,24 +7441,39 @@
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="14"
-                        Width="300">
+                        Width="320">
                         <StackPanel Spacing="8">
-                          <TextBlock Text="Khoảng ngày"
+                          <TextBlock Text="Chọn khoảng thời gian"
                             FontSize="13"
                             FontWeight="SemiBold"
                             Foreground="#163F38" />
                           <TextBlock Text="Từ ngày" FontSize="11" Foreground="#61736E" />
-                          <DatePicker SelectedDate="{Binding BaoCaoPhieuNhapTuNgay, Mode=TwoWay}"
+                          <DatePicker SelectedDate="{Binding BaoCaoPhieuNhapTuNgayChon, Mode=TwoWay}"
                             HorizontalAlignment="Stretch" />
                           <TextBlock Text="Đến ngày" FontSize="11" Foreground="#61736E" />
-                          <DatePicker SelectedDate="{Binding BaoCaoPhieuNhapDenNgay, Mode=TwoWay}"
+                          <DatePicker SelectedDate="{Binding BaoCaoPhieuNhapDenNgayChon, Mode=TwoWay}"
                             HorizontalAlignment="Stretch" />
-                          <Button Classes="toolbar-primary"
-                            Content="Áp dụng"
-                            HorizontalAlignment="Right"
-                            IsEnabled="{Binding CoKhoangNgayBaoCaoPhieuNhap}"
-                            Command="{Binding ApDungKhoangNgayBaoCaoPhieuNhapCommand}"
-                            Margin="0" />
+
+                          <!-- Thông báo kiểm tra lỗi ngày bắt đầu > ngày kết thúc -->
+                          <TextBlock Text="{Binding BaoCaoPhieuNhapDateErrorMessage}"
+                            FontSize="11"
+                            Foreground="#D64545"
+                            FontWeight="SemiBold"
+                            IsVisible="{Binding BaoCaoPhieuNhapDateErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                          <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+                            <Button Grid.Column="1"
+                              Classes="toolbar-action"
+                              Content="Hủy"
+                              Command="{Binding HuyKhoangNgayBaoCaoPhieuNhapCommand}"
+                              Margin="0" />
+                            <Button Grid.Column="2"
+                              Classes="toolbar-primary"
+                              Content="Áp dụng"
+                              IsEnabled="{Binding CoKhoangNgayChonHopLe}"
+                              Command="{Binding ApDungKhoangNgayBaoCaoPhieuNhapCommand}"
+                              Margin="0" />
+                          </Grid>
                         </StackPanel>
                       </Border>
                     </Flyout>
@@ -7157,19 +7483,22 @@
                 <Button Classes="filterChip purchaseFilter"
                   Classes.active="{Binding IsBaoCaoPhieuNhapDateAll}"
                   Content="Mọi ngày"
+                  ToolTip.Tip="Hiển thị phiếu nhập ở tất cả thời gian (không lọc ngày)"
                   Command="{Binding SetBaoCaoPhieuNhapDateAllCommand}" />
 
                 <Button Classes="purchasePageButton"
                   Margin="0,0,6,0"
                   Content="◀"
                   VerticalContentAlignment="Center"
-                  ToolTip.Tip="Khoảng ngày trước"
+                  IsEnabled="{Binding CanBaoCaoPhieuNhapDatePrev}"
+                  ToolTip.Tip="{Binding BaoCaoPhieuNhapDatePrevTooltip}"
                   Command="{Binding BaoCaoPhieuNhapDatePrevDayCommand}" />
                 <Button Classes="purchasePageButton"
                   Margin="0,0,6,0"
                   Content="▶"
                   VerticalContentAlignment="Center"
-                  ToolTip.Tip="Khoảng ngày sau"
+                  IsEnabled="{Binding CanBaoCaoPhieuNhapDateNext}"
+                  ToolTip.Tip="{Binding BaoCaoPhieuNhapDateNextTooltip}"
                   Command="{Binding BaoCaoPhieuNhapDateNextDayCommand}" />
               </WrapPanel>
             </StackPanel>
@@ -7230,35 +7559,40 @@
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapMaPhieu}" />
 
                 <TextBlock Grid.Column="1"
                   Text="THỜI GIAN"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapThoiGian}" />
 
                 <TextBlock Grid.Column="2"
                   Text="MÃ NCC"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapMaNcc}" />
 
                 <TextBlock Grid.Column="3"
                   Text="NHÀ CUNG CẤP"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapTenNcc}" />
 
                 <TextBlock Grid.Column="4"
                   Text="PHƯƠNG THỨC / QUỸ"
                   FontWeight="Bold"
                   Foreground="#164B40"
                   FontSize="12"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapPhuongThuc}" />
 
                 <TextBlock Grid.Column="5"
                   Text="CÒN NỢ"
@@ -7266,7 +7600,8 @@
                   Foreground="#164B40"
                   FontSize="12"
                   HorizontalAlignment="Right"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapConNo}" />
 
                 <TextBlock Grid.Column="6"
                   Text="TRẠNG THÁI"
@@ -7274,7 +7609,8 @@
                   Foreground="#164B40"
                   FontSize="12"
                   HorizontalAlignment="Center"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapTrangThai}" />
 
                 <TextBlock Grid.Column="7"
                   Text="THANH TOÁN"
@@ -7282,7 +7618,8 @@
                   Foreground="#164B40"
                   FontSize="12"
                   HorizontalAlignment="Center"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapThanhToan}" />
 
                 <TextBlock Grid.Column="8"
                   Text="THAO TÁC"
@@ -7290,7 +7627,8 @@
                   Foreground="#164B40"
                   FontSize="12"
                   HorizontalAlignment="Center"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding HienThiCotPhieuNhapThaoTac}" />
               </Grid>
             </Border>
 
@@ -7333,7 +7671,8 @@
                         ColumnSpacing="10"
                         VerticalAlignment="Center">
 
-                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapMaPhieu}">
                           <Button
                             Background="Transparent"
                             BorderThickness="0"
@@ -7366,25 +7705,29 @@
                           Text="{Binding ThoiGianNhapText}"
                           Foreground="#667A74"
                           FontSize="12"
-                          VerticalAlignment="Center" />
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapThoiGian}" />
 
                         <TextBlock Grid.Column="2"
                           Text="{Binding MaNhaCungCap}"
                           Foreground="#667A74"
                           FontSize="12"
-                          VerticalAlignment="Center" />
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapMaNcc}" />
 
                         <TextBlock Grid.Column="3"
                           Text="{Binding TenNhaCungCap}"
                           Foreground="#263B35"
                           FontWeight="Medium"
                           TextTrimming="CharacterEllipsis"
-                          VerticalAlignment="Center" />
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapTenNcc}" />
 
                         <!-- PHƯƠNG THỨC / QUỸ CHI TRẢ -->
                         <StackPanel Grid.Column="4"
                           VerticalAlignment="Center"
-                          Spacing="2">
+                          Spacing="2"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapPhuongThuc}">
                           <TextBlock Text="{Binding PhuongThucThanhToanHienThi}"
                             FontSize="12"
                             FontWeight="SemiBold"
@@ -7401,7 +7744,8 @@
                           FontWeight="SemiBold"
                           Foreground="#D64545"
                           HorizontalAlignment="Right"
-                          VerticalAlignment="Center" />
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapConNo}" />
 
                         <!-- BADGE TRẠNG THÁI PHIẾU -->
                         <Border Grid.Column="6"
@@ -7410,7 +7754,8 @@
                           MinWidth="96"
                           HorizontalAlignment="Center"
                           VerticalAlignment="Center"
-                          Background="{Binding TrangThaiBadgeBrush}">
+                          Background="{Binding TrangThaiBadgeBrush}"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapTrangThai}">
                           <TextBlock Text="{Binding TrangThaiHienThi}"
                             FontSize="11"
                             FontWeight="SemiBold"
@@ -7426,7 +7771,8 @@
                           MinWidth="132"
                           HorizontalAlignment="Center"
                           VerticalAlignment="Center"
-                          Background="{Binding TrangThaiThanhToanBadgeBrush}">
+                          Background="{Binding TrangThaiThanhToanBadgeBrush}"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapThanhToan}">
                           <TextBlock Text="{Binding TrangThaiThanhToanHienThi}"
                             FontSize="11"
                             FontWeight="SemiBold"
@@ -7440,7 +7786,8 @@
                           Orientation="Horizontal"
                           Spacing="6"
                           HorizontalAlignment="Center"
-                          VerticalAlignment="Center">
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapThaoTac}">
                           <Button
                             Classes="payRowButton"
                             Width="108"

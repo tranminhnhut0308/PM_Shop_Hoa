@@ -27,6 +27,11 @@ public sealed partial class DatabaseService
     private readonly DatabaseConfigService _configService;
     private bool? _hasPhieuNhapExtraColumns;
     private readonly SemaphoreSlim _ensurePhieuNhapExtraColumns = new(1, 1);
+<<<<<<< HEAD
+=======
+    private bool? _hasChiTietPhieuNhapDonViTinhExcel;
+    private readonly SemaphoreSlim _ensureChiTietPhieuNhapDonViTinhExcel = new(1, 1);
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
     private bool? _hasPhieuNhapTrackingColumns;
     private readonly SemaphoreSlim _ensurePhieuNhapTrackingColumns = new(1, 1);
     private bool? _hasHoaDonTrackingColumns;
@@ -62,6 +67,8 @@ public sealed partial class DatabaseService
     {
         await EnsurePhieuQuyLoaiPhieuColumnAsync();
         await EnsureHoaDonTrackingColumnsAsync();
+        await EnsurePhieuNhapExtraColumnsAsync();
+        await EnsureChiTietPhieuNhapDonViTinhExcelAsync();
 
         var connection = new MySqlConnection(GetConnectionString());
 
@@ -89,6 +96,8 @@ public sealed partial class DatabaseService
     {
         await EnsurePhieuQuyLoaiPhieuColumnAsync();
         await EnsureHoaDonTrackingColumnsAsync();
+        await EnsurePhieuNhapExtraColumnsAsync();
+        await EnsureChiTietPhieuNhapDonViTinhExcelAsync();
 
         var connection = new MySqlConnection(GetConnectionString());
 
@@ -4782,30 +4791,46 @@ public sealed partial class DatabaseService
         string? trangThaiHoaDon,
         uint? khachHangId,
         uint? nhanVienId,
-        bool khachLe)
+        bool khachLe,
+        decimal? tongTienTu = null,
+        decimal? tongTienDen = null)
     {
         var rawSearch = (search ?? "").Trim();
         var escapedSearch = rawSearch.Replace("!", "!!").Replace("%", "!%").Replace("_", "!_");
         var normalizedSearch = ProductSearchHelper.ChuanHoa(rawSearch)
             .Replace("!", "!!").Replace("%", "!%").Replace("_", "!_");
+        var phoneDigits = new string(rawSearch.Where(char.IsDigit).ToArray());
 
-        DateTime? tuNgayDau = tuNgay?.Date;
-        DateTime? denNgaySau = denNgay?.Date.AddDays(1);
+        // Invoice timestamps are stored as Vietnam-local wall-clock values; keep
+        // filter parameters Unspecified so the connector does not shift them by machine timezone.
+        DateTime? tuNgayDau = tuNgay.HasValue
+            ? DateTime.SpecifyKind(tuNgay.Value.Date, DateTimeKind.Unspecified)
+            : null;
+        DateTime? denNgaySau = denNgay.HasValue
+            ? DateTime.SpecifyKind(denNgay.Value.Date.AddDays(1), DateTimeKind.Unspecified)
+            : null;
 
         var dieuKien = new List<string>();
 
         if (!string.IsNullOrWhiteSpace(rawSearch))
         {
             var tenKhachHangExpr = BieuThucChuanHoaSql("COALESCE(kh.ten_khach_hang, 'Khach le')");
-            var ghiChuExpr = BieuThucChuanHoaSql("COALESCE(hd.ghi_chu, '')");
-            var tenSanPhamExpr = BieuThucChuanHoaSql("COALESCE(ct.ten_san_pham, '')");
+            var maHoaDonExpr = BieuThucChuanHoaSql("COALESCE(hd.ma_hoa_don, '')");
+            var maKhachHangExpr = BieuThucChuanHoaSql("COALESCE(kh.ma_khach_hang, '')");
+            var soDienThoaiExpr = BieuThucChuanHoaSql("COALESCE(kh.so_dien_thoai, '')");
+            const string soDienThoaiDigitsExpr =
+                "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(kh.so_dien_thoai, ''), ' ', ''), '-', ''), '.', ''), '+', ''), '/', '')";
 
             dieuKien.Add($"""
                 (
                     hd.ma_hoa_don LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
+                    OR {maHoaDonExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
                     OR kh.ma_khach_hang LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
-                    OR kh.ten_khach_hang LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
+                    OR {maKhachHangExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
+                    OR {soDienThoaiExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
+                    OR (@SearchPhoneDigits <> '' AND {soDienThoaiDigitsExpr} LIKE CONCAT('%', @SearchPhoneDigits, '%') ESCAPE '!')
                     OR {tenKhachHangExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
+<<<<<<< HEAD
                     OR kh.so_dien_thoai LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
                     OR hd.so_dien_thoai LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
                     OR hd.ghi_chu LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
@@ -4820,6 +4845,8 @@ public sealed partial class DatabaseService
                               OR {tenSanPhamExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
                           )
                     )
+=======
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
                 )
                 """);
         }
@@ -4833,6 +4860,12 @@ public sealed partial class DatabaseService
         {
             dieuKien.Add("hd.thoi_gian_ban < @DenNgaySau");
         }
+
+        if (tongTienTu.HasValue)
+            dieuKien.Add("hd.khach_can_tra >= @TongTienTu");
+
+        if (tongTienDen.HasValue)
+            dieuKien.Add("hd.khach_can_tra <= @TongTienDen");
 
         if (khachHangId.HasValue && khachHangId.Value > 0)
         {
@@ -4851,7 +4884,7 @@ public sealed partial class DatabaseService
         var ttHd = (trangThaiHoaDon ?? "").Trim().ToUpperInvariant();
         if (ttHd is "HOAN_THANH")
         {
-            dieuKien.Add("hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY')");
+            dieuKien.Add("hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')");
         }
         else if (ttHd is "DA_HUY" or "HUY")
         {
@@ -4902,10 +4935,13 @@ public sealed partial class DatabaseService
         {
             SearchRaw = escapedSearch,
             SearchNormalized = normalizedSearch,
+            SearchPhoneDigits = phoneDigits,
             TuNgayDau = tuNgayDau,
             DenNgaySau = denNgaySau,
             KhachHangId = khachHangId,
-            NhanVienId = nhanVienId
+            NhanVienId = nhanVienId,
+            TongTienTu = tongTienTu,
+            TongTienDen = tongTienDen
         };
 
         return (whereClause, paramObj);
@@ -4921,7 +4957,9 @@ public sealed partial class DatabaseService
         uint? nhanVienId = null,
         bool khachLe = false,
         int page = 1,
-        int pageSize = 20)
+        int pageSize = 20,
+        decimal? tongTienTu = null,
+        decimal? tongTienDen = null)
     {
         var coCotHuy = await EnsureHuyHoaDonSchemaAsync();
         await EnsureHoaDonFilterIndexesAsync();
@@ -4929,14 +4967,15 @@ public sealed partial class DatabaseService
         await using var connection = await OpenAsync();
 
         var (whereClause, paramObj) = XayDungDieuKienLocHoaDon(
-            search, tuNgay, denNgay, trangThaiThanhToan, trangThaiHoaDon, khachHangId, nhanVienId, khachLe);
+            search, tuNgay, denNgay, trangThaiThanhToan, trangThaiHoaDon, khachHangId, nhanVienId,
+            khachLe, tongTienTu, tongTienDen);
 
         var summarySql = $"""
             SELECT
                 COUNT(*) AS TongSoLuong,
-                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') THEN hd.khach_can_tra ELSE 0 END), 0) AS TongDoanhThu,
-                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS TongDaThanhToan,
-                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY') THEN hd.con_no ELSE 0 END), 0) AS TongConNo,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.khach_can_tra ELSE 0 END), 0) AS TongDoanhThu,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.khach_da_thanh_toan ELSE 0 END), 0) AS TongDaThanhToan,
+                COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY', 'HUY', 'LUU_TAM') THEN hd.con_no ELSE 0 END), 0) AS TongConNo,
                 COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY') THEN 1 ELSE 0 END), 0) AS TongDaHuy
             FROM hoa_don_ban_hang hd
             LEFT JOIN khach_hang kh ON kh.id = hd.khach_hang_id
@@ -9624,13 +9663,18 @@ public sealed partial class DatabaseService
 
         await using var connection = await OpenAsync();
 
-        // Hai cột so_hoa_don_dau_vao / ma_dat_hang_nhap là tuỳ chọn (database cũ
-        // chưa có); chỉ thêm vào câu SQL khi thực sự tồn tại.
+        // Thông tin hóa đơn/người giao hàng là tuỳ chọn ở database cũ, nhưng
+        // thông tin nhà cung cấp thì luôn có. Tách riêng để không bị mất khi
+        // database thiếu một cột mở rộng.
         var hasExtraColumns = await HasPhieuNhapExtraColumnsAsync();
         var hasPhuongThuc = await EnsurePhieuNhapPhuongThucColumnAsync();
+        var hasDvtExcel = await EnsureChiTietPhieuNhapDonViTinhExcelAsync();
 
-        var extraSelect = (hasExtraColumns
-            ? ",\n            p.so_hoa_don_dau_vao AS SoHoaDonDauVao,\n            p.ma_dat_hang_nhap   AS MaDatHangNhap,\n            p.ngay_hoa_don_dau_vao AS NgayHoaDonDauVao,\n            p.ten_nguoi_giao_hang AS TenNguoiGiaoHang,\n            p.sdt_nguoi_giao_hang AS SdtNguoiGiaoHang,\n            ncc.dia_chi AS DiaChiNhaCungCap,\n            ncc.so_dien_thoai AS SoDienThoaiNhaCungCap,\n            ncc.ma_so_thue AS MaSoThueNhaCungCap"
+        var extraSelect = ",\n            ncc.dia_chi AS DiaChiNhaCungCap,"
+            + "\n            ncc.so_dien_thoai AS SoDienThoaiNhaCungCap,"
+            + "\n            ncc.ma_so_thue AS MaSoThueNhaCungCap"
+            + (hasExtraColumns
+            ? ",\n            p.so_hoa_don_dau_vao AS SoHoaDonDauVao,\n            p.ma_dat_hang_nhap   AS MaDatHangNhap,\n            p.ngay_hoa_don_dau_vao AS NgayHoaDonDauVao,\n            p.ten_nguoi_giao_hang AS TenNguoiGiaoHang,\n            p.sdt_nguoi_giao_hang AS SdtNguoiGiaoHang"
             : string.Empty)
             + (hasPhuongThuc
             ? ",\n            COALESCE(p.phuong_thuc_thanh_toan, 'TIEN_MAT') AS PhuongThucThanhToan"
@@ -9674,12 +9718,16 @@ public sealed partial class DatabaseService
         if (header is null)
             return null;
 
-        const string detailSql = """
+        var donViTinhSelect = hasDvtExcel
+            ? "COALESCE(NULLIF(TRIM(ct.don_vi_tinh_excel), ''), dvt.ten_don_vi, '') AS DonViTinh"
+            : "COALESCE(dvt.ten_don_vi, '') AS DonViTinh";
+
+        var detailSql = $"""
         SELECT
             ct.san_pham_id  AS SanPhamId,
             ct.ma_san_pham  AS MaSanPham,
             ct.ten_san_pham AS TenSanPham,
-            COALESCE(NULLIF(TRIM(ct.don_vi_tinh_excel), ''), dvt.ten_don_vi, '') AS DonViTinh,
+            {donViTinhSelect},
             ct.so_luong     AS SoLuong,
             ct.don_gia_nhap AS DonGiaNhap,
             ct.giam_gia     AS GiamGia,
@@ -10130,6 +10178,8 @@ public sealed partial class DatabaseService
         phieu.DaThanhToan = Math.Clamp(phieu.DaThanhToan, 0, phieu.TongTienNhap);
         phieu.ConNo = phieu.TongTienNhap - phieu.DaThanhToan;
         phieu.TrangThai = "DA_NHAP_HANG";
+        var laPhieuMoi = phieu.Id == 0;
+        var soTienThanhToanBangTien = phieu.DaThanhToan;
 
         var hasExtraColumns = await HasPhieuNhapExtraColumnsAsync();
         var hasPhuongThucColumn = await EnsurePhieuNhapPhuongThucColumnAsync();
@@ -10375,6 +10425,15 @@ public sealed partial class DatabaseService
                 phieu,
                 dongHopLe);
 
+            if (laPhieuMoi)
+            {
+                await ApDungTienUngTruocNhaCungCapTrongGiaoDichAsync(
+                    connection,
+                    transaction,
+                    phieu,
+                    phieu.NguoiNhapId);
+            }
+
             // ============================================================
             buocXuLy = "Ghi nhận công nợ nhà cung cấp";
             // 4. CÔNG NỢ NHÀ CUNG CẤP
@@ -10386,7 +10445,8 @@ public sealed partial class DatabaseService
                 connection,
                 transaction,
                 phieu,
-                branchId);
+                branchId,
+                soTienThanhToanBangTien);
 
             // ============================================================
             buocXuLy = "Ghi nhận sổ quỹ thanh toán";
@@ -10402,7 +10462,8 @@ public sealed partial class DatabaseService
                 phieu.NguoiNhapId,
                 phieu,
                 hasPhieuQuyExtraColumns,
-                hasPhieuQuyPhieuNhapColumns);
+                hasPhieuQuyPhieuNhapColumns,
+                soTienThanhToanBangTien);
 
             // ============================================================
             buocXuLy = "Lưu chứng từ và nhật ký hoạt động";
@@ -10507,6 +10568,86 @@ public sealed partial class DatabaseService
         }
     }
 
+    private static async Task<decimal> ApDungTienUngTruocNhaCungCapTrongGiaoDichAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        PhieuNhapHang phieu,
+        uint? userId)
+    {
+        if (phieu.NhaCungCapId is not uint nccId || nccId == 0 || phieu.ConNo <= 0)
+            return 0m;
+
+        var supplierId = await connection.ExecuteScalarAsync<uint?>(
+            "SELECT id FROM nha_cung_cap WHERE id = @Id FOR UPDATE;",
+            new { Id = nccId },
+            transaction);
+        if (supplierId is null)
+            throw new InvalidOperationException($"Không tìm thấy nhà cung cấp id {nccId} để cấn trừ khoản trả trước.");
+
+        var balance = await connection.ExecuteScalarAsync<decimal>(
+            """
+            SELECT COALESCE(SUM(ghi_no - ghi_co), 0)
+            FROM lich_su_cong_no_nha_cung_cap
+            WHERE nha_cung_cap_id = @NhaCungCapId
+            FOR UPDATE;
+            """,
+            new { NhaCungCapId = nccId },
+            transaction);
+
+        var tienUngTruoc = Math.Max(0m, -balance);
+        var soTienCanTru = Math.Min(tienUngTruoc, phieu.ConNo);
+        if (soTienCanTru <= 0)
+            return 0m;
+
+        phieu.DaThanhToan += soTienCanTru;
+        phieu.ConNo -= soTienCanTru;
+        var now = DateTime.Now;
+
+        var affected = await connection.ExecuteAsync(
+            """
+            UPDATE phieu_nhap_hang
+            SET da_thanh_toan = @DaThanhToan,
+                con_no = @ConNo,
+                ngay_cap_nhat = @ThoiGian
+            WHERE id = @Id
+              AND trang_thai NOT IN ('DA_HUY', 'HUY');
+            """,
+            new
+            {
+                phieu.DaThanhToan,
+                phieu.ConNo,
+                ThoiGian = now,
+                phieu.Id
+            },
+            transaction);
+        if (affected != 1)
+            throw new InvalidOperationException($"Không thể cập nhật khoản cấn trừ cho phiếu nhập {phieu.MaPhieuNhap}.");
+
+        var maThanhToan = await SinhMaThanhToanNhaCungCapTrongGiaoDichAsync(connection, transaction);
+        await connection.ExecuteAsync(
+            """
+            INSERT INTO thanh_toan_nha_cung_cap
+            (ma_thanh_toan, nha_cung_cap_id, phieu_nhap_id, so_tien, phuong_thuc,
+             thoi_gian, nguoi_thuc_hien_id, ghi_chu)
+            VALUES
+            (@MaThanhToan, @NhaCungCapId, @PhieuNhapId, @SoTien, 'CAN_TRU',
+             @ThoiGian, @NguoiThucHienId, @GhiChu);
+            """,
+            new
+            {
+                MaThanhToan = maThanhToan,
+                NhaCungCapId = nccId,
+                PhieuNhapId = phieu.Id,
+                SoTien = soTienCanTru,
+                ThoiGian = now,
+                NguoiThucHienId = userId,
+                GhiChu = $"Cấn trừ khoản trả trước của nhà cung cấp vào phiếu nhập {phieu.MaPhieuNhap}."
+            },
+            transaction);
+
+        return soTienCanTru;
+    }
+
     /// <summary>
     /// Ghi sổ cái công nợ nhà cung cấp cho một phiếu nhập, trong CÙNG transaction
     /// với lần lưu phiếu: một dòng ghi khoản phải trả khi nhập hàng và một dòng
@@ -10519,6 +10660,7 @@ public sealed partial class DatabaseService
         MySqlTransaction transaction,
         PhieuNhapHang phieu,
         uint branchId,
+        decimal? soTienThanhToanBangTien = null,
         bool xoaLichSuCu = true)
     {
         if (phieu.NhaCungCapId is not uint nccId || nccId == 0)
@@ -10552,7 +10694,8 @@ public sealed partial class DatabaseService
         }
 
         // Khoản đã trả làm giảm nợ phải trả, nên ghi có.
-        if (phieu.DaThanhToan > 0)
+        var soTienThanhToan = soTienThanhToanBangTien ?? phieu.DaThanhToan;
+        if (soTienThanhToan > 0)
         {
             await GhiMotDongCongNoNhaCungCapAsync(
                 connection,
@@ -10562,10 +10705,10 @@ public sealed partial class DatabaseService
                 "THANH_TOAN_NHAP",
                 phieu.MaPhieuNhap,
                 0,
-                phieu.DaThanhToan,
+                soTienThanhToan,
                 phieu.ThoiGianNhap,
                 phieu.NguoiNhapId,
-                $"Đã thanh toán {phieu.DaThanhToan:N0} cho phiếu {phieu.MaPhieuNhap}");
+                $"Đã thanh toán {soTienThanhToan:N0} cho phiếu {phieu.MaPhieuNhap}");
         }
     }
 
@@ -10581,7 +10724,8 @@ public sealed partial class DatabaseService
         uint? userId,
         PhieuNhapHang phieu,
         bool coCotNguoiNopNhanGhiChu,
-        bool coCotPhieuNhap)
+        bool coCotPhieuNhap,
+        decimal? soTienThanhToanBangTien = null)
     {
         // 1. Dọn dẹp phiếu chi cũ nếu phiếu nhập được cập nhật lại / hoàn thành lại
         if (coCotPhieuNhap)
@@ -10608,7 +10752,8 @@ public sealed partial class DatabaseService
         }
 
         // 2. Nếu phiếu có thanh toán tiền (> 0), tạo phiếu chi mới
-        if (phieu.DaThanhToan > 0)
+        var soTienThanhToan = soTienThanhToanBangTien ?? phieu.DaThanhToan;
+        if (soTienThanhToan > 0)
         {
             var maPhieuChi = await SinhMaPhieuChiTrongGiaoDichAsync(connection, transaction);
 
@@ -10678,7 +10823,7 @@ public sealed partial class DatabaseService
                     MaPhieu = maPhieuChi,
                     ChiNhanhId = branchId,
                     NhomChiPhiId = idNhomChiNhaCungCap,
-                    SoTien = phieu.DaThanhToan,
+                    SoTien = soTienThanhToan,
                     PhuongThuc = phuongThuc,
                     NoiDung = noiDung,
                     NguoiNopNhan = Truncate150(phieu.TenNhaCungCap),
@@ -10948,10 +11093,12 @@ public sealed partial class DatabaseService
     };
 
     /// <summary>
-    /// Hai cột so_hoa_don_dau_vao / ma_dat_hang_nhap là tuỳ chọn.
-    /// Kiểm tra information_schema một lần để database cũ vẫn chạy được.
+    /// Bảo đảm đủ 5 cột thông tin hóa đơn / người giao hàng của phiếu nhập.
+    /// Database cũ có thể thiếu từng cột (đặc biệt <c>ma_dat_hang_nhap</c>), nên
+    /// phải kiểm tra và bổ sung độc lập từng cột thay vì chỉ kiểm tra 2 cột như
+    /// trước đây. Trả về true khi tất cả các cột đã sẵn sàng.
     /// </summary>
-    private async Task<bool> HasPhieuNhapExtraColumnsAsync()
+    private async Task<bool> EnsurePhieuNhapExtraColumnsAsync()
     {
         if (_hasPhieuNhapExtraColumns.HasValue)
             return _hasPhieuNhapExtraColumns.Value;
@@ -10962,6 +11109,7 @@ public sealed partial class DatabaseService
             if (_hasPhieuNhapExtraColumns.HasValue)
                 return _hasPhieuNhapExtraColumns.Value;
 
+<<<<<<< HEAD
             await using var connection = await OpenAsync();
             await EnsurePhieuNhapColumnAsync(connection, "so_hoa_don_dau_vao", null,
                 "VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL", copyEmptyValue: true);
@@ -10984,11 +11132,70 @@ public sealed partial class DatabaseService
         finally
         {
             _ensurePhieuNhapExtraColumns.Release();
+=======
+            // Dùng connection riêng (không gọi OpenAsync) để tránh đệ quy.
+            await using var connection = new MySqlConnection(GetConnectionString());
+            await connection.OpenAsync();
+
+            var requiredColumns = new (string Name, string Definition, string Position)[]
+            {
+                ("so_hoa_don_dau_vao", "VARCHAR(50) NULL DEFAULT NULL", "AFTER ghi_chu"),
+                ("ma_dat_hang_nhap", "VARCHAR(50) NULL DEFAULT NULL", "AFTER so_hoa_don_dau_vao"),
+                ("ngay_hoa_don_dau_vao", "DATE NULL DEFAULT NULL", "AFTER ma_dat_hang_nhap"),
+                ("ten_nguoi_giao_hang", "VARCHAR(150) NULL DEFAULT NULL", "AFTER ngay_hoa_don_dau_vao"),
+                ("sdt_nguoi_giao_hang", "VARCHAR(50) NULL DEFAULT NULL", "AFTER ten_nguoi_giao_hang")
+            };
+
+            var existing = (await connection.QueryAsync<string>(
+                """
+                SELECT COLUMN_NAME
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'phieu_nhap_hang'
+                  AND COLUMN_NAME IN @Names;
+                """,
+                new { Names = requiredColumns.Select(c => c.Name).ToArray() }))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (name, definition, position) in requiredColumns)
+            {
+                if (existing.Contains(name))
+                    continue;
+
+                try
+                {
+                    await connection.ExecuteAsync(
+                        $"ALTER TABLE phieu_nhap_hang ADD COLUMN {name} {definition} {position};");
+                    existing.Add(name);
+                }
+                catch (MySqlException ex) when (ex.Number == 1060)
+                {
+                    // Tiến trình khác đã thêm cột trước đó.
+                    existing.Add(name);
+                }
+                catch (Exception ex)
+                {
+                    SafeLog.WriteError($"Loi bo sung cot {name} phieu_nhap_hang", ex);
+                }
+            }
+
+            _hasPhieuNhapExtraColumns = requiredColumns.All(c => existing.Contains(c.Name));
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi kiem tra cot mo rong phieu nhap", ex);
+            _hasPhieuNhapExtraColumns = false;
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
+        }
+        finally
+        {
+            _ensurePhieuNhapExtraColumns.Release();
         }
 
         return _hasPhieuNhapExtraColumns.Value;
     }
 
+<<<<<<< HEAD
     private static async Task EnsurePhieuNhapColumnAsync(
         MySqlConnection connection,
         string columnName,
@@ -10999,10 +11206,37 @@ public sealed partial class DatabaseService
         static async Task<bool> ColumnExistsAsync(MySqlConnection conn, string name)
         {
             var count = await conn.ExecuteScalarAsync<long>(
+=======
+    private async Task<bool> HasPhieuNhapExtraColumnsAsync()
+        => await EnsurePhieuNhapExtraColumnsAsync();
+
+    /// <summary>
+    /// Bảo đảm <c>chi_tiet_phieu_nhap_hang</c> có cột <c>don_vi_tinh_excel</c>.
+    /// Cột này lưu đơn vị tính đọc từ file Excel/import; database mới tạo từ
+    /// <c>database/hoa_shop.sql</c> chưa có cột nên các truy vấn chi tiết sẽ lỗi
+    /// nếu không bổ sung trước.
+    /// </summary>
+    private async Task<bool> EnsureChiTietPhieuNhapDonViTinhExcelAsync()
+    {
+        if (_hasChiTietPhieuNhapDonViTinhExcel.HasValue)
+            return _hasChiTietPhieuNhapDonViTinhExcel.Value;
+
+        await _ensureChiTietPhieuNhapDonViTinhExcel.WaitAsync();
+        try
+        {
+            if (_hasChiTietPhieuNhapDonViTinhExcel.HasValue)
+                return _hasChiTietPhieuNhapDonViTinhExcel.Value;
+
+            await using var connection = new MySqlConnection(GetConnectionString());
+            await connection.OpenAsync();
+
+            var count = await connection.ExecuteScalarAsync<long>(
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
                 """
                 SELECT COUNT(*)
                 FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE()
+<<<<<<< HEAD
                   AND TABLE_NAME = 'phieu_nhap_hang'
                   AND COLUMN_NAME = @Name;
                 """,
@@ -11032,6 +11266,47 @@ public sealed partial class DatabaseService
         await connection.ExecuteAsync(
             $"UPDATE `phieu_nhap_hang` SET `{columnName}` = `{legacyColumnName}` " +
             $"WHERE `{legacyColumnName}` IS NOT NULL AND {emptyCondition};");
+=======
+                  AND TABLE_NAME = 'chi_tiet_phieu_nhap_hang'
+                  AND COLUMN_NAME = 'don_vi_tinh_excel';
+                """);
+
+            if (count == 0)
+            {
+                try
+                {
+                    await connection.ExecuteAsync(
+                        "ALTER TABLE chi_tiet_phieu_nhap_hang "
+                        + "ADD COLUMN don_vi_tinh_excel VARCHAR(50) NULL DEFAULT NULL AFTER ten_san_pham;");
+                }
+                catch (MySqlException ex) when (ex.Number == 1060)
+                {
+                    // Cột đã được tiến trình khác thêm.
+                }
+            }
+
+            count = await connection.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'chi_tiet_phieu_nhap_hang'
+                  AND COLUMN_NAME = 'don_vi_tinh_excel';
+                """);
+            _hasChiTietPhieuNhapDonViTinhExcel = count > 0;
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi kiem tra cot don_vi_tinh_excel", ex);
+            _hasChiTietPhieuNhapDonViTinhExcel = false;
+        }
+        finally
+        {
+            _ensureChiTietPhieuNhapDonViTinhExcel.Release();
+        }
+
+        return _hasChiTietPhieuNhapDonViTinhExcel.Value;
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
     }
 
     public async Task EnsurePhieuNhapTrackingColumnsAsync()

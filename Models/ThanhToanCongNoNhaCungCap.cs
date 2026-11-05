@@ -64,6 +64,7 @@ public sealed class ThanhToanCongNoNhaCungCap
         "CHUYEN_KHOAN" or "CHUYEN_KHOAN_NGAN_HANG" or "NGAN_HANG" => "Chuyển khoản",
         "THE" or "THE_TIN_DUNG" => "Thẻ",
         "VI_DIEN_TU" or "VI" => "Ví điện tử",
+        "CAN_TRU" => "Cấn trừ khoản trả trước",
         _ => string.IsNullOrWhiteSpace(PhuongThuc) ? "Chưa ghi nhận" : PhuongThuc
     };
     public string MaThamChieuHienThi => string.IsNullOrWhiteSpace(MaThamChieu) ? "—" : MaThamChieu.Trim();

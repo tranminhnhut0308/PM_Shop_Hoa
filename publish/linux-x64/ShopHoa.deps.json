@@ -7,7 +7,7 @@
   "targets": {
     ".NETCoreApp,Version=v8.0": {},
     ".NETCoreApp,Version=v8.0/linux-x64": {
-      "ShopHoa/1.0.8": {
+      "ShopHoa/1.0.9": {
         "dependencies": {
           "Avalonia": "11.3.12",
           "Avalonia.Controls.DataGrid": "11.3.12",
@@ -1132,7 +1132,7 @@
     }
   },
   "libraries": {
-    "ShopHoa/1.0.8": {
+    "ShopHoa/1.0.9": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

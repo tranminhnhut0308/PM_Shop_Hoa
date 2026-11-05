@@ -4,12 +4,15 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShopHoa.Helpers;
 using ShopHoa.Models;
 
 namespace ShopHoa.ViewModels;
+
+public sealed record InvoiceFilterChip(string Key, string Text);
 
 public sealed partial class MainWindowViewModel
 {
@@ -19,14 +22,20 @@ public sealed partial class MainWindowViewModel
 
     private DateTimeOffset? _invoiceFilterStartDate;
     private DateTimeOffset? _invoiceFilterEndDate;
-    private string _selectedInvoiceDatePreset = "Tháng này";
+    private DateTimeOffset? _invoiceCustomStartDateDraft;
+    private DateTimeOffset? _invoiceCustomEndDateDraft;
+    private string _selectedInvoiceDatePreset = "Mọi ngày";
+    private string _invoiceDatePresetBeforeCustom = "Mọi ngày";
     private bool _dangCapNhatPresetNgay;
+    private bool _dangHuyChonNgayTuyChon;
+    private bool _dangSuaKhoangNgayTuyChon;
 
     private string _selectedInvoicePaymentStatus = "Tất cả";
     private string _selectedInvoiceStatus = "Tất cả";
     private KhachHangFilterOption? _selectedInvoiceCustomer;
     private HoaDonNhanVienFilterOption? _selectedInvoiceEmployee;
     private int _invoiceSearchVersion;
+    private CancellationTokenSource? _invoiceSearchDebounce;
 
     private int _invoicePage = 1;
     private int _invoicePageSize = 20;
@@ -38,6 +47,9 @@ public sealed partial class MainWindowViewModel
     private string invoiceCustomerSearch = "";
 
     [ObservableProperty]
+    private bool isInvoiceCustomDatePickerOpen;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasNoInvoices))]
     private bool _isLoadingInvoices;
 
@@ -46,16 +58,14 @@ public sealed partial class MainWindowViewModel
     // --- 1. LỰA CHỌN KHOẢNG THỜI GIAN NHANH ---
     public IReadOnlyList<string> InvoiceDatePresets { get; } =
     [
+        "Mọi ngày",
         "Hôm nay",
         "Hôm qua",
-        "7 ngày qua",
+        "7 ngày gần nhất",
         "30 ngày qua",
-        "Tuần này",
         "Tháng này",
         "Tháng trước",
-        "Quý này",
-        "Năm nay",
-        "Tùy chọn"
+        "Tùy chỉnh"
     ];
 
     public string SelectedInvoiceDatePreset
@@ -63,14 +73,44 @@ public sealed partial class MainWindowViewModel
         get => _selectedInvoiceDatePreset;
         set
         {
+            var previousPreset = _selectedInvoiceDatePreset;
             if (SetProperty(ref _selectedInvoiceDatePreset, value))
             {
-                if (!_dangCapNhatPresetNgay && !string.IsNullOrWhiteSpace(value) && value != "Tùy chọn")
+                if (!_dangCapNhatPresetNgay && !_dangHuyChonNgayTuyChon && value == "Tùy chỉnh")
                 {
-                    ApDungPresetNgayHoaDon(value, tuDongTim: false);
+                    _invoiceDatePresetBeforeCustom = previousPreset;
+                    InvoiceCustomStartDateDraft = InvoiceFilterStartDate ?? NgayVietNamHomNay();
+                    InvoiceCustomEndDateDraft = InvoiceFilterEndDate ?? NgayVietNamHomNay();
+                    IsInvoiceCustomDatePickerOpen = true;
                 }
+                else if (!_dangCapNhatPresetNgay && !_dangHuyChonNgayTuyChon
+                    && !string.IsNullOrWhiteSpace(value))
+                {
+                    ApDungPresetNgayHoaDon(value);
+                }
+                OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
+                OnPropertyChanged(nameof(InvoiceDateFilterText));
+                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+                OnPropertyChanged(nameof(InvoiceDateCompactText));
+                OnPropertyChanged(nameof(HasInvoiceDateFilter));
             }
         }
+    }
+
+    public DateTimeOffset? InvoiceCustomStartDateDraft
+    {
+        get => _invoiceCustomStartDateDraft;
+        set => SetProperty(
+            ref _invoiceCustomStartDateDraft,
+            value.HasValue ? VietnameseCalendar.FromCalendarDate(value.Value) : null);
+    }
+
+    public DateTimeOffset? InvoiceCustomEndDateDraft
+    {
+        get => _invoiceCustomEndDateDraft;
+        set => SetProperty(
+            ref _invoiceCustomEndDateDraft,
+            value.HasValue ? VietnameseCalendar.FromCalendarDate(value.Value) : null);
     }
 
     public DateTimeOffset? InvoiceFilterStartDate
@@ -78,13 +118,25 @@ public sealed partial class MainWindowViewModel
         get => _invoiceFilterStartDate;
         set
         {
-            if (SetProperty(ref _invoiceFilterStartDate, value?.Date))
+            if (SetProperty(
+                ref _invoiceFilterStartDate,
+                value.HasValue ? VietnameseCalendar.FromCalendarDate(value.Value) : null))
             {
                 OnPropertyChanged(nameof(InvoiceFilterStartDateText));
+                OnPropertyChanged(nameof(InvoiceDateFilterText));
+                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+                OnPropertyChanged(nameof(InvoiceDateCompactText));
+                OnPropertyChanged(nameof(HasInvoiceDateFilter));
                 if (!_dangCapNhatPresetNgay)
                 {
-                    _selectedInvoiceDatePreset = "Tùy chọn";
+                    _selectedInvoiceDatePreset = "Tùy chỉnh";
                     OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
+                    OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
+                    if (InvoiceFilterStartDate.HasValue && InvoiceFilterEndDate.HasValue)
+                    {
+                        InvoicePage = 1;
+                        _ = SearchInvoicesAsync(giuTrang: true);
+                    }
                 }
             }
         }
@@ -95,13 +147,25 @@ public sealed partial class MainWindowViewModel
         get => _invoiceFilterEndDate;
         set
         {
-            if (SetProperty(ref _invoiceFilterEndDate, value?.Date))
+            if (SetProperty(
+                ref _invoiceFilterEndDate,
+                value.HasValue ? VietnameseCalendar.FromCalendarDate(value.Value) : null))
             {
                 OnPropertyChanged(nameof(InvoiceFilterEndDateText));
+                OnPropertyChanged(nameof(InvoiceDateFilterText));
+                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+                OnPropertyChanged(nameof(InvoiceDateCompactText));
+                OnPropertyChanged(nameof(HasInvoiceDateFilter));
                 if (!_dangCapNhatPresetNgay)
                 {
-                    _selectedInvoiceDatePreset = "Tùy chọn";
+                    _selectedInvoiceDatePreset = "Tùy chỉnh";
                     OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
+                    OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
+                    if (InvoiceFilterStartDate.HasValue && InvoiceFilterEndDate.HasValue)
+                    {
+                        InvoicePage = 1;
+                        _ = SearchInvoicesAsync(giuTrang: true);
+                    }
                 }
             }
         }
@@ -112,6 +176,111 @@ public sealed partial class MainWindowViewModel
 
     public string InvoiceFilterEndDateText =>
         InvoiceFilterEndDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "Đến ngày";
+
+    public bool IsInvoiceCustomDatePreset => SelectedInvoiceDatePreset == "Tùy chỉnh";
+    public bool HasInvoiceDateFilter => InvoiceFilterStartDate.HasValue || InvoiceFilterEndDate.HasValue;
+
+    private static DateTimeOffset NgayVietNamHomNay() => VietnameseCalendar.Today();
+
+    [RelayCommand]
+    private async Task ApDungKhoangNgayHoaDonAsync()
+    {
+        if (!InvoiceCustomStartDateDraft.HasValue || !InvoiceCustomEndDateDraft.HasValue)
+        {
+            StatusMessage = "Vui lòng chọn cả ngày bắt đầu và ngày kết thúc.";
+            return;
+        }
+
+        if (InvoiceCustomStartDateDraft.Value.Date > InvoiceCustomEndDateDraft.Value.Date)
+        {
+            StatusMessage = "Ngày bắt đầu không được lớn hơn ngày kết thúc.";
+            return;
+        }
+
+        _dangCapNhatPresetNgay = true;
+        InvoiceFilterStartDate = VietnameseCalendar.FromCalendarDate(InvoiceCustomStartDateDraft.Value);
+        InvoiceFilterEndDate = VietnameseCalendar.FromCalendarDate(InvoiceCustomEndDateDraft.Value);
+        _selectedInvoiceDatePreset = "Tùy chỉnh";
+        _dangCapNhatPresetNgay = false;
+        OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
+        OnPropertyChanged(nameof(InvoiceDateFilterText));
+        OnPropertyChanged(nameof(InvoiceDateCompactText));
+
+        _dangSuaKhoangNgayTuyChon = false;
+        IsInvoiceCustomDatePickerOpen = false;
+        HuyTimHoaDonDebounce();
+        InvoicePage = 1;
+        await SearchInvoicesAsync(giuTrang: true);
+    }
+
+    [RelayCommand]
+    private async Task DatLaiKhoangNgayHoaDonAsync()
+    {
+        _dangCapNhatPresetNgay = true;
+        InvoiceFilterStartDate = null;
+        InvoiceFilterEndDate = null;
+        _selectedInvoiceDatePreset = "Mọi ngày";
+        _dangCapNhatPresetNgay = false;
+        OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
+        OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
+        OnPropertyChanged(nameof(InvoiceDateFilterText));
+        OnPropertyChanged(nameof(InvoiceDateCompactText));
+
+        _dangSuaKhoangNgayTuyChon = false;
+        IsInvoiceCustomDatePickerOpen = false;
+        HuyTimHoaDonDebounce();
+        InvoicePage = 1;
+        await SearchInvoicesAsync(giuTrang: true);
+    }
+
+    [RelayCommand]
+    private void HuyChonKhoangNgayHoaDon()
+    {
+        if (!_dangSuaKhoangNgayTuyChon)
+        {
+            _dangHuyChonNgayTuyChon = true;
+            SelectedInvoiceDatePreset = _invoiceDatePresetBeforeCustom;
+            _dangHuyChonNgayTuyChon = false;
+        }
+
+        _dangSuaKhoangNgayTuyChon = false;
+        IsInvoiceCustomDatePickerOpen = false;
+    }
+
+    [RelayCommand]
+    private void MoChonKhoangNgayHoaDon()
+    {
+        if (!IsInvoiceCustomDatePreset)
+            return;
+
+        InvoiceCustomStartDateDraft = InvoiceFilterStartDate;
+        InvoiceCustomEndDateDraft = InvoiceFilterEndDate;
+        _dangSuaKhoangNgayTuyChon = true;
+        IsInvoiceCustomDatePickerOpen = true;
+    }
+
+    public string InvoiceDateFilterText
+    {
+        get
+        {
+            if (IsInvoiceCustomDatePreset
+                && (InvoiceFilterStartDate is null || InvoiceFilterEndDate is null))
+                return "Khoảng thời gian tùy chỉnh chưa đầy đủ";
+
+            if (InvoiceFilterStartDate is null && InvoiceFilterEndDate is null)
+                return "Khoảng thời gian: Mọi ngày";
+
+            var start = InvoiceFilterStartDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "không giới hạn";
+            var end = InvoiceFilterEndDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "không giới hạn";
+            return $"Khoảng thời gian đang lọc: {start} – {end}";
+        }
+    }
+
+    [ObservableProperty]
+    private string invoiceFilterMinTotal = "";
+
+    [ObservableProperty]
+    private string invoiceFilterMaxTotal = "";
 
     // --- 2. BỘ LỌC TRẠNG THÁI THANH TOÁN & TRẠNG THÁI HÓA ĐƠN ---
     public IReadOnlyList<string> InvoicePaymentStatusOptions { get; } =
@@ -132,6 +301,10 @@ public sealed partial class MainWindowViewModel
             if (SetProperty(ref _selectedInvoicePaymentStatus, value))
             {
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+                OnPropertyChanged(nameof(IsInvoicePaymentAll));
+                OnPropertyChanged(nameof(IsInvoicePaymentPaid));
+                OnPropertyChanged(nameof(IsInvoicePaymentUnpaid));
+                OnPropertyChanged(nameof(IsInvoicePaymentPartial));
             }
         }
     }
@@ -140,10 +313,14 @@ public sealed partial class MainWindowViewModel
     [
         "Tất cả",
         "Hoàn thành",
+<<<<<<< HEAD
         "Chưa thanh toán",
         "Thanh toán một phần",
         "Đã hủy",
         "Tổng hợp"
+=======
+        "Đã hủy"
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
     ];
 
     public string SelectedInvoiceStatus
@@ -154,6 +331,7 @@ public sealed partial class MainWindowViewModel
             if (SetProperty(ref _selectedInvoiceStatus, value))
             {
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+                CapNhatInvoiceActiveFilterChips();
             }
         }
     }
@@ -170,12 +348,154 @@ public sealed partial class MainWindowViewModel
             if (SetProperty(ref _selectedInvoiceCustomer, value))
             {
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+<<<<<<< HEAD
                 CapNhatInvoiceCustomerFilterOptions();
+=======
+                CapNhatInvoiceActiveFilterChips();
+>>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
             }
         }
     }
 
     public ObservableCollection<HoaDonNhanVienFilterOption> InvoiceEmployeeOptions { get; } = [];
+    public ObservableCollection<InvoiceFilterChip> InvoiceActiveFilterChips { get; } = [];
+    public bool HasAppliedInvoiceFilters => InvoiceActiveFilterChips.Count > 0;
+    public string InvoiceAdvancedFilterCountText =>
+        HasInvoiceAdvancedFilters
+            ? $"Bộ lọc khác ({InvoiceActiveFilterChips.Count})"
+            : "Bộ lọc khác";
+
+    public string InvoiceDateCompactText
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(SelectedInvoiceDatePreset)
+                || SelectedInvoiceDatePreset == "Mọi ngày")
+                return "📅 Mọi ngày";
+
+            var start = InvoiceFilterStartDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "…";
+            var end = InvoiceFilterEndDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "…";
+            return InvoiceFilterStartDate == InvoiceFilterEndDate
+                ? $"📅 {start} | {SelectedInvoiceDatePreset}"
+                : $"📅 {start} – {end} | {SelectedInvoiceDatePreset}";
+        }
+    }
+
+    public bool HasInvoiceAdvancedFilters =>
+        !string.IsNullOrWhiteSpace(InvoiceFilterMinTotal)
+        || !string.IsNullOrWhiteSpace(InvoiceFilterMaxTotal)
+        || SelectedInvoiceStatus != "Tất cả"
+        || SelectedInvoiceCustomer?.Id is not null
+        || SelectedInvoiceCustomer?.IsWalkIn == true
+        || SelectedInvoiceEmployee?.Id is not null;
+
+    public bool IsInvoicePaymentAll => SelectedInvoicePaymentStatus == "Tất cả";
+    public bool IsInvoicePaymentPaid => SelectedInvoicePaymentStatus == "Đã thanh toán";
+    public bool IsInvoicePaymentUnpaid => SelectedInvoicePaymentStatus == "Chưa thanh toán";
+    public bool IsInvoicePaymentPartial => SelectedInvoicePaymentStatus == "Thanh toán một phần";
+
+    [RelayCommand]
+    private async Task LocThanhToanHoaDonAsync(string? status)
+    {
+        SelectedInvoicePaymentStatus = string.IsNullOrWhiteSpace(status) ? "Tất cả" : status;
+        await SearchInvoicesAsync();
+    }
+
+    [RelayCommand]
+    private async Task ApDungBoLocHoaDonAsync()
+    {
+        IsInvoiceAdvancedFiltersExpanded = false;
+        await SearchInvoicesAsync();
+    }
+
+    [RelayCommand]
+    private void DongBoLocHoaDon()
+        => IsInvoiceAdvancedFiltersExpanded = false;
+
+    [RelayCommand]
+    private async Task XoaNoiDungTimHoaDonAsync()
+    {
+        InvoiceSearch = "";
+        HuyTimHoaDonDebounce();
+        await SearchInvoicesAsync();
+    }
+
+    [RelayCommand]
+    private void ToggleBoLocHoaDon()
+    {
+        IsInvoiceAdvancedFiltersExpanded = !IsInvoiceAdvancedFiltersExpanded;
+    }
+
+    [RelayCommand]
+    private async Task XoaChipLocHoaDonAsync(string? key)
+    {
+        switch (key)
+        {
+            case "search":
+                InvoiceSearch = "";
+                HuyTimHoaDonDebounce();
+                break;
+            case "date":
+                _dangCapNhatPresetNgay = true;
+                _selectedInvoiceDatePreset = "Mọi ngày";
+                InvoiceFilterStartDate = null;
+                InvoiceFilterEndDate = null;
+                _dangCapNhatPresetNgay = false;
+                OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
+                OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
+                break;
+            case "invoice-status":
+                SelectedInvoiceStatus = "Tất cả";
+                break;
+            case "payment-status":
+                SelectedInvoicePaymentStatus = "Tất cả";
+                break;
+            case "customer":
+                SelectedInvoiceCustomer = InvoiceCustomerOptions.FirstOrDefault();
+                break;
+            case "employee":
+                SelectedInvoiceEmployee = InvoiceEmployeeOptions.FirstOrDefault();
+                break;
+            case "min-total":
+                InvoiceFilterMinTotal = "";
+                break;
+            case "max-total":
+                InvoiceFilterMaxTotal = "";
+                break;
+            default:
+                return;
+        }
+
+        await SearchInvoicesAsync();
+    }
+
+    private void CapNhatInvoiceActiveFilterChips()
+    {
+        InvoiceActiveFilterChips.Clear();
+        if (SelectedInvoiceStatus != "Tất cả")
+            InvoiceActiveFilterChips.Add(new("invoice-status", $"Hóa đơn: {SelectedInvoiceStatus}"));
+
+        if (SelectedInvoiceCustomer is { IsWalkIn: true })
+            InvoiceActiveFilterChips.Add(new("customer", "Khách hàng: Khách lẻ"));
+        else if (SelectedInvoiceCustomer?.Id is not null)
+            InvoiceActiveFilterChips.Add(new("customer", $"Khách hàng: {SelectedInvoiceCustomer.DisplayText}"));
+
+        if (SelectedInvoiceEmployee?.Id is not null)
+            InvoiceActiveFilterChips.Add(new("employee", $"Nhân viên: {SelectedInvoiceEmployee.DisplayText}"));
+        if (!string.IsNullOrWhiteSpace(InvoiceFilterMinTotal))
+            InvoiceActiveFilterChips.Add(new("min-total", $"Từ: {InvoiceFilterMinTotal.Trim()} đ"));
+        if (!string.IsNullOrWhiteSpace(InvoiceFilterMaxTotal))
+            InvoiceActiveFilterChips.Add(new("max-total", $"Đến: {InvoiceFilterMaxTotal.Trim()} đ"));
+
+        OnPropertyChanged(nameof(HasInvoiceAdvancedFilters));
+        OnPropertyChanged(nameof(HasAppliedInvoiceFilters));
+        OnPropertyChanged(nameof(InvoiceAdvancedFilterCountText));
+        OnPropertyChanged(nameof(InvoiceDateCompactText));
+        OnPropertyChanged(nameof(IsInvoicePaymentAll));
+        OnPropertyChanged(nameof(IsInvoicePaymentPaid));
+        OnPropertyChanged(nameof(IsInvoicePaymentUnpaid));
+        OnPropertyChanged(nameof(IsInvoicePaymentPartial));
+    }
 
     public HoaDonNhanVienFilterOption? SelectedInvoiceEmployee
     {
@@ -185,6 +505,7 @@ public sealed partial class MainWindowViewModel
             if (SetProperty(ref _selectedInvoiceEmployee, value))
             {
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+                CapNhatInvoiceActiveFilterChips();
             }
         }
     }
@@ -205,6 +526,10 @@ public sealed partial class MainWindowViewModel
                 var end = InvoiceFilterEndDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "…";
                 filters.Add($"Thời gian: {start} – {end}");
             }
+            if (!string.IsNullOrWhiteSpace(InvoiceFilterMinTotal))
+                filters.Add($"Từ tiền: {InvoiceFilterMinTotal.Trim()}");
+            if (!string.IsNullOrWhiteSpace(InvoiceFilterMaxTotal))
+                filters.Add($"Đến tiền: {InvoiceFilterMaxTotal.Trim()}");
             if (SelectedInvoiceStatus != "Tất cả")
                 filters.Add($"Hóa đơn: {SelectedInvoiceStatus}");
             if (SelectedInvoicePaymentStatus != "Tất cả")
@@ -228,6 +553,52 @@ public sealed partial class MainWindowViewModel
     partial void OnInvoiceSearchChanged(string value)
     {
         OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+        DatLichTimHoaDon();
+    }
+
+    partial void OnInvoiceFilterMinTotalChanged(string value)
+    {
+        OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+        CapNhatInvoiceActiveFilterChips();
+    }
+
+    partial void OnInvoiceFilterMaxTotalChanged(string value)
+    {
+        OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+        CapNhatInvoiceActiveFilterChips();
+    }
+
+    private void DatLichTimHoaDon()
+    {
+        var next = new CancellationTokenSource();
+        var previous = Interlocked.Exchange(ref _invoiceSearchDebounce, next);
+        previous?.Cancel();
+        _ = TimHoaDonSauDebounceAsync(next);
+    }
+
+    private async Task TimHoaDonSauDebounceAsync(CancellationTokenSource source)
+    {
+        try
+        {
+            await Task.Delay(350, source.Token);
+            if (!source.IsCancellationRequested)
+            {
+                if (IsInvoiceCustomDatePreset
+                    && (!InvoiceFilterStartDate.HasValue || !InvoiceFilterEndDate.HasValue))
+                    return;
+
+                InvoicePage = 1;
+                await SearchInvoicesAsync(giuTrang: true);
+            }
+        }
+        catch (OperationCanceledException) when (source.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            Interlocked.CompareExchange(ref _invoiceSearchDebounce, null, source);
+            source.Dispose();
+        }
     }
 
     partial void OnInvoiceCustomerSearchChanged(string value) =>
@@ -443,51 +814,52 @@ public sealed partial class MainWindowViewModel
     // --- 6. XỬ LÝ PRESET NGÀY ---
     public void ApDungPresetNgayHoaDon(string preset, bool tuDongTim = true)
     {
-        var today = DateTime.Today;
+        var today = NgayVietNamHomNay().Date;
         _dangCapNhatPresetNgay = true;
         try
         {
             switch (preset)
             {
                 case "Hôm nay":
-                    InvoiceFilterStartDate = new DateTimeOffset(today);
-                    InvoiceFilterEndDate = new DateTimeOffset(today);
+                    InvoiceFilterStartDate = VietnameseCalendar.FromDateTime(today);
+                    InvoiceFilterEndDate = VietnameseCalendar.FromDateTime(today);
                     break;
 
                 case "Hôm qua":
                     var yesterday = today.AddDays(-1);
-                    InvoiceFilterStartDate = new DateTimeOffset(yesterday);
-                    InvoiceFilterEndDate = new DateTimeOffset(yesterday);
+                    InvoiceFilterStartDate = VietnameseCalendar.FromDateTime(yesterday);
+                    InvoiceFilterEndDate = VietnameseCalendar.FromDateTime(yesterday);
                     break;
 
                 case "7 ngày qua":
-                    InvoiceFilterStartDate = new DateTimeOffset(today.AddDays(-6));
-                    InvoiceFilterEndDate = new DateTimeOffset(today);
+                case "7 ngày gần nhất":
+                    InvoiceFilterStartDate = VietnameseCalendar.FromDateTime(today.AddDays(-6));
+                    InvoiceFilterEndDate = VietnameseCalendar.FromDateTime(today);
                     break;
 
                 case "30 ngày qua":
-                    InvoiceFilterStartDate = new DateTimeOffset(today.AddDays(-29));
-                    InvoiceFilterEndDate = new DateTimeOffset(today);
+                    InvoiceFilterStartDate = VietnameseCalendar.FromDateTime(today.AddDays(-29));
+                    InvoiceFilterEndDate = VietnameseCalendar.FromDateTime(today);
                     break;
 
                 case "Tuần này":
                     var firstDayOfWeek = today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
-                    InvoiceFilterStartDate = new DateTimeOffset(firstDayOfWeek);
-                    InvoiceFilterEndDate = new DateTimeOffset(firstDayOfWeek.AddDays(6));
+                    InvoiceFilterStartDate = VietnameseCalendar.FromDateTime(firstDayOfWeek);
+                    InvoiceFilterEndDate = VietnameseCalendar.FromDateTime(firstDayOfWeek.AddDays(6));
                     break;
 
                 case "Tháng này":
                     var firstThisMonth = new DateTime(today.Year, today.Month, 1);
                     var lastThisMonth = firstThisMonth.AddMonths(1).AddDays(-1);
-                    InvoiceFilterStartDate = new DateTimeOffset(firstThisMonth);
-                    InvoiceFilterEndDate = new DateTimeOffset(lastThisMonth);
+                    InvoiceFilterStartDate = VietnameseCalendar.FromDateTime(firstThisMonth);
+                    InvoiceFilterEndDate = VietnameseCalendar.FromDateTime(lastThisMonth);
                     break;
 
                 case "Tháng trước":
                     var firstLastMonth = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
                     var lastLastMonth = new DateTime(today.Year, today.Month, 1).AddDays(-1);
-                    InvoiceFilterStartDate = new DateTimeOffset(firstLastMonth);
-                    InvoiceFilterEndDate = new DateTimeOffset(lastLastMonth);
+                    InvoiceFilterStartDate = VietnameseCalendar.FromDateTime(firstLastMonth);
+                    InvoiceFilterEndDate = VietnameseCalendar.FromDateTime(lastLastMonth);
                     break;
 
                 case "Quý này":
@@ -495,15 +867,21 @@ public sealed partial class MainWindowViewModel
                     int firstMonthOfQ = (q - 1) * 3 + 1;
                     var firstDayQ = new DateTime(today.Year, firstMonthOfQ, 1);
                     var lastDayQ = firstDayQ.AddMonths(3).AddDays(-1);
-                    InvoiceFilterStartDate = new DateTimeOffset(firstDayQ);
-                    InvoiceFilterEndDate = new DateTimeOffset(lastDayQ);
+                    InvoiceFilterStartDate = VietnameseCalendar.FromDateTime(firstDayQ);
+                    InvoiceFilterEndDate = VietnameseCalendar.FromDateTime(lastDayQ);
                     break;
 
                 case "Năm nay":
-                    InvoiceFilterStartDate = new DateTimeOffset(new DateTime(today.Year, 1, 1));
-                    InvoiceFilterEndDate = new DateTimeOffset(new DateTime(today.Year, 12, 31));
+                    InvoiceFilterStartDate = VietnameseCalendar.FromDateTime(new DateTime(today.Year, 1, 1));
+                    InvoiceFilterEndDate = VietnameseCalendar.FromDateTime(new DateTime(today.Year, 12, 31));
                     break;
 
+                case "Mọi ngày":
+                    InvoiceFilterStartDate = null;
+                    InvoiceFilterEndDate = null;
+                    break;
+
+                case "Tùy chỉnh":
                 case "Tùy chọn":
                 default:
                     break;
@@ -511,6 +889,7 @@ public sealed partial class MainWindowViewModel
 
             _selectedInvoiceDatePreset = preset;
             OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
+            OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
         }
         finally
         {
@@ -519,11 +898,13 @@ public sealed partial class MainWindowViewModel
 
         if (tuDongTim)
         {
+            HuyTimHoaDonDebounce();
             InvoicePage = 1;
             _ = SearchInvoicesAsync(giuTrang: true);
         }
 
         OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+        OnPropertyChanged(nameof(InvoiceDateFilterText));
     }
 
     [RelayCommand]
@@ -543,8 +924,14 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     public async Task SearchInvoicesAsync()
     {
+        HuyTimHoaDonDebounce();
         InvoicePage = 1;
         await SearchInvoicesAsync(giuTrang: true);
+    }
+
+    private void HuyTimHoaDonDebounce()
+    {
+        Interlocked.Exchange(ref _invoiceSearchDebounce, null)?.Cancel();
     }
 
     public async Task SearchInvoicesAsync(bool giuTrang)
@@ -560,6 +947,19 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
+        if (IsInvoiceCustomDatePreset
+            && (!InvoiceFilterStartDate.HasValue || !InvoiceFilterEndDate.HasValue))
+        {
+            StatusMessage = "Vui lòng chọn cả ngày bắt đầu và ngày kết thúc cho khoảng tùy chỉnh.";
+            await ShowMessageAsync(
+                "Thiếu khoảng thời gian",
+                "Khi chọn Tùy chỉnh, vui lòng nhập cả ngày bắt đầu và ngày kết thúc.");
+            return;
+        }
+
+        if (!TryGetInvoiceTotalRange(out var tongTienTu, out var tongTienDen))
+            return;
+
         if (!giuTrang)
         {
             InvoicePage = 1;
@@ -573,8 +973,12 @@ public sealed partial class MainWindowViewModel
         {
             HoaDons.Clear();
 
-            var tuNgay = InvoiceFilterStartDate?.Date;
-            var denNgay = InvoiceFilterEndDate?.Date;
+            var tuNgay = InvoiceFilterStartDate.HasValue
+                ? VietnameseCalendar.ToDatabaseWallClockDate(InvoiceFilterStartDate.Value)
+                : (DateTime?)null;
+            var denNgay = InvoiceFilterEndDate.HasValue
+                ? VietnameseCalendar.ToDatabaseWallClockDate(InvoiceFilterEndDate.Value)
+                : (DateTime?)null;
 
             var ttThanhToan = SelectedInvoicePaymentStatus switch
             {
@@ -610,7 +1014,9 @@ public sealed partial class MainWindowViewModel
                 nhanVienId: nhanVienId,
                 khachLe: khachLe,
                 page: InvoicePage,
-                pageSize: InvoicePageSize);
+                pageSize: InvoicePageSize,
+                tongTienTu: tongTienTu,
+                tongTienDen: tongTienDen);
 
             if (searchVersion != _invoiceSearchVersion)
                 return;
@@ -631,7 +1037,9 @@ public sealed partial class MainWindowViewModel
                     nhanVienId: nhanVienId,
                     khachLe: khachLe,
                     page: 1,
-                    pageSize: InvoicePageSize);
+                    pageSize: InvoicePageSize,
+                    tongTienTu: tongTienTu,
+                    tongTienDen: tongTienDen);
                 InvoiceTotalCount = result.TongSoLuong;
             }
 
@@ -649,6 +1057,7 @@ public sealed partial class MainWindowViewModel
             OnPropertyChanged(nameof(InvoiceTongSoLuongText));
             OnPropertyChanged(nameof(InvoiceSummaryText));
             CapNhatPhanTrangHoaDon();
+            CapNhatInvoiceActiveFilterChips();
 
             StatusMessage = $"Tìm thấy {result.TongSoLuong:N0} hóa đơn phù hợp.";
         }
@@ -682,17 +1091,73 @@ public sealed partial class MainWindowViewModel
         }
     }
 
+    private bool TryGetInvoiceTotalRange(out decimal? minimum, out decimal? maximum)
+    {
+        minimum = null;
+        maximum = null;
+        var vi = CultureInfo.GetCultureInfo("vi-VN");
+
+        if (!string.IsNullOrWhiteSpace(InvoiceFilterMinTotal))
+        {
+            if (!decimal.TryParse(InvoiceFilterMinTotal, NumberStyles.Number, vi, out var value)
+                && !decimal.TryParse(InvoiceFilterMinTotal, NumberStyles.Number, CultureInfo.InvariantCulture, out value))
+            {
+                StatusMessage = "Giá trị “Từ tiền” không hợp lệ.";
+                return false;
+            }
+            if (value < 0)
+            {
+                StatusMessage = "Giá trị lọc tiền không được âm.";
+                return false;
+            }
+            minimum = value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(InvoiceFilterMaxTotal))
+        {
+            if (!decimal.TryParse(InvoiceFilterMaxTotal, NumberStyles.Number, vi, out var value)
+                && !decimal.TryParse(InvoiceFilterMaxTotal, NumberStyles.Number, CultureInfo.InvariantCulture, out value))
+            {
+                StatusMessage = "Giá trị “Đến tiền” không hợp lệ.";
+                return false;
+            }
+            if (value < 0)
+            {
+                StatusMessage = "Giá trị lọc tiền không được âm.";
+                return false;
+            }
+            maximum = value;
+        }
+
+        if (minimum.HasValue && maximum.HasValue && minimum.Value > maximum.Value)
+        {
+            StatusMessage = "Giá trị “Từ tiền” không được lớn hơn “Đến tiền”.";
+            return false;
+        }
+
+        return true;
+    }
+
     // --- 8. ĐẶT LẠI TOÀN BỘ BỘ LỌC VỀ MẶC ĐỊNH ---
     [RelayCommand]
     public async Task ClearInvoiceSearchAsync()
     {
+        IsInvoiceAdvancedFiltersExpanded = false;
+        IsInvoiceCustomDatePickerOpen = false;
+        HuyTimHoaDonDebounce();
         InvoiceSearch = "";
+        HuyTimHoaDonDebounce();
         _dangCapNhatPresetNgay = true;
-        _selectedInvoiceDatePreset = "Tùy chọn";
+        _selectedInvoiceDatePreset = "Mọi ngày";
         InvoiceFilterStartDate = null;
         InvoiceFilterEndDate = null;
+        InvoiceCustomStartDateDraft = null;
+        InvoiceCustomEndDateDraft = null;
         _dangCapNhatPresetNgay = false;
         OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
+        OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
+        InvoiceFilterMinTotal = "";
+        InvoiceFilterMaxTotal = "";
 
         _selectedInvoicePaymentStatus = "Tất cả";
         OnPropertyChanged(nameof(SelectedInvoicePaymentStatus));
@@ -709,6 +1174,7 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(SelectedInvoiceEmployee));
 
         OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+        CapNhatInvoiceActiveFilterChips();
         InvoicePage = 1;
 
         await SearchInvoicesAsync(giuTrang: true);

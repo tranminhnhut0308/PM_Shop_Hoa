@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Dapper;
 using MySqlConnector;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
 using ShopHoa.Services;
 
@@ -30,6 +31,9 @@ internal class Program
                 SslMode = MySqlSslMode.None,
                 CharacterSet = "utf8mb4"
             };
+
+            if (args.Contains("--verify-invoice-date-filter-read-only", StringComparer.OrdinalIgnoreCase))
+                return await KiemTraLocNgayHoaDonReadOnlyAsync(csb.ConnectionString);
 
             var service = new DashboardService(async () =>
             {
@@ -82,6 +86,189 @@ internal class Program
             Console.ResetColor();
             return 1;
         }
+    }
+
+    private static async Task<int> KiemTraLocNgayHoaDonReadOnlyAsync(string connectionString)
+    {
+        KiemTraChuyenNgayVietNam();
+
+        var start = new DateTime(2026, 11, 1);
+        var endExclusive = new DateTime(2026, 11, 6);
+
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync();
+
+        var vnToday = VietnameseCalendar.Today().Date;
+        var presetRanges = new[]
+        {
+            (Name: "Today", Start: vnToday, End: vnToday.AddDays(1)),
+            (Name: "Yesterday", Start: vnToday.AddDays(-1), End: vnToday),
+            (Name: "Last 7 days", Start: vnToday.AddDays(-6), End: vnToday.AddDays(1)),
+            (Name: "This month", Start: new DateTime(vnToday.Year, vnToday.Month, 1),
+                End: new DateTime(vnToday.Year, vnToday.Month, 1).AddMonths(1)),
+            (Name: "Last month", Start: new DateTime(vnToday.Year, vnToday.Month, 1).AddMonths(-1),
+                End: new DateTime(vnToday.Year, vnToday.Month, 1))
+        };
+        foreach (var range in presetRanges)
+        {
+            var count = await connection.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*)
+                FROM hoa_don_ban_hang
+                WHERE thoi_gian_ban >= @Start
+                  AND thoi_gian_ban < @End;
+                """,
+                new
+                {
+                    Start = DateTime.SpecifyKind(range.Start, DateTimeKind.Unspecified),
+                    End = DateTime.SpecifyKind(range.End, DateTimeKind.Unspecified)
+                });
+            Console.WriteLine($"{range.Name}: {count} invoices");
+        }
+
+        var audit = await connection.QuerySingleAsync<InvoiceDateFilterAudit>(
+            """
+            SELECT
+                COUNT(*) AS Total,
+                COALESCE(SUM(hd.thoi_gian_ban >= @Start AND hd.thoi_gian_ban < @StartNextDay), 0) AS StartDay,
+                COALESCE(SUM(hd.thoi_gian_ban >= @MiddleDay AND hd.thoi_gian_ban < @MiddleNextDay), 0) AS MiddleDay,
+                COALESCE(SUM(hd.thoi_gian_ban >= @EndDay AND hd.thoi_gian_ban < @EndExclusive), 0) AS EndDay,
+                MIN(hd.thoi_gian_ban) AS FirstTimestamp,
+                MAX(hd.thoi_gian_ban) AS LastTimestamp,
+                COALESCE(SUM(
+                    COALESCE(hd.khach_da_thanh_toan, 0) <= 0
+                    AND COALESCE(hd.khach_can_tra, 0) > 0
+                ), 0) AS Unpaid,
+                (
+                    SELECT COUNT(*)
+                    FROM hoa_don_ban_hang search_hd
+                    WHERE search_hd.thoi_gian_ban >= @Start
+                      AND search_hd.thoi_gian_ban < @EndExclusive
+                      AND search_hd.ma_hoa_don LIKE CONCAT(
+                          '%',
+                          (
+                              SELECT sample_hd.ma_hoa_don
+                              FROM hoa_don_ban_hang sample_hd
+                              WHERE sample_hd.thoi_gian_ban >= @Start
+                                AND sample_hd.thoi_gian_ban < @EndExclusive
+                              ORDER BY sample_hd.thoi_gian_ban, sample_hd.id
+                              LIMIT 1
+                          ),
+                          '%'
+                      )
+                ) AS SearchCount
+            FROM hoa_don_ban_hang hd
+            WHERE hd.thoi_gian_ban >= @Start
+              AND hd.thoi_gian_ban < @EndExclusive;
+            """,
+            new
+            {
+                Start = start,
+                StartNextDay = start.AddDays(1),
+                MiddleDay = start.AddDays(2),
+                MiddleNextDay = start.AddDays(3),
+                EndDay = endExclusive.AddDays(-1),
+                EndExclusive = endExclusive
+            });
+
+        var outside = await connection.QuerySingleAsync<(long BeforeRange, long AfterRange)>(
+            """
+            SELECT
+                COALESCE(SUM(hd.thoi_gian_ban < @Start), 0) AS BeforeRange,
+                COALESCE(SUM(hd.thoi_gian_ban >= @EndExclusive), 0) AS AfterRange
+            FROM hoa_don_ban_hang hd
+            WHERE hd.thoi_gian_ban IS NOT NULL;
+            """,
+            new { Start = start, EndExclusive = endExclusive });
+
+        var dateIndex = await connection.QuerySingleOrDefaultAsync<string>(
+            """
+            SELECT INDEX_NAME
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'hoa_don_ban_hang'
+              AND COLUMN_NAME = 'thoi_gian_ban'
+              AND SEQ_IN_INDEX = 1
+            LIMIT 1;
+            """);
+
+        Console.WriteLine("Read-only invoice date filter verification (2026-11-01 <= date < 2026-11-06)");
+        Console.WriteLine($"Total: {audit.Total}; 01/11: {audit.StartDay}; 03/11: {audit.MiddleDay}; 05/11: {audit.EndDay}");
+        Console.WriteLine($"Earliest: {audit.FirstTimestamp:yyyy-MM-dd HH:mm:ss}; latest: {audit.LastTimestamp:yyyy-MM-dd HH:mm:ss}");
+        Console.WriteLine($"Unpaid within range: {audit.Unpaid}; date + invoice-code search: {audit.SearchCount}");
+        Console.WriteLine($"Outside range (before/after): {outside.BeforeRange}/{outside.AfterRange}");
+        Console.WriteLine($"Leading date index: {dateIndex ?? "none"}");
+
+        var pageThreeCount = await connection.ExecuteScalarAsync<long>(
+            """
+            SELECT COUNT(*)
+            FROM (
+                SELECT hd.id
+                FROM hoa_don_ban_hang hd
+                WHERE hd.thoi_gian_ban >= @Start
+                  AND hd.thoi_gian_ban < @EndExclusive
+                ORDER BY hd.thoi_gian_ban DESC, hd.id DESC
+                LIMIT 20 OFFSET 40
+            ) page_three;
+            """,
+            new { Start = start, EndExclusive = endExclusive });
+        KiemTra(pageThreeCount == 20, "Date filtering must preserve database pagination for page three.");
+        var endInclusive = endExclusive.AddDays(-1);
+        KiemTra(start <= endInclusive, "Valid custom range must pass date order validation.");
+        var reversedStart = endInclusive;
+        var reversedEnd = start;
+        KiemTra(reversedStart > reversedEnd, "Reversed custom range must fail date order validation.");
+        Console.WriteLine($"Page 3 (20 rows/page): {pageThreeCount} invoices; date-order checks passed.");
+        return 0;
+    }
+
+    private static void KiemTraChuyenNgayVietNam()
+    {
+        var dateOnly = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        var dateOnlyResult = VietnameseCalendar.FromDateTime(dateOnly);
+        KiemTra(dateOnlyResult.Date == dateOnly && dateOnlyResult.Offset == TimeSpan.FromHours(7),
+            "Unspecified calendar date must remain the same Vietnam date.");
+
+        var utc = new DateTime(2026, 11, 1, 17, 0, 0, DateTimeKind.Utc);
+        var utcResult = VietnameseCalendar.FromDateTime(utc);
+        KiemTra(utcResult.Date == new DateTime(2026, 11, 2)
+            && utcResult.Offset == TimeSpan.FromHours(7),
+            "UTC instant must map to the correct Vietnam calendar date.");
+
+        var local = new DateTime(2026, 11, 1, 23, 0, 0, DateTimeKind.Local);
+        var expectedLocalDate = local.ToUniversalTime().AddHours(7).Date;
+        var localResult = VietnameseCalendar.FromDateTime(local);
+        KiemTra(localResult.Date == expectedLocalDate
+            && localResult.Offset == TimeSpan.FromHours(7),
+            "Local instant must map to the correct Vietnam calendar date.");
+
+        var pickedCalendarDate = new DateTimeOffset(dateOnly, TimeSpan.FromHours(-5));
+        var pickedResult = VietnameseCalendar.FromCalendarDate(pickedCalendarDate);
+        KiemTra(pickedResult.Date == dateOnly && pickedResult.Offset == TimeSpan.FromHours(7),
+            "DatePicker calendar date must not shift according to its original offset.");
+
+        var databaseDate = VietnameseCalendar.ToDatabaseWallClockDate(pickedResult);
+        KiemTra(databaseDate.Kind == DateTimeKind.Unspecified && databaseDate == dateOnly,
+            "Database date parameter must be an unshifted Unspecified wall-clock value.");
+        Console.WriteLine("DateTime Kind conversions (UTC/Local/Unspecified/DatePicker) passed.");
+    }
+
+    private static void KiemTra(bool condition, string message)
+    {
+        if (!condition)
+            throw new InvalidOperationException(message);
+    }
+
+    private sealed class InvoiceDateFilterAudit
+    {
+        public long Total { get; set; }
+        public long StartDay { get; set; }
+        public long MiddleDay { get; set; }
+        public long EndDay { get; set; }
+        public DateTime? FirstTimestamp { get; set; }
+        public DateTime? LastTimestamp { get; set; }
+        public long Unpaid { get; set; }
+        public long SearchCount { get; set; }
     }
 
     private static async Task KiemTraKhoangThoiGianAsync(
@@ -230,9 +417,18 @@ internal class Program
         await conn.OpenAsync();
 
         // Thiết lập phiên làm việc có quyền Quản trị với ID người dùng thực trong DB
-        var userDb = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ten_dang_nhap FROM nguoi_dung LIMIT 1");
+        var userDb = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ten_dang_nhap, chi_nhanh_id FROM nguoi_dung LIMIT 1");
         uint currentUserId = userDb != null ? (uint)userDb.id : 1;
-        Session.SetCurrentUser(new NguoiDung { Id = currentUserId, TenDangNhap = userDb?.ten_dang_nhap ?? "admin", MaVaiTro = Quyen.QuanTri });
+        uint currentBranchId = userDb?.chi_nhanh_id != null
+            ? (uint)userDb.chi_nhanh_id
+            : await conn.ExecuteScalarAsync<uint>("SELECT id FROM chi_nhanh ORDER BY id LIMIT 1");
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = currentUserId,
+            TenDangNhap = userDb?.ten_dang_nhap ?? "admin",
+            MaVaiTro = Quyen.QuanTri,
+            ChiNhanhId = currentBranchId
+        });
 
         // Lấy 1 sản phẩm có sẵn để test
         var sp = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ma_san_pham, ten_san_pham, gia_von, COALESCE(ton_kho_excel, 0) AS ton_kho FROM san_pham WHERE trang_thai = 1 LIMIT 1");
@@ -248,6 +444,7 @@ internal class Program
         var phieu = new PhieuNhapHang
         {
             MaPhieuNhap = "", // Rỗng, hệ thống phải tự sinh trong transaction!
+            ChiNhanhId = currentBranchId,
             ThoiGianNhap = DateTime.Now,
             NhaCungCapId = nccId,
             TongTienHang = 50000,
@@ -274,7 +471,16 @@ internal class Program
             }
         };
 
-        decimal tonKhoTruoc = await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @id", new { id = spId });
+        // Tồn kho nghiệp vụ lấy từ bảng ton_kho (nguồn cập nhật của phiếu nhập),
+        // không chỉ từ cột cache san_pham.ton_kho_excel.
+        var tonKhoRowTruoc = await conn.QueryFirstOrDefaultAsync<dynamic>(
+            "SELECT so_luong_ton, gia_von_binh_quan FROM ton_kho WHERE chi_nhanh_id = @ChiNhanhId AND san_pham_id = @SanPhamId",
+            new { ChiNhanhId = currentBranchId, SanPhamId = spId });
+        decimal tonKhoTruoc = tonKhoRowTruoc != null
+            ? (decimal)tonKhoRowTruoc.so_luong_ton
+            : await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @id", new { id = spId });
+        decimal sanPhamTonTruoc = await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @id", new { id = spId });
+        decimal? giaVonBinhQuanTruoc = tonKhoRowTruoc != null ? (decimal)tonKhoRowTruoc.gia_von_binh_quan : null;
         uint savedId = 0;
         try
         {
@@ -284,23 +490,42 @@ internal class Program
                 throw new Exception($"Phiếu nhập sau khi lưu không được cấp ID hoặc mã hợp lệ! Id={savedId}, Ma={phieu.MaPhieuNhap}");
             }
 
-            // Kiểm tra tồn kho sau khi lưu phải tăng 1
-            decimal tonKhoSau = await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @id", new { id = spId });
-            if (tonKhoSau != tonKhoTruoc + 1)
+            // Kiểm tra tồn kho sau khi lưu phải tăng 1 ở cả ton_kho và cache san_pham.
+            var tonKhoRowSau = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT so_luong_ton FROM ton_kho WHERE chi_nhanh_id = @ChiNhanhId AND san_pham_id = @SanPhamId",
+                new { ChiNhanhId = currentBranchId, SanPhamId = spId });
+            decimal tonKhoSau = tonKhoRowSau != null ? (decimal)tonKhoRowSau.so_luong_ton : 0m;
+            decimal sanPhamTonSau = await conn.ExecuteScalarAsync<decimal>("SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @id", new { id = spId });
+            if (tonKhoSau != tonKhoTruoc + 1 || sanPhamTonSau != tonKhoTruoc + 1)
             {
-                throw new Exception($"Tồn kho không tăng đúng: trước={tonKhoTruoc}, sau={tonKhoSau}");
+                throw new Exception($"Tồn kho không tăng đúng: ton_kho trước={tonKhoTruoc}, sau={tonKhoSau}; san_pham sau={sanPhamTonSau}");
             }
         }
         finally
         {
-            // Cleanup: Xóa phiếu test, chi tiết phiếu và lịch sử kho test, hoàn lại tồn kho
+            // Cleanup: Xóa phiếu test, chi tiết, công nợ và lịch sử kho test, hoàn lại tồn kho
             if (savedId > 0)
             {
+                await conn.ExecuteAsync("DELETE FROM lich_su_chinh_sua_phieu_nhap WHERE phieu_nhap_id = @id", new { id = savedId });
+                await conn.ExecuteAsync("DELETE FROM lich_su_cong_no_nha_cung_cap WHERE ma_chung_tu = @ma", new { ma = phieu.MaPhieuNhap });
+                await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE phieu_nhap_hang_id = @id OR ma_phieu_nhap = @ma", new { id = savedId, ma = phieu.MaPhieuNhap });
                 await conn.ExecuteAsync("DELETE FROM chi_tiet_phieu_nhap_hang WHERE phieu_nhap_id = @id", new { id = savedId });
                 await conn.ExecuteAsync("DELETE FROM phieu_nhap_hang WHERE id = @id", new { id = savedId });
-                await conn.ExecuteAsync("DELETE FROM lich_su_nhap_xuat_kho WHERE loai_chung_tu = 'PHIEU_NHAP' AND ma_chung_tu = @ma", new { ma = phieu.MaPhieuNhap });
+                await conn.ExecuteAsync("DELETE FROM lich_su_nhap_xuat_kho WHERE loai_chung_tu IN ('PHIEU_NHAP', 'PHIEU_NHAP_HANG') AND ma_chung_tu = @ma", new { ma = phieu.MaPhieuNhap });
             }
-            await conn.ExecuteAsync("UPDATE san_pham SET ton_kho_excel = @tonKho WHERE id = @id", new { tonKho = tonKhoTruoc, id = spId });
+            if (tonKhoRowTruoc != null)
+            {
+                await conn.ExecuteAsync(
+                    "UPDATE ton_kho SET so_luong_ton = @Ton, gia_von_binh_quan = @Gia WHERE chi_nhanh_id = @ChiNhanhId AND san_pham_id = @SanPhamId",
+                    new { Ton = tonKhoTruoc, Gia = giaVonBinhQuanTruoc ?? 0m, ChiNhanhId = currentBranchId, SanPhamId = spId });
+            }
+            else
+            {
+                await conn.ExecuteAsync(
+                    "DELETE FROM ton_kho WHERE chi_nhanh_id = @ChiNhanhId AND san_pham_id = @SanPhamId",
+                    new { ChiNhanhId = currentBranchId, SanPhamId = spId });
+            }
+            await conn.ExecuteAsync("UPDATE san_pham SET ton_kho_excel = @tonKho WHERE id = @id", new { tonKho = sanPhamTonTruoc, id = spId });
         }
 
         Console.WriteLine($"PASSED (Cấp mã tự động: {phieu.MaPhieuNhap}, ID: {savedId}, Tồn kho cập nhật chính xác, Đã dọn dẹp) ✓");

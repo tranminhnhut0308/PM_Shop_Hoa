@@ -51,7 +51,7 @@ public partial class HuyPhieuNhapWindow : Window
         if (_detail.DaThanhToan > 0)
         {
             PanelXuLyTienDaChi.IsVisible = true;
-            TxtThongBaoCongNo.Text = $"Phiếu đã thanh toán {_detail.DaThanhToanText}, còn nợ {_detail.ConNoText}. Bạn có thể chọn hoàn tiền về quỹ tiệm hoặc giữ làm khoản trả trước của nhà cung cấp.";
+            TxtThongBaoCongNo.Text = $"Phiếu đã thanh toán {_detail.DaThanhToanText}, còn nợ {_detail.ConNoText}. Bạn có thể hoàn tiền cho nhà cung cấp hoặc giữ khoản này để cấn trừ công nợ sau.";
         }
         else
         {
@@ -134,14 +134,14 @@ public partial class HuyPhieuNhapWindow : Window
 
         try
         {
-            var hoanTienVeQuy = _detail.DaThanhToan > 0 && (RbHoanTienVeQuy.IsChecked == true);
+            var hoanTienChoNhaCungCap = _detail.DaThanhToan > 0 && (RbHoanTienChoNhaCungCap.IsChecked == true);
             var phuongThuc = (CboPhuongThucHoanTien.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "TIEN_MAT";
 
             var yeuCau = new HuyPhieuNhapYeuCau
             {
                 PhieuNhapId = _detail.PhieuNhapId,
                 LyDoHuy = lyDo,
-                HoanTienVeQuy = hoanTienVeQuy,
+                HoanTienChoNhaCungCap = hoanTienChoNhaCungCap,
                 PhuongThucHoanTien = phuongThuc,
                 NguoiThaoTacId = _nguoiThaoTacId,
                 TenNguoiThaoTac = _tenNguoiThaoTac

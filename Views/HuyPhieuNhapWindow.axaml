@@ -173,16 +173,16 @@
 
               <!-- Khi phiếu đã thanh toán DaThanhToan > 0 -->
               <StackPanel x:Name="PanelXuLyTienDaChi" Spacing="8" IsVisible="False">
-                <RadioButton x:Name="RbHoanTienVeQuy"
+                <RadioButton x:Name="RbHoanTienChoNhaCungCap"
                   GroupName="GrpTienDaChi"
                   IsChecked="True"
-                  Content="Hoàn trả tiền về quỹ tiệm (Tự động ghi phiếu thu hoàn tiền vào Sổ quỹ)"
+                  Content="Hoàn tiền cho nhà cung cấp (Tự động ghi phiếu chi vào Sổ quỹ)"
                   FontSize="12.5" />
 
                 <Grid Margin="26,0,0,0"
                   ColumnDefinitions="Auto,200"
                   ColumnSpacing="10">
-                  <TextBlock Text="Hình thức nhận lại tiền:"
+                  <TextBlock Text="Hình thức hoàn tiền:"
                     VerticalAlignment="Center"
                     FontSize="12"
                     Foreground="#475569" />
@@ -198,7 +198,7 @@
 
                 <RadioButton x:Name="RbGiuNoNCC"
                   GroupName="GrpTienDaChi"
-                  Content="Không hoàn tiền ngay — Giữ làm khoản trả trước / cấn trừ công nợ NCC sau"
+                  Content="Không hoàn tiền ngay — Giữ làm khoản trả trước / cấn trừ công nợ NCC ở phiếu nhập sau"
                   FontSize="12.5" />
               </StackPanel>
             </StackPanel>

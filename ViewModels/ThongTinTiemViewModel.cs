@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -75,6 +76,14 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
         new("50", "Rất lớn (50mm)")
     ];
 
+    public IReadOnlyList<LuaChonHoaDon> ViTriKenhOptions { get; } =
+    [
+        new(KenhLienHe.ViTriDau, "Đầu hóa đơn"),
+        new(KenhLienHe.ViTriCuoi, "Cuối hóa đơn")
+    ];
+
+    public ObservableCollection<KenhLienHe> DanhSachKenhLienHe { get; } = [];
+
     // ============================================================
     // TRẠNG THÁI MÀN HÌNH
     // ============================================================
@@ -135,25 +144,26 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
     [ObservableProperty] private string tenTiem = "";
     [ObservableProperty] private string diaChi = "";
     [ObservableProperty] private string soDienThoai = "";
-    [ObservableProperty] private string zalo = "";
-    [ObservableProperty] private string facebook = "";
-    [ObservableProperty] private string email = "";
     [ObservableProperty] private string maSoThue = "";
-    [ObservableProperty] private string website = "";
     [ObservableProperty] private string tenNganHang = "";
     [ObservableProperty] private string soTaiKhoan = "";
     [ObservableProperty] private string chuTaiKhoan = "";
     [ObservableProperty] private string loiCamOn = "";
+    [ObservableProperty] private string tenKenhNhap = "";
+    [ObservableProperty] private string noiDungKenhNhap = "";
+    [ObservableProperty] private LuaChonHoaDon? viTriKenhChon;
+    [ObservableProperty] private bool hienThiKenhNhap = true;
+    [ObservableProperty] private bool dangSuaKenh;
 
     [ObservableProperty] private bool hienThiLogo = true;
     [ObservableProperty] private bool hienThiQr = true;
-    [ObservableProperty] private bool hienThiFacebook = true;
     [ObservableProperty] private bool hienThiNganHang = true;
     [ObservableProperty] private bool hienThiDiaChiKhachHang = true;
 
     [ObservableProperty] private LuaChonHoaDon? khoGiayChon;
     [ObservableProperty] private LuaChonHoaDon? viTriQrChon;
     [ObservableProperty] private LuaChonHoaDon? kichThuocQrChon;
+    private KenhLienHe? _kenhDangSua;
 
     // ============================================================
     // TẢI / LƯU
@@ -197,11 +207,7 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
         TenTiem = info.TenTiem;
         DiaChi = info.DiaChi;
         SoDienThoai = info.SoDienThoai;
-        Zalo = info.Zalo;
-        Facebook = info.Facebook;
-        Email = info.Email;
         MaSoThue = info.MaSoThue;
-        Website = info.Website;
         TenNganHang = info.TenNganHang;
         SoTaiKhoan = info.SoTaiKhoan;
         ChuTaiKhoan = info.ChuTaiKhoan;
@@ -209,7 +215,6 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
 
         HienThiLogo = info.HienThiLogo;
         HienThiQr = info.HienThiQr;
-        HienThiFacebook = info.HienThiFacebook;
         HienThiNganHang = info.HienThiNganHang;
         HienThiDiaChiKhachHang = info.HienThiDiaChiKhachHang;
 
@@ -221,6 +226,127 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
         LogoXemTruoc = info.LogoBitmap;
         DuongDanQr = info.DuongDanQr;
         QrXemTruoc = info.QrBitmap;
+
+        DanhSachKenhLienHe.Clear();
+        foreach (var channel in info.KenhLienHes.OrderBy(x => x.ThuTu))
+            DanhSachKenhLienHe.Add(SaoChepKenh(channel));
+    }
+
+    private static KenhLienHe SaoChepKenh(KenhLienHe channel) => new()
+    {
+        Id = channel.Id,
+        Ten = channel.Ten,
+        NoiDung = channel.NoiDung,
+        HienThi = channel.HienThi,
+        ViTriHienThi = channel.ViTriHienThi,
+        ThuTu = channel.ThuTu
+    };
+
+    [RelayCommand]
+    private void ThemKenh()
+    {
+        if (!DuocPhepChinhSua)
+            return;
+
+        _kenhDangSua = null;
+        TenKenhNhap = "";
+        NoiDungKenhNhap = "";
+        ViTriKenhChon = ChonTheoGiaTri(ViTriKenhOptions, KenhLienHe.ViTriCuoi);
+        HienThiKenhNhap = true;
+        DangSuaKenh = true;
+        ThongBaoLoi = "";
+    }
+
+    [RelayCommand]
+    private void SuaKenh(KenhLienHe? channel)
+    {
+        if (!DuocPhepChinhSua || channel is null)
+            return;
+
+        _kenhDangSua = channel;
+        TenKenhNhap = channel.Ten;
+        NoiDungKenhNhap = channel.NoiDung;
+        ViTriKenhChon = ChonTheoGiaTri(ViTriKenhOptions, channel.ViTriHienThi);
+        HienThiKenhNhap = channel.HienThi;
+        DangSuaKenh = true;
+        ThongBaoLoi = "";
+    }
+
+    [RelayCommand]
+    private void LuuKenh()
+    {
+        var ten = TenKenhNhap.Trim();
+        var noiDung = NoiDungKenhNhap.Trim();
+        if (ten.Length == 0 || noiDung.Length == 0)
+        {
+            ThongBaoLoi = "Vui lòng nhập tên kênh và nội dung liên hệ.";
+            return;
+        }
+
+        if (ten.Length > 100 || noiDung.Length > 500)
+        {
+            ThongBaoLoi = "Tên kênh tối đa 100 ký tự và nội dung tối đa 500 ký tự.";
+            return;
+        }
+
+        if (_kenhDangSua is null)
+        {
+            DanhSachKenhLienHe.Add(new KenhLienHe
+            {
+                Ten = ten,
+                NoiDung = noiDung,
+                HienThi = HienThiKenhNhap,
+                ViTriHienThi = ViTriKenhChon?.GiaTri ?? KenhLienHe.ViTriCuoi
+            });
+        }
+        else
+        {
+            _kenhDangSua.Ten = ten;
+            _kenhDangSua.NoiDung = noiDung;
+            _kenhDangSua.HienThi = HienThiKenhNhap;
+            _kenhDangSua.ViTriHienThi = ViTriKenhChon?.GiaTri ?? KenhLienHe.ViTriCuoi;
+        }
+
+        DangSuaKenh = false;
+        _kenhDangSua = null;
+        ThongBaoLoi = "";
+    }
+
+    [RelayCommand]
+    private void HuySuaKenh()
+    {
+        DangSuaKenh = false;
+        _kenhDangSua = null;
+        ThongBaoLoi = "";
+    }
+
+    [RelayCommand]
+    private void XoaKenh(KenhLienHe? channel)
+    {
+        if (DuocPhepChinhSua && channel is not null)
+            DanhSachKenhLienHe.Remove(channel);
+    }
+
+    [RelayCommand]
+    private void DuaKenhLen(KenhLienHe? channel)
+    {
+        if (!DuocPhepChinhSua || channel is null)
+            return;
+
+        var index = DanhSachKenhLienHe.IndexOf(channel);
+        if (index > 0)
+            DanhSachKenhLienHe.Move(index, index - 1);
+    }
+
+    [RelayCommand]
+    private void DuaKenhXuong(KenhLienHe? channel)
+    {
+        if (!DuocPhepChinhSua || channel is null)
+            return;
+
+        var index = DanhSachKenhLienHe.IndexOf(channel);
+        if (index >= 0 && index < DanhSachKenhLienHe.Count - 1)
+            DanhSachKenhLienHe.Move(index, index + 1);
     }
 
     private static LuaChonHoaDon? ChonTheoGiaTri(
@@ -253,6 +379,12 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
             return;
         }
 
+        if (DangSuaKenh)
+        {
+            ThongBaoLoi = "Hãy lưu hoặc hủy biểu mẫu kênh liên hệ trước khi lưu cấu hình.";
+            return;
+        }
+
         DangLuu = true;
         ThongBaoLoi = "";
 
@@ -273,11 +405,12 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
                 TenTiem = TenTiem,
                 DiaChi = DiaChi,
                 SoDienThoai = SoDienThoai,
-                Zalo = Zalo,
-                Facebook = Facebook,
-                Email = Email,
+                Zalo = "",
+                Facebook = "",
+                Email = "",
                 MaSoThue = MaSoThue,
-                Website = Website,
+                Website = "",
+                KenhLienHes = DanhSachKenhLienHe.Select(SaoChepKenh).ToList(),
                 TenNganHang = TenNganHang,
                 SoTaiKhoan = SoTaiKhoan,
                 ChuTaiKhoan = ChuTaiKhoan,
@@ -286,7 +419,7 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
                 DuongDanQr = duongDanQrDaLuu,
                 HienThiLogo = HienThiLogo,
                 HienThiQr = HienThiQr,
-                HienThiFacebook = HienThiFacebook,
+                HienThiFacebook = false,
                 HienThiNganHang = HienThiNganHang,
                 HienThiDiaChiKhachHang = HienThiDiaChiKhachHang,
                 KhoGiayIn = KhoGiayChon?.GiaTri ?? ThongTinTiem.KhoGiay80,
@@ -479,7 +612,8 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
                 [
                     new HoaDonBanHangReceiptItem
                     {
-                        TenSanPham = "Bó hoa hồng đỏ cao cấp gói giấy Hàn Quốc kèm thiệp chúc mừng",
+                        TenSanPham = "Bó hoa hồng đỏ Ecuador cao cấp gói giấy Hàn Quốc kèm thiệp chúc mừng sinh nhật",
+                        GhiChu = "Gói giấy màu kem, kèm thiệp chúc mừng.",
                         DonViTinh = "Bó",
                         SoLuong = 2,
                         DonGia = 450000,
@@ -492,14 +626,46 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
                         SoLuong = 1,
                         DonGia = 650000,
                         ThanhTien = 650000
+                    },
+                    new HoaDonBanHangReceiptItem
+                    {
+                        TenSanPham = "Lẵng hoa khai trương phối nhiều loại hoa tươi cao cấp",
+                        DonViTinh = "Lẵng",
+                        SoLuong = 1,
+                        DonGia = 1250000,
+                        ThanhTien = 1250000
+                    },
+                    new HoaDonBanHangReceiptItem
+                    {
+                        TenSanPham = "Hộp hoa thiết kế riêng",
+                        DonViTinh = "Hộp",
+                        SoLuong = 3,
+                        DonGia = 320000,
+                        ThanhTien = 960000
+                    },
+                    new HoaDonBanHangReceiptItem
+                    {
+                        TenSanPham = "Hoa baby nhập khẩu",
+                        DonViTinh = "Bó",
+                        SoLuong = 2,
+                        DonGia = 180000,
+                        ThanhTien = 360000
+                    },
+                    new HoaDonBanHangReceiptItem
+                    {
+                        TenSanPham = "Giấy gói hoa Hàn Quốc",
+                        DonViTinh = "Tờ",
+                        SoLuong = 5,
+                        DonGia = 25000,
+                        ThanhTien = 125000
                     }
                 ],
-                TongTienHang = 1550000,
+                TongTienHang = 4245000,
                 GiamGia = 50000,
-                KhachCanTra = 1500000,
-                TienKhachDua = 1000000,
-                KhachDaThanhToan = 1000000,
-                ConNo = 500000,
+                KhachCanTra = 4195000,
+                TienKhachDua = 2000000,
+                KhachDaThanhToan = 2000000,
+                ConNo = 2195000,
                 GhiChu = "Giao trước 17h, gọi khách trước khi giao."
             };
 
@@ -532,11 +698,8 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
         TenTiem = TenTiem,
         DiaChi = DiaChi,
         SoDienThoai = SoDienThoai,
-        Zalo = Zalo,
-        Facebook = Facebook,
-        Email = Email,
+        KenhLienHes = DanhSachKenhLienHe.Select(SaoChepKenh).ToList(),
         MaSoThue = MaSoThue,
-        Website = Website,
         TenNganHang = TenNganHang,
         SoTaiKhoan = SoTaiKhoan,
         ChuTaiKhoan = ChuTaiKhoan,
@@ -545,7 +708,7 @@ public sealed partial class ThongTinTiemViewModel : ObservableObject
         DuongDanQr = DuongDanQr,
         HienThiLogo = HienThiLogo,
         HienThiQr = HienThiQr,
-        HienThiFacebook = HienThiFacebook,
+        HienThiFacebook = false,
         HienThiNganHang = HienThiNganHang,
         HienThiDiaChiKhachHang = HienThiDiaChiKhachHang,
         KhoGiayIn = KhoGiayChon?.GiaTri ?? ThongTinTiem.KhoGiay80,
