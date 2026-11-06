@@ -52,7 +52,8 @@ public partial class InvoiceWindow : Window
         PrintButton.IsVisible = !receipt.LaHoaDonTongHop;
         CancelInvoiceButton.IsVisible = !receipt.LaHoaDonDaHuy && DatabaseService.CoQuyenHuyHoaDonHienTai();
         RecreateInvoiceButton.IsVisible = receipt.LaHoaDonDaHuy && DatabaseService.CoQuyenTaoLaiHoaDonHienTai();
-        EditInvoiceButton.IsVisible = !receipt.LaHoaDonDaHuy;
+        EditInvoiceButton.IsVisible =
+            !receipt.LaHoaDonDaHuy && DatabaseService.CoQuyenChinhSuaHoaDonHienTai();
         HistoryInvoiceButton.IsVisible = true;
     }
 
@@ -306,6 +307,12 @@ public partial class InvoiceWindow : Window
         if (receipt.LaHoaDonDaHuy)
         {
             await HienThiThongBaoAsync("Thông báo", $"Hóa đơn {receipt.MaHoaDon} đã bị hủy, không thể chỉnh sửa.");
+            return;
+        }
+
+        if (!DatabaseService.CoQuyenChinhSuaHoaDonHienTai())
+        {
+            await HienThiThongBaoAsync("Thông báo", "Bạn không có quyền chỉnh sửa hóa đơn bán hàng.");
             return;
         }
 

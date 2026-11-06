@@ -37,6 +37,9 @@ public sealed partial class DatabaseService
             PermissionKeys.SalesPayment,
             PermissionKeys.InvoicesEdit);
 
+    public static bool CoQuyenChinhSuaHoaDonHienTai()
+        => Quyen.HasPermission(Session.CurrentUser, PermissionKeys.InvoicesEdit);
+
     private static void KiemTraQuyenHuyHoaDon()
     {
         if (!CoQuyenHuyHoaDonHienTai())

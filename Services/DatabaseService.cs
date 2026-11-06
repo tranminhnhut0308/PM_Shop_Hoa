@@ -5257,10 +5257,15 @@ public sealed partial class DatabaseService
 
         const string detailSql = """
         SELECT
+            id           AS Id,
+            san_pham_id  AS SanPhamId,
+            ma_san_pham  AS MaSanPham,
             ten_san_pham AS TenSanPham,
             COALESCE(NULLIF(TRIM(don_vi_tinh), ''), 'Bó') AS DonViTinh,
             so_luong     AS SoLuong,
             don_gia      AS DonGia,
+            COALESCE(giam_gia, 0) AS GiamGia,
+            ghi_chu      AS GhiChu,
             thanh_tien   AS ThanhTien
         FROM chi_tiet_hoa_don_ban_hang
         WHERE hoa_don_id = @HoaDonId

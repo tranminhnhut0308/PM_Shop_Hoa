@@ -39,16 +39,18 @@ public partial class HoaDonEditorWindow : Window
 
         foreach (var it in _receipt.Items)
         {
-            var sp = _allProducts.FirstOrDefault(p => string.Equals(p.TenSanPham, it.TenSanPham, StringComparison.OrdinalIgnoreCase));
+            var sp = _allProducts.FirstOrDefault(p => p.Id == it.SanPhamId);
             var editItem = new HoaDonItemEditModel
             {
-                SanPhamId = sp?.Id ?? 0,
-                MaSanPham = sp?.MaSanPham ?? "",
+                Id = it.Id,
+                SanPhamId = it.SanPhamId,
+                MaSanPham = it.MaSanPham ?? sp?.MaSanPham ?? "",
                 TenSanPham = it.TenSanPham,
                 DonViTinh = it.DonViTinh,
                 SoLuong = it.SoLuong,
                 DonGia = it.DonGia,
-                GiamGia = 0,
+                GiamGia = it.GiamGia,
+                GhiChu = it.GhiChu,
                 GiaVon = sp?.GiaVon ?? 0
             };
             editItem.PropertyChanged += (s, e) => TinhToanChiPhi();
@@ -69,7 +71,7 @@ public partial class HoaDonEditorWindow : Window
         AcbSanPham.ItemsSource = _allProducts.Select(p => $"{p.MaSanPham} - {p.TenSanPham}").ToList();
 
         // Ghi chú
-        TxtGhiChu.Text = "";
+        TxtGhiChu.Text = _receipt.GhiChu ?? "";
 
         // Giảm giá đơn
         NumGiamGia.Value = _receipt.GiamGia;
@@ -208,7 +210,7 @@ public partial class HoaDonEditorWindow : Window
                 MaHoaDon = _receipt.MaHoaDon,
                 LyDoSua = lyDoSua,
                 GiamGia = NumGiamGia.Value ?? 0,
-                ThuKhac = 0,
+                ThuKhac = _receipt.ThuKhac,
                 GhiChu = TxtGhiChu.Text?.Trim(),
                 Items = _items.ToList()
             };

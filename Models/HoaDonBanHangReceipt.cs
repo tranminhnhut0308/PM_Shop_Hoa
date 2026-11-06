@@ -131,11 +131,15 @@ public sealed class HoaDonBanHangReceipt
 
 public sealed class HoaDonBanHangReceiptItem
 {
+    public uint Id { get; set; }
+    public uint SanPhamId { get; set; }
+    public string? MaSanPham { get; set; }
     public string TenSanPham { get; set; } = "";
     public string? GhiChu { get; set; }
     public string DonViTinh { get; set; } = "Bó";
     public decimal SoLuong { get; set; }
     public decimal DonGia { get; set; }
+    public decimal GiamGia { get; set; }
     public decimal ThanhTien { get; set; }
 }
 

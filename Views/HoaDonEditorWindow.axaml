@@ -174,7 +174,7 @@
         <Grid Grid.Row="1" ColumnDefinitions="300,16,*,16,220">
           <StackPanel Grid.Column="0">
             <TextBlock Text="Ngày bán" Classes="field-label" />
-            <DatePicker x:Name="DpThoiGianBan" Height="40" />
+            <DatePicker x:Name="DpThoiGianBan" Height="40" IsEnabled="False" />
           </StackPanel>
           <StackPanel Grid.Column="2">
             <TextBlock Text="Khách hàng" Classes="field-label" />
@@ -185,7 +185,7 @@
           </StackPanel>
           <StackPanel Grid.Column="4">
             <TextBlock Text="Số điện thoại" Classes="field-label" />
-            <TextBox x:Name="TxtSoDienThoai" Height="40" Watermark="SĐT khách..." />
+            <TextBox x:Name="TxtSoDienThoai" Height="40" Watermark="SĐT khách..." IsReadOnly="True" />
           </StackPanel>
         </Grid>
       </Grid>
