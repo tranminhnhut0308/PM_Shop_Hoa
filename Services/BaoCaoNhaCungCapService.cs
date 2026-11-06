@@ -281,6 +281,47 @@ public sealed class BaoCaoNhaCungCapService
     private static async Task<decimal> TaiTienChiSoQuyAsync(
         MySqlConnection conn, DieuKien dk, CancellationToken token)
     {
+        var dieuKienTimKiem = string.Empty;
+        if (dk.TimKiem is not null)
+        {
+            var coBangLichSuThanhToan = await conn.ExecuteScalarAsync<int>(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'lich_su_thanh_toan_cong_no_nha_cung_cap';
+                """) > 0;
+            var lienKetThanhToan = coBangLichSuThanhToan
+                ? """
+                  OR EXISTS (
+                      SELECT 1
+                      FROM lich_su_thanh_toan_cong_no_nha_cung_cap tt
+                      INNER JOIN nha_cung_cap ncc ON ncc.id = tt.nha_cung_cap_id
+                      WHERE tt.ma_giao_dich = pc.ma_phieu_chi
+                        AND (ncc.ma_nha_cung_cap LIKE @TimKiem
+                             OR ncc.ten_nha_cung_cap LIKE @TimKiem
+                             OR ncc.so_dien_thoai LIKE @TimKiem)
+                  )
+                  """
+                : string.Empty;
+
+            dieuKienTimKiem = $"""
+                AND (
+                    COALESCE(pc.noi_dung, '') LIKE @TimKiem
+                    OR EXISTS (
+                        SELECT 1
+                        FROM phieu_nhap_hang p
+                        INNER JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
+                        WHERE pc.noi_dung LIKE CONCAT('%', p.ma_phieu_nhap, '%')
+                          AND (ncc.ma_nha_cung_cap LIKE @TimKiem
+                               OR ncc.ten_nha_cung_cap LIKE @TimKiem
+                               OR ncc.so_dien_thoai LIKE @TimKiem)
+                    )
+                    {lienKetThanhToan}
+                )
+                """;
+        }
+
         var sql = $"""
         SELECT COALESCE(SUM(pc.so_tien), 0)
         FROM phieu_chi pc
@@ -292,7 +333,7 @@ public sealed class BaoCaoNhaCungCapService
               WHERE ncp.id = pc.nhom_chi_phi_id
                 AND ncp.ma_nhom = 'CHI_NHA_CUNG_CAP'
           )
-          {(dk.TimKiem is null ? "" : "AND pc.noi_dung LIKE @TimKiem")};
+          {dieuKienTimKiem};
         """;
 
         return await conn.ExecuteScalarAsync<decimal>(
