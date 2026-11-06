@@ -1,5 +1,7 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Avalonia.Media.Imaging;
+using ShopHoa.Helpers;
 
 namespace ShopHoa.Models;
 
@@ -103,6 +105,21 @@ public sealed partial class SanPham : ObservableObject
     /// <summary>Nội dung đang gõ trong ô giá bán nhanh (số, không có dấu phân cách).</summary>
     [ObservableProperty]
     private string giaBanDangNhap = "0";
+
+    public decimal GiaBanDangNhapValue
+    {
+        get => decimal.TryParse(
+            GiaBanDangNhap,
+            NumberStyles.AllowDecimalPoint,
+            CultureInfo.InvariantCulture,
+            out var value)
+                ? value
+                : 0m;
+        set => GiaBanDangNhap = MoneyInput.ToRawText(value);
+    }
+
+    partial void OnGiaBanDangNhapChanged(string value)
+        => OnPropertyChanged(nameof(GiaBanDangNhapValue));
 
     /// <summary>Lỗi hiển thị ngay dưới ô giá bán nhanh (rỗng = không lỗi).</summary>
     [ObservableProperty]

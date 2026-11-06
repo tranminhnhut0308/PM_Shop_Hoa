@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:controls="using:ShopHoa.Controls"
   xmlns:models="using:ShopHoa.Models"
   xmlns:views="using:ShopHoa.Views"
   x:Class="ShopHoa.Views.PhieuNhapEditorWindow"
@@ -324,13 +325,9 @@
                 <DataGridTemplateColumn Header="Đơn giá nhập" Width="125" MinWidth="110">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
-                      <NumericUpDown Classes="numeric-cell"
-                                     Value="{Binding DonGiaNhap, Mode=TwoWay}"
-                                     Minimum="0" Maximum="999999999" Increment="1000"
-                                     FormatString="N0"
-                                     ShowButtonSpinner="False"
-                                     TextAlignment="Right"
-                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                      <controls:MoneyTextBox Height="32" Maximum="999999999"
+                                             Value="{Binding DonGiaNhap, Mode=TwoWay}"
+                                             HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
@@ -338,13 +335,9 @@
                 <DataGridTemplateColumn Header="Giảm giá" Width="100" MinWidth="85">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:PhieuNhapItemEditModel">
-                      <NumericUpDown Classes="numeric-cell"
-                                     Value="{Binding GiamGia, Mode=TwoWay}"
-                                     Minimum="0" Maximum="999999999" Increment="1000"
-                                     FormatString="N0"
-                                     ShowButtonSpinner="False"
-                                     TextAlignment="Right"
-                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                      <controls:MoneyTextBox Height="32" Maximum="999999999"
+                                             Value="{Binding GiamGia, Mode=TwoWay}"
+                                             HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
@@ -400,16 +393,14 @@
 
                 <Grid ColumnDefinitions="*,135" ColumnSpacing="8">
                   <TextBlock Text="Chi phí khác" Foreground="#61736E" VerticalAlignment="Center" FontSize="12.5" />
-                  <NumericUpDown Grid.Column="1" x:Name="NumChiPhiKhac" Classes="amount-input"
-                                 Minimum="0" Maximum="999999999" Increment="5000"
-                                 FormatString="N0" ValueChanged="OnCalculationInputsChanged" />
+                  <controls:MoneyTextBox Grid.Column="1" x:Name="NumChiPhiKhac" Maximum="999999999"
+                                         ValueChanged="OnCalculationInputsChanged" />
                 </Grid>
 
                 <Grid ColumnDefinitions="*,135" ColumnSpacing="8">
                   <TextBlock Text="Giảm giá phiếu" Foreground="#61736E" VerticalAlignment="Center" FontSize="12.5" />
-                  <NumericUpDown Grid.Column="1" x:Name="NumGiamGia" Classes="amount-input"
-                                 Minimum="0" Maximum="999999999" Increment="5000"
-                                 FormatString="N0" ValueChanged="OnCalculationInputsChanged" />
+                  <controls:MoneyTextBox Grid.Column="1" x:Name="NumGiamGia" Maximum="999999999"
+                                         ValueChanged="OnCalculationInputsChanged" />
                 </Grid>
               </StackPanel>
             </Border>
@@ -431,9 +422,8 @@
                     <TextBlock Text="Đã thanh toán" Foreground="#61736E" FontWeight="SemiBold" FontSize="12" />
                     <TextBlock Text="Tiền đã trả NCC" FontSize="10" Foreground="#9CA3AF" />
                   </StackPanel>
-                  <NumericUpDown Grid.Column="1" x:Name="NumDaThanhToan" Classes="amount-input"
-                                 Minimum="0" Maximum="999999999" Increment="10000"
-                                 FormatString="N0" ValueChanged="OnCalculationInputsChanged" />
+                  <controls:MoneyTextBox Grid.Column="1" x:Name="NumDaThanhToan" Maximum="999999999"
+                                         ValueChanged="OnCalculationInputsChanged" />
                 </Grid>
 
                 <Border Height="1" Background="#EEF3F1" Margin="0,2" />

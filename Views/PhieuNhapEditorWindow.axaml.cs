@@ -144,7 +144,7 @@ public partial class PhieuNhapEditorWindow : Window
         }
     }
 
-    private void OnCalculationInputsChanged(object? sender, NumericUpDownValueChangedEventArgs e)
+    private void OnCalculationInputsChanged(object? sender, EventArgs e)
     {
         CapNhatTongTien();
     }
@@ -307,9 +307,9 @@ public partial class PhieuNhapEditorWindow : Window
             _request.SdtNguoiGiaoHang = TxtSdtNguoiGiaoHang.Text?.Trim();
             _request.GhiChu = TxtGhiChu.Text?.Trim();
             _request.PhuongThucThanhToan = CbbPhuongThuc.SelectedIndex == 1 ? "CHUYEN_KHOAN" : "TIEN_MAT";
-            _request.ChiPhiKhac = NumChiPhiKhac.Value ?? 0m;
-            _request.GiamGia = NumGiamGia.Value ?? 0m;
-            _request.DaThanhToan = NumDaThanhToan.Value ?? 0m;
+            _request.ChiPhiKhac = NumChiPhiKhac.Value;
+            _request.GiamGia = NumGiamGia.Value;
+            _request.DaThanhToan = NumDaThanhToan.Value;
             _request.LyDoChinhSua = lyDo;
             _request.Items = dongHopLe;
 

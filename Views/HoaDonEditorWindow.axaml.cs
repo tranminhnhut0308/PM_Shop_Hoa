@@ -92,7 +92,7 @@ public partial class HoaDonEditorWindow : Window
 
         TxtTongTienHang.Text = $"{tongTienHang:N0} đ";
 
-        var giamGia = NumGiamGia.Value ?? 0;
+        var giamGia = NumGiamGia.Value;
         var khachCanTra = Math.Max(0, tongTienHang - giamGia);
         TxtKhachCanTra.Text = $"{khachCanTra:N0} đ";
 
@@ -168,7 +168,7 @@ public partial class HoaDonEditorWindow : Window
         }
     }
 
-    private void NumGiamGia_OnValueChanged(object? sender, NumericUpDownValueChangedEventArgs e)
+    private void NumGiamGia_OnValueChanged(object? sender, EventArgs e)
     {
         TinhToanChiPhi();
     }
@@ -209,7 +209,7 @@ public partial class HoaDonEditorWindow : Window
                 HoaDonId = _receipt.HoaDonId,
                 MaHoaDon = _receipt.MaHoaDon,
                 LyDoSua = lyDoSua,
-                GiamGia = NumGiamGia.Value ?? 0,
+                GiamGia = NumGiamGia.Value,
                 ThuKhac = _receipt.ThuKhac,
                 GhiChu = TxtGhiChu.Text?.Trim(),
                 Items = _items.ToList()

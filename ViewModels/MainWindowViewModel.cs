@@ -2104,14 +2104,10 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        // Validate ngay trên dòng, chưa đụng database
-        if (!MoneyInput.TryParse(
-                product.GiaBanDangNhap,
-                true,
-                out var giaBan,
-                out var loi))
+        var giaBan = product.GiaBanDangNhapValue;
+        if (giaBan < 0 || giaBan > MoneyInput.GiaTienToiDa)
         {
-            product.LoiGiaBanNhanh = loi;
+            product.LoiGiaBanNhanh = "Giá bán không hợp lệ.";
             return;
         }
 

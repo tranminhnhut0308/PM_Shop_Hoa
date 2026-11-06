@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:ShopHoa.Controls"
         x:Class="ShopHoa.Views.NhapGiaBanWindow"
         Width="480"
         Height="300"
@@ -149,13 +150,10 @@
                        TextWrapping="Wrap"/>
 
             <!-- Ô GIÁ -->
-            <TextBox Grid.Row="2"
-                     x:Name="GiaBanTextBox"
-                     Classes="giaBanInput"
-                     Watermark="Nhập giá bán..."
-                     Height="44"
-                     HorizontalContentAlignment="Left"
-                     VerticalContentAlignment="Center"/>
+            <controls:MoneyTextBox Grid.Row="2"
+                                   x:Name="GiaBanTextBox"
+                                   Watermark="Nhập giá bán..."
+                                   Height="44"/>
 
             <!-- NÚT -->
             <Grid Grid.Row="3"

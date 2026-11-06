@@ -2305,10 +2305,9 @@
                     <ComboBox ItemsSource="{Binding DiscountModes}"
                               SelectedItem="{Binding SaleDiscountMode, Mode=TwoWay}"
                               Padding="3,1" FontSize="11" MinWidth="70" />
-                    <TextBox Width="78"
-                             Text="{Binding SaleDiscountInput, Mode=TwoWay, Converter={StaticResource ThousandsSeparatorConverter}}"
-                             Watermark="0" TextChanged="OnSaleDiscountTextChanged"
-                             HorizontalContentAlignment="Right" Padding="3,1" FontSize="12" />
+                    <controls:MoneyTextBox Width="78"
+                                           Value="{Binding SaleDiscountInput, Mode=TwoWay}"
+                                           Watermark="0" Height="28" />
                   </StackPanel>
                 </Grid>
 
@@ -2316,10 +2315,9 @@
 
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Text="Tiền khách đưa" Foreground="#61736E" VerticalAlignment="Center" FontSize="12" />
-                  <TextBox Grid.Column="1" Width="110"
-                           Text="{Binding TienKhachDua, Mode=OneWay}"
-                           TextChanged="OnTienKhachDuaTextChangedUI"
-                           HorizontalContentAlignment="Right" Watermark="0" FontSize="12" />
+                  <controls:MoneyTextBox Grid.Column="1" Width="110"
+                                         Value="{Binding TienKhachDua, Mode=TwoWay}"
+                                         Watermark="0" Height="28" />
                 </Grid>
 
                 <Grid ColumnDefinitions="*,Auto">
@@ -2684,11 +2682,10 @@
                                 Spacing="2">
 
                                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="2">
-                                  <TextBox Name="GiaBanInlineTextBox"
-                                    Text="{Binding GiaBanDangNhap, Mode=TwoWay}"
+                                  <controls:MoneyTextBox Name="GiaBanInlineTextBox"
+                                    Value="{Binding GiaBanDangNhapValue, Mode=TwoWay}"
                                     Watermark="0"
-                                    Padding="6,3"
-                                    FontSize="12"
+                                    Height="28"
                                     MinWidth="52"
                                     KeyDown="OnInlineGiaBanKeyDown" />
                                   <Button Grid.Column="1"

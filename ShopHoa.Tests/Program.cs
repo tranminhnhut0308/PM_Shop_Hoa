@@ -13,6 +13,9 @@ internal class Program
     static async Task<int> Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
+        if (args.Contains("--verify-money-input", StringComparer.OrdinalIgnoreCase))
+            return MoneyInputVerifier.Run();
+
         Console.WriteLine("==========================================================================================");
         Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG SHOP HOA: ĐỐI SOÁT TOÀN DIỆN THỐNG KÊ TRANG TỔNG QUAN (#69)  ");
         Console.WriteLine("==========================================================================================");

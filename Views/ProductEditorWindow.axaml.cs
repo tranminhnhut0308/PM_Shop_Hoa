@@ -21,8 +21,6 @@ public partial class ProductEditorWindow : Window
     private readonly bool _duocSuaGiaBan;
     private readonly bool _duocSuaGiaVon;
     private readonly bool _duocDieuChinhTonKho;
-    private bool _dangDinhDangTien;
-
     public SanPham Product => _product;
 
     public ProductEditorWindow() : this(null)
@@ -67,10 +65,6 @@ public partial class ProductEditorWindow : Window
 
         ApCheQuyenTungTruong();
 
-        GiaBanTextBox.GotFocus += GiaBanTextBox_OnGotFocus;
-        GiaBanTextBox.LostFocus += GiaBanTextBox_OnLostFocus;
-        GiaBanTextBox.TextChanged += GiaBanTextBox_OnTextChanged;
-
         Title = _isNew ? "Thêm sản phẩm" : (_cheDoXem ? "Chi tiết sản phẩm" : "Sửa sản phẩm");
         LoadProduct();
     }
@@ -84,15 +78,22 @@ public partial class ProductEditorWindow : Window
         if (_cheDoXem)
         {
             // Chỉ xem: mọi ô nhập chỉ đọc, ẩn các thao tác thay đổi dữ liệu.
-            foreach (var textBox in new[]
+            foreach (var control in new Control[]
                      {
                          TenSanPhamTextBox, GiaBanTextBox, GiaVonTextBox, TonKhoTextBox,
                          KhachDatTextBox, ViTriKhoTextBox, LoaiHangTextBox, DuKienHetHangTextBox
                      })
             {
-                textBox.IsEnabled = true;
-                textBox.IsReadOnly = true;
+                control.IsEnabled = true;
             }
+            TenSanPhamTextBox.IsReadOnly = true;
+            GiaBanTextBox.IsReadOnly = true;
+            GiaVonTextBox.IsReadOnly = true;
+            TonKhoTextBox.IsReadOnly = true;
+            KhachDatTextBox.IsReadOnly = true;
+            ViTriKhoTextBox.IsReadOnly = true;
+            LoaiHangTextBox.IsReadOnly = true;
+            DuKienHetHangTextBox.IsReadOnly = true;
 
             NhomSanPhamComboBox.IsEnabled = false;
             DonViTinhComboBox.IsEnabled = false;
@@ -148,78 +149,13 @@ public partial class ProductEditorWindow : Window
         // Giá bán / giá vốn hiển thị kiểu tiền Việt Nam (50.000).
         // Tồn kho / KH đặt là số lượng nên dùng định dạng số lượng: bỏ các số 0
         // thập phân vô nghĩa (100.000 -> 100) nhưng giữ phần thập phân thật.
-        GiaBanTextBox.Text = MoneyInput.Format(_product.GiaBan);
-        GiaVonTextBox.Text =  MoneyInput.Format(_product.GiaVon);
+        GiaBanTextBox.Value = _product.GiaBan;
+        GiaVonTextBox.Value = _product.GiaVon;
         TonKhoTextBox.Text = SoLuongFormat.Raw(_product.TonKhoExcel);
         KhachDatTextBox.Text = SoLuongFormat.Raw(_product.KhachDat);
         ViTriKhoTextBox.Text = _product.ViTriKho ?? "";
         LoaiHangTextBox.Text = !string.IsNullOrWhiteSpace(_product.LoaiHang) ? _product.LoaiHang : (_isNew ? "Hàng hóa" : "");
         DuKienHetHangTextBox.Text = _product.DuKienHetHang ?? "";
-    }
-
-    /// <summary>Bắt đầu gõ thì bỏ dấu phân cách để sửa số bình thường.</summary>
-    private void GiaBanTextBox_OnGotFocus(object? sender, RoutedEventArgs e)
-    {
-        if (!MoneyInput.TryParse(GiaBanTextBox.Text, false, out var value, out _))
-            return;
-
-        var raw = MoneyInput.ToRawText(value);
-
-        if (GiaBanTextBox.Text != raw)
-            GiaBanTextBox.Text = raw;
-
-        GiaBanTextBox.SelectAll();
-    }
-
-    /// <summary>Rời ô thì format lại kiểu Việt Nam, kể cả khi người dùng gõ sai.</summary>
-    private void GiaBanTextBox_OnLostFocus(object? sender, RoutedEventArgs e)
-    {
-        if (!MoneyInput.TryParse(GiaBanTextBox.Text, false, out var value, out _))
-            value = 0m;
-
-        _dangDinhDangTien = true;
-        GiaBanTextBox.Text = MoneyInput.Format(value);
-        _dangDinhDangTien = false;
-    }
-
-    /// <summary>
-    /// Gõ tới đâu thì thêm dấu phân cách hàng nghìn tới đó (gõ 1500000 ra 1.500.000).
-    /// Chỉ lấy chữ số để khỏi hiện ký hiệu tiền lẫn trong ô nhập.
-    /// </summary>
-    private void GiaBanTextBox_OnTextChanged(object? sender, TextChangedEventArgs e)
-    {
-        if (_dangDinhDangTien)
-            return;
-
-        var digits = new string(
-            (GiaBanTextBox.Text ?? "")
-                .Where(char.IsDigit)
-                .ToArray());
-
-        // Để trống thì chờ người dùng gõ tiếp, không tự nhảy về "0"
-        if (digits.Length == 0)
-            return;
-
-        if (!decimal.TryParse(
-                digits,
-                NumberStyles.None,
-                CultureInfo.InvariantCulture,
-                out var value))
-        {
-            return;
-        }
-
-        var formatted = MoneyInput.Format(value);
-
-        if (formatted == GiaBanTextBox.Text)
-            return;
-
-        _dangDinhDangTien = true;
-
-        GiaBanTextBox.Text = formatted;
-        GiaBanTextBox.CaretIndex = formatted.Length;
-
-        _dangDinhDangTien = false;
     }
 
     private void SaveButton_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -239,18 +175,18 @@ public partial class ProductEditorWindow : Window
 
         // Validate giá bán trước: không cho lưu nếu nhập chữ, số âm,
         // để trống hoặc vượt quá giới hạn DECIMAL(15,2).
-        var giaBan = _product.GiaBan;
-
+        var giaBan = _duocSuaGiaBan ? GiaBanTextBox.Value : _product.GiaBan;
         if (_duocSuaGiaBan &&
-            !MoneyInput.TryParse(GiaBanTextBox.Text, true, out giaBan, out var loiGiaBan))
+            (giaBan < 0 || giaBan > MoneyInput.GiaTienToiDa))
         {
-            LoiGiaBanTextBlock.Text = loiGiaBan;
+            LoiGiaBanTextBlock.Text = "Giá bán không hợp lệ.";
             ErrorTextBlock.Text = "Giá bán chưa hợp lệ, vui lòng kiểm tra lại.";
             GiaBanTextBox.Focus();
             return;
         }
 
-        if (!TryReadDecimal(GiaVonTextBox.Text, out var giaVon))
+        var giaVon = GiaVonTextBox.Value;
+        if (giaVon < 0 || giaVon > MoneyInput.GiaTienToiDa)
         {
             ErrorTextBlock.Text = "Giá vốn phải là số hợp lệ.";
             return;

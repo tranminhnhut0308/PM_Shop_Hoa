@@ -11,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using ShopHoa.Controls;
 using ShopHoa.Helpers;
 using ShopHoa.Models;
 using ShopHoa.Services;
@@ -19,8 +20,6 @@ namespace ShopHoa.Views;
 
 public partial class MainWindow : Window
 {
-    private bool _formattingDiscount;
-    private bool _formattingCash;
     private HelpWindow? _helpWindow;
     private bool _dangThemSanPhamBanHang;
     private bool _dangThemSanPhamNhapHang;
@@ -209,42 +208,6 @@ public partial class MainWindow : Window
         // Tìm realtime
         _ = viewModel.SearchSaleCustomersAsync(text);
     }
-    private void OnSaleDiscountTextChanged(object? sender, TextChangedEventArgs e)
-    {
-        if (_formattingDiscount || sender is not TextBox textBox)
-            return;
-
-        var text = textBox.Text ?? string.Empty;
-
-        if (string.IsNullOrWhiteSpace(text))
-            return;
-
-        var normalized = text
-            .Replace(".", string.Empty)
-            .Replace(",", string.Empty);
-
-        if (!decimal.TryParse(
-                normalized,
-                NumberStyles.Number,
-                CultureInfo.InvariantCulture,
-                out var amount))
-            return;
-
-        var formatted = amount.ToString(
-            "N0",
-            CultureInfo.GetCultureInfo("vi-VN"));
-
-        if (formatted == text)
-            return;
-
-        _formattingDiscount = true;
-
-        textBox.Text = formatted;
-        textBox.CaretIndex = formatted.Length;
-
-        _formattingDiscount = false;
-    }
-
     private void OnImportProductSearchTextChanged(
     object? sender,
     TextChangedEventArgs e)
@@ -676,10 +639,10 @@ public partial class MainWindow : Window
         if (DataContext is not MainWindowViewModel viewModel)
             return;
 
-        if (sender is not TextBox textBox)
+        if (sender is not MoneyTextBox moneyTextBox)
             return;
 
-        var product = TimDongSanPham(textBox, out _);
+        var product = TimDongSanPham(moneyTextBox, out _);
 
         if (product is null)
             return;
@@ -718,7 +681,8 @@ public partial class MainWindow : Window
             // Bấm nút hoặc gõ trong ô nhập bên trong dòng thì không mở form sửa
             if (element is Button or ComboBox
                 or Avalonia.Controls.Primitives.ToggleButton
-                or TextBox)
+                or TextBox
+                or MoneyTextBox)
             {
                 benTrongOChinhGia = true;
             }
@@ -1024,63 +988,6 @@ public partial class MainWindow : Window
         }
 
         return EscapeCsv(value);
-    }
-
-    private void OnTienKhachDuaTextChangedUI(
-    object? sender,
-    TextChangedEventArgs e)
-    {
-        if (_formattingCash || sender is not TextBox textBox)
-            return;
-
-        var text = textBox.Text ?? string.Empty;
-
-        // Cho phép xóa trắng
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            if (DataContext is MainWindowViewModel vm)
-                vm.TienKhachDua = 0;
-
-            return;
-        }
-
-        // Bỏ dấu phân cách hàng nghìn
-        var normalized = text
-            .Replace(".", "")
-            .Replace(",", "");
-
-        // Chỉ nhận số
-        if (!decimal.TryParse(
-                normalized,
-                NumberStyles.None,
-                CultureInfo.InvariantCulture,
-                out var amount))
-        {
-            return;
-        }
-
-        // Cập nhật số thật
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            viewModel.TienKhachDua = amount;
-        }
-
-        // Format giống ô Giảm giá
-        var formatted = amount.ToString(
-            "N0",
-            CultureInfo.GetCultureInfo("vi-VN"));
-
-        if (formatted == text)
-            return;
-
-        _formattingCash = true;
-
-        textBox.Text = formatted;
-
-        // Đưa con trỏ về cuối
-        textBox.CaretIndex = formatted.Length;
-
-        _formattingCash = false;
     }
 
     // ============================================================

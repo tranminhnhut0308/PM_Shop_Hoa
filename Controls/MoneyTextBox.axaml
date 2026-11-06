@@ -2,14 +2,14 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   x:Class="ShopHoa.Controls.MoneyTextBox"
   x:Name="Root"
+  Height="38"
   Background="Transparent">
 
   <TextBox x:Name="Input"
-    Text="{Binding Text, ElementName=Root, Mode=TwoWay}"
     TextAlignment="Right"
-    Watermark="0"
-    Height="38"
+    Watermark="{Binding Watermark, ElementName=Root}"
     CornerRadius="8"
-    Padding="12,8"
+    Padding="6,4"
+    VerticalAlignment="Stretch"
     VerticalContentAlignment="Center" />
 </UserControl>

@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:controls="using:ShopHoa.Controls"
   x:Class="ShopHoa.Views.ProductEditorWindow"
   Width="620"
   Height="820"
@@ -156,11 +157,11 @@
         <StackPanel>
           <TextBlock Classes="label" Text="Giá bán" />
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-            <TextBox x:Name="GiaBanTextBox"
-              Text="0"
-              TextAlignment="Right"
+            <controls:MoneyTextBox x:Name="GiaBanTextBox"
+              Value="0"
+              Watermark="Nhập số tiền, ví dụ 50.000"
               Margin="0,5,0,0"
-              Watermark="Nhập số tiền, ví dụ 50.000" />
+              />
             <TextBlock Grid.Column="1"
               Text="đ"
               Foreground="#6B7D77"
@@ -176,9 +177,8 @@
         </StackPanel>
         <StackPanel Grid.Column="1">
           <TextBlock Classes="label" Text="Giá vốn" />
-          <TextBox x:Name="GiaVonTextBox"
-            Text="0"
-            TextAlignment="Right" />
+          <controls:MoneyTextBox x:Name="GiaVonTextBox"
+            Value="0" />
         </StackPanel>
       </Grid>
 

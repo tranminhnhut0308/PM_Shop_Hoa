@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:controls="using:ShopHoa.Controls"
   xmlns:models="using:ShopHoa.Models"
   xmlns:views="using:ShopHoa.Views"
   x:Class="ShopHoa.Views.HoaDonEditorWindow"
@@ -254,26 +255,18 @@
                 <DataGridTemplateColumn Header="Đơn giá" Width="1.15*" MinWidth="104">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:HoaDonItemEditModel">
-                      <NumericUpDown Classes="numeric-cell"
-                                     Value="{Binding DonGia, Mode=TwoWay}"
-                                     Minimum="0" Maximum="999999999" Increment="1000"
-                                     FormatString="N0"
-                                     ShowButtonSpinner="False"
-                                     TextAlignment="Right"
-                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                      <controls:MoneyTextBox Height="32" Maximum="999999999"
+                                             Value="{Binding DonGia, Mode=TwoWay}"
+                                             HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
                 <DataGridTemplateColumn Header="Giảm giá" Width="1.0*" MinWidth="96">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:HoaDonItemEditModel">
-                      <NumericUpDown Classes="numeric-cell"
-                                     Value="{Binding GiamGia, Mode=TwoWay}"
-                                     Minimum="0" Maximum="999999999" Increment="1000"
-                                     FormatString="N0"
-                                     ShowButtonSpinner="False"
-                                     TextAlignment="Right"
-                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                      <controls:MoneyTextBox Height="32" Maximum="999999999"
+                                             Value="{Binding GiamGia, Mode=TwoWay}"
+                                             HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
@@ -322,9 +315,8 @@
                 </Grid>
                 <Grid ColumnDefinitions="*,150" ColumnSpacing="10">
                   <TextBlock Text="Giảm giá hóa đơn" Foreground="#61736E" VerticalAlignment="Center" />
-                  <NumericUpDown Grid.Column="1" x:Name="NumGiamGia" Classes="amount-input"
-                                 Minimum="0" Maximum="999999999" Increment="5000"
-                                 FormatString="N0" ValueChanged="NumGiamGia_OnValueChanged" />
+                  <controls:MoneyTextBox Grid.Column="1" x:Name="NumGiamGia" Maximum="999999999"
+                                         ValueChanged="NumGiamGia_OnValueChanged" />
                 </Grid>
               </StackPanel>
             </Border>
