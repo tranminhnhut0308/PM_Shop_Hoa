@@ -313,14 +313,10 @@ public sealed partial class MainWindowViewModel
     [
         "Tất cả",
         "Hoàn thành",
-<<<<<<< HEAD
         "Chưa thanh toán",
         "Thanh toán một phần",
         "Đã hủy",
         "Tổng hợp"
-=======
-        "Đã hủy"
->>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
     ];
 
     public string SelectedInvoiceStatus
@@ -348,11 +344,8 @@ public sealed partial class MainWindowViewModel
             if (SetProperty(ref _selectedInvoiceCustomer, value))
             {
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-<<<<<<< HEAD
                 CapNhatInvoiceCustomerFilterOptions();
-=======
                 CapNhatInvoiceActiveFilterChips();
->>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
             }
         }
     }

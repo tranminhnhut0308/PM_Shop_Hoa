@@ -27,11 +27,8 @@ public sealed partial class DatabaseService
     private readonly DatabaseConfigService _configService;
     private bool? _hasPhieuNhapExtraColumns;
     private readonly SemaphoreSlim _ensurePhieuNhapExtraColumns = new(1, 1);
-<<<<<<< HEAD
-=======
     private bool? _hasChiTietPhieuNhapDonViTinhExcel;
     private readonly SemaphoreSlim _ensureChiTietPhieuNhapDonViTinhExcel = new(1, 1);
->>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
     private bool? _hasPhieuNhapTrackingColumns;
     private readonly SemaphoreSlim _ensurePhieuNhapTrackingColumns = new(1, 1);
     private bool? _hasHoaDonTrackingColumns;
@@ -4818,6 +4815,8 @@ public sealed partial class DatabaseService
             var maHoaDonExpr = BieuThucChuanHoaSql("COALESCE(hd.ma_hoa_don, '')");
             var maKhachHangExpr = BieuThucChuanHoaSql("COALESCE(kh.ma_khach_hang, '')");
             var soDienThoaiExpr = BieuThucChuanHoaSql("COALESCE(kh.so_dien_thoai, '')");
+            var ghiChuExpr = BieuThucChuanHoaSql("COALESCE(hd.ghi_chu, '')");
+            var tenSanPhamExpr = BieuThucChuanHoaSql("COALESCE(ct.ten_san_pham, '')");
             const string soDienThoaiDigitsExpr =
                 "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(kh.so_dien_thoai, ''), ' ', ''), '-', ''), '.', ''), '+', ''), '/', '')";
 
@@ -4830,7 +4829,6 @@ public sealed partial class DatabaseService
                     OR {soDienThoaiExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
                     OR (@SearchPhoneDigits <> '' AND {soDienThoaiDigitsExpr} LIKE CONCAT('%', @SearchPhoneDigits, '%') ESCAPE '!')
                     OR {tenKhachHangExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
-<<<<<<< HEAD
                     OR kh.so_dien_thoai LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
                     OR hd.so_dien_thoai LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
                     OR hd.ghi_chu LIKE CONCAT('%', @SearchRaw, '%') ESCAPE '!'
@@ -4845,8 +4843,6 @@ public sealed partial class DatabaseService
                               OR {tenSanPhamExpr} LIKE CONCAT('%', @SearchNormalized, '%') ESCAPE '!'
                           )
                     )
-=======
->>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
                 )
                 """);
         }
@@ -11109,8 +11105,8 @@ public sealed partial class DatabaseService
             if (_hasPhieuNhapExtraColumns.HasValue)
                 return _hasPhieuNhapExtraColumns.Value;
 
-<<<<<<< HEAD
-            await using var connection = await OpenAsync();
+            await using var connection = new MySqlConnection(GetConnectionString());
+            await connection.OpenAsync();
             await EnsurePhieuNhapColumnAsync(connection, "so_hoa_don_dau_vao", null,
                 "VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL", copyEmptyValue: true);
             await EnsurePhieuNhapColumnAsync(connection, "ma_dat_hang_nhap", null,
@@ -11132,70 +11128,11 @@ public sealed partial class DatabaseService
         finally
         {
             _ensurePhieuNhapExtraColumns.Release();
-=======
-            // Dùng connection riêng (không gọi OpenAsync) để tránh đệ quy.
-            await using var connection = new MySqlConnection(GetConnectionString());
-            await connection.OpenAsync();
-
-            var requiredColumns = new (string Name, string Definition, string Position)[]
-            {
-                ("so_hoa_don_dau_vao", "VARCHAR(50) NULL DEFAULT NULL", "AFTER ghi_chu"),
-                ("ma_dat_hang_nhap", "VARCHAR(50) NULL DEFAULT NULL", "AFTER so_hoa_don_dau_vao"),
-                ("ngay_hoa_don_dau_vao", "DATE NULL DEFAULT NULL", "AFTER ma_dat_hang_nhap"),
-                ("ten_nguoi_giao_hang", "VARCHAR(150) NULL DEFAULT NULL", "AFTER ngay_hoa_don_dau_vao"),
-                ("sdt_nguoi_giao_hang", "VARCHAR(50) NULL DEFAULT NULL", "AFTER ten_nguoi_giao_hang")
-            };
-
-            var existing = (await connection.QueryAsync<string>(
-                """
-                SELECT COLUMN_NAME
-                FROM information_schema.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = 'phieu_nhap_hang'
-                  AND COLUMN_NAME IN @Names;
-                """,
-                new { Names = requiredColumns.Select(c => c.Name).ToArray() }))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var (name, definition, position) in requiredColumns)
-            {
-                if (existing.Contains(name))
-                    continue;
-
-                try
-                {
-                    await connection.ExecuteAsync(
-                        $"ALTER TABLE phieu_nhap_hang ADD COLUMN {name} {definition} {position};");
-                    existing.Add(name);
-                }
-                catch (MySqlException ex) when (ex.Number == 1060)
-                {
-                    // Tiến trình khác đã thêm cột trước đó.
-                    existing.Add(name);
-                }
-                catch (Exception ex)
-                {
-                    SafeLog.WriteError($"Loi bo sung cot {name} phieu_nhap_hang", ex);
-                }
-            }
-
-            _hasPhieuNhapExtraColumns = requiredColumns.All(c => existing.Contains(c.Name));
-        }
-        catch (Exception ex)
-        {
-            SafeLog.WriteError("Loi kiem tra cot mo rong phieu nhap", ex);
-            _hasPhieuNhapExtraColumns = false;
->>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
-        }
-        finally
-        {
-            _ensurePhieuNhapExtraColumns.Release();
         }
 
         return _hasPhieuNhapExtraColumns.Value;
     }
 
-<<<<<<< HEAD
     private static async Task EnsurePhieuNhapColumnAsync(
         MySqlConnection connection,
         string columnName,
@@ -11206,37 +11143,10 @@ public sealed partial class DatabaseService
         static async Task<bool> ColumnExistsAsync(MySqlConnection conn, string name)
         {
             var count = await conn.ExecuteScalarAsync<long>(
-=======
-    private async Task<bool> HasPhieuNhapExtraColumnsAsync()
-        => await EnsurePhieuNhapExtraColumnsAsync();
-
-    /// <summary>
-    /// Bảo đảm <c>chi_tiet_phieu_nhap_hang</c> có cột <c>don_vi_tinh_excel</c>.
-    /// Cột này lưu đơn vị tính đọc từ file Excel/import; database mới tạo từ
-    /// <c>database/hoa_shop.sql</c> chưa có cột nên các truy vấn chi tiết sẽ lỗi
-    /// nếu không bổ sung trước.
-    /// </summary>
-    private async Task<bool> EnsureChiTietPhieuNhapDonViTinhExcelAsync()
-    {
-        if (_hasChiTietPhieuNhapDonViTinhExcel.HasValue)
-            return _hasChiTietPhieuNhapDonViTinhExcel.Value;
-
-        await _ensureChiTietPhieuNhapDonViTinhExcel.WaitAsync();
-        try
-        {
-            if (_hasChiTietPhieuNhapDonViTinhExcel.HasValue)
-                return _hasChiTietPhieuNhapDonViTinhExcel.Value;
-
-            await using var connection = new MySqlConnection(GetConnectionString());
-            await connection.OpenAsync();
-
-            var count = await connection.ExecuteScalarAsync<long>(
->>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
                 """
                 SELECT COUNT(*)
                 FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE()
-<<<<<<< HEAD
                   AND TABLE_NAME = 'phieu_nhap_hang'
                   AND COLUMN_NAME = @Name;
                 """,
@@ -11266,7 +11176,30 @@ public sealed partial class DatabaseService
         await connection.ExecuteAsync(
             $"UPDATE `phieu_nhap_hang` SET `{columnName}` = `{legacyColumnName}` " +
             $"WHERE `{legacyColumnName}` IS NOT NULL AND {emptyCondition};");
-=======
+    }
+
+    private async Task<bool> HasPhieuNhapExtraColumnsAsync()
+        => await EnsurePhieuNhapExtraColumnsAsync();
+
+    private async Task<bool> EnsureChiTietPhieuNhapDonViTinhExcelAsync()
+    {
+        if (_hasChiTietPhieuNhapDonViTinhExcel.HasValue)
+            return _hasChiTietPhieuNhapDonViTinhExcel.Value;
+
+        await _ensureChiTietPhieuNhapDonViTinhExcel.WaitAsync();
+        try
+        {
+            if (_hasChiTietPhieuNhapDonViTinhExcel.HasValue)
+                return _hasChiTietPhieuNhapDonViTinhExcel.Value;
+
+            await using var connection = new MySqlConnection(GetConnectionString());
+            await connection.OpenAsync();
+
+            var count = await connection.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
                   AND TABLE_NAME = 'chi_tiet_phieu_nhap_hang'
                   AND COLUMN_NAME = 'don_vi_tinh_excel';
                 """);
@@ -11281,7 +11214,7 @@ public sealed partial class DatabaseService
                 }
                 catch (MySqlException ex) when (ex.Number == 1060)
                 {
-                    // Cột đã được tiến trình khác thêm.
+                    // Another process may have added the column after the existence check.
                 }
             }
 
@@ -11306,7 +11239,6 @@ public sealed partial class DatabaseService
         }
 
         return _hasChiTietPhieuNhapDonViTinhExcel.Value;
->>>>>>> 1c5e0674376daca902ac17d7858913d067ad7aed
     }
 
     public async Task EnsurePhieuNhapTrackingColumnsAsync()

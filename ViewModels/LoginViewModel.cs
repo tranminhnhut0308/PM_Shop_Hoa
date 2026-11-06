@@ -15,11 +15,6 @@ public partial class LoginViewModel : ObservableObject
     private readonly DatabaseService _db = new();
     private readonly LoginCredentialStore _store = new();
 
-    public LoginViewModel()
-    {
-        _ = KiemTraKetNoiAsync();
-    }
-
     // Không có tài khoản nào gắn cứng trong source.
     // Tên đăng nhập chỉ được điền lại khi người dùng đã bật "Ghi nhớ đăng nhập".
     [ObservableProperty]
@@ -38,7 +33,7 @@ public partial class LoginViewModel : ObservableObject
     private bool ghiNhoDangNhap;
 
     [ObservableProperty]
-    private string trangThaiKetNoi = "Đang kiểm tra kết nối...";
+    private string trangThaiKetNoi = "Đang chờ đăng nhập...";
 
     /// <summary>
     /// Hiện nút "Xóa thông tin đã ghi nhớ" khi máy đang có credential lưu.
