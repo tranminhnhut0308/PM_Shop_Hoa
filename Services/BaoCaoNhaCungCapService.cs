@@ -7,8 +7,7 @@ namespace ShopHoa.Services;
 
 /// <summary>
 /// Dịch vụ cho màn "Báo cáo nhà cung cấp":
-/// - Tính toán tổng tiền nhập hàng, tiền trả hàng, giá trị nhập hàng thực tế (đã trừ trả hàng),
-///   đã thanh toán và công nợ theo từng nhà cung cấp.
+/// - Tính toán tổng tiền nhập hàng, thanh toán và công nợ theo từng nhà cung cấp.
 /// - Top 10 nhà cung cấp nhập hàng nhiều nhất trực tiếp bằng SQL (ORDER BY ... DESC LIMIT 10).
 /// - Bảng dữ liệu có tìm kiếm, sắp xếp theo cột và phân trang (LIMIT @SoDong OFFSET @Offset).
 /// - Mọi phép tính thực hiện ở tầng SQL, không kéo toàn bộ bảng về RAM.
@@ -23,13 +22,11 @@ public sealed class BaoCaoNhaCungCapService
             ["SoDienThoai"] = "ncc.so_dien_thoai",
             ["SoPhieuNhap"] = "SoPhieuNhap",
             ["TongTienNhap"] = "TongTienNhap",
-            ["TienTraHang"] = "TienTraHang",
-            ["GiaTriNhapHang"] = "GiaTriNhapHang",
             ["DaThanhToan"] = "DaThanhToan",
             ["CongNo"] = "CongNo"
         };
 
-    public const string KhoaMacDinh = "GiaTriNhapHang";
+    public const string KhoaMacDinh = "TongTienNhap";
 
     private readonly Func<Task<MySqlConnection>> _taoKetNoi;
     private readonly Func<Task>? _damBaoCotTheoDoiPhieuNhap;
@@ -62,10 +59,10 @@ public sealed class BaoCaoNhaCungCapService
             FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE()
               AND TABLE_NAME = 'nha_cung_cap'
-              AND COLUMN_NAME = 'co_du_lieu_kiotviet';
+              AND COLUMN_NAME IN ('co_du_lieu_kiotviet', 'ngay_nhap_excel');
             """;
             var count = await conn.ExecuteScalarAsync<int>(sql);
-            _coCotDuLieuKiotViet = count > 0;
+            _coCotDuLieuKiotViet = count == 2;
         }
         catch
         {
@@ -107,7 +104,17 @@ public sealed class BaoCaoNhaCungCapService
         var soPhieuTrongKy = await conn.ExecuteScalarAsync<int>(
             new CommandDefinition(kiemTraPhieuSql, new { TuNgay = tu, DenKeTiep = denKeTiep }, cancellationToken: token));
 
-        var suDungKiotVietFallback = soPhieuTrongKy == 0 && coCotKiotViet;
+        var coDuLieuKiotVietTrongKy = coCotKiotViet && await conn.ExecuteScalarAsync<int>(
+            """
+            SELECT COUNT(*)
+            FROM nha_cung_cap ncc
+            WHERE ncc.trang_thai = 1
+              AND ncc.co_du_lieu_kiotviet = 1
+              AND ncc.ngay_nhap_excel >= @TuNgay
+              AND ncc.ngay_nhap_excel < @DenKeTiep;
+            """,
+            new { TuNgay = tu, DenKeTiep = denKeTiep }) > 0;
+        var suDungKiotVietFallback = soPhieuTrongKy == 0 && coDuLieuKiotVietTrongKy;
 
         var dk = new DieuKien
         {
@@ -122,6 +129,12 @@ public sealed class BaoCaoNhaCungCapService
         var tongHop = await TaiTongHopAsync(conn, dk, token);
         tongHop.TuNgay = tu;
         tongHop.DenNgay = denKeTiep.AddDays(-1);
+        tongHop.TienChiSoQuy = await TaiTienChiSoQuyAsync(conn, dk, token);
+        if (!dk.SuDungKiotViet)
+        {
+            tongHop.CongNo = await TaiTongCongNoAsync(conn, dk, token);
+            tongHop.DaThanhToan = await TaiTongDaThanhToanAsync(conn, dk, token);
+        }
 
         // 2. Tổng số bản ghi (cho phân trang)
         var tongSoBanGhi = await TaiTongSoBanGhiAsync(conn, dk, token);
@@ -140,8 +153,8 @@ public sealed class BaoCaoNhaCungCapService
         for (int i = 0; i < top.Count; i++)
         {
             top[i].Stt = i + 1;
-            top[i].TyLePhanTram = tongHop.GiaTriNhapHang > 0
-                ? (double)(top[i].GiaTriNhapHang / tongHop.GiaTriNhapHang * 100m)
+            top[i].TyLePhanTram = tongHop.TongTienNhap > 0
+                ? (double)(top[i].TongTienNhap / tongHop.TongTienNhap * 100m)
                 : 0.0;
         }
 
@@ -176,29 +189,6 @@ public sealed class BaoCaoNhaCungCapService
         public object Params => new { TuNgay, DenKeTiep, TimKiem };
     }
 
-    private static string BieuThucTraHang(DieuKien dk)
-    {
-        // Tiền trả hàng từ sổ cái công nợ (loại giao dịch trả hàng/giảm trừ)
-        var subSql = @"COALESCE((
-            SELECT SUM(ls.ghi_co)
-            FROM lich_su_cong_no_nha_cung_cap ls
-            WHERE ls.nha_cung_cap_id = ncc.id
-              AND ls.loai_giao_dich IN ('TRA_HANG', 'TRA_HANG_NHAP', 'XUAT_TRA', 'GIAM_TRU')
-              AND ls.thoi_gian >= @TuNgay AND ls.thoi_gian < @DenKeTiep
-        ), 0)";
-
-        if (dk.SuDungKiotViet)
-        {
-            return @"CASE
-                WHEN ncc.co_du_lieu_kiotviet = 1 AND COALESCE(ncc.tong_mua, 0) > COALESCE(ncc.tong_mua_tru_tra_hang, 0)
-                THEN (COALESCE(ncc.tong_mua, 0) - COALESCE(ncc.tong_mua_tru_tra_hang, 0))
-                ELSE " + subSql + @"
-            END";
-        }
-
-        return subSql;
-    }
-
     private static string BieuThucCongNo(DieuKien dk)
     {
         var congNoNoiBo = @"COALESCE((
@@ -224,6 +214,14 @@ public sealed class BaoCaoNhaCungCapService
         return congNoNoiBo;
     }
 
+    private static string BieuThucDaThanhToan() => @"COALESCE((
+        SELECT SUM(ls.ghi_co)
+        FROM lich_su_cong_no_nha_cung_cap ls
+        WHERE ls.nha_cung_cap_id = ncc.id
+          AND ls.loai_giao_dich = 'THANH_TOAN_NHAP'
+          AND ls.thoi_gian >= @TuNgay AND ls.thoi_gian < @DenKeTiep
+    ), 0)";
+
     private async Task<BaoCaoNhaCungCapTongHop> TaiTongHopAsync(
         MySqlConnection conn, DieuKien dk, CancellationToken token)
     {
@@ -234,12 +232,13 @@ public sealed class BaoCaoNhaCungCapService
                 COUNT(*) AS TongNhaCungCap,
                 0 AS SoPhieuNhap,
                 COALESCE(SUM(ncc.tong_mua), 0) AS TongTienNhap,
-                COALESCE(SUM(CASE WHEN ncc.tong_mua > ncc.tong_mua_tru_tra_hang THEN ncc.tong_mua - ncc.tong_mua_tru_tra_hang ELSE 0 END), 0) AS TienTraHang,
-                COALESCE(SUM(CASE WHEN ncc.tong_mua > ncc.no_can_tra_hien_tai THEN ncc.tong_mua - ncc.no_can_tra_hien_tai ELSE 0 END), 0) AS DaThanhToan,
+                0 AS TongSoLuongNhap,
+                0 AS DaThanhToan,
                 COALESCE(SUM(ncc.no_can_tra_hien_tai), 0) AS CongNo
             FROM nha_cung_cap ncc
             WHERE ncc.trang_thai = 1
               AND ncc.co_du_lieu_kiotviet = 1
+              AND ncc.ngay_nhap_excel >= @TuNgay AND ncc.ngay_nhap_excel < @DenKeTiep
               AND COALESCE(ncc.tong_mua, 0) > 0
               {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")};
             """;
@@ -249,23 +248,25 @@ public sealed class BaoCaoNhaCungCapService
                 ?? new BaoCaoNhaCungCapTongHop();
         }
 
-        var tienTraHangExpr = BieuThucTraHang(dk);
-        var congNoExpr = BieuThucCongNo(dk);
-
         var sql = $"""
         SELECT
             COUNT(DISTINCT ncc.id) AS TongNhaCungCap,
             COUNT(p.id) AS SoPhieuNhap,
             COALESCE(SUM(p.tong_tien_nhap), 0) AS TongTienNhap,
+            COALESCE(SUM(ct.tong_sl), 0) AS TongSoLuongNhap,
             COALESCE(SUM(p.giam_gia), 0) AS GiamGia,
             COALESCE(SUM(p.chi_phi_khac), 0) AS ChiPhiKhac,
-            COALESCE(SUM({tienTraHangExpr}), 0) AS TienTraHang,
-            COALESCE(SUM(p.da_thanh_toan), 0) AS DaThanhToan,
-            COALESCE(SUM({congNoExpr}), 0) AS CongNo,
+            0 AS DaThanhToan,
+            0 AS CongNo,
             COALESCE(SUM(p.con_no), 0) AS CongNoPhatSinh,
             COUNT(DISTINCT CASE WHEN p.con_no > 0 THEN ncc.id END) AS SoNccConNo
         FROM phieu_nhap_hang p
         LEFT JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
+        LEFT JOIN (
+            SELECT phieu_nhap_id, SUM(so_luong) AS tong_sl
+            FROM chi_tiet_phieu_nhap_hang
+            GROUP BY phieu_nhap_id
+        ) ct ON ct.phieu_nhap_id = p.id
         WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
           AND p.trang_thai NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
           AND (ncc.trang_thai = 1 OR ncc.id IS NULL)
@@ -275,6 +276,66 @@ public sealed class BaoCaoNhaCungCapService
         return await conn.QueryFirstOrDefaultAsync<BaoCaoNhaCungCapTongHop>(
             new CommandDefinition(sql, dk.Params, cancellationToken: token))
             ?? new BaoCaoNhaCungCapTongHop();
+    }
+
+    private static async Task<decimal> TaiTienChiSoQuyAsync(
+        MySqlConnection conn, DieuKien dk, CancellationToken token)
+    {
+        var sql = $"""
+        SELECT COALESCE(SUM(pc.so_tien), 0)
+        FROM phieu_chi pc
+        WHERE pc.trang_thai = 'HOAN_THANH'
+          AND pc.thoi_gian_chi >= @TuNgay AND pc.thoi_gian_chi < @DenKeTiep
+          AND EXISTS (
+              SELECT 1
+              FROM nhom_chi_phi ncp
+              WHERE ncp.id = pc.nhom_chi_phi_id
+                AND ncp.ma_nhom = 'CHI_NHA_CUNG_CAP'
+          )
+          {(dk.TimKiem is null ? "" : "AND pc.noi_dung LIKE @TimKiem")};
+        """;
+
+        return await conn.ExecuteScalarAsync<decimal>(
+            new CommandDefinition(sql, dk.Params, cancellationToken: token));
+    }
+
+    private static async Task<decimal> TaiTongDaThanhToanAsync(
+        MySqlConnection conn, DieuKien dk, CancellationToken token)
+    {
+        var sql = $"""
+        SELECT COALESCE(SUM(ls.ghi_co), 0)
+        FROM lich_su_cong_no_nha_cung_cap ls
+        INNER JOIN nha_cung_cap ncc ON ncc.id = ls.nha_cung_cap_id
+        WHERE ls.loai_giao_dich = 'THANH_TOAN_NHAP'
+          AND ls.thoi_gian >= @TuNgay AND ls.thoi_gian < @DenKeTiep
+          AND ncc.trang_thai = 1
+          {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")};
+        """;
+
+        return await conn.ExecuteScalarAsync<decimal>(
+            new CommandDefinition(sql, dk.Params, cancellationToken: token));
+    }
+
+    private static async Task<decimal> TaiTongCongNoAsync(
+        MySqlConnection conn, DieuKien dk, CancellationToken token)
+    {
+        var congNoExpr = BieuThucCongNo(dk);
+        var sql = $"""
+        SELECT COALESCE(SUM(t.CongNo), 0)
+        FROM (
+            SELECT ncc.id, {congNoExpr} AS CongNo
+            FROM nha_cung_cap ncc
+            INNER JOIN phieu_nhap_hang p ON p.nha_cung_cap_id = ncc.id
+            WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
+              AND p.trang_thai NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
+              AND ncc.trang_thai = 1
+              {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")}
+            GROUP BY ncc.id
+        ) t;
+        """;
+
+        return await conn.ExecuteScalarAsync<decimal>(
+            new CommandDefinition(sql, dk.Params, cancellationToken: token));
     }
 
     private async Task<int> TaiTongSoBanGhiAsync(
@@ -287,6 +348,7 @@ public sealed class BaoCaoNhaCungCapService
             FROM nha_cung_cap ncc
             WHERE ncc.trang_thai = 1
               AND ncc.co_du_lieu_kiotviet = 1
+              AND ncc.ngay_nhap_excel >= @TuNgay AND ncc.ngay_nhap_excel < @DenKeTiep
               AND COALESCE(ncc.tong_mua, 0) > 0
               {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")};
             """;
@@ -325,13 +387,13 @@ public sealed class BaoCaoNhaCungCapService
                 COALESCE(ncc.so_dien_thoai, '') AS SoDienThoai,
                 0 AS SoPhieuNhap,
                 COALESCE(ncc.tong_mua, 0) AS TongTienNhap,
-                COALESCE(CASE WHEN ncc.tong_mua > ncc.tong_mua_tru_tra_hang THEN ncc.tong_mua - ncc.tong_mua_tru_tra_hang ELSE 0 END, 0) AS TienTraHang,
-                COALESCE(ncc.tong_mua_tru_tra_hang, COALESCE(ncc.tong_mua, 0)) AS GiaTriNhapHang,
-                COALESCE(CASE WHEN ncc.tong_mua > ncc.no_can_tra_hien_tai THEN ncc.tong_mua - ncc.no_can_tra_hien_tai ELSE 0 END, 0) AS DaThanhToan,
+                0 AS TongSoLuongNhap,
+                0 AS DaThanhToan,
                 COALESCE(ncc.no_can_tra_hien_tai, 0) AS CongNo
             FROM nha_cung_cap ncc
             WHERE ncc.trang_thai = 1
               AND ncc.co_du_lieu_kiotviet = 1
+              AND ncc.ngay_nhap_excel >= @TuNgay AND ncc.ngay_nhap_excel < @DenKeTiep
               AND COALESCE(ncc.tong_mua, 0) > 0
               {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")}
             ORDER BY {orderBy}, ncc.id
@@ -352,7 +414,6 @@ public sealed class BaoCaoNhaCungCapService
             return rsKv.AsList();
         }
 
-        var tienTraHangExpr = BieuThucTraHang(dk);
         var congNoExpr = BieuThucCongNo(dk);
 
         var sql = $"""
@@ -364,9 +425,7 @@ public sealed class BaoCaoNhaCungCapService
             COUNT(p.id) AS SoPhieuNhap,
             COALESCE(SUM(ct.tong_sl), 0) AS TongSoLuongNhap,
             COALESCE(SUM(p.tong_tien_nhap), 0) AS TongTienNhap,
-            {tienTraHangExpr} AS TienTraHang,
-            (COALESCE(SUM(p.tong_tien_nhap), 0) - {tienTraHangExpr}) AS GiaTriNhapHang,
-            COALESCE(SUM(p.da_thanh_toan), 0) AS DaThanhToan,
+            {BieuThucDaThanhToan()} AS DaThanhToan,
             {congNoExpr} AS CongNo
         FROM phieu_nhap_hang p
         LEFT JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
@@ -411,16 +470,16 @@ public sealed class BaoCaoNhaCungCapService
                 COALESCE(ncc.so_dien_thoai, '') AS SoDienThoai,
                 0 AS SoPhieuNhap,
                 COALESCE(ncc.tong_mua, 0) AS TongTienNhap,
-                COALESCE(CASE WHEN ncc.tong_mua > ncc.tong_mua_tru_tra_hang THEN ncc.tong_mua - ncc.tong_mua_tru_tra_hang ELSE 0 END, 0) AS TienTraHang,
-                COALESCE(ncc.tong_mua_tru_tra_hang, COALESCE(ncc.tong_mua, 0)) AS GiaTriNhapHang,
-                COALESCE(CASE WHEN ncc.tong_mua > ncc.no_can_tra_hien_tai THEN ncc.tong_mua - ncc.no_can_tra_hien_tai ELSE 0 END, 0) AS DaThanhToan,
+                0 AS TongSoLuongNhap,
+                0 AS DaThanhToan,
                 COALESCE(ncc.no_can_tra_hien_tai, 0) AS CongNo
             FROM nha_cung_cap ncc
             WHERE ncc.trang_thai = 1
               AND ncc.co_du_lieu_kiotviet = 1
+              AND ncc.ngay_nhap_excel >= @TuNgay AND ncc.ngay_nhap_excel < @DenKeTiep
               AND COALESCE(ncc.tong_mua, 0) > 0
               {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")}
-            ORDER BY GiaTriNhapHang DESC, ncc.id
+            ORDER BY TongTienNhap DESC, ncc.id
             LIMIT 10;
             """;
 
@@ -429,7 +488,6 @@ public sealed class BaoCaoNhaCungCapService
             return rsKv.AsList();
         }
 
-        var tienTraHangExpr = BieuThucTraHang(dk);
         var congNoExpr = BieuThucCongNo(dk);
 
         var sql = $"""
@@ -441,9 +499,7 @@ public sealed class BaoCaoNhaCungCapService
             COUNT(p.id) AS SoPhieuNhap,
             COALESCE(SUM(ct.tong_sl), 0) AS TongSoLuongNhap,
             COALESCE(SUM(p.tong_tien_nhap), 0) AS TongTienNhap,
-            {tienTraHangExpr} AS TienTraHang,
-            (COALESCE(SUM(p.tong_tien_nhap), 0) - {tienTraHangExpr}) AS GiaTriNhapHang,
-            COALESCE(SUM(p.da_thanh_toan), 0) AS DaThanhToan,
+            {BieuThucDaThanhToan()} AS DaThanhToan,
             {congNoExpr} AS CongNo
         FROM phieu_nhap_hang p
         LEFT JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
@@ -457,7 +513,7 @@ public sealed class BaoCaoNhaCungCapService
           AND (ncc.trang_thai = 1 OR ncc.id IS NULL)
           {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")}
         GROUP BY ncc.id, ncc.ma_nha_cung_cap, ncc.ten_nha_cung_cap, ncc.so_dien_thoai
-        ORDER BY GiaTriNhapHang DESC, SoPhieuNhap DESC, ncc.id
+        ORDER BY TongTienNhap DESC, SoPhieuNhap DESC, ncc.id
         LIMIT 10;
         """;
 
@@ -468,7 +524,7 @@ public sealed class BaoCaoNhaCungCapService
 
     /// <summary>
     /// Biểu đồ "Nhập hàng theo thời gian": khoảng ≤ 1 ngày chia theo giờ, dài hơn chia
-    /// theo ngày. Gộp tiền nhập (từ phiếu nhập) và tiền trả hàng (từ sổ cái công nợ).
+    /// theo ngày; chỉ cộng giá trị các phiếu nhập hợp lệ.
     /// </summary>
     private async Task<(List<BaoCaoNhaCungCapDiemThoiGian> Diem, string[] TrucY)> TaiBieuDoAsync(
         MySqlConnection conn, DieuKien dk, CancellationToken token)
@@ -483,30 +539,16 @@ public sealed class BaoCaoNhaCungCapService
         var sql = $"""
         SELECT ThoiGianStr,
                COALESCE(SUM(TienNhap), 0) AS TienNhap,
-               COALESCE(SUM(TienTraHang), 0) AS TienTraHang,
                COALESCE(SUM(SoPhieuNhap), 0) AS SoPhieuNhap
         FROM (
             SELECT DATE_FORMAT(p.thoi_gian_nhap, '{format}') AS ThoiGianStr,
                    COALESCE(SUM(p.tong_tien_nhap), 0) AS TienNhap,
-                   0 AS TienTraHang,
                    COUNT(*) AS SoPhieuNhap
             FROM phieu_nhap_hang p
             LEFT JOIN nha_cung_cap ncc ON ncc.id = p.nha_cung_cap_id
             WHERE p.thoi_gian_nhap >= @TuNgay AND p.thoi_gian_nhap < @DenKeTiep
               AND p.trang_thai NOT IN ('DA_HUY', 'HUY', 'LUU_TAM')
               AND (ncc.trang_thai = 1 OR ncc.id IS NULL)
-              {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")}
-            GROUP BY ThoiGianStr
-            UNION ALL
-            SELECT DATE_FORMAT(ls.thoi_gian, '{format}') AS ThoiGianStr,
-                   0 AS TienNhap,
-                   COALESCE(SUM(ls.ghi_co), 0) AS TienTraHang,
-                   0 AS SoPhieuNhap
-            FROM lich_su_cong_no_nha_cung_cap ls
-            INNER JOIN nha_cung_cap ncc ON ncc.id = ls.nha_cung_cap_id
-            WHERE ls.thoi_gian >= @TuNgay AND ls.thoi_gian < @DenKeTiep
-              AND ls.loai_giao_dich IN ('TRA_HANG', 'TRA_HANG_NHAP', 'XUAT_TRA', 'GIAM_TRU')
-              AND ncc.trang_thai = 1
               {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")}
             GROUP BY ThoiGianStr
         ) t
@@ -528,7 +570,6 @@ public sealed class BaoCaoNhaCungCapService
             {
                 ThoiGian = tg,
                 TienNhap = Convert.ToDecimal(r.TienNhap),
-                TienTraHang = Convert.ToDecimal(r.TienTraHang),
                 SoPhieuNhap = Convert.ToInt32(r.SoPhieuNhap),
                 NhanXet = tg.ToString(theoGio ? "HH:00" : "dd/MM")
             });
@@ -540,7 +581,7 @@ public sealed class BaoCaoNhaCungCapService
             var dayDu = DienDayDuThoiGian(list, dk, theoGio, format);
 
             // Trục tung làm tròn đẹp (4 khoảng, 5 nhãn) để cột không bị lệch thang.
-            var max = dayDu.Max(x => x.GiaTriNhap);
+            var max = dayDu.Max(x => x.TienNhap);
             var (trucMax, nhanTrucY) = TinhTrucY(max);
 
             // Bề rộng cột giãn theo số điểm: ít điểm thì cột rộng, nhiều điểm thì hẹp.
@@ -554,7 +595,7 @@ public sealed class BaoCaoNhaCungCapService
 
             foreach (var x in dayDu)
             {
-                var giaTri = Math.Max(0m, x.GiaTriNhap);
+                var giaTri = Math.Max(0m, x.TienNhap);
                 x.TyLeChieuCao = trucMax <= 0 ? 0 : (double)(giaTri / trucMax * 100m);
                 x.TyLeBeRong = beRongMongMuon / BaoCaoNhaCungCapDiemThoiGian.BeRongToiDa * 100d;
             }
@@ -593,7 +634,6 @@ public sealed class BaoCaoNhaCungCapService
                 {
                     ThoiGian = tg,
                     TienNhap = 0,
-                    TienTraHang = 0,
                     SoPhieuNhap = 0,
                     NhanXet = tg.ToString(theoGio ? "HH:00" : "dd/MM", CultureInfo.InvariantCulture)
                 });
@@ -682,22 +722,22 @@ public sealed class BaoCaoNhaCungCapService
         var marks = new List<BaoCaoNhaCungCapScaleMark>();
         var labels = new string[11];
 
-        decimal maxNet = list.Count > 0 ? list.Max(x => x.GiaTriNhapHang) : 0m;
-        if (maxNet <= 0)
-            maxNet = 10_000_000m;
+        decimal maxImport = list.Count > 0 ? list.Max(x => x.TongTienNhap) : 0m;
+        if (maxImport <= 0)
+            maxImport = 10_000_000m;
 
         // Luôn chia thành 10 khoảng đều như hình tham khảo
-        var step = TinhBuocChiaDep(maxNet / 10m);
+        var step = TinhBuocChiaDep(maxImport / 10m);
         if (step <= 0)
             step = 1_000_000m;
 
         var maxScale = step * 10m;
 
         // Bộ bước "đẹp" dày nên maxScale luôn >= maxNet; chỉ chặn sai số làm tròn.
-        if (maxScale < maxNet)
+        if (maxScale < maxImport)
         {
-            step = maxNet / 10m;
-            maxScale = maxNet;
+            step = maxImport / 10m;
+            maxScale = maxImport;
         }
 
         for (int i = 0; i <= 10; i++)
@@ -717,7 +757,7 @@ public sealed class BaoCaoNhaCungCapService
 
         foreach (var x in list)
         {
-            x.TyLeBar = maxScale <= 0 ? 0 : Math.Max(0, (double)(x.GiaTriNhapHang / maxScale * 100m));
+            x.TyLeBar = maxScale <= 0 ? 0 : Math.Max(0, (double)(x.TongTienNhap / maxScale * 100m));
             x.RongBar = Math.Max(0, x.TyLeBar / 100d * beRongMacDinh);
         }
 

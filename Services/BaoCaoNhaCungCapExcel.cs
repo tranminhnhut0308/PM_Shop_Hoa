@@ -67,16 +67,13 @@ public static class BaoCaoNhaCungCapExcel
 
         var kpiList = new (string Ten, object GiaTri, string Kieu, string DonVi, string YNghia, string? MauChu)[]
         {
-            ("Tổng số nhà cung cấp phát sinh giao dịch", t.TongNhaCungCap, "int", "Nhà cung cấp", "Số NCC có phát sinh phiếu nhập trong kỳ", null),
-            ("Số phiếu nhập hàng", t.SoPhieuNhap, "int", "Phiếu nhập", "Tổng số lượt nhập kho hoàn thành", null),
-            ("Tổng tiền nhập hàng", t.TongTienNhap, "tien", "VNĐ", "Tổng giá trị hàng nhập trước giảm giá & chi phí", null),
-            ("Tổng giảm giá nhập hàng", t.GiamGia, "tien", "VNĐ", "Chiết khấu/giảm giá được nhà cung cấp trừ", null),
-            ("Tổng chi phí khác", t.ChiPhiKhac, "tien", "VNĐ", "Chi phí vận chuyển, bốc xếp hoặc phụ phí nhập", null),
-            ("Tổng giá trị nhập hàng (sau giảm trừ)", t.GiaTriNhapHang, "tien", "VNĐ", "Giá trị thực tế cần thanh toán sau khi trừ trả hàng", ExcelHelper.MauChuDao),
-            ("Tổng tiền đã thanh toán cho nhà cung cấp", t.DaThanhToan, "tien", "VNĐ", "Số tiền thực tế cửa hàng đã chi thanh toán cho NCC", ExcelHelper.MauTichCuc),
-            ("Tổng công nợ phát sinh", t.CongNoPhatSinh, "tien", "VNĐ", t.CongNoPhatSinh > 0 ? "Công nợ mới phát sinh từ các phiếu nhập trong kỳ" : "Không phát sinh nợ mới", t.CongNoPhatSinh > 0 ? ExcelHelper.MauNguyHiem : ExcelHelper.MauTichCuc),
-            ("Số nhà cung cấp còn nợ", t.SoNccConNo, "int", "Nhà cung cấp", t.SoNccConNo > 0 ? "Nhà cung cấp cửa hàng còn nợ chưa thanh toán hết" : "Đã thanh toán đủ cho toàn bộ NCC", t.SoNccConNo > 0 ? ExcelHelper.MauCanhBao : ExcelHelper.MauTichCuc),
-            ("Số nhà cung cấp đã thanh toán đầy đủ", t.SoNccDaThanhToanHet, "int", "Nhà cung cấp", "Nhà cung cấp đã thanh toán 100% không còn nợ", ExcelHelper.MauTichCuc)
+            ("Tổng tiền nhập hàng", t.TongTienNhap, "tien", "VNĐ", "Tổng giá trị các phiếu nhập hợp lệ", ExcelHelper.MauChuDao),
+            ("Số phiếu nhập hàng", t.SoPhieuNhap, "int", "Phiếu nhập", "Không tính phiếu đã hủy", null),
+            ("Số nhà cung cấp", t.TongNhaCungCap, "int", "Nhà cung cấp", "Có phát sinh nhập hàng trong kỳ", null),
+            ("Số hàng hóa đã nhập", t.TongSoLuongNhap, "decimal", "Sản phẩm", "Tổng số lượng hàng trên phiếu nhập", null),
+            ("Chi nhà cung cấp theo sổ quỹ", t.TienChiSoQuy, "tien", "VNĐ", "Tổng phiếu chi nhà cung cấp đã hoàn thành", ExcelHelper.MauTichCuc),
+            ("Đã thanh toán cho nhà cung cấp", t.DaThanhToan, "tien", "VNĐ", "Tổng thanh toán ghi nhận trong sổ công nợ", ExcelHelper.MauTichCuc),
+            ("Tổng công nợ nhà cung cấp", t.CongNo, "tien", "VNĐ", "Số dư công nợ hiện tại của nhà cung cấp có phát sinh", ExcelHelper.MauCanhBao)
         };
 
         for (int i = 0; i < kpiList.Length; i++)
@@ -93,6 +90,8 @@ public static class BaoCaoNhaCungCapExcel
             var cellVal = ws.Cell(dong, 3);
             if (item.Kieu == "tien")
                 ExcelHelper.GhiO_Tien(cellVal, Convert.ToDecimal(item.GiaTri), hienThiVnd: true);
+            else if (item.Kieu == "decimal")
+                ExcelHelper.GhiO_SoLuong(cellVal, Convert.ToDecimal(item.GiaTri));
             else
                 ExcelHelper.GhiO_Chu(cellVal, Convert.ToInt32(item.GiaTri).ToString("N0"), XLAlignmentHorizontalValues.Right);
 
@@ -123,7 +122,7 @@ public static class BaoCaoNhaCungCapExcel
         ExcelHelper.GhiTieuDeCot(ws, dong, tieuDeTop);
         dong++;
 
-        decimal maxNhapTop = d.Top.Count > 0 ? d.Top.Max(x => x.GiaTriNhapHang) : 0m;
+        decimal maxNhapTop = d.Top.Count > 0 ? d.Top.Max(x => x.TongTienNhap) : 0m;
         decimal topTongTienNhap = 0, topTongDaTra = 0, topTongNo = 0, topTongSl = 0;
         int topTongPhieu = 0;
 
@@ -138,7 +137,7 @@ public static class BaoCaoNhaCungCapExcel
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 4), ncc.SoDienThoai, XLAlignmentHorizontalValues.Center);
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 5), ncc.SoPhieuNhap.ToString("N0"), XLAlignmentHorizontalValues.Right);
             ExcelHelper.GhiO_SoLuong(ws.Cell(dong, 6), ncc.TongSoLuongNhap);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 7), ncc.GiaTriNhapHang, hienThiVnd: true);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 7), ncc.TongTienNhap, hienThiVnd: true);
             ExcelHelper.GhiO_Tien(ws.Cell(dong, 8), ncc.DaThanhToan, hienThiVnd: true);
 
             var cellNo = ws.Cell(dong, 9);
@@ -150,7 +149,7 @@ public static class BaoCaoNhaCungCapExcel
             }
 
             var cellBar = ws.Cell(dong, 10);
-            double tyLe = maxNhapTop > 0 ? (double)(ncc.GiaTriNhapHang / maxNhapTop * 100m) : 0;
+            double tyLe = maxNhapTop > 0 ? (double)(ncc.TongTienNhap / maxNhapTop * 100m) : 0;
             cellBar.Value = ExcelHelper.TaoThanhTrucQuan(tyLe, 10);
             cellBar.Style.Font.FontName = "Consolas";
             cellBar.Style.Font.FontSize = 9.5;
@@ -163,7 +162,7 @@ public static class BaoCaoNhaCungCapExcel
 
             topTongPhieu += ncc.SoPhieuNhap;
             topTongSl += ncc.TongSoLuongNhap;
-            topTongTienNhap += ncc.GiaTriNhapHang;
+            topTongTienNhap += ncc.TongTienNhap;
             topTongDaTra += ncc.DaThanhToan;
             topTongNo += ncc.CongNo;
             dong++;
@@ -202,10 +201,10 @@ public static class BaoCaoNhaCungCapExcel
 
         var chiSoCongNo = new (string Ten, object GiaTri, string Kieu, string DonVi, string DanhGia, string? Mau)[]
         {
-            ("Tổng công nợ phát sinh trong kỳ", t.CongNoPhatSinh, "tien", "VNĐ", t.GiaTriNhapHang > 0 ? $"Tỷ lệ nợ/giá trị nhập: {(double)(t.CongNoPhatSinh / t.GiaTriNhapHang * 100m):0.0}%" : "0%", t.CongNoPhatSinh > 0 ? ExcelHelper.MauNguyHiem : ExcelHelper.MauTichCuc),
-            ("Tổng tiền đã chi thanh toán trong kỳ", t.DaThanhToan, "tien", "VNĐ", t.GiaTriNhapHang > 0 ? $"Tỷ lệ đã chi trả: {(double)(t.DaThanhToan / t.GiaTriNhapHang * 100m):0.0}%" : "100%", ExcelHelper.MauTichCuc),
-            ("Tổng số nhà cung cấp còn nợ", t.SoNccConNo, "int", "Nhà cung cấp", t.TongNhaCungCap > 0 ? $"{(double)t.SoNccConNo / t.TongNhaCungCap * 100:0.0}% tổng NCC" : "0%", t.SoNccConNo > 0 ? ExcelHelper.MauCanhBao : ExcelHelper.MauTichCuc),
-            ("Tổng số nhà cung cấp đã trả hết", t.SoNccDaThanhToanHet, "int", "Nhà cung cấp", t.TongNhaCungCap > 0 ? $"{(double)t.SoNccDaThanhToanHet / t.TongNhaCungCap * 100:0.0}% tổng NCC" : "100%", ExcelHelper.MauTichCuc)
+            ("Tổng tiền nhập hàng", t.TongTienNhap, "tien", "VNĐ", "Giá trị các phiếu nhập hợp lệ trong kỳ", ExcelHelper.MauChuDao),
+            ("Đã thanh toán theo sổ công nợ", t.DaThanhToan, "tien", "VNĐ", t.TongTienNhap > 0 ? $"Thanh toán / nhập hàng: {(double)(t.DaThanhToan / t.TongTienNhap * 100m):0.0}%" : "0%", ExcelHelper.MauTichCuc),
+            ("Chi nhà cung cấp theo sổ quỹ", t.TienChiSoQuy, "tien", "VNĐ", "Phiếu chi đã hoàn thành trong kỳ", ExcelHelper.MauTichCuc),
+            ("Tổng công nợ hiện tại", t.CongNo, "tien", "VNĐ", "Số dư sổ công nợ nhà cung cấp", t.CongNo > 0 ? ExcelHelper.MauCanhBao : ExcelHelper.MauTichCuc)
         };
 
         foreach (var cn in chiSoCongNo)
@@ -245,7 +244,7 @@ public static class BaoCaoNhaCungCapExcel
         ExcelHelper.GhiTieuDeCot(ws, dong, tieuDeCnChiTiet);
         dong++;
 
-        var danhSachCnNcc = d.DongTrang.OrderByDescending(x => x.CongNo).ThenByDescending(x => x.GiaTriNhapHang).ToList();
+        var danhSachCnNcc = d.DongTrang.ToList();
         decimal cnTongNhap = 0, cnTongDaChi = 0, cnTongNo = 0;
 
         for (int i = 0; i < danhSachCnNcc.Count; i++)
@@ -260,7 +259,7 @@ public static class BaoCaoNhaCungCapExcel
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 2), item.MaNhaCungCap, XLAlignmentHorizontalValues.Center);
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 3), item.TenNhaCungCap);
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 4), item.SoDienThoai, XLAlignmentHorizontalValues.Center);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 5), item.GiaTriNhapHang, hienThiVnd: true);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 5), item.TongTienNhap, hienThiVnd: true);
             ExcelHelper.GhiO_Tien(ws.Cell(dong, 6), item.DaThanhToan, hienThiVnd: true);
 
             var cellNo = ws.Cell(dong, 7);
@@ -272,13 +271,13 @@ public static class BaoCaoNhaCungCapExcel
             }
 
             var cellBar = ws.Cell(dong, 8);
-            double tyLeTra = item.GiaTriNhapHang > 0 ? (double)(item.DaThanhToan / item.GiaTriNhapHang * 100m) : 100.0;
-            cellBar.Value = $"Đã trả: {tyLeTra:0}% {ExcelHelper.TaoThanhTrucQuan(tyLeTra, 8)}";
+            double tyLeThanhToan = item.TongTienNhap > 0 ? (double)(item.DaThanhToan / item.TongTienNhap * 100m) : 0.0;
+            cellBar.Value = $"Đã thanh toán: {tyLeThanhToan:0}% {ExcelHelper.TaoThanhTrucQuan(tyLeThanhToan, 8)}";
             cellBar.Style.Font.FontName = "Consolas";
             cellBar.Style.Font.FontSize = 9.5;
             cellBar.Style.Font.FontColor = XLColor.FromHtml(ExcelHelper.MauChuDao);
 
-            cnTongNhap += item.GiaTriNhapHang;
+            cnTongNhap += item.TongTienNhap;
             cnTongDaChi += item.DaThanhToan;
             cnTongNo += item.CongNo;
             dong++;
@@ -308,24 +307,24 @@ public static class BaoCaoNhaCungCapExcel
         oNhom4.Style.Font.FontColor = XLColor.FromHtml(ExcelHelper.MauChuDao);
         dong++;
 
-        string[] tieuDeTyTrong = ["STT", "Mã NCC", "Tên nhà cung cấp", "Số phiếu nhập", "Giá trị nhập hàng (VNĐ)", "Tỷ trọng nhập (%)", "Biểu đồ tỷ trọng", "So sánh Nhập & Đã trả"];
+        string[] tieuDeTyTrong = ["STT", "Mã NCC", "Tên nhà cung cấp", "Số phiếu nhập", "Tổng tiền nhập (VNĐ)", "Tỷ trọng nhập (%)", "Biểu đồ tỷ trọng", "Tỷ lệ thanh toán"];
         ExcelHelper.GhiTieuDeCot(ws, dong, tieuDeTyTrong);
         dong++;
 
-        decimal tongGiaTriKy = t.GiaTriNhapHang > 0 ? t.GiaTriNhapHang : (d.DongTrang.Sum(x => x.GiaTriNhapHang));
+        decimal tongGiaTriKy = t.TongTienNhap;
         for (int i = 0; i < d.DongTrang.Count; i++)
         {
             var item = d.DongTrang[i];
             ws.Row(dong).Height = 20;
 
-            double tyLePhanTram = tongGiaTriKy > 0 ? (double)(item.GiaTriNhapHang / tongGiaTriKy * 100m) : 0.0;
-            double tyLeDaTra = item.GiaTriNhapHang > 0 ? (double)(item.DaThanhToan / item.GiaTriNhapHang * 100m) : 100.0;
+            double tyLePhanTram = tongGiaTriKy > 0 ? (double)(item.TongTienNhap / tongGiaTriKy * 100m) : 0.0;
+            double tyLeThanhToan = item.TongTienNhap > 0 ? (double)(item.DaThanhToan / item.TongTienNhap * 100m) : 0.0;
 
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 1), i + 1, XLAlignmentHorizontalValues.Center);
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 2), item.MaNhaCungCap, XLAlignmentHorizontalValues.Center);
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 3), item.TenNhaCungCap);
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 4), item.SoPhieuNhap.ToString("N0"), XLAlignmentHorizontalValues.Right);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 5), item.GiaTriNhapHang, hienThiVnd: true);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 5), item.TongTienNhap, hienThiVnd: true);
 
             var cellPt = ws.Cell(dong, 6);
             cellPt.Value = tyLePhanTram / 100.0;
@@ -343,10 +342,10 @@ public static class BaoCaoNhaCungCapExcel
             cellBar.Style.Border.OutsideBorderColor = XLColor.FromHtml(ExcelHelper.MauVien);
 
             var cellSoSanh = ws.Cell(dong, 8);
-            cellSoSanh.Value = $"Đã trả {tyLeDaTra:0}%";
+            cellSoSanh.Value = $"Đã thanh toán {tyLeThanhToan:0}%";
             cellSoSanh.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
             cellSoSanh.Style.Font.Bold = true;
-            cellSoSanh.Style.Font.FontColor = tyLeDaTra >= 99.9 ? XLColor.FromHtml(ExcelHelper.MauTichCuc) : XLColor.FromHtml(ExcelHelper.MauCanhBao);
+            cellSoSanh.Style.Font.FontColor = tyLeThanhToan >= 99.9 ? XLColor.FromHtml(ExcelHelper.MauTichCuc) : XLColor.FromHtml(ExcelHelper.MauCanhBao);
             cellSoSanh.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
             cellSoSanh.Style.Border.OutsideBorderColor = XLColor.FromHtml(ExcelHelper.MauVien);
 
@@ -402,16 +401,16 @@ public static class BaoCaoNhaCungCapExcel
             DateTime.Now,
             tenCuaHang,
             nguoiXuat,
-            tongSoCot: 11);
+            tongSoCot: 9);
 
         string[] tieuDe =
         [
             "STT", "Mã NCC", "Tên nhà cung cấp", "Số điện thoại", "Số phiếu nhập", "Tổng SL nhập",
-            "Tổng tiền nhập (VNĐ)", "Tiền trả hàng (VNĐ)", "Giá trị nhập hàng (VNĐ)", "Đã thanh toán (VNĐ)", "Còn nợ (VNĐ)"
+            "Tổng tiền nhập (VNĐ)", "Đã thanh toán (VNĐ)", "Còn nợ (VNĐ)"
         ];
         ExcelHelper.GhiTieuDeCot(ws, dongHeader, tieuDe);
 
-        decimal tongTien = 0, tongTra = 0, tongNhap = 0, tongDaTra = 0, tongCongNo = 0, tongSl = 0;
+        decimal tongTien = 0, tongDaThanhToan = 0, tongCongNo = 0, tongSl = 0;
         int tongPhieu = 0;
 
         var dong = dongHeader + 1;
@@ -431,11 +430,9 @@ public static class BaoCaoNhaCungCapExcel
             ExcelHelper.GhiO_SoLuong(ws.Cell(dong, 6), row.TongSoLuongNhap);
 
             ExcelHelper.GhiO_Tien(ws.Cell(dong, 7), row.TongTienNhap, hienThiVnd: true);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 8), row.TienTraHang, hienThiVnd: true);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 9), row.GiaTriNhapHang, hienThiVnd: true);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 10), row.DaThanhToan, hienThiVnd: true);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 8), row.DaThanhToan, hienThiVnd: true);
 
-            var cellNo = ws.Cell(dong, 11);
+            var cellNo = ws.Cell(dong, 9);
             ExcelHelper.GhiO_Tien(cellNo, row.CongNo, hienThiVnd: true);
             if (row.CongNo > 0)
             {
@@ -446,9 +443,7 @@ public static class BaoCaoNhaCungCapExcel
             tongPhieu += row.SoPhieuNhap;
             tongSl += row.TongSoLuongNhap;
             tongTien += row.TongTienNhap;
-            tongTra += row.TienTraHang;
-            tongNhap += row.GiaTriNhapHang;
-            tongDaTra += row.DaThanhToan;
+            tongDaThanhToan += row.DaThanhToan;
             tongCongNo += row.CongNo;
 
             dong++;
@@ -463,10 +458,8 @@ public static class BaoCaoNhaCungCapExcel
             ExcelHelper.GhiO_Chu(ws.Cell(dong, 5), tongPhieu.ToString("N0"), XLAlignmentHorizontalValues.Right);
             ExcelHelper.GhiO_SoLuong(ws.Cell(dong, 6), tongSl);
             ExcelHelper.GhiO_Tien(ws.Cell(dong, 7), tongTien, hienThiVnd: true);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 8), tongTra, hienThiVnd: true);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 9), tongNhap, hienThiVnd: true);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 10), tongDaTra, hienThiVnd: true);
-            ExcelHelper.GhiO_Tien(ws.Cell(dong, 11), tongCongNo, hienThiVnd: true);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 8), tongDaThanhToan, hienThiVnd: true);
+            ExcelHelper.GhiO_Tien(ws.Cell(dong, 9), tongCongNo, hienThiVnd: true);
             ExcelHelper.DinhDangDongTongCong(ws, dong, 1, tieuDe.Length);
         }
 

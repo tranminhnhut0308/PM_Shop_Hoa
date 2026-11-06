@@ -18,11 +18,17 @@ public sealed class BaoCaoNhaCungCapTongHop
     /// <summary>Tổng số phiếu nhập hàng trong kỳ.</summary>
     public int SoPhieuNhap { get; set; }
 
-    /// <summary>Tổng tiền nhập hàng trong kỳ (trước khi trừ trả hàng).</summary>
+    /// <summary>Tổng tiền nhập hàng trong kỳ từ các phiếu nhập hợp lệ.</summary>
     public decimal TongTienNhap { get; set; }
 
-    /// <summary>Tổng tiền hàng đã trả lại nhà cung cấp trong kỳ.</summary>
-    public decimal TienTraHang { get; set; }
+    /// <summary>Tổng số lượng hàng hóa nhập trong kỳ.</summary>
+    public decimal TongSoLuongNhap { get; set; }
+
+    /// <summary>Tổng thanh toán đã ghi nhận trong sổ công nợ nhà cung cấp.</summary>
+    public decimal DaThanhToan { get; set; }
+
+    /// <summary>Tổng tiền chi nhà cung cấp từ sổ quỹ trong kỳ.</summary>
+    public decimal TienChiSoQuy { get; set; }
 
     /// <summary>Tổng giảm giá nhập hàng trong kỳ.</summary>
     public decimal GiamGia { get; set; }
@@ -30,13 +36,7 @@ public sealed class BaoCaoNhaCungCapTongHop
     /// <summary>Tổng chi phí khác khi nhập hàng trong kỳ.</summary>
     public decimal ChiPhiKhac { get; set; }
 
-    /// <summary>Giá trị nhập hàng thực tế: Tổng tiền nhập - Tiền trả hàng.</summary>
-    public decimal GiaTriNhapHang => TongTienNhap - TienTraHang;
-
-    /// <summary>Tổng số tiền đã thanh toán cho nhà cung cấp trong kỳ.</summary>
-    public decimal DaThanhToan { get; set; }
-
-    /// <summary>Tổng công nợ hiện tại với các nhà cung cấp.</summary>
+    /// <summary>Tổng công nợ nhà cung cấp theo sổ công nợ.</summary>
     public decimal CongNo { get; set; }
 
     /// <summary>Tổng công nợ phát sinh từ các phiếu nhập trong kỳ.</summary>
@@ -48,13 +48,6 @@ public sealed class BaoCaoNhaCungCapTongHop
     /// <summary>Số nhà cung cấp đã thanh toán đầy đủ trong kỳ.</summary>
     public int SoNccDaThanhToanHet => Math.Max(0, TongNhaCungCap - SoNccConNo);
 
-    /// <summary>Giá trị nhập trung bình mỗi phiếu: Giá trị nhập hàng / số phiếu nhập.</summary>
-    public decimal GiaTriNhapTrungBinh =>
-        SoPhieuNhap <= 0 ? 0m : GiaTriNhapHang / SoPhieuNhap;
-
-    public string GiaTriNhapTrungBinhHienThi =>
-        GiaTriNhapTrungBinh.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-
     public string TongNhaCungCapHienThi =>
         TongNhaCungCap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
 
@@ -64,8 +57,8 @@ public sealed class BaoCaoNhaCungCapTongHop
     public string TongTienNhapHienThi =>
         TongTienNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
 
-    public string TienTraHangHienThi =>
-        TienTraHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string TongSoLuongNhapHienThi =>
+        TongSoLuongNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
 
     public string GiamGiaHienThi =>
         GiamGia.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
@@ -82,11 +75,11 @@ public sealed class BaoCaoNhaCungCapTongHop
     public string SoNccDaThanhToanHetHienThi =>
         SoNccDaThanhToanHet.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
 
-    public string GiaTriNhapHangHienThi =>
-        GiaTriNhapHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-
     public string DaThanhToanHienThi =>
         DaThanhToan.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+
+    public string TienChiSoQuyHienThi =>
+        TienChiSoQuy.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
 
     public string CongNoHienThi =>
         CongNo.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
@@ -99,7 +92,7 @@ public sealed class BaoCaoNhaCungCapTongHop
 }
 
 /// <summary>
-/// Một dòng trong biểu đồ "Top 10 nhà cung cấp nhập hàng nhiều nhất (đã trừ trả hàng)".
+/// Một dòng trong biểu đồ Top 10 nhà cung cấp theo tổng tiền nhập hàng.
 /// </summary>
 public sealed partial class BaoCaoNhaCungCapTop : ObservableObject
 {
@@ -121,13 +114,7 @@ public sealed partial class BaoCaoNhaCungCapTop : ObservableObject
     /// <summary>Tổng tiền nhập hàng trong kỳ.</summary>
     public decimal TongTienNhap { get; set; }
 
-    /// <summary>Giá trị hàng đã trả lại nhà cung cấp trong kỳ.</summary>
-    public decimal TienTraHang { get; set; }
-
-    /// <summary>Giá trị nhập hàng thực tế (đã trừ trả hàng).</summary>
-    public decimal GiaTriNhapHang { get; set; }
-
-    /// <summary>Đã thanh toán.</summary>
+    /// <summary>Đã thanh toán theo sổ công nợ nhà cung cấp.</summary>
     public decimal DaThanhToan { get; set; }
 
     /// <summary>Công nợ hiện tại.</summary>
@@ -142,10 +129,10 @@ public sealed partial class BaoCaoNhaCungCapTop : ObservableObject
     private double _rongBar;
 
     public string GiaTriHienThi =>
-        GiaTriNhapHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+        TongTienNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
 
     /// <summary>Nhãn tiền rút gọn hiển thị ngay sau thanh biểu đồ (vd: 10,3 tr).</summary>
-    public string GiaTriRutGon => RutGonTien(GiaTriNhapHang);
+    public string GiaTriRutGon => RutGonTien(TongTienNhap);
 
     private static string RutGonTien(decimal val)
     {
@@ -175,8 +162,6 @@ public sealed partial class BaoCaoNhaCungCapTop : ObservableObject
         $"{TenNhaCungCap} ({MaNhaCungCap})\n" +
         $"• Số phiếu nhập: {SoPhieuNhap:N0}\n" +
         $"• Tổng tiền nhập: {TongTienNhap:N0} đ\n" +
-        $"• Tiền trả hàng: {TienTraHang:N0} đ\n" +
-        $"• Thực nhập (đã trừ trả): {GiaTriNhapHang:N0} đ\n" +
         $"• Đã thanh toán: {DaThanhToan:N0} đ\n" +
         $"• Công nợ hiện tại: {CongNo:N0} đ";
 }
@@ -196,8 +181,6 @@ public sealed class BaoCaoNhaCungCapDong
     public decimal TongSoLuongNhap { get; set; }
     public double TyLePhanTram { get; set; }
     public decimal TongTienNhap { get; set; }
-    public decimal TienTraHang { get; set; }
-    public decimal GiaTriNhapHang { get; set; }
     public decimal DaThanhToan { get; set; }
     public decimal CongNo { get; set; }
 
@@ -207,11 +190,8 @@ public sealed class BaoCaoNhaCungCapDong
     public string TongTienNhapHienThi =>
         TongTienNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
 
-    public string TienTraHangHienThi =>
-        TienTraHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-
-    public string GiaTriNhapHangHienThi =>
-        GiaTriNhapHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    public string TongSoLuongNhapHienThi =>
+        TongSoLuongNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
 
     public string DaThanhToanHienThi =>
         DaThanhToan.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
@@ -234,12 +214,6 @@ public sealed class BaoCaoNhaCungCapDiemThoiGian
     /// <summary>Tổng tiền nhập hàng trong điểm thời gian này.</summary>
     public decimal TienNhap { get; set; }
 
-    /// <summary>Tổng tiền hàng đã trả lại nhà cung cấp trong điểm thời gian này.</summary>
-    public decimal TienTraHang { get; set; }
-
-    /// <summary>Giá trị nhập ròng: TienNhap - TienTraHang.</summary>
-    public decimal GiaTriNhap => TienNhap - TienTraHang;
-
     public int SoPhieuNhap { get; set; }
 
     /// <summary>Tỉ lệ chiều cao cột so với điểm cao nhất trong khoảng (0..100).</summary>
@@ -252,14 +226,12 @@ public sealed class BaoCaoNhaCungCapDiemThoiGian
     public const double BeRongToiDa = 72;
 
     /// <summary>Chiều cao cột tính bằng pixel để XAML bind thẳng.</summary>
-    public double ChieuCaoCot => GiaTriNhap <= 0 ? 0 : Math.Max(3, TyLeChieuCao / 100d * ChieuCaoToiDa);
+    public double ChieuCaoCot => TienNhap <= 0 ? 0 : Math.Max(3, TyLeChieuCao / 100d * ChieuCaoToiDa);
 
     /// <summary>Bề rộng cột (px); nhiều điểm thì cuộn ngang trong vùng biểu đồ.</summary>
     public double BeRongCot => Math.Max(20, Math.Min(BeRongToiDa, TyLeBeRong / 100d * BeRongToiDa));
 
     public string TienNhapHienThi => TienNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string TienTraHangHienThi => TienTraHang.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
-    public string GiaTriNhapHienThi => GiaTriNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public string SoPhieuNhapHienThi => SoPhieuNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " phiếu";
 
     public string NgayDayDu => ThoiGian.ToString(NhanXet.Contains(':') ? "dd/MM/yyyy HH:00" : "dd/MM/yyyy");
@@ -267,8 +239,6 @@ public sealed class BaoCaoNhaCungCapDiemThoiGian
     public string ToolTip =>
         $"{NgayDayDu}\n" +
         $"Tổng tiền nhập: {TienNhapHienThi}\n" +
-        $"Tiền trả hàng: {TienTraHangHienThi}\n" +
-        $"Giá trị nhập ròng: {GiaTriNhapHienThi}\n" +
         $"Số phiếu nhập: {SoPhieuNhapHienThi}";
 }
 

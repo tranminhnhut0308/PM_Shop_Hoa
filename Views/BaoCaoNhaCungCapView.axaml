@@ -220,7 +220,7 @@
             <TextBlock Text="Báo cáo nhà cung cấp" FontSize="20" FontWeight="SemiBold"
               Foreground="#123F37" />
             <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
-              Text="Theo dõi giá trị nhập hàng, trả hàng, thanh toán và công nợ theo nhà cung cấp." />
+              Text="Theo dõi giá trị nhập hàng, thanh toán và công nợ theo nhà cung cấp." />
           </StackPanel>
 
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
@@ -313,78 +313,55 @@
       <ProgressBar IsIndeterminate="True" Height="3" IsVisible="{Binding DangTai}"
         Foreground="#087F6E" Background="#EAF9F5" BorderThickness="0" />
 
-      <!-- ============ 2. KHỐI TỔNG QUAN (8 CHỈ SỐ) ============ -->
-      <Grid ColumnDefinitions="*,*,*,*,*,*,*,*" ColumnSpacing="10">
-
+      <!-- ============ 2. KHỐI TỔNG QUAN (7 CHỈ SỐ) ============ -->
+      <Grid ColumnDefinitions="*,*,*,*,*,*,*" ColumnSpacing="10">
         <Border Classes="bcMetric">
           <StackPanel Spacing="2">
-            <TextBlock Classes="bcMetricLabel" Text="TỔNG TIỀN NHẬP" />
-            <TextBlock Classes="bcMetricValue" Foreground="#087F6E"
-              Text="{Binding TongHop.TongTienNhapHienThi}" />
-            <TextBlock Classes="bcMetricSub" Text="Trước khi trừ trả hàng" />
+            <TextBlock Classes="bcMetricLabel" Text="TỔNG TIỀN NHẬP HÀNG" />
+            <TextBlock Classes="bcMetricValue" Foreground="#087F6E" Text="{Binding TongHop.TongTienNhapHienThi}" />
+            <TextBlock Classes="bcMetricSub" Text="Phiếu nhập hợp lệ" />
           </StackPanel>
         </Border>
-
         <Border Grid.Column="1" Classes="bcMetric">
           <StackPanel Spacing="2">
-            <TextBlock Classes="bcMetricLabel" Text="TIỀN TRẢ HÀNG" />
-            <TextBlock Classes="bcMetricValue" Foreground="#C0392B"
-              Text="{Binding TongHop.TienTraHangHienThi}" />
-            <TextBlock Classes="bcMetricSub" Text="Hàng trả lại nhà cung cấp" />
+            <TextBlock Classes="bcMetricLabel" Text="SỐ PHIẾU NHẬP" />
+            <TextBlock Classes="bcMetricValue" Text="{Binding TongHop.SoPhieuNhapHienThi}" />
+            <TextBlock Classes="bcMetricSub" Text="Không tính phiếu đã hủy" />
           </StackPanel>
         </Border>
-
         <Border Grid.Column="2" Classes="bcMetric">
           <StackPanel Spacing="2">
-            <TextBlock Classes="bcMetricLabel" Text="GIÁ TRỊ NHẬP RÒNG" />
-            <TextBlock Classes="bcMetricValue" Foreground="#087F6E"
-              Text="{Binding TongHop.GiaTriNhapHangHienThi}" />
-            <TextBlock Classes="bcMetricSub" Text="Đã trừ trả hàng" />
-          </StackPanel>
-        </Border>
-
-        <Border Grid.Column="3" Classes="bcMetric">
-          <StackPanel Spacing="2">
-            <TextBlock Classes="bcMetricLabel" Text="SỐ PHIẾU NHẬP" />
-            <TextBlock Classes="bcMetricValue"
-              Text="{Binding TongHop.SoPhieuNhapHienThi}" />
-            <TextBlock Classes="bcMetricSub" Text="Phiếu đã nhập hàng" />
-          </StackPanel>
-        </Border>
-
-        <Border Grid.Column="4" Classes="bcMetric">
-          <StackPanel Spacing="2">
             <TextBlock Classes="bcMetricLabel" Text="SỐ NHÀ CUNG CẤP" />
-            <TextBlock Classes="bcMetricValue"
-              Text="{Binding TongHop.TongNhaCungCapHienThi}" />
+            <TextBlock Classes="bcMetricValue" Text="{Binding TongHop.TongNhaCungCapHienThi}" />
             <TextBlock Classes="bcMetricSub" Text="Có phát sinh trong kỳ" />
           </StackPanel>
         </Border>
-
+        <Border Grid.Column="3" Classes="bcMetric">
+          <StackPanel Spacing="2">
+            <TextBlock Classes="bcMetricLabel" Text="SỐ HÀNG ĐÃ NHẬP" />
+            <TextBlock Classes="bcMetricValue" Text="{Binding TongHop.TongSoLuongNhapHienThi}" />
+            <TextBlock Classes="bcMetricSub" Text="Tổng số lượng theo phiếu nhập" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="4" Classes="bcMetric">
+          <StackPanel Spacing="2">
+            <TextBlock Classes="bcMetricLabel" Text="CHI NHÀ CUNG CẤP / PHIẾU CHI" />
+            <TextBlock Classes="bcMetricValue" Foreground="#7C3AED" Text="{Binding TongHop.TienChiSoQuyHienThi}" />
+            <TextBlock Classes="bcMetricSub" Text="Chi thực tế trong sổ quỹ" />
+          </StackPanel>
+        </Border>
         <Border Grid.Column="5" Classes="bcMetric">
           <StackPanel Spacing="2">
-            <TextBlock Classes="bcMetricLabel" Text="NHẬP TB / PHIẾU" />
-            <TextBlock Classes="bcMetricValue"
-              Text="{Binding TongHop.GiaTriNhapTrungBinhHienThi}" />
-            <TextBlock Classes="bcMetricSub" Text="Giá trị nhập ròng / phiếu" />
+            <TextBlock Classes="bcMetricLabel" Text="ĐÃ THANH TOÁN NCC" />
+            <TextBlock Classes="bcMetricValue" Foreground="#2563EB" Text="{Binding TongHop.DaThanhToanHienThi}" />
+            <TextBlock Classes="bcMetricSub" Text="Theo sổ công nợ trong kỳ" />
           </StackPanel>
         </Border>
-
         <Border Grid.Column="6" Classes="bcMetric">
           <StackPanel Spacing="2">
-            <TextBlock Classes="bcMetricLabel" Text="ĐÃ THANH TOÁN" />
-            <TextBlock Classes="bcMetricValue" Foreground="#2563EB"
-              Text="{Binding TongHop.DaThanhToanHienThi}" />
-            <TextBlock Classes="bcMetricSub" Text="Tiền đã trả nhà cung cấp" />
-          </StackPanel>
-        </Border>
-
-        <Border Grid.Column="7" Classes="bcMetric">
-          <StackPanel Spacing="2">
-            <TextBlock Classes="bcMetricLabel" Text="CÔNG NỢ" />
-            <TextBlock Classes="bcMetricValue" Foreground="#D97706"
-              Text="{Binding TongHop.CongNoHienThi}" />
-            <TextBlock Classes="bcMetricSub" Text="Còn phải trả" />
+            <TextBlock Classes="bcMetricLabel" Text="TỔNG CÔNG NỢ NCC" />
+            <TextBlock Classes="bcMetricValue" Foreground="#D97706" Text="{Binding TongHop.CongNoHienThi}" />
+            <TextBlock Classes="bcMetricSub" Text="Số dư công nợ hiện tại" />
           </StackPanel>
         </Border>
       </Grid>
@@ -474,7 +451,7 @@
           <StackPanel VerticalAlignment="Center" Spacing="2">
             <TextBlock Classes="bcSectionTitle" Text="{Binding TieuDeBieuDo}" />
             <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
-              Text="Xếp hạng theo giá trị nhập ròng (đã trừ trả hàng) trong kỳ." />
+              Text="Xếp hạng theo tổng giá trị nhập hàng thực tế trong kỳ." />
           </StackPanel>
 
           <Border Height="1" Background="#EEF4F2" />
@@ -608,7 +585,7 @@
               <!-- Header -->
               <Border Padding="10,6" BorderBrush="#EEF4F2" BorderThickness="0,0,0,1"
                 Background="#F3F7F5">
-                <Grid ColumnDefinitions="45,105,*,120,85,130,120,140,130">
+                <Grid ColumnDefinitions="45,105,*,120,85,110,130,130,130">
                   <TextBlock Grid.Column="0" Classes="bcTableHead" Text="STT"
                     HorizontalAlignment="Center" VerticalAlignment="Center" />
                   <Button Grid.Column="1" Classes="sortHeaderBtn"
@@ -628,13 +605,11 @@
                     Command="{Binding SapXepCommand}" CommandParameter="TongTienNhap">
                     <TextBlock Classes="bcTableHead" Text="Tổng tiền nhập" />
                   </Button>
-                  <Button Grid.Column="6" Classes="sortHeaderBtn right"
-                    Command="{Binding SapXepCommand}" CommandParameter="TienTraHang">
-                    <TextBlock Classes="bcTableHead" Text="Tiền trả hàng" />
-                  </Button>
+                  <TextBlock Grid.Column="6" Classes="bcTableHead" Text="Số lượng"
+                    HorizontalAlignment="Right" VerticalAlignment="Center" />
                   <Button Grid.Column="7" Classes="sortHeaderBtn right"
-                    Command="{Binding SapXepCommand}" CommandParameter="GiaTriNhapHang">
-                    <TextBlock Classes="bcTableHead" Text="Giá trị nhập ròng" />
+                    Command="{Binding SapXepCommand}" CommandParameter="DaThanhToan">
+                    <TextBlock Classes="bcTableHead" Text="Đã thanh toán" />
                   </Button>
                   <Button Grid.Column="8" Classes="sortHeaderBtn right"
                     Command="{Binding SapXepCommand}" CommandParameter="CongNo">
@@ -650,7 +625,7 @@
                     <Button Classes="bcRowBtn"
                       Command="{Binding ElementName=RootView, Path=DataContext.XemChiTietNhaCungCapCommand}"
                       CommandParameter="{Binding}">
-                      <Grid ColumnDefinitions="45,105,*,120,85,130,120,140,130">
+                      <Grid ColumnDefinitions="45,105,*,120,85,110,130,130,130">
                         <TextBlock Grid.Column="0" Classes="bcTableCell"
                           Text="{Binding Stt}" HorizontalAlignment="Center"
                           VerticalAlignment="Center" />
@@ -670,11 +645,11 @@
                           FontWeight="SemiBold" Text="{Binding TongTienNhapHienThi}"
                           HorizontalAlignment="Right" VerticalAlignment="Center" />
                         <TextBlock Grid.Column="6" Classes="bcTableCell"
-                          Foreground="#C0392B" Text="{Binding TienTraHangHienThi}"
+                          Text="{Binding TongSoLuongNhapHienThi}"
                           HorizontalAlignment="Right" VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="7" Classes="bcTableCell"
-                          Foreground="#087F6E" Text="{Binding GiaTriNhapHangHienThi}"
-                          HorizontalAlignment="Right" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="7" Classes="bcTableCell" Foreground="#2563EB"
+                          Text="{Binding DaThanhToanHienThi}" HorizontalAlignment="Right"
+                          VerticalAlignment="Center" />
                         <TextBlock Grid.Column="8" Classes="bcTableCell"
                           FontWeight="SemiBold"
                           Foreground="{Binding CongNo, Converter={x:Static converters:ConNoForegroundConverter.Instance}}"
@@ -689,7 +664,7 @@
               <!-- Tổng cuối bảng -->
               <Border IsVisible="{Binding CoDongTrang}" Margin="0,4,0,0" Padding="10,7"
                 Background="#F3F8F7" CornerRadius="6">
-                <Grid ColumnDefinitions="45,105,*,120,85,130,120,140,130">
+                <Grid ColumnDefinitions="45,105,*,120,85,110,130,130,130">
                   <TextBlock Grid.Column="0" FontSize="11.5" FontWeight="SemiBold"
                     Foreground="#164B40" Text="Tổng" VerticalAlignment="Center" />
                   <TextBlock Grid.Column="2" FontSize="11.5" FontWeight="SemiBold"
@@ -702,10 +677,10 @@
                     Foreground="#164B40" Text="{Binding TongHop.TongTienNhapHienThi}"
                     HorizontalAlignment="Right" VerticalAlignment="Center" />
                   <TextBlock Grid.Column="6" FontSize="11.5" FontWeight="SemiBold"
-                    Foreground="#C0392B" Text="{Binding TongHop.TienTraHangHienThi}"
+                    Foreground="#164B40" Text="{Binding TongHop.TongSoLuongNhapHienThi}"
                     HorizontalAlignment="Right" VerticalAlignment="Center" />
                   <TextBlock Grid.Column="7" FontSize="11.5" FontWeight="SemiBold"
-                    Foreground="#087F6E" Text="{Binding TongHop.GiaTriNhapHangHienThi}"
+                    Foreground="#2563EB" Text="{Binding TongHop.DaThanhToanHienThi}"
                     HorizontalAlignment="Right" VerticalAlignment="Center" />
                   <TextBlock Grid.Column="8" FontSize="11.5" FontWeight="SemiBold"
                     Foreground="#D97706" Text="{Binding TongHop.CongNoHienThi}"

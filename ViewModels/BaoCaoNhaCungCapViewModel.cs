@@ -333,7 +333,7 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
     [ObservableProperty] private bool coTop;
     [ObservableProperty] private bool coDongTrang;
 
-    public string TieuDeBieuDo => "Top 10 nhà cung cấp nhập hàng nhiều nhất (đã trừ trả hàng)";
+    public string TieuDeBieuDo => "Top 10 nhà cung cấp theo tổng tiền nhập hàng";
 
     [ObservableProperty] private decimal maxScaleValue = 30_000_000m;
     private string[] _scaleLabels = ["0", "3 tr", "6 tr", "9 tr", "12 tr", "15 tr", "18 tr", "21 tr", "24 tr", "27 tr", "30 tr"];
@@ -368,7 +368,7 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
 
         foreach (var item in TopItems)
         {
-            item.RongBar = Math.Max(0, (double)(item.GiaTriNhapHang / MaxScaleValue) * plotWidth);
+            item.RongBar = Math.Max(0, (double)(item.TongTienNhap / MaxScaleValue) * plotWidth);
         }
     }
 
@@ -554,7 +554,7 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
             {
                 if (_currentPlotWidth > 20 && MaxScaleValue > 0)
                 {
-                    item.RongBar = Math.Max(0, (double)(item.GiaTriNhapHang / MaxScaleValue) * _currentPlotWidth);
+                    item.RongBar = Math.Max(0, (double)(item.TongTienNhap / MaxScaleValue) * _currentPlotWidth);
                 }
                 TopItems.Add(item);
             }
