@@ -87,6 +87,8 @@
                         Click="OnQuickDateClick" />
                     <Button Content="7 ngày" Tag="last7" Classes="quickFilter"
                         Click="OnQuickDateClick" />
+                    <Button Content="30 ngày" Tag="last30" Classes="quickFilter"
+                        Click="OnQuickDateClick" />
                     <Button Content="Tháng này" Tag="thisMonth" Classes="quickFilter"
                         Click="OnQuickDateClick" />
                     <Button Content="Tháng trước" Tag="lastMonth" Classes="quickFilter"
@@ -134,18 +136,9 @@
             </Grid>
 
             <!-- THỐNG KÊ -->
-            <Grid Grid.Row="4" ColumnDefinitions="*,*,*" ColumnSpacing="12">
+            <Grid Grid.Row="4" ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
                 <Border Background="#F0F9F6" BorderBrush="#D8EDE6" BorderThickness="1"
                     CornerRadius="10" Padding="16,12">
-                    <StackPanel>
-                        <TextBlock Text="TỔNG ĐÃ THANH TOÁN" FontSize="11"
-                            FontWeight="SemiBold" Foreground="#61736E" />
-                        <TextBlock x:Name="TxtTongTien" Margin="0,5,0,0"
-                            FontSize="21" FontWeight="Bold" Foreground="#087F6E" />
-                    </StackPanel>
-                </Border>
-                <Border Grid.Column="1" Background="#F4F7FB" BorderBrush="#E1E8F0"
-                    BorderThickness="1" CornerRadius="10" Padding="16,12">
                     <StackPanel>
                         <TextBlock Text="TỔNG SỐ GIAO DỊCH" FontSize="11"
                             FontWeight="SemiBold" Foreground="#61736E" />
@@ -153,12 +146,30 @@
                             FontSize="21" FontWeight="Bold" Foreground="#163F38" />
                     </StackPanel>
                 </Border>
-                <Border Grid.Column="2" Background="#FFFBEB" BorderBrush="#F5E9C8"
+                <Border Grid.Column="1" Background="#F4F7FB" BorderBrush="#E1E8F0"
                     BorderThickness="1" CornerRadius="10" Padding="16,12">
                     <StackPanel>
-                        <TextBlock Text="HOÀN THÀNH  /  ĐÃ HỦY" FontSize="11"
+                        <TextBlock Text="TỔNG TIỀN ĐÃ THANH TOÁN" FontSize="11"
                             FontWeight="SemiBold" Foreground="#61736E" />
-                        <TextBlock x:Name="TxtTrangThai" Margin="0,5,0,0"
+                        <TextBlock x:Name="TxtTongTien" Margin="0,5,0,0"
+                            FontSize="21" FontWeight="Bold" Foreground="#087F6E" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Background="#F4F7FB" BorderBrush="#E1E8F0"
+                    BorderThickness="1" CornerRadius="10" Padding="16,12">
+                    <StackPanel>
+                        <TextBlock Text="CÔNG NỢ TRƯỚC THANH TOÁN" FontSize="11"
+                            FontWeight="SemiBold" Foreground="#61736E" />
+                        <TextBlock x:Name="TxtCongNoTruoc" Margin="0,5,0,0"
+                            FontSize="18" FontWeight="Bold" Foreground="#31534B" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="3" Background="#FFFBEB" BorderBrush="#F5E9C8"
+                    BorderThickness="1" CornerRadius="10" Padding="16,12">
+                    <StackPanel>
+                        <TextBlock Text="CÔNG NỢ SAU THANH TOÁN" FontSize="11"
+                            FontWeight="SemiBold" Foreground="#61736E" />
+                        <TextBlock x:Name="TxtCongNoSau" Margin="0,5,0,0"
                             FontSize="18" FontWeight="Bold" Foreground="#8A5A00" />
                     </StackPanel>
                 </Border>
@@ -176,11 +187,14 @@
                 BorderThickness="1"
                 SelectionMode="Single"
                 SelectionChanged="OnSelectionChanged"
+                HorizontalScrollBarVisibility="Auto"
+                VerticalScrollBarVisibility="Auto"
                 DoubleTapped="OnGridDoubleTapped">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="STT" Binding="{Binding SoThuTuHienThi}" Width="60" />
                     <DataGridTextColumn Header="Mã giao dịch" Binding="{Binding MaGiaoDich}" Width="145" />
                     <DataGridTextColumn Header="Ngày giờ" Binding="{Binding ThoiGianText}" Width="140" />
+                    <DataGridTextColumn Header="Mã tham chiếu" Binding="{Binding MaThamChieuHienThi}" Width="140" />
+                    <DataGridTextColumn Header="Nội dung thanh toán" Binding="{Binding NoiDungThanhToan}" Width="200" />
                     <DataGridTemplateColumn Header="Công nợ trước" Width="140">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
@@ -209,7 +223,7 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Phương thức" Binding="{Binding PhuongThucHienThi}" Width="120" />
+                    <DataGridTextColumn Header="Phương thức" Binding="{Binding PhuongThucHienThi}" Width="140" />
                     <DataGridTemplateColumn Header="Trạng thái" Width="120">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
@@ -227,8 +241,7 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Mã tham chiếu" Binding="{Binding MaThamChieuHienThi}" Width="140" />
-                    <DataGridTextColumn Header="Người thu" Binding="{Binding NguoiThucHien}" Width="140" />
+                    <DataGridTextColumn Header="Người thực hiện" Binding="{Binding NguoiThucHien}" Width="150" />
                     <DataGridTemplateColumn Header="Thao tác" Width="110">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>

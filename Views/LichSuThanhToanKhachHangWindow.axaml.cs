@@ -1,14 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
-using ClosedXML.Excel;
 using ShopHoa.Models;
 using ShopHoa.Services;
 
@@ -20,8 +17,10 @@ public partial class LichSuThanhToanKhachHangWindow : Window
     private readonly uint _customerId;
     private readonly string _customerCode;
     private readonly string _customerName;
-    private IReadOnlyList<ThanhToanCongNoKhachHang> _records = [];
     private IReadOnlyList<ThanhToanCongNoKhachHang> _visibleRecords = [];
+    private ThanhToanCongNoLichSuThongKe _summary = new();
+    private string _appliedKeyword = "";
+    private int _totalCount;
     private int _currentPage = 1;
     private int _pageSize = 20;
     private bool _initializingPageSize;
@@ -52,7 +51,6 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         CboPageSize.SelectedItem = _pageSize;
         _initializingPageSize = false;
         Loaded += async (_, _) => await NapDuLieuAsync();
-        TimKiemBox.TextChanged += (_, _) => LocTheoTuKhoa();
         TuNgayPicker.SelectedDateChanged += (_, _) => OnStartDateChanged();
         DenNgayPicker.SelectedDateChanged += (_, _) => OnEndDateChanged();
     }
@@ -60,47 +58,96 @@ public partial class LichSuThanhToanKhachHangWindow : Window
     private async Task NapDuLieuAsync()
     {
         var loadVersion = ++_loadVersion;
-        TxtDateError.IsVisible = false;
-        EmptyState.IsVisible = false;
-        LoadingIndicator.IsVisible = true;
-        LoadingState.IsVisible = true;
-        LichSuGrid.IsEnabled = false;
-        var loadFailed = false;
-        DateTime? tuNgay = TuNgayPicker.SelectedDate?.Date;
-        DateTime? denNgay = DenNgayPicker.SelectedDate?.Date.AddDays(1);
+        BatDauTaiDuLieu();
         try
         {
-            var records = await _database.GetLichSuThanhToanCongNoKhachHangAsync(
-                _customerId,
-                tuNgay,
-                denNgay);
-            if (loadVersion != _loadVersion)
-                return;
-
-            _records = records;
-            LocTheoTuKhoa();
+            await TaiTrangHienTaiAsync(loadVersion);
         }
         catch (Exception ex)
         {
             if (loadVersion != _loadVersion)
                 return;
 
-            loadFailed = true;
-            _records = [];
-            LocTheoTuKhoa();
-            TxtDateError.Text = "Không tải được lịch sử: " + ex.Message;
-            TxtDateError.IsVisible = true;
+            HienThiLoiTaiDuLieu(ex);
         }
         finally
         {
             if (loadVersion == _loadVersion)
-            {
-                LoadingIndicator.IsVisible = false;
-                LoadingState.IsVisible = false;
-                LichSuGrid.IsEnabled = true;
-                EmptyState.IsVisible = _visibleRecords.Count == 0 && !loadFailed;
-            }
+                KetThucTaiDuLieu();
         }
+    }
+
+    private void BatDauTaiDuLieu()
+    {
+        TxtDateError.IsVisible = false;
+        EmptyState.IsVisible = false;
+        LoadingIndicator.IsVisible = true;
+        LoadingState.IsVisible = true;
+        LichSuGrid.IsEnabled = false;
+    }
+
+    private async Task TaiTrangHienTaiAsync(int loadVersion)
+    {
+        var tuNgay = TuNgayPicker.SelectedDate?.Date;
+        var denNgay = DenNgayPicker.SelectedDate?.Date.AddDays(1);
+        var (summary, records) = await TaiTrangAsync(
+            tuNgay, denNgay, _appliedKeyword, _currentPage, _pageSize);
+        if (loadVersion == _loadVersion)
+            HienThiTrang(summary, records);
+    }
+
+    private void HienThiLoiTaiDuLieu(Exception exception)
+    {
+        XoaDuLieuTrang();
+        TxtDateError.Text = "Không tải được lịch sử: " + exception.Message;
+        TxtDateError.IsVisible = true;
+    }
+
+    private void KetThucTaiDuLieu()
+    {
+        LoadingIndicator.IsVisible = false;
+        LoadingState.IsVisible = false;
+        LichSuGrid.IsEnabled = true;
+        EmptyState.IsVisible = _totalCount == 0 && !TxtDateError.IsVisible;
+    }
+
+    private async Task<(ThanhToanCongNoLichSuThongKe Summary, IReadOnlyList<ThanhToanCongNoKhachHang> Records)> TaiTrangAsync(
+            DateTime? tuNgay,
+            DateTime? denNgay,
+            string keyword,
+            int page,
+            int pageSize)
+        {
+            var summaryTask = _database.GetThongKeLichSuThanhToanCongNoKhachHangAsync(
+                _customerId, tuNgay, denNgay, keyword);
+            var recordsTask = _database.GetLichSuThanhToanCongNoKhachHangAsync(
+                _customerId, tuNgay, denNgay, keyword, pageSize, (page - 1) * pageSize);
+            await Task.WhenAll(summaryTask, recordsTask);
+            return (await summaryTask, await recordsTask);
+        }
+
+    private void HienThiTrang(
+            ThanhToanCongNoLichSuThongKe summary,
+            IReadOnlyList<ThanhToanCongNoKhachHang> records)
+        {
+            _summary = summary;
+            _totalCount = summary.TongSoGiaoDich;
+            _currentPage = Math.Clamp(_currentPage, 1, TongSoTrang);
+            _visibleRecords = records;
+            var firstIndex = (_currentPage - 1) * _pageSize;
+            for (var index = 0; index < records.Count; index++)
+                records[index].SoThuTuHienThi = firstIndex + index + 1;
+            CapNhatThongKe();
+            CapNhatTrangHienTai();
+        }
+
+    private void XoaDuLieuTrang()
+    {
+        _visibleRecords = [];
+        _totalCount = 0;
+        _summary = new ThanhToanCongNoLichSuThongKe();
+        CapNhatThongKe();
+        CapNhatTrangHienTai();
     }
 
     private async void OnFilterClick(object? sender, RoutedEventArgs e)
@@ -108,6 +155,8 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         if (!KiemTraKhoangNgay())
             return;
 
+        _appliedKeyword = TimKiemBox.Text?.Trim() ?? "";
+        _currentPage = 1;
         await NapDuLieuAsync();
     }
 
@@ -119,30 +168,17 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         _updatingDateRange = false;
         TimKiemBox.Text = "";
         TxtDateError.IsVisible = false;
+        _appliedKeyword = "";
+        _currentPage = 1;
         await NapDuLieuAsync();
     }
 
-    private void LocTheoTuKhoa()
+    private void CapNhatThongKe()
     {
-        var keyword = ChuanHoaTuKhoa(TimKiemBox.Text);
-        _visibleRecords = string.IsNullOrWhiteSpace(keyword)
-            ? _records
-            : _records.Where(record =>
-                ChuanHoaTuKhoa(record.MaGiaoDich).Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                || ChuanHoaTuKhoa(record.MaThamChieu).Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                || ChuanHoaTuKhoa(record.PhuongThucHienThi).Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                || ChuanHoaTuKhoa(record.NguoiThucHien).Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                || ChuanHoaTuKhoa(record.GhiChu).Contains(keyword, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-        _currentPage = 1;
-        TxtTongTien.Text = $"{_visibleRecords.Where(record => !record.DaHuy).Sum(record => record.SoTien):N0} đ";
-        TxtTongGiaoDich.Text = $"{_visibleRecords.Count:N0}";
-        TxtTrangThai.Text =
-            $"{_visibleRecords.Count(record => !record.DaHuy):N0} thành công  /  "
-            + $"{_visibleRecords.Count(record => record.DaHuy):N0} đã hủy";
-        CapNhatTrangHienTai();
-        EmptyState.IsVisible = _visibleRecords.Count == 0 && !LoadingIndicator.IsVisible;
+        TxtTongTien.Text = $"{_summary.TongTienDaThanhToan:N0} đ";
+        TxtTongGiaoDich.Text = $"{_summary.TongSoGiaoDich:N0}";
+        TxtCongNoTruoc.Text = $"{_summary.CongNoTruocThanhToan:N0} đ";
+        TxtCongNoSau.Text = $"{_summary.CongNoSauThanhToan:N0} đ";
     }
 
     private bool KiemTraKhoangNgay()
@@ -186,6 +222,7 @@ public partial class LichSuThanhToanKhachHangWindow : Window
             "today" => (today, today),
             "yesterday" => (today.AddDays(-1), today.AddDays(-1)),
             "last7" => (today.AddDays(-6), today),
+            "last30" => (today.AddDays(-29), today),
             "thisMonth" => (new DateTime(today.Year, today.Month, 1), today),
             "lastMonth" => (
                 new DateTime(today.Year, today.Month, 1).AddMonths(-1),
@@ -197,6 +234,8 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         TuNgayPicker.SelectedDate = from;
         DenNgayPicker.SelectedDate = to;
         _updatingDateRange = false;
+        _appliedKeyword = TimKiemBox.Text?.Trim() ?? "";
+        _currentPage = 1;
         await NapDuLieuAsync();
     }
 
@@ -234,12 +273,17 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         TxtDateError.IsVisible = false;
     }
 
-    private void OnSearchKeyDown(object? sender, KeyEventArgs e)
+    private async void OnSearchKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter)
             return;
 
-        LocTheoTuKhoa();
+        if (KiemTraKhoangNgay())
+        {
+            _appliedKeyword = TimKiemBox.Text?.Trim() ?? "";
+            _currentPage = 1;
+            await NapDuLieuAsync();
+        }
         e.Handled = true;
     }
 
@@ -257,64 +301,43 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         }
     }
 
-    private void OnPageSizeChanged(object? sender, SelectionChangedEventArgs e)
+    private async void OnPageSizeChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (_initializingPageSize || CboPageSize.SelectedItem is not int pageSize)
             return;
 
         _pageSize = pageSize;
         _currentPage = 1;
-        CapNhatTrangHienTai();
+        await NapDuLieuAsync();
     }
 
-    private void OnFirstPageClick(object? sender, RoutedEventArgs e) => ChuyenTrang(1);
+    private async void OnFirstPageClick(object? sender, RoutedEventArgs e) => await ChuyenTrangAsync(1);
 
-    private void OnPreviousPageClick(object? sender, RoutedEventArgs e) => ChuyenTrang(_currentPage - 1);
+    private async void OnPreviousPageClick(object? sender, RoutedEventArgs e) => await ChuyenTrangAsync(_currentPage - 1);
 
-    private void OnNextPageClick(object? sender, RoutedEventArgs e) => ChuyenTrang(_currentPage + 1);
+    private async void OnNextPageClick(object? sender, RoutedEventArgs e) => await ChuyenTrangAsync(_currentPage + 1);
 
-    private void OnLastPageClick(object? sender, RoutedEventArgs e) =>
-        ChuyenTrang(TongSoTrang);
+    private async void OnLastPageClick(object? sender, RoutedEventArgs e) =>
+        await ChuyenTrangAsync(TongSoTrang);
 
-    private int TongSoTrang => Math.Max(1, (int)Math.Ceiling(_visibleRecords.Count / (double)_pageSize));
+    private int TongSoTrang => Math.Max(1, (int)Math.Ceiling(_totalCount / (double)_pageSize));
 
-    private void ChuyenTrang(int page)
+    private async Task ChuyenTrangAsync(int page)
     {
         _currentPage = Math.Clamp(page, 1, TongSoTrang);
-        CapNhatTrangHienTai();
+        await NapDuLieuAsync();
     }
 
     private void CapNhatTrangHienTai()
     {
         var skip = (_currentPage - 1) * _pageSize;
-        var pageRecords = _visibleRecords.Skip(skip).Take(_pageSize).ToArray();
-        for (var index = 0; index < pageRecords.Length; index++)
-            pageRecords[index].SoThuTuHienThi = skip + index + 1;
-
-        LichSuGrid.ItemsSource = pageRecords;
+        LichSuGrid.ItemsSource = _visibleRecords;
         LichSuGrid.SelectedItem = null;
         BtnDetail.IsEnabled = false;
         TxtPage.Text = $"Trang {_currentPage:N0} / {TongSoTrang:N0}";
-        var first = _visibleRecords.Count == 0 ? 0 : skip + 1;
-        var last = Math.Min(skip + _pageSize, _visibleRecords.Count);
-        TxtResultRange.Text = $"Hiển thị {first:N0}–{last:N0} / {_visibleRecords.Count:N0} giao dịch";
-    }
-
-    private static string ChuanHoaTuKhoa(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return "";
-
-        var normalized = value.Replace('đ', 'd').Replace('Đ', 'D')
-            .Normalize(NormalizationForm.FormD);
-        var builder = new StringBuilder(normalized.Length);
-        foreach (var character in normalized)
-        {
-            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
-                builder.Append(character);
-        }
-
-        return builder.ToString().Normalize(NormalizationForm.FormC);
+        var first = _totalCount == 0 ? 0 : skip + 1;
+        var last = Math.Min(skip + _visibleRecords.Count, _totalCount);
+        TxtResultRange.Text = $"Hiển thị {first:N0}–{last:N0} / {_totalCount:N0} giao dịch";
     }
 
     private void OnGridDoubleTapped(object? sender, TappedEventArgs e)
@@ -423,100 +446,6 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         detail.AppendLine($"Tổng tiền đã phân bổ: {allocatedTotal:N0} đ ({allocations.Count} hóa đơn)");
         if (record.SoTien > allocatedTotal)
             detail.AppendLine($"Số tiền thanh toán chưa gắn hóa đơn: {record.SoTien - allocatedTotal:N0} đ");
-    }
-
-    private async void OnExportClick(object? sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var file = await ChonFileXuatAsync();
-            if (file is null)
-                return;
-
-            using var workbook = new XLWorkbook();
-            var sheet = workbook.Worksheets.Add("Lịch sử thanh toán");
-            DienThongTinBaoCao(sheet);
-            DienDanhSachGiaoDich(sheet);
-            DinhDangBaoCao(sheet);
-            workbook.SaveAs(file.Path.LocalPath);
-            TxtDateError.Text = "Đã xuất lịch sử thanh toán.";
-            TxtDateError.Foreground = Avalonia.Media.Brushes.SeaGreen;
-            TxtDateError.IsVisible = true;
-        }
-        catch (Exception ex)
-        {
-            TxtDateError.Text = "Không xuất được Excel: " + ex.Message;
-            TxtDateError.Foreground = Avalonia.Media.Brushes.Firebrick;
-            TxtDateError.IsVisible = true;
-        }
-    }
-
-    private Task<IStorageFile?> ChonFileXuatAsync() =>
-        StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Xuất lịch sử thanh toán công nợ",
-            SuggestedFileName = $"LichSuThanhToan_{_customerCode}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx",
-            DefaultExtension = "xlsx",
-            ShowOverwritePrompt = true,
-            FileTypeChoices = [new FilePickerFileType("Excel") { Patterns = ["*.xlsx"] }]
-        });
-
-    private void DienThongTinBaoCao(IXLWorksheet sheet)
-    {
-        sheet.Cell(1, 1).Value = "LỊCH SỬ THANH TOÁN CÔNG NỢ KHÁCH HÀNG";
-        sheet.Cell(2, 1).Value = $"Khách hàng: {_customerCode} - {_customerName}";
-        sheet.Cell(3, 1).Value =
-            $"Khoảng thời gian: {TuNgayPicker.SelectedDate?.ToString("dd/MM/yyyy") ?? "Tất cả"}"
-            + $" - {DenNgayPicker.SelectedDate?.ToString("dd/MM/yyyy") ?? "Tất cả"}";
-        sheet.Cell(4, 1).Value =
-            $"Tổng đã thanh toán: {_visibleRecords.Where(record => !record.DaHuy).Sum(record => record.SoTien):N0} đ"
-            + $" | Tổng số giao dịch: {_visibleRecords.Count:N0}";
-
-        var headers = LayTieuDeBaoCao();
-        for (var index = 0; index < headers.Length; index++)
-            sheet.Cell(6, index + 1).Value = headers[index];
-    }
-
-    private void DienDanhSachGiaoDich(IXLWorksheet sheet)
-    {
-        for (var index = 0; index < _visibleRecords.Count; index++)
-        {
-            var record = _visibleRecords[index];
-            var row = index + 7;
-            sheet.Cell(row, 1).Value = index + 1;
-            sheet.Cell(row, 2).Value = record.MaGiaoDich;
-            sheet.Cell(row, 3).Value = record.MaKhachHang;
-            sheet.Cell(row, 4).Value = record.ThoiGian;
-            sheet.Cell(row, 5).Value = record.CongNoTruoc;
-            sheet.Cell(row, 6).Value = record.SoTien;
-            sheet.Cell(row, 7).Value = record.CongNoSau;
-            sheet.Cell(row, 8).Value = record.PhuongThucHienThi;
-            sheet.Cell(row, 9).Value = record.TrangThaiHienThi;
-            sheet.Cell(row, 10).Value = record.MaThamChieuHienThi;
-            sheet.Cell(row, 11).Value = record.NguoiThucHien;
-            sheet.Cell(row, 12).Value = record.GhiChu ?? "";
-        }
-    }
-
-    private static string[] LayTieuDeBaoCao() =>
-    [
-        "STT", "Mã giao dịch", "Mã khách hàng", "Ngày giờ", "Công nợ trước",
-        "Số tiền thanh toán", "Công nợ sau", "Phương thức",
-        "Trạng thái", "Mã tham chiếu", "Người thực hiện", "Ghi chú"
-    ];
-
-    private static void DinhDangBaoCao(IXLWorksheet sheet)
-    {
-        var lastColumn = LayTieuDeBaoCao().Length;
-        sheet.Range(1, 1, 1, lastColumn).Merge();
-        sheet.Range(1, 1, 1, lastColumn).Style.Font.Bold = true;
-        sheet.Range(1, 1, 1, lastColumn).Style.Font.FontSize = 16;
-        sheet.Range(6, 1, 6, lastColumn).Style.Font.Bold = true;
-        sheet.Range(6, 1, 6, lastColumn).Style.Fill.BackgroundColor =
-            XLColor.FromHtml("#EAF5F2");
-        sheet.Column(4).Style.DateFormat.Format = "dd/mm/yyyy hh:mm";
-        sheet.Columns(5, 7).Style.NumberFormat.Format = "#,##0";
-        sheet.Columns().AdjustToContents();
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();

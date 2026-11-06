@@ -3637,12 +3637,15 @@ public sealed partial class DatabaseService
     public async Task<IReadOnlyList<ThanhToanCongNoKhachHang>> GetLichSuThanhToanCongNoKhachHangAsync(
         uint customerId,
         DateTime? tuNgay = null,
-        DateTime? denNgayExclusive = null)
+        DateTime? denNgayExclusive = null,
+        string? tuKhoa = null,
+        int? gioiHan = null,
+        int boQua = 0)
     {
         await EnsureBangLichSuThanhToanKhachHangAsync();
         await EnsurePhieuQuyCancelColumnsAsync();
 
-        const string sql = """
+        var sql = $"""
         SELECT
             ls.id AS Id,
             kh.ma_khach_hang AS MaKhachHang,
@@ -3666,15 +3669,108 @@ public sealed partial class DatabaseService
         WHERE ls.khach_hang_id = @CustomerId
           AND (@TuNgay IS NULL OR ls.thoi_gian >= @TuNgay)
           AND (@DenNgayExclusive IS NULL OR ls.thoi_gian < @DenNgayExclusive)
-        ORDER BY ls.thoi_gian DESC, ls.id DESC;
+          AND (@TuKhoa IS NULL OR (
+              ls.ma_giao_dich LIKE CONCAT('%', @TuKhoa, '%')
+              OR COALESCE(ls.ma_tham_chieu, '') LIKE CONCAT('%', @TuKhoa, '%')
+              OR COALESCE(ls.phuong_thuc, '') LIKE CONCAT('%', @TuKhoa, '%')
+              OR COALESCE(nd.ho_ten, '') LIKE CONCAT('%', @TuKhoa, '%')
+              OR COALESCE(nd.ten_dang_nhap, '') LIKE CONCAT('%', @TuKhoa, '%')
+              OR COALESCE(ls.ghi_chu, '') LIKE CONCAT('%', @TuKhoa, '%')
+          ))
+        ORDER BY ls.thoi_gian DESC, ls.id DESC
+        {(gioiHan.HasValue ? "LIMIT @GioiHan OFFSET @BoQua" : "")};
         """;
 
         await using var connection = await OpenAsync();
         var records = await connection.QueryAsync<ThanhToanCongNoKhachHang>(
             sql,
-            new { CustomerId = customerId, TuNgay = tuNgay, DenNgayExclusive = denNgayExclusive });
+            new
+            {
+                CustomerId = customerId,
+                TuNgay = tuNgay,
+                DenNgayExclusive = denNgayExclusive,
+                TuKhoa = string.IsNullOrWhiteSpace(tuKhoa) ? null : tuKhoa.Trim(),
+                GioiHan = gioiHan,
+                BoQua = Math.Max(0, boQua)
+            });
 
         return records.AsList();
+    }
+
+    public async Task<ThanhToanCongNoLichSuThongKe> GetThongKeLichSuThanhToanCongNoKhachHangAsync(
+        uint customerId,
+        DateTime? tuNgay = null,
+        DateTime? denNgayExclusive = null,
+        string? tuKhoa = null)
+    {
+        await EnsureBangLichSuThanhToanKhachHangAsync();
+        await EnsurePhieuQuyCancelColumnsAsync();
+        const string sql = """
+        SELECT
+            COUNT(*) AS TongSoGiaoDich,
+            COALESCE(SUM(CASE WHEN ls.trang_thai <> 'HUY' THEN ls.so_tien ELSE 0 END), 0) AS TongTienDaThanhToan,
+            COALESCE((
+                SELECT first_record.cong_no_truoc
+                FROM lich_su_thanh_toan_cong_no_khach_hang first_record
+                LEFT JOIN nguoi_dung first_user ON first_user.id = first_record.nguoi_thuc_hien_id
+                WHERE first_record.khach_hang_id = @CustomerId
+                  AND first_record.trang_thai <> 'HUY'
+                  AND (@TuNgay IS NULL OR first_record.thoi_gian >= @TuNgay)
+                  AND (@DenNgayExclusive IS NULL OR first_record.thoi_gian < @DenNgayExclusive)
+                  AND (@TuKhoa IS NULL OR (
+                      first_record.ma_giao_dich LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(first_record.ma_tham_chieu, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(first_record.phuong_thuc, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(first_user.ho_ten, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(first_user.ten_dang_nhap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(first_record.ghi_chu, '') LIKE CONCAT('%', @TuKhoa, '%')
+                  ))
+                ORDER BY first_record.thoi_gian ASC, first_record.id ASC
+                LIMIT 1
+            ), 0) AS CongNoTruocThanhToan,
+            COALESCE((
+                SELECT last_record.cong_no_sau
+                FROM lich_su_thanh_toan_cong_no_khach_hang last_record
+                LEFT JOIN nguoi_dung last_user ON last_user.id = last_record.nguoi_thuc_hien_id
+                WHERE last_record.khach_hang_id = @CustomerId
+                  AND last_record.trang_thai <> 'HUY'
+                  AND (@TuNgay IS NULL OR last_record.thoi_gian >= @TuNgay)
+                  AND (@DenNgayExclusive IS NULL OR last_record.thoi_gian < @DenNgayExclusive)
+                  AND (@TuKhoa IS NULL OR (
+                      last_record.ma_giao_dich LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(last_record.ma_tham_chieu, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(last_record.phuong_thuc, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(last_user.ho_ten, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(last_user.ten_dang_nhap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(last_record.ghi_chu, '') LIKE CONCAT('%', @TuKhoa, '%')
+                  ))
+                ORDER BY last_record.thoi_gian DESC, last_record.id DESC
+                LIMIT 1
+            ), 0) AS CongNoSauThanhToan
+        FROM lich_su_thanh_toan_cong_no_khach_hang ls
+        LEFT JOIN nguoi_dung nd ON nd.id = ls.nguoi_thuc_hien_id
+        WHERE ls.khach_hang_id = @CustomerId
+          AND (@TuNgay IS NULL OR ls.thoi_gian >= @TuNgay)
+          AND (@DenNgayExclusive IS NULL OR ls.thoi_gian < @DenNgayExclusive)
+          AND (@TuKhoa IS NULL OR (
+              ls.ma_giao_dich LIKE CONCAT('%', @TuKhoa, '%')
+              OR COALESCE(ls.ma_tham_chieu, '') LIKE CONCAT('%', @TuKhoa, '%')
+              OR COALESCE(ls.phuong_thuc, '') LIKE CONCAT('%', @TuKhoa, '%')
+              OR COALESCE(nd.ho_ten, '') LIKE CONCAT('%', @TuKhoa, '%')
+              OR COALESCE(nd.ten_dang_nhap, '') LIKE CONCAT('%', @TuKhoa, '%')
+              OR COALESCE(ls.ghi_chu, '') LIKE CONCAT('%', @TuKhoa, '%')
+          ));
+        """;
+        await using var connection = await OpenAsync();
+        return await connection.QueryFirstOrDefaultAsync<ThanhToanCongNoLichSuThongKe>(
+            sql,
+            new
+            {
+                CustomerId = customerId,
+                TuNgay = tuNgay,
+                DenNgayExclusive = denNgayExclusive,
+                TuKhoa = string.IsNullOrWhiteSpace(tuKhoa) ? null : tuKhoa.Trim()
+            }) ?? new ThanhToanCongNoLichSuThongKe();
     }
 
     public async Task<uint> ThemKhachHangAsync(KhachHang customer)
@@ -7465,11 +7561,14 @@ public sealed partial class DatabaseService
             public async Task<IReadOnlyList<ThanhToanCongNoNhaCungCap>> GetLichSuThanhToanCongNoNhaCungCapAsync(
                 uint? nhaCungCapId = null,
                 DateTime? tuNgay = null,
-                DateTime? denNgayExclusive = null)
+                DateTime? denNgayExclusive = null,
+                string? tuKhoa = null,
+                int? gioiHan = null,
+                int boQua = 0)
             {
                 await EnsureBangLichSuThanhToanNhaCungCapAsync();
 
-                const string sql = """
+                var sql = $"""
                 SELECT
                     ls.id AS Id,
                     ls.nha_cung_cap_id AS NhaCungCapId,
@@ -7495,7 +7594,19 @@ public sealed partial class DatabaseService
                 WHERE (@NhaCungCapId IS NULL OR ls.nha_cung_cap_id = @NhaCungCapId)
                   AND (@TuNgay IS NULL OR ls.thoi_gian >= @TuNgay)
                   AND (@DenNgayExclusive IS NULL OR ls.thoi_gian < @DenNgayExclusive)
-                ORDER BY ls.thoi_gian DESC, ls.id DESC;
+                  AND (@TuKhoa IS NULL OR (
+                      ls.ma_giao_dich LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(ls.ma_tham_chieu, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(ls.phuong_thuc, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(ls.ma_nha_cung_cap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(ls.ten_nha_cung_cap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(ls.don_vi_nhan, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(nd.ho_ten, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(nd.ten_dang_nhap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(ls.ghi_chu, '') LIKE CONCAT('%', @TuKhoa, '%')
+                  ))
+                ORDER BY ls.thoi_gian DESC, ls.id DESC
+                {(gioiHan.HasValue ? "LIMIT @GioiHan OFFSET @BoQua" : "")};
                 """;
 
                 await using var connection = await OpenAsync();
@@ -7505,8 +7616,95 @@ public sealed partial class DatabaseService
                     {
                         NhaCungCapId = nhaCungCapId,
                         TuNgay = tuNgay,
-                        DenNgayExclusive = denNgayExclusive
+                        DenNgayExclusive = denNgayExclusive,
+                        TuKhoa = string.IsNullOrWhiteSpace(tuKhoa) ? null : tuKhoa.Trim(),
+                        GioiHan = gioiHan,
+                        BoQua = Math.Max(0, boQua)
                     })).AsList();
+            }
+
+            public async Task<ThanhToanCongNoLichSuThongKe> GetThongKeLichSuThanhToanCongNoNhaCungCapAsync(
+                uint? nhaCungCapId = null,
+                DateTime? tuNgay = null,
+                DateTime? denNgayExclusive = null,
+                string? tuKhoa = null)
+            {
+                await EnsureBangLichSuThanhToanNhaCungCapAsync();
+                const string sql = """
+                SELECT
+                    COUNT(*) AS TongSoGiaoDich,
+                    COALESCE(SUM(CASE WHEN ls.trang_thai <> 'HUY' THEN ls.so_tien ELSE 0 END), 0) AS TongTienDaThanhToan,
+                    COALESCE((
+                        SELECT first_record.cong_no_truoc
+                        FROM lich_su_thanh_toan_cong_no_nha_cung_cap first_record
+                        LEFT JOIN nguoi_dung first_user ON first_user.id = first_record.nguoi_thuc_hien_id
+                        WHERE (@NhaCungCapId IS NULL OR first_record.nha_cung_cap_id = @NhaCungCapId)
+                          AND first_record.trang_thai <> 'HUY'
+                          AND (@TuNgay IS NULL OR first_record.thoi_gian >= @TuNgay)
+                          AND (@DenNgayExclusive IS NULL OR first_record.thoi_gian < @DenNgayExclusive)
+                          AND (@TuKhoa IS NULL OR (
+                              first_record.ma_giao_dich LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(first_record.ma_tham_chieu, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(first_record.phuong_thuc, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(first_record.ma_nha_cung_cap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(first_record.ten_nha_cung_cap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(first_record.don_vi_nhan, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(first_user.ho_ten, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(first_user.ten_dang_nhap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(first_record.ghi_chu, '') LIKE CONCAT('%', @TuKhoa, '%')
+                          ))
+                        ORDER BY first_record.thoi_gian ASC, first_record.id ASC
+                        LIMIT 1
+                    ), 0) AS CongNoTruocThanhToan,
+                    COALESCE((
+                        SELECT last_record.cong_no_sau
+                        FROM lich_su_thanh_toan_cong_no_nha_cung_cap last_record
+                        LEFT JOIN nguoi_dung last_user ON last_user.id = last_record.nguoi_thuc_hien_id
+                        WHERE (@NhaCungCapId IS NULL OR last_record.nha_cung_cap_id = @NhaCungCapId)
+                          AND last_record.trang_thai <> 'HUY'
+                          AND (@TuNgay IS NULL OR last_record.thoi_gian >= @TuNgay)
+                          AND (@DenNgayExclusive IS NULL OR last_record.thoi_gian < @DenNgayExclusive)
+                          AND (@TuKhoa IS NULL OR (
+                              last_record.ma_giao_dich LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(last_record.ma_tham_chieu, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(last_record.phuong_thuc, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(last_record.ma_nha_cung_cap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(last_record.ten_nha_cung_cap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(last_record.don_vi_nhan, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(last_user.ho_ten, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(last_user.ten_dang_nhap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                              OR COALESCE(last_record.ghi_chu, '') LIKE CONCAT('%', @TuKhoa, '%')
+                          ))
+                        ORDER BY last_record.thoi_gian DESC, last_record.id DESC
+                        LIMIT 1
+                    ), 0) AS CongNoSauThanhToan
+                FROM lich_su_thanh_toan_cong_no_nha_cung_cap ls
+                LEFT JOIN nguoi_dung nd ON nd.id = ls.nguoi_thuc_hien_id
+                WHERE (@NhaCungCapId IS NULL OR ls.nha_cung_cap_id = @NhaCungCapId)
+                  AND (@TuNgay IS NULL OR ls.thoi_gian >= @TuNgay)
+                  AND (@DenNgayExclusive IS NULL OR ls.thoi_gian < @DenNgayExclusive)
+                  AND (@TuKhoa IS NULL OR (
+                      ls.ma_giao_dich LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(ls.ma_tham_chieu, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(ls.phuong_thuc, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(ls.ma_nha_cung_cap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(ls.ten_nha_cung_cap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(ls.don_vi_nhan, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(nd.ho_ten, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(nd.ten_dang_nhap, '') LIKE CONCAT('%', @TuKhoa, '%')
+                      OR COALESCE(ls.ghi_chu, '') LIKE CONCAT('%', @TuKhoa, '%')
+                  ));
+                """;
+                await using var connection = await OpenAsync();
+                return await connection.QueryFirstOrDefaultAsync<ThanhToanCongNoLichSuThongKe>(
+                    sql,
+                    new
+                    {
+                        NhaCungCapId = nhaCungCapId,
+                        TuNgay = tuNgay,
+                        DenNgayExclusive = denNgayExclusive,
+                        TuKhoa = string.IsNullOrWhiteSpace(tuKhoa) ? null : tuKhoa.Trim()
+                    }) ?? new ThanhToanCongNoLichSuThongKe();
             }
 
             public async Task<IReadOnlyList<PhanBoThanhToanNhaCungCap>> GetPhanBoThanhToanNhaCungCapAsync(

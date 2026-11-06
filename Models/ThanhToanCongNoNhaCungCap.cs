@@ -68,6 +68,8 @@ public sealed class ThanhToanCongNoNhaCungCap
         _ => string.IsNullOrWhiteSpace(PhuongThuc) ? "Chưa ghi nhận" : PhuongThuc
     };
     public string MaThamChieuHienThi => string.IsNullOrWhiteSpace(MaThamChieu) ? "—" : MaThamChieu.Trim();
+    public string NoiDungThanhToan =>
+        string.IsNullOrWhiteSpace(GhiChu) ? "Thanh toán công nợ nhà cung cấp" : GhiChu.Trim();
     public string GhiChuHienThi => string.IsNullOrWhiteSpace(GhiChu) ? "—" : GhiChu.Trim();
 }
 

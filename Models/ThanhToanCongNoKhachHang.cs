@@ -42,6 +42,8 @@ public sealed class ThanhToanCongNoKhachHang
     };
 
     public string MaThamChieuHienThi => string.IsNullOrWhiteSpace(MaThamChieu) ? "—" : MaThamChieu.Trim();
+    public string NoiDungThanhToan =>
+        string.IsNullOrWhiteSpace(GhiChu) ? "Thu công nợ khách hàng" : GhiChu.Trim();
     public string CongNoTruocText => $"{CongNoTruoc:N0} đ";
     public string SoTienText => $"{SoTien:N0} đ";
     public string CongNoSauText => $"{CongNoSau:N0} đ";
