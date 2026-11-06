@@ -8661,11 +8661,11 @@
 
                 <Button Grid.Column="1"
                   Classes="sq-icon"
-                  Content="âœ•"
+                  Content="✕"
                   Width="32"
                   Height="32"
                   FontSize="13"
-                  ToolTip.Tip="ÄÃ³ng"
+                  ToolTip.Tip="Đóng"
                   Command="{Binding DongChiTietPhieuCommand}" />
               </Grid>
             </Border>
@@ -8956,7 +8956,7 @@
 
                 <Button Grid.Column="1"
                   Classes="sq-btn-secondary"
-                  Content="ÄÃ³ng"
+                  Content="Đóng"
                   Command="{Binding DongChiTietPhieuCommand}" />
 
                 <Button Grid.Column="2"
