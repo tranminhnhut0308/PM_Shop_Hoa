@@ -111,8 +111,19 @@
     <Style Selector="Button.bcSortBtn.pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="#F1F8F6" />
     </Style>
+    <Style Selector="Button.bcSortBtn.active">
+      <Setter Property="Background" Value="#EEF7F4" />
+    </Style>
     <Style Selector="Button.bcSortBtn.right /template/ ContentPresenter">
       <Setter Property="HorizontalContentAlignment" Value="Right" />
+    </Style>
+    <Style Selector="TextBlock.bcSortIndicator">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Foreground" Value="#9AA9A5" />
+    </Style>
+    <Style Selector="TextBlock.bcSortIndicator.active">
+      <Setter Property="Foreground" Value="#087F6E" />
+      <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
     <!-- ===== NHÃN ===== -->
@@ -346,6 +357,13 @@
                 Text="{Binding TimKiem, Mode=TwoWay}" />
             </StackPanel>
 
+            <StackPanel Spacing="4">
+              <TextBlock Classes="flLabel" Text="Sắp xếp theo" />
+              <ComboBox Classes="flCombo"
+                ItemsSource="{Binding SapXepNhanhOptions}"
+                SelectedItem="{Binding SapXepNhanhChon, Mode=TwoWay}" />
+            </StackPanel>
+
             <Border Height="1" Background="#EEF4F2" />
 
             <!-- Áp dụng / Đặt lại -->
@@ -504,92 +522,110 @@
                         Margin="10,4,0,4" VerticalAlignment="Center" />
 
                       <Button Grid.Column="1" Classes="bcSortBtn"
+                        Classes.active="{Binding DangSapXepMa}"
+                        ToolTip.Tip="{Binding TipSapXepMa}"
                         Command="{Binding SapXepCommand}"
                         CommandParameter="MaKhachHang">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                           <TextBlock Classes="bcTableHead" Text="Mã KH" />
-                          <TextBlock Classes="bcTableHead" Foreground="#087F6E"
-                            Text="{Binding DanhDauMa}" />
+                          <TextBlock Classes="bcSortIndicator"
+                            Classes.active="{Binding DangSapXepMa}" Text="{Binding DanhDauMa}" />
                         </StackPanel>
                       </Button>
 
                       <Button Grid.Column="2" Classes="bcSortBtn"
+                        Classes.active="{Binding DangSapXepTen}"
+                        ToolTip.Tip="{Binding TipSapXepTen}"
                         Command="{Binding SapXepCommand}"
                         CommandParameter="TenKhachHang">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                           <TextBlock Classes="bcTableHead" Text="Tên khách hàng" />
-                          <TextBlock Classes="bcTableHead" Foreground="#087F6E"
-                            Text="{Binding DanhDauTen}" />
+                          <TextBlock Classes="bcSortIndicator"
+                            Classes.active="{Binding DangSapXepTen}" Text="{Binding DanhDauTen}" />
                         </StackPanel>
                       </Button>
 
                       <Button Grid.Column="3" Classes="bcSortBtn"
+                        Classes.active="{Binding DangSapXepSdt}"
+                        ToolTip.Tip="{Binding TipSapXepSdt}"
                         Command="{Binding SapXepCommand}"
                         CommandParameter="SoDienThoai">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                           <TextBlock Classes="bcTableHead" Text="Số điện thoại" />
-                          <TextBlock Classes="bcTableHead" Foreground="#087F6E"
-                            Text="{Binding DanhDauSdt}" />
+                          <TextBlock Classes="bcSortIndicator"
+                            Classes.active="{Binding DangSapXepSdt}" Text="{Binding DanhDauSdt}" />
                         </StackPanel>
                       </Button>
 
                       <Button Grid.Column="4" Classes="bcSortBtn right"
+                        Classes.active="{Binding DangSapXepSoDon}"
+                        ToolTip.Tip="{Binding TipSapXepSoDon}"
                         Command="{Binding SapXepCommand}"
                         CommandParameter="SoDonHang">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                           <TextBlock Classes="bcTableHead" Text="Số đơn" />
-                          <TextBlock Classes="bcTableHead" Foreground="#087F6E"
-                            Text="{Binding DanhDauSoDon}" />
+                          <TextBlock Classes="bcSortIndicator"
+                            Classes.active="{Binding DangSapXepSoDon}" Text="{Binding DanhDauSoDon}" />
                         </StackPanel>
                       </Button>
 
                       <Button Grid.Column="5" Classes="bcSortBtn right"
+                        Classes.active="{Binding DangSapXepTongTien}"
+                        ToolTip.Tip="{Binding TipSapXepTongTien}"
                         Command="{Binding SapXepCommand}"
                         CommandParameter="TongTienHang">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                           <TextBlock Classes="bcTableHead" Text="Tổng tiền hàng" />
-                          <TextBlock Classes="bcTableHead" Foreground="#087F6E"
-                            Text="{Binding DanhDauTongTien}" />
+                          <TextBlock Classes="bcSortIndicator"
+                            Classes.active="{Binding DangSapXepTongTien}" Text="{Binding DanhDauTongTien}" />
                         </StackPanel>
                       </Button>
 
                       <Button Grid.Column="6" Classes="bcSortBtn right"
+                        Classes.active="{Binding DangSapXepGiamGia}"
+                        ToolTip.Tip="{Binding TipSapXepGiamGia}"
                         Command="{Binding SapXepCommand}"
                         CommandParameter="GiamGia">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                           <TextBlock Classes="bcTableHead" Text="Giảm giá" />
-                          <TextBlock Classes="bcTableHead" Foreground="#087F6E"
-                            Text="{Binding DanhDauGiamGia}" />
+                          <TextBlock Classes="bcSortIndicator"
+                            Classes.active="{Binding DangSapXepGiamGia}" Text="{Binding DanhDauGiamGia}" />
                         </StackPanel>
                       </Button>
 
                       <Button Grid.Column="7" Classes="bcSortBtn right"
+                        Classes.active="{Binding DangSapXepDaThanhToan}"
+                        ToolTip.Tip="{Binding TipSapXepDaThanhToan}"
                         Command="{Binding SapXepCommand}"
                         CommandParameter="DaThanhToan">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                           <TextBlock Classes="bcTableHead" Text="Đã thanh toán" />
-                          <TextBlock Classes="bcTableHead" Foreground="#087F6E"
-                            Text="{Binding DanhDauDaThanhToan}" />
+                          <TextBlock Classes="bcSortIndicator"
+                            Classes.active="{Binding DangSapXepDaThanhToan}" Text="{Binding DanhDauDaThanhToan}" />
                         </StackPanel>
                       </Button>
 
                       <Button Grid.Column="8" Classes="bcSortBtn right"
+                        Classes.active="{Binding DangSapXepCongNo}"
+                        ToolTip.Tip="{Binding TipSapXepCongNo}"
                         Command="{Binding SapXepCommand}"
                         CommandParameter="CongNo">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                           <TextBlock Classes="bcTableHead" Text="Công nợ" />
-                          <TextBlock Classes="bcTableHead" Foreground="#087F6E"
-                            Text="{Binding DanhDauCongNo}" />
+                          <TextBlock Classes="bcSortIndicator"
+                            Classes.active="{Binding DangSapXepCongNo}" Text="{Binding DanhDauCongNo}" />
                         </StackPanel>
                       </Button>
 
                       <Button Grid.Column="9" Classes="bcSortBtn right"
+                        Classes.active="{Binding DangSapXepGiaTriMua}"
+                        ToolTip.Tip="{Binding TipSapXepGiaTriMua}"
                         Command="{Binding SapXepCommand}"
                         CommandParameter="GiaTriMuaHang">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                           <TextBlock Classes="bcTableHead" Text="Giá trị mua hàng" />
-                          <TextBlock Classes="bcTableHead" Foreground="#087F6E"
-                            Text="{Binding DanhDauGiaTriMua}" />
+                          <TextBlock Classes="bcSortIndicator"
+                            Classes.active="{Binding DangSapXepGiaTriMua}" Text="{Binding DanhDauGiaTriMua}" />
                         </StackPanel>
                       </Button>
                     </Grid>

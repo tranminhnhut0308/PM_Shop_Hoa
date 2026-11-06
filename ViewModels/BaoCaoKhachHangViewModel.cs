@@ -44,6 +44,8 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
     /// <summary>Đang tự điều chỉnh trang cho vừa dữ liệu → không tự tải lại (tránh lặp).</summary>
     private bool _dangDieuChinhTrang;
 
+    private bool _dangDongBoSapXepNhanh;
+
     private CancellationTokenSource? _treCts;
     private int _phienBan;
 
@@ -54,7 +56,7 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
         KieuHienThi = BaoCaoKhachHangKieuHienThi.BieuDo;
         MocQuanTamChon = MocQuanTamOptions[0];
         MocQuanTam = BaoCaoKhachHangMocQuanTam.BanHang;
-        SapXepKho = KhoaCuaMocQuanTam(MocQuanTam);
+        SapXepKho = string.Empty;
         SapXepTang = false;
         TimKiem = string.Empty;
         SoDongTrang = 15;
@@ -157,6 +159,22 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
 
     [ObservableProperty] private string? mocQuanTamChon;
 
+    public ObservableCollection<string> SapXepNhanhOptions { get; } = new()
+    {
+        "Tên khách hàng A → Z",
+        "Tên khách hàng Z → A",
+        "Số đơn hàng tăng dần",
+        "Số đơn hàng giảm dần",
+        "Tổng tiền hàng cao nhất",
+        "Tổng tiền hàng thấp nhất",
+        "Công nợ cao nhất",
+        "Công nợ thấp nhất",
+        "Đã thanh toán cao nhất",
+        "Đã thanh toán thấp nhất"
+    };
+
+    [ObservableProperty] private string? sapXepNhanhChon;
+
     // ============================================================
     // DỮ LIỆU
     // ============================================================
@@ -243,7 +261,7 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
     public bool CanTrangTruoc => Trang > 1;
     public bool CanTrangSau => Trang < TongSoTrang;
 
-    /// <summary>Dấu ▲/▼ cho từng cột — chỉ cột đang sắp xếp mới có dấu.</summary>
+    /// <summary>Trạng thái và tooltip sắp xếp của từng tiêu đề cột.</summary>
     public string DanhDauMa => DanhDau("MaKhachHang");
     public string DanhDauTen => DanhDau("TenKhachHang");
     public string DanhDauSdt => DanhDau("SoDienThoai");
@@ -254,10 +272,44 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
     public string DanhDauCongNo => DanhDau("CongNo");
     public string DanhDauGiaTriMua => DanhDau("GiaTriMuaHang");
 
+    public bool DangSapXepMa => DangSapXep("MaKhachHang");
+    public bool DangSapXepTen => DangSapXep("TenKhachHang");
+    public bool DangSapXepSdt => DangSapXep("SoDienThoai");
+    public bool DangSapXepSoDon => DangSapXep("SoDonHang");
+    public bool DangSapXepTongTien => DangSapXep("TongTienHang");
+    public bool DangSapXepGiamGia => DangSapXep("GiamGia");
+    public bool DangSapXepDaThanhToan => DangSapXep("DaThanhToan");
+    public bool DangSapXepCongNo => DangSapXep("CongNo");
+    public bool DangSapXepGiaTriMua => DangSapXep("GiaTriMuaHang");
+
+    public string TipSapXepMa => TaoTipSapXep("MaKhachHang", "mã khách hàng");
+    public string TipSapXepTen => TaoTipSapXep("TenKhachHang", "tên khách hàng");
+    public string TipSapXepSdt => TaoTipSapXep("SoDienThoai", "số điện thoại");
+    public string TipSapXepSoDon => TaoTipSapXep("SoDonHang", "số đơn hàng");
+    public string TipSapXepTongTien => TaoTipSapXep("TongTienHang", "tổng tiền hàng");
+    public string TipSapXepGiamGia => TaoTipSapXep("GiamGia", "giảm giá");
+    public string TipSapXepDaThanhToan => TaoTipSapXep("DaThanhToan", "đã thanh toán");
+    public string TipSapXepCongNo => TaoTipSapXep("CongNo", "công nợ");
+    public string TipSapXepGiaTriMua => TaoTipSapXep("GiaTriMuaHang", "giá trị mua hàng");
+
     private string DanhDau(string cot) =>
-        string.Equals(SapXepKho, cot, StringComparison.OrdinalIgnoreCase)
-            ? (SapXepTang ? "▲" : "▼")
-            : string.Empty;
+        !DangSapXep(cot) ? "↕" : SapXepTang ? "↑" : "↓";
+
+    private bool DangSapXep(string cot) =>
+        string.Equals(SapXepKho, cot, StringComparison.OrdinalIgnoreCase);
+
+    private string TaoTipSapXep(string cot, string tenCot)
+    {
+        if (!DangSapXep(cot))
+            return $"Nhấn để sắp xếp {tenCot} {(LaCotChu(cot) ? "A → Z" : "tăng dần")}.";
+
+        return SapXepTang
+            ? $"Đang sắp xếp {tenCot} tăng dần. Nhấn để chuyển giảm dần."
+            : $"Đang sắp xếp {tenCot} giảm dần. Nhấn để trở về thứ tự mặc định.";
+    }
+
+    private static bool LaCotChu(string cot) =>
+        cot is "MaKhachHang" or "TenKhachHang" or "SoDienThoai";
 
     private void ThongBaoDauCot()
     {
@@ -270,6 +322,24 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
         OnPropertyChanged(nameof(DanhDauDaThanhToan));
         OnPropertyChanged(nameof(DanhDauCongNo));
         OnPropertyChanged(nameof(DanhDauGiaTriMua));
+        OnPropertyChanged(nameof(DangSapXepMa));
+        OnPropertyChanged(nameof(DangSapXepTen));
+        OnPropertyChanged(nameof(DangSapXepSdt));
+        OnPropertyChanged(nameof(DangSapXepSoDon));
+        OnPropertyChanged(nameof(DangSapXepTongTien));
+        OnPropertyChanged(nameof(DangSapXepGiamGia));
+        OnPropertyChanged(nameof(DangSapXepDaThanhToan));
+        OnPropertyChanged(nameof(DangSapXepCongNo));
+        OnPropertyChanged(nameof(DangSapXepGiaTriMua));
+        OnPropertyChanged(nameof(TipSapXepMa));
+        OnPropertyChanged(nameof(TipSapXepTen));
+        OnPropertyChanged(nameof(TipSapXepSdt));
+        OnPropertyChanged(nameof(TipSapXepSoDon));
+        OnPropertyChanged(nameof(TipSapXepTongTien));
+        OnPropertyChanged(nameof(TipSapXepGiamGia));
+        OnPropertyChanged(nameof(TipSapXepDaThanhToan));
+        OnPropertyChanged(nameof(TipSapXepCongNo));
+        OnPropertyChanged(nameof(TipSapXepGiaTriMua));
     }
 
     private void CapNhatPhanTrang()
@@ -281,8 +351,23 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
         OnPropertyChanged(nameof(CanTrangSau));
     }
 
-    partial void OnSapXepKhoChanged(string value) => ThongBaoDauCot();
-    partial void OnSapXepTangChanged(bool value) => ThongBaoDauCot();
+    partial void OnSapXepKhoChanged(string value)
+    {
+        ThongBaoDauCot();
+        DongBoLuaChonSapXepNhanh();
+    }
+
+    partial void OnSapXepTangChanged(bool value)
+    {
+        ThongBaoDauCot();
+        DongBoLuaChonSapXepNhanh();
+    }
+
+    partial void OnSapXepNhanhChonChanged(string? value)
+    {
+        if (!_dangDongBoSapXepNhanh)
+            _ = ApDungSapXepNhanhAsync(value);
+    }
 
     partial void OnTrangChanged(int value)
     {
@@ -321,7 +406,7 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
         MocQuanTam = DoiMocQuanTam(value);
 
         // Đổi mối quan tâm thì biểu đồ và bảng cùng dùng tiêu chí mới.
-        SapXepKho = KhoaCuaMocQuanTam(MocQuanTam);
+        SapXepKho = string.Empty;
         SapXepTang = false;
 
         if (Trang != 1)
@@ -561,7 +646,7 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
             TimKiem = string.Empty;
             MocQuanTamChon = MocQuanTamOptions[0];
             MocQuanTam = BaoCaoKhachHangMocQuanTam.BanHang;
-            SapXepKho = KhoaCuaMocQuanTam(BaoCaoKhachHangMocQuanTam.BanHang);
+            SapXepKho = string.Empty;
             SapXepTang = false;
             DatKhoangThangNay();
         }
@@ -636,6 +721,59 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
         _ => "TongTienHang"
     };
 
+    private void DongBoLuaChonSapXepNhanh()
+    {
+        _dangDongBoSapXepNhanh = true;
+        try
+        {
+            SapXepNhanhChon = (SapXepKho, SapXepTang) switch
+            {
+                ("TenKhachHang", true) => SapXepNhanhOptions[0],
+                ("TenKhachHang", false) => SapXepNhanhOptions[1],
+                ("SoDonHang", true) => SapXepNhanhOptions[2],
+                ("SoDonHang", false) => SapXepNhanhOptions[3],
+                ("TongTienHang", false) => SapXepNhanhOptions[4],
+                ("TongTienHang", true) => SapXepNhanhOptions[5],
+                ("CongNo", false) => SapXepNhanhOptions[6],
+                ("CongNo", true) => SapXepNhanhOptions[7],
+                ("DaThanhToan", false) => SapXepNhanhOptions[8],
+                ("DaThanhToan", true) => SapXepNhanhOptions[9],
+                _ => null
+            };
+        }
+        finally
+        {
+            _dangDongBoSapXepNhanh = false;
+        }
+    }
+
+    private async Task ApDungSapXepNhanhAsync(string? luaChon)
+    {
+        string? cot;
+        bool tang;
+        switch (luaChon)
+        {
+            case "Tên khách hàng A → Z": (cot, tang) = ("TenKhachHang", true); break;
+            case "Tên khách hàng Z → A": (cot, tang) = ("TenKhachHang", false); break;
+            case "Số đơn hàng tăng dần": (cot, tang) = ("SoDonHang", true); break;
+            case "Số đơn hàng giảm dần": (cot, tang) = ("SoDonHang", false); break;
+            case "Tổng tiền hàng cao nhất": (cot, tang) = ("TongTienHang", false); break;
+            case "Tổng tiền hàng thấp nhất": (cot, tang) = ("TongTienHang", true); break;
+            case "Công nợ cao nhất": (cot, tang) = ("CongNo", false); break;
+            case "Công nợ thấp nhất": (cot, tang) = ("CongNo", true); break;
+            case "Đã thanh toán cao nhất": (cot, tang) = ("DaThanhToan", false); break;
+            case "Đã thanh toán thấp nhất": (cot, tang) = ("DaThanhToan", true); break;
+            default: return;
+        }
+
+        SapXepKho = cot;
+        SapXepTang = tang;
+        if (Trang != 1)
+            DatTrang(1);
+
+        await TaiDuLieuAsync();
+    }
+
     // ============================================================
     // LỆNH KHÁC
     // ============================================================
@@ -702,12 +840,16 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
             return;
 
         if (string.Equals(SapXepKho, cot, StringComparison.OrdinalIgnoreCase))
-            SapXepTang = !SapXepTang;
+        {
+            if (SapXepTang)
+                SapXepTang = false;
+            else
+                SapXepKho = string.Empty;
+        }
         else
         {
             SapXepKho = cot;
-            // Cột chữ sắp tăng dần, cột số sắp giảm dần cho đúng intuition.
-            SapXepTang = cot is "MaKhachHang" or "TenKhachHang" or "SoDienThoai";
+            SapXepTang = LaCotChu(cot);
         }
 
         if (Trang != 1)

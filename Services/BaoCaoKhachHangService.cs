@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -86,7 +87,8 @@ public sealed class BaoCaoKhachHangService
         int trangHieu = trang < 1 ? 1 : trang;
         int offset = (trangHieu - 1) * soDong;
 
-        var dongTrang = await TaiTrangAsync(conn, dk, sapXepKho, sapXepTang, soDong, offset, token);
+        var dongTrang = await TaiTrangAsync(
+            conn, dk, sapXepKho, sapXepTang, metricKho, soDong, offset, token);
         for (int i = 0; i < dongTrang.Count; i++)
             dongTrang[i].Stt = offset + i + 1;
 
@@ -179,9 +181,14 @@ WHERE " + dk.Where + @";
 
     private async Task<List<BaoCaoKhachHangDong>> TaiTrangAsync(
         MySqlConnection conn, DieuKien dk, string sapXepKho, bool sapXepTang,
-        int soDong, int offset, CancellationToken token)
+        string metricKho, int soDong, int offset, CancellationToken token)
     {
-        string orderBy = LayOrderBy(sapXepKho, sapXepTang);
+        string khoaSapXep = string.IsNullOrWhiteSpace(sapXepKho)
+            ? (string.IsNullOrWhiteSpace(metricKho) ? KhoaMacDinh : metricKho)
+            : sapXepKho;
+        bool sapXepTenTiengViet = string.Equals(
+            khoaSapXep, "TenKhachHang", StringComparison.OrdinalIgnoreCase);
+        string orderBy = LayOrderBy(khoaSapXep, sapXepTang);
 
         string sql = @"
 SELECT
@@ -192,9 +199,8 @@ SELECT
   " + TongHopCot + DieuKien.From + @"
 WHERE " + dk.Where + @"
 GROUP BY " + NhomKhach + @"
-ORDER BY " + orderBy + @", COALESCE(kh.id, 0)
-LIMIT @SoDong OFFSET @Offset;
-";
+ORDER BY " + (sapXepTenTiengViet ? "COALESCE(kh.id, 0)" : orderBy + ", COALESCE(kh.id, 0)")
+            + (sapXepTenTiengViet ? ";" : "\nLIMIT @SoDong OFFSET @Offset;");
 
         var thamSo = new
         {
@@ -207,7 +213,23 @@ LIMIT @SoDong OFFSET @Offset;
 
         var rs = await conn.QueryAsync<BaoCaoKhachHangDong>(
             new CommandDefinition(sql, thamSo, cancellationToken: token));
-        return rs.AsList();
+        var dong = rs.AsList();
+
+        if (!sapXepTenTiengViet)
+            return dong;
+
+        var compareInfo = CultureInfo.GetCultureInfo("vi-VN").CompareInfo;
+        dong.Sort((a, b) =>
+        {
+            int soSanhTen = compareInfo.Compare(
+                a.TenKhachHang, b.TenKhachHang, CompareOptions.IgnoreCase);
+            if (soSanhTen != 0)
+                return sapXepTang ? soSanhTen : -soSanhTen;
+
+            return a.Id.CompareTo(b.Id);
+        });
+
+        return dong.Skip(offset).Take(soDong).ToList();
     }
 
     private async Task<List<BaoCaoKhachHangTop>> TaiTopAsync(
