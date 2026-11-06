@@ -2148,7 +2148,7 @@
                                      HorizontalContentAlignment="Right" VerticalContentAlignment="Center"
                                      CornerRadius="5" BorderBrush="#CFE6E1" BorderThickness="1"
                                      Background="White"
-                                     Text="{Binding DonGia, Mode=TwoWay}" />
+                                     Text="{Binding DonGia, Mode=TwoWay, StringFormat={}{0:N0}}" />
                             <TextBlock FontSize="11.5" Foreground="#667A74" VerticalAlignment="Center">
                               <Run Text="đ / " />
                               <Run Text="{Binding DonViTinh}" FontWeight="SemiBold" />
