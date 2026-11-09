@@ -15,6 +15,8 @@ internal class Program
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         if (args.Contains("--verify-money-input", StringComparer.OrdinalIgnoreCase))
             return MoneyInputVerifier.Run();
+        if (args.Contains("--verify-issue-87", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue87_ComboBoxNhaCungCap();
 
         Console.WriteLine("==========================================================================================");
         Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG SHOP HOA: ĐỐI SOÁT TOÀN DIỆN THỐNG KÊ TRANG TỔNG QUAN (#69)  ");
@@ -77,8 +79,9 @@ internal class Program
             await KiemTraIssue68_SinhMaAtomicAsync(csb.ConnectionString);
             await KiemTraIssue68_LuuPhieuNhapMaRongAsync(csb.ConnectionString);
             KiemTraIssue68_MultiTab_DocLap();
+            KiemTraIssue87_ComboBoxNhaCungCap();
 
-            Console.WriteLine("\n>>> TẤT CẢ CÁC BÀI KIỂM THỬ ISSUE #68 & #69 ĐÃ VƯỢT QUA 100% THÀNH CÔNG! <<<");
+            Console.WriteLine("\n>>> TẤT CẢ CÁC BÀI KIỂM THỬ ISSUE #68, #69 & #87 ĐÃ VƯỢT QUA 100% THÀNH CÔNG! <<<");
             return 0;
         }
         catch (Exception ex)
@@ -557,5 +560,67 @@ internal class Program
         if (tab1.TongTienNhap != 500000m || tab2.TongTienNhap != 1000000m) throw new Exception("Tính toán tổng tiền từng tab bị sai");
 
         Console.WriteLine("PASSED (Tab 1: 50 SP • 500.000 đ | Tab 2: 20 SP • 1.000.000 đ - Hoàn toàn độc lập) ✓");
+    }
+
+    public static int KiemTraIssue87_ComboBoxNhaCungCap()
+    {
+        Console.Write("[Kiểm tra Issue #87] ComboBox hiển thị tên nhà cung cấp (thay vì tên class)... ");
+
+        // 1. Kiểm tra thuộc tính model NhaCungCapThanhToanLuaChon
+        var type = typeof(NhaCungCapThanhToanLuaChon);
+        if (type.GetProperty(nameof(NhaCungCapThanhToanLuaChon.Id)) == null)
+            throw new Exception("NhaCungCapThanhToanLuaChon thiếu thuộc tính Id");
+        if (type.GetProperty(nameof(NhaCungCapThanhToanLuaChon.TenNhaCungCap)) == null)
+            throw new Exception("NhaCungCapThanhToanLuaChon thiếu thuộc tính TenNhaCungCap");
+        if (type.GetProperty(nameof(NhaCungCapThanhToanLuaChon.MaNhaCungCap)) == null)
+            throw new Exception("NhaCungCapThanhToanLuaChon thiếu thuộc tính MaNhaCungCap");
+        if (type.GetProperty(nameof(NhaCungCapThanhToanLuaChon.TenHienThi)) == null)
+            throw new Exception("NhaCungCapThanhToanLuaChon thiếu thuộc tính TenHienThi");
+
+        // 2. Kiểm tra tùy chọn mặc định 'Tất cả nhà cung cấp'
+        var tatCa = new NhaCungCapThanhToanLuaChon
+        {
+            Id = null,
+            MaNhaCungCap = "",
+            TenNhaCungCap = "Tất cả nhà cung cấp",
+            TenHienThi = "Tất cả nhà cung cấp"
+        };
+        if (tatCa.Id != null)
+            throw new Exception("Tùy chọn tất cả nhà cung cấp phải có Id = null");
+        if (tatCa.TenNhaCungCap != "Tất cả nhà cung cấp")
+            throw new Exception("Tên nhà cung cấp của tùy chọn mặc định phải là 'Tất cả nhà cung cấp'");
+        if (tatCa.ToString() == "ShopHoa.Models.NhaCungCapThanhToanLuaChon")
+            throw new Exception("ToString() không được hiển thị tên class!");
+        if (tatCa.ToString() != "Tất cả nhà cung cấp")
+            throw new Exception($"ToString() mong muốn 'Tất cả nhà cung cấp', thực tế: '{tatCa}'");
+
+        // 3. Kiểm tra nhà cung cấp thực tế (ví dụ: NCC Chị Linh ĐL)
+        var ncc = new NhaCungCapThanhToanLuaChon
+        {
+            Id = 5,
+            MaNhaCungCap = "NCC01",
+            TenNhaCungCap = "NCC Chị Linh ĐL",
+            TenHienThi = "NCC Chị Linh ĐL"
+        };
+        if (ncc.Id != 5)
+            throw new Exception("Id nhà cung cấp sai");
+        if (ncc.TenNhaCungCap != "NCC Chị Linh ĐL")
+            throw new Exception("Thuộc tính TenNhaCungCap phải chứa 'NCC Chị Linh ĐL'");
+        if (ncc.ToString() == "ShopHoa.Models.NhaCungCapThanhToanLuaChon")
+            throw new Exception("ToString() không được hiển thị tên class!");
+        if (ncc.ToString() != "NCC Chị Linh ĐL")
+            throw new Exception($"ToString() mong muốn 'NCC Chị Linh ĐL', thực tế: '{ncc}'");
+
+        // 4. Kiểm tra trường hợp nhà cung cấp chỉ có tên mà không có mã
+        var nccKhongMa = new NhaCungCapThanhToanLuaChon
+        {
+            Id = 6,
+            TenNhaCungCap = "Vườn Lan Đà Lạt"
+        };
+        if (nccKhongMa.ToString() != "Vườn Lan Đà Lạt")
+            throw new Exception($"ToString() mong muốn 'Vườn Lan Đà Lạt', thực tế: '{nccKhongMa}'");
+
+        Console.WriteLine("PASSED ('Tất cả nhà cung cấp' & 'NCC Chị Linh ĐL' hiển thị đúng tên, không hiển thị tên class) ✓");
+        return 0;
     }
 }

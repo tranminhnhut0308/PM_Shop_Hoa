@@ -80,7 +80,24 @@
             <Grid Grid.Row="2" RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto,*,Auto"
                 ColumnSpacing="10" RowSpacing="7">
                 <TextBlock Text="Nhà cung cấp" VerticalAlignment="Center" Foreground="#263B35" />
-                <ComboBox x:Name="CboNhaCungCap" Grid.Column="1" Height="38" HorizontalAlignment="Stretch" />
+                <ComboBox x:Name="CboNhaCungCap"
+                    Grid.Column="1"
+                    Height="38"
+                    HorizontalAlignment="Stretch"
+                    DisplayMemberBinding="{Binding TenNhaCungCap}"
+                    SelectedValueBinding="{Binding Id}"
+                    SelectionChanged="OnNhaCungCapSelectionChanged">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="models:NhaCungCapThanhToanLuaChon">
+                            <TextBlock Text="{Binding TenNhaCungCap}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                    <ComboBox.SelectionBoxItemTemplate>
+                        <DataTemplate x:DataType="models:NhaCungCapThanhToanLuaChon">
+                            <TextBlock Text="{Binding TenNhaCungCap}" />
+                        </DataTemplate>
+                    </ComboBox.SelectionBoxItemTemplate>
+                </ComboBox>
                 <TextBlock Grid.Column="2" Text="Từ ngày" VerticalAlignment="Center" Foreground="#263B35" />
                 <CalendarDatePicker x:Name="TuNgayPicker" Grid.Column="3"
                     SelectedDateFormat="Custom" CustomDateFormatString="dd/MM/yyyy"

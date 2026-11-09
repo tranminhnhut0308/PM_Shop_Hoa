@@ -76,5 +76,12 @@ public sealed class ThanhToanCongNoNhaCungCap
 public sealed class NhaCungCapThanhToanLuaChon
 {
     public uint? Id { get; init; }
+    public string MaNhaCungCap { get; init; } = "";
+    public string TenNhaCungCap { get; init; } = "";
     public string TenHienThi { get; init; } = "";
+
+    public override string ToString() =>
+        !string.IsNullOrWhiteSpace(TenNhaCungCap) ? TenNhaCungCap :
+        !string.IsNullOrWhiteSpace(TenHienThi) ? TenHienThi :
+        "Tất cả nhà cung cấp";
 }

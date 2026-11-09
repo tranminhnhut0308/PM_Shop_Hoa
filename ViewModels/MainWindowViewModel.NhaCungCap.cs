@@ -632,6 +632,7 @@ public sealed partial class MainWindowViewModel
             var window = new LichSuThanhToanNhaCungCapWindow(
                 _db,
                 row?.SupplierId,
+                row?.MaNhaCungCap ?? "",
                 row?.TenNhaCungCap ?? "");
             await window.ShowDialog(OwnerWindow);
         }

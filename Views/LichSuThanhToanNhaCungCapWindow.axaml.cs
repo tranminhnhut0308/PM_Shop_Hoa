@@ -26,6 +26,7 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
     private int _currentPage = 1;
     private int _pageSize = 20;
     private bool _initializingPageSize;
+    private bool _initializingSupplier;
     private bool _updatingDateRange;
     private int _loadVersion;
 
@@ -54,9 +55,11 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
         _supplierName = supplierName;
 
         InitializeComponent();
-        TxtNhaCungCap.Text = string.IsNullOrWhiteSpace(supplierCode)
-            ? (string.IsNullOrWhiteSpace(supplierName) ? "Tất cả nhà cung cấp" : supplierName)
-            : $"{supplierCode} - {supplierName}";
+        TxtNhaCungCap.Text = !initialSupplierId.HasValue && string.IsNullOrWhiteSpace(supplierCode)
+            ? (string.IsNullOrWhiteSpace(supplierName) || supplierName == "Nhà cung cấp" ? "Tất cả nhà cung cấp" : supplierName)
+            : (string.IsNullOrWhiteSpace(supplierCode)
+                ? (string.IsNullOrWhiteSpace(supplierName) ? "Tất cả nhà cung cấp" : supplierName)
+                : (supplierName.StartsWith(supplierCode, StringComparison.OrdinalIgnoreCase) ? supplierName : $"{supplierCode} - {supplierName}"));
 
         LichSuGrid.ItemsSource = Array.Empty<ThanhToanCongNoNhaCungCap>();
         _initializingPageSize = true;
@@ -109,9 +112,45 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
         TimKiemBox.Text = "";
         if (CboNhaCungCap.ItemsSource is List<NhaCungCapThanhToanLuaChon> options && options.Count > 0)
         {
-            CboNhaCungCap.SelectedItem = options.FirstOrDefault(option => option.Id == _initialSupplierId) ?? options[0];
+            _initializingSupplier = true;
+            try
+            {
+                var matched = options.FirstOrDefault(option =>
+                {
+                    if (_initialSupplierId.HasValue)
+                        return option.Id == _initialSupplierId;
+                    if (!string.IsNullOrWhiteSpace(_supplierCode) && string.Equals(option.MaNhaCungCap, _supplierCode, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                    if (!string.IsNullOrWhiteSpace(_supplierName) && string.Equals(option.TenNhaCungCap, _supplierName, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                    return false;
+                }) ?? options[0];
+
+                CboNhaCungCap.SelectedItem = matched;
+                TxtNhaCungCap.Text = matched.Id.HasValue ? matched.TenNhaCungCap : "Tất cả nhà cung cấp";
+            }
+            finally
+            {
+                _initializingSupplier = false;
+            }
         }
         _appliedKeyword = "";
+        _currentPage = 1;
+        await NapDuLieuAsync();
+    }
+
+    private async void OnNhaCungCapSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_initializingSupplier)
+            return;
+
+        if (CboNhaCungCap.SelectedItem is not NhaCungCapThanhToanLuaChon selected)
+            return;
+
+        TxtNhaCungCap.Text = selected.Id.HasValue
+            ? selected.TenNhaCungCap
+            : "Tất cả nhà cung cấp";
+
         _currentPage = 1;
         await NapDuLieuAsync();
     }
@@ -121,19 +160,57 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
         if (CboNhaCungCap.ItemsSource is not null)
             return;
 
-        var suppliers = await _database.GetNhaCungCapAsync();
-        var options = new List<NhaCungCapThanhToanLuaChon>
+        _initializingSupplier = true;
+        try
         {
-            new() { Id = null, TenHienThi = "Tất cả nhà cung cấp" }
-        };
-        options.AddRange(suppliers.Select(supplier => new NhaCungCapThanhToanLuaChon
+            var suppliers = await _database.GetNhaCungCapAsync();
+            var options = new List<NhaCungCapThanhToanLuaChon>
+            {
+                new()
+                {
+                    Id = null,
+                    MaNhaCungCap = "",
+                    TenNhaCungCap = "Tất cả nhà cung cấp",
+                    TenHienThi = "Tất cả nhà cung cấp"
+                }
+            };
+            options.AddRange(suppliers.Select(supplier =>
+            {
+                var ten = string.IsNullOrWhiteSpace(supplier.TenNhaCungCap)
+                    ? (supplier.MaNhaCungCap ?? "Nhà cung cấp")
+                    : supplier.TenNhaCungCap.Trim();
+                var ma = (supplier.MaNhaCungCap ?? "").Trim();
+                var hienThi = string.IsNullOrWhiteSpace(ma) || ten.Contains(ma, StringComparison.OrdinalIgnoreCase)
+                    ? ten
+                    : $"{ma} - {ten}";
+
+                return new NhaCungCapThanhToanLuaChon
+                {
+                    Id = supplier.Id,
+                    MaNhaCungCap = ma,
+                    TenNhaCungCap = ten,
+                    TenHienThi = hienThi
+                };
+            }));
+
+            CboNhaCungCap.ItemsSource = options;
+            var matched = options.FirstOrDefault(option =>
+            {
+                if (_initialSupplierId.HasValue)
+                    return option.Id == _initialSupplierId;
+                if (!string.IsNullOrWhiteSpace(_supplierCode) && string.Equals(option.MaNhaCungCap, _supplierCode, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (!string.IsNullOrWhiteSpace(_supplierName) && string.Equals(option.TenNhaCungCap, _supplierName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                return false;
+            }) ?? options[0];
+
+            CboNhaCungCap.SelectedItem = matched;
+        }
+        finally
         {
-            Id = supplier.Id,
-            TenHienThi = $"{supplier.MaNhaCungCap} - {supplier.TenNhaCungCap}"
-        }));
-        CboNhaCungCap.ItemsSource = options;
-        CboNhaCungCap.SelectedItem = options.FirstOrDefault(
-            option => option.Id == _initialSupplierId) ?? options[0];
+            _initializingSupplier = false;
+        }
     }
 
     private async Task<(ThanhToanCongNoLichSuThongKe Summary, IReadOnlyList<ThanhToanCongNoNhaCungCap> Records)> TaiTrangAsync(

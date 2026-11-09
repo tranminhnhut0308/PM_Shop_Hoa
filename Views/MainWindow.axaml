@@ -387,6 +387,12 @@
       <Setter Property="BorderThickness" Value="1" />
     </Style>
 
+    <!-- Bảng hàng hóa phiếu nhập: giữ padding ô nhỏ để các nút/numeric không bị cắt -->
+    <Style Selector="DataGrid#GridPhieuNhapItems DataGridCell">
+      <Setter Property="Padding" Value="2,2" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
     <!-- DÒNG KHÁCH HÀNG: DI CHUỘT CÓ MÀU, TÁCH DÒNG MỎNG -->
     <Style Selector="Border.customerRow">
       <Setter Property="Background" Value="Transparent" />
@@ -5330,353 +5336,320 @@
                   CornerRadius="12"
                   ClipToBounds="True">
 
-                  <Grid RowDefinitions="Auto,*">
+                  <!--
+                    ISSUE #88: Header và body dùng chung một DataGrid nên nằm trong cùng
+                    hệ tọa độ cuộn ngang. DataGrid tự đồng bộ offset header/body, giữ
+                    header cố định khi cuộn dọc và tính chiều rộng cột nhất quán.
+                  -->
+                  <Grid>
+                    <DataGrid x:Name="GridPhieuNhapItems"
+                              ItemsSource="{Binding PhieuNhapItems}"
+                              AutoGenerateColumns="False"
+                              CanUserReorderColumns="False"
+                              CanUserResizeColumns="True"
+                              CanUserSortColumns="False"
+                              HeadersVisibility="Column"
+                              SelectionMode="Single"
+                              GridLinesVisibility="Horizontal"
+                              HorizontalGridLinesBrush="#EDF2F0"
+                              Background="White"
+                              BorderThickness="0"
+                              HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto">
+                      <DataGrid.Columns>
+                        <!-- STT -->
+                        <DataGridTemplateColumn Header="STT" Width="44" MinWidth="44">
+                          <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
+                              <TextBlock Text="{Binding Index}"
+                                         Foreground="#98A2B3"
+                                         FontSize="13"
+                                         VerticalAlignment="Center"
+                                         HorizontalAlignment="Center" />
+                            </DataTemplate>
+                          </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
 
-                    <!-- HEADER BẢNG -->
-                    <Border Background="#F7FAF9"
-                      BorderBrush="#E2ECE8"
-                      BorderThickness="0,0,0,1"
-                      Padding="8,0">
+                        <!-- MÃ HÀNG (nhấn để mở xem / chỉnh sửa chi tiết) -->
+                        <DataGridTemplateColumn Header="MÃ HÀNG" Width="110" MinWidth="95">
+                          <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
+                              <Button Background="Transparent"
+                                      BorderThickness="0"
+                                      Padding="0"
+                                      Cursor="Hand"
+                                      HorizontalAlignment="Left"
+                                      VerticalAlignment="Center"
+                                      ToolTip.Tip="Nhấn vào mã để xem / chỉnh sửa thông tin hàng hóa"
+                                      Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoChiTietSanPhamTuPhieuNhapCommand}"
+                                      CommandParameter="{Binding}">
+                                <Border Background="#E6F4F1" CornerRadius="4" Padding="5,2">
+                                  <TextBlock Text="{Binding MaSanPham}" FontSize="12" FontWeight="Bold" Foreground="#0A8C78" TextTrimming="CharacterEllipsis" />
+                                </Border>
+                              </Button>
+                            </DataTemplate>
+                          </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
 
-                      <Grid ColumnDefinitions="36,110,*,90,100,115,120,36"
-                        Height="38">
-
-                        <TextBlock Text="STT"
-                          FontWeight="SemiBold"
-                          Foreground="#164B40"
-                          FontSize="11.5"
-                          VerticalAlignment="Center"
-                          HorizontalAlignment="Center" />
-
-                        <TextBlock Grid.Column="1"
-                          Text="MÃ HÀNG"
-                          FontWeight="SemiBold"
-                          Foreground="#164B40"
-                          FontSize="11.5"
-                          VerticalAlignment="Center" />
-
-                        <TextBlock Grid.Column="2"
-                          Text="TÊN HÀNG"
-                          FontWeight="SemiBold"
-                          Foreground="#164B40"
-                          FontSize="11.5"
-                          VerticalAlignment="Center" />
-
-                        <TextBlock Grid.Column="3"
-                          Text="ĐVT"
-                          FontWeight="SemiBold"
-                          Foreground="#164B40"
-                          FontSize="11.5"
-                          VerticalAlignment="Center" />
-
-                        <TextBlock Grid.Column="4"
-                          Text="SỐ LƯỢNG"
-                          FontWeight="SemiBold"
-                          Foreground="#164B40"
-                          FontSize="11.5"
-                          VerticalAlignment="Center"
-                          HorizontalAlignment="Center" />
-
-                        <TextBlock Grid.Column="5"
-                          Text="GIÁ NHẬP"
-                          FontWeight="SemiBold"
-                          Foreground="#164B40"
-                          FontSize="11.5"
-                          VerticalAlignment="Center"
-                          HorizontalAlignment="Right"
-                          Margin="0,0,6,0" />
-
-                        <TextBlock Grid.Column="6"
-                          Text="THÀNH TIỀN"
-                          FontWeight="SemiBold"
-                          Foreground="#164B40"
-                          FontSize="11.5"
-                          VerticalAlignment="Center"
-                          HorizontalAlignment="Right"
-                          Margin="0,0,6,0" />
-
-                        <TextBlock Grid.Column="7"
-                          Text=""
-                          VerticalAlignment="Center" />
-                      </Grid>
-                    </Border>
-
-                    <!-- DANH SÁCH -->
-                    <Grid Grid.Row="1">
-
-                      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding PhieuNhapItems}" MinWidth="750">
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
-
-                            <Border Background="White"
-                              BorderBrush="#EDF2F0"
-                              BorderThickness="0,0,0,1"
-                              Padding="8,2">
-
-                              <Grid ColumnDefinitions="36,110,*,90,100,115,120,36"
-                                MinHeight="46">
-
-                                <!-- STT -->
-                                <TextBlock Text="{Binding Index}"
-                                  Foreground="#98A2B3"
-                                  FontSize="13"
-                                  VerticalAlignment="Center"
-                                  HorizontalAlignment="Center" />
-
-                                <!-- MÃ HÀNG (nhấn để mở xem / chỉnh sửa chi tiết) -->
-                                <Button Grid.Column="1"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Padding="0"
-                                        Cursor="Hand"
-                                        HorizontalAlignment="Left"
-                                        VerticalAlignment="Center"
-                                        ToolTip.Tip="Nhấn vào mã để xem / chỉnh sửa thông tin hàng hóa"
-                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoChiTietSanPhamTuPhieuNhapCommand}"
-                                        CommandParameter="{Binding}">
-                                  <Border Background="#E6F4F1" CornerRadius="4" Padding="5,2">
-                                    <TextBlock Text="{Binding MaSanPham}" FontSize="12" FontWeight="Bold" Foreground="#0A8C78" TextTrimming="CharacterEllipsis" />
-                                  </Border>
-                                </Button>
-
-                                <!-- TÊN HÀNG (nhấn để mở xem / chỉnh sửa chi tiết, tự động xuống dòng Wrap) -->
-                                <Button Grid.Column="2"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Padding="0,2,8,2"
-                                        Cursor="Hand"
-                                        HorizontalAlignment="Stretch"
-                                        VerticalAlignment="Center"
-                                        HorizontalContentAlignment="Left"
-                                        ToolTip.Tip="{Binding TenSanPham, StringFormat='Nhấn để xem / chỉnh sửa: {0}'}"
-                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoChiTietSanPhamTuPhieuNhapCommand}"
-                                        CommandParameter="{Binding}">
-                                  <TextBlock Text="{Binding TenSanPham}"
-                                    Foreground="#163F38"
-                                    FontSize="13"
-                                    FontWeight="SemiBold"
-                                    VerticalAlignment="Center"
-                                    TextWrapping="Wrap"
-                                    LineHeight="18" />
-                                </Button>
-                                <!-- ĐVT: hiển thị sẵn nếu hàng đã có ĐVT, hoặc cho chọn/thêm trực tiếp nếu hàng chưa có ĐVT -->
-                                <Grid Grid.Column="3"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,8,0">
-
-                                  <TextBlock Text="{Binding DonViTinh}"
-                                    IsVisible="{Binding CoDonViTinhCoSan}"
-                                    Foreground="#667085"
-                                    FontSize="13"
-                                    VerticalAlignment="Center"
-                                    TextTrimming="CharacterEllipsis" />
-
-                                  <Grid ColumnDefinitions="*,Auto"
-                                    ColumnSpacing="4"
-                                    IsVisible="{Binding ChoPhepChonDonViTinh}"
-                                    VerticalAlignment="Center">
-
-                                    <ComboBox Grid.Column="0"
-                                      ItemsSource="{Binding DonViTinhOptions}"
-                                      SelectedItem="{Binding SelectedDonViTinh, Mode=TwoWay}"
-                                      PlaceholderText="Chọn ĐVT"
-                                      Height="30"
-                                      MinHeight="30"
-                                      Padding="8,3"
-                                      FontSize="12.5"
-                                      CornerRadius="6"
-                                      Background="#F8FBFA"
-                                      BorderBrush="#087F6E"
-                                      BorderThickness="1"
+                        <!-- TÊN HÀNG (nhấn để mở xem / chỉnh sửa chi tiết, tự động xuống dòng) -->
+                        <DataGridTemplateColumn Header="TÊN HÀNG" Width="*" MinWidth="180">
+                          <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
+                              <Button Background="Transparent"
+                                      BorderThickness="0"
+                                      Padding="0,2,8,2"
+                                      Cursor="Hand"
                                       HorizontalAlignment="Stretch"
                                       VerticalAlignment="Center"
-                                      ToolTip.Tip="Hàng hóa này chưa có ĐVT — chọn ĐVT tại đây để tự động cập nhật vào danh sách hàng hóa sau khi hoàn thành phiếu nhập">
-                                      <ComboBox.ItemTemplate>
-                                        <DataTemplate x:DataType="models:ProductOption">
-                                          <TextBlock Text="{Binding Name}" FontSize="12.5" VerticalAlignment="Center" />
-                                        </DataTemplate>
-                                      </ComboBox.ItemTemplate>
-                                    </ComboBox>
-
-                                    <Button Grid.Column="1"
-                                      Width="26"
-                                      Height="30"
-                                      MinWidth="26"
-                                      MaxWidth="26"
-                                      Margin="0"
-                                      Padding="0"
-                                      CornerRadius="6"
-                                      Background="#EEF7F4"
-                                      Foreground="#0C756A"
-                                      BorderBrush="#CFE6E1"
-                                      BorderThickness="1"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center"
-                                      ToolTip.Tip="Thêm đơn vị tính mới"
-                                      Command="{Binding ElementName=RootWindow, Path=DataContext.ThemDonViTinhPhieuNhapCommand}"
+                                      HorizontalContentAlignment="Left"
+                                      ToolTip.Tip="{Binding TenSanPham, StringFormat='Nhấn để xem / chỉnh sửa: {0}'}"
+                                      Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoChiTietSanPhamTuPhieuNhapCommand}"
                                       CommandParameter="{Binding}">
-                                      <Path Width="10"
-                                        Height="10"
+                                <TextBlock Text="{Binding TenSanPham}"
+                                           Foreground="#163F38"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           MaxLines="2"
+                                           TextTrimming="CharacterEllipsis"
+                                           LineHeight="18" />
+                              </Button>
+                            </DataTemplate>
+                          </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- ĐVT: hiển thị sẵn nếu hàng đã có ĐVT, hoặc cho chọn/thêm trực tiếp nếu hàng chưa có ĐVT -->
+                        <DataGridTemplateColumn Header="ĐVT" Width="90" MinWidth="80">
+                          <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
+                              <Grid VerticalAlignment="Center" Margin="0,0,8,0">
+                                <TextBlock Text="{Binding DonViTinh}"
+                                           IsVisible="{Binding CoDonViTinhCoSan}"
+                                           Foreground="#667085"
+                                           FontSize="13"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+
+                                <Grid ColumnDefinitions="*,Auto"
+                                      ColumnSpacing="4"
+                                      IsVisible="{Binding ChoPhepChonDonViTinh}"
+                                      VerticalAlignment="Center">
+                                  <ComboBox Grid.Column="0"
+                                            ItemsSource="{Binding DonViTinhOptions}"
+                                            SelectedItem="{Binding SelectedDonViTinh, Mode=TwoWay}"
+                                            PlaceholderText="Chọn ĐVT"
+                                            Height="30"
+                                            MinHeight="30"
+                                            Padding="8,3"
+                                            FontSize="12.5"
+                                            CornerRadius="6"
+                                            Background="#F8FBFA"
+                                            BorderBrush="#087F6E"
+                                            BorderThickness="1"
+                                            HorizontalAlignment="Stretch"
+                                            VerticalAlignment="Center"
+                                            ToolTip.Tip="Hàng hóa này chưa có ĐVT — chọn ĐVT tại đây để tự động cập nhật vào danh sách hàng hóa sau khi hoàn thành phiếu nhập">
+                                    <ComboBox.ItemTemplate>
+                                      <DataTemplate x:DataType="models:ProductOption">
+                                        <TextBlock Text="{Binding Name}" FontSize="12.5" VerticalAlignment="Center" />
+                                      </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                  </ComboBox>
+
+                                  <Button Grid.Column="1"
+                                          Width="26"
+                                          Height="30"
+                                          MinWidth="26"
+                                          MaxWidth="26"
+                                          Margin="0"
+                                          Padding="0"
+                                          CornerRadius="6"
+                                          Background="#EEF7F4"
+                                          Foreground="#0C756A"
+                                          BorderBrush="#CFE6E1"
+                                          BorderThickness="1"
+                                          HorizontalContentAlignment="Center"
+                                          VerticalContentAlignment="Center"
+                                          ToolTip.Tip="Thêm đơn vị tính mới"
+                                          Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ThemDonViTinhPhieuNhapCommand}"
+                                          CommandParameter="{Binding}">
+                                    <Path Width="10"
+                                          Height="10"
+                                          Stretch="Uniform"
+                                          Fill="#0C756A"
+                                          Data="M 4.6,0 H 6.4 V 4.6 H 11 V 6.4 H 6.4 V 11 H 4.6 V 6.4 H 0 V 4.6 H 4.6 Z"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                                  </Button>
+                                </Grid>
+                              </Grid>
+                            </DataTemplate>
+                          </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- SỐ LƯỢNG (sửa trực tiếp) -->
+                        <DataGridTemplateColumn Header="SỐ LƯỢNG" Width="110" MinWidth="106">
+                          <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
+                              <!-- Icon của 3 nút dùng hình học (Rectangle/Path) thay cho chữ "+", "−", "×":
+                                   chữ của font luôn nằm trên trục toán học nên lệch ~1px xuống dưới tâm,
+                                   còn hình học do layout căn giữa nên luôn đúng tâm ở mọi độ phân giải. -->
+                              <Grid ColumnDefinitions="26,*,26"
+                                    ColumnSpacing="0"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                                <Button Width="26"
+                                        Height="28"
+                                        MinWidth="26"
+                                        MaxWidth="26"
+                                        Margin="0"
+                                        Padding="0"
+                                        HorizontalContentAlignment="Center"
+                                        VerticalContentAlignment="Center"
+                                        CornerRadius="6,0,0,6"
+                                        Background="#EEF7F4"
+                                        Foreground="#0C756A"
+                                        BorderBrush="#CFE6E1"
+                                        BorderThickness="1,1,0,1"
+                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).GiamSoLuongNhapCommand}"
+                                        CommandParameter="{Binding}">
+                                  <Rectangle Width="11"
+                                             Height="1.8"
+                                             Fill="#0C756A"
+                                             HorizontalAlignment="Center"
+                                             VerticalAlignment="Center" />
+                                </Button>
+
+                                <TextBox Grid.Column="1"
+                                         MinWidth="52"
+                                         Height="28"
+                                         Margin="0"
+                                         Padding="2"
+                                         TextAlignment="Center"
+                                         HorizontalContentAlignment="Center"
+                                         VerticalContentAlignment="Center"
+                                         Background="#F8FBFA"
+                                         BorderBrush="#CFE6E1"
+                                         BorderThickness="1"
+                                         Text="{Binding SoLuong, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                                <Button Grid.Column="2"
+                                        Width="26"
+                                        Height="28"
+                                        MinWidth="26"
+                                        MaxWidth="26"
+                                        Margin="0"
+                                        Padding="0"
+                                        HorizontalContentAlignment="Center"
+                                        VerticalContentAlignment="Center"
+                                        CornerRadius="0,6,6,0"
+                                        Background="#EEF7F4"
+                                        Foreground="#0C756A"
+                                        BorderBrush="#CFE6E1"
+                                        BorderThickness="0,1,1,1"
+                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).TangSoLuongNhapCommand}"
+                                        CommandParameter="{Binding}">
+                                  <Path Width="11"
+                                        Height="11"
                                         Stretch="Uniform"
                                         Fill="#0C756A"
                                         Data="M 4.6,0 H 6.4 V 4.6 H 11 V 6.4 H 6.4 V 11 H 4.6 V 6.4 H 0 V 4.6 H 4.6 Z"
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Center" />
-                                    </Button>
-                                  </Grid>
-                                </Grid>
-
-                                <!-- SỐ LƯỢNG (sửa trực tiếp) -->
-                                <!-- Icon của 3 nút dùng hình học (Rectangle/Path) thay cho chữ "+", "−", "×":
-                                     chữ của font luôn nằm trên trục toán học nên lệch ~1px xuống dưới tâm,
-                                     còn hình học do layout căn giữa nên luôn đúng tâm ở mọi độ phân giải. -->
-                                <Grid Grid.Column="4"
-                                  ColumnDefinitions="26,*,26"
-                                  ColumnSpacing="0"
-                                  HorizontalAlignment="Center"
-                                  VerticalAlignment="Center">
-
-                                  <Button Width="26"
-                                    Height="28"
-                                    MinWidth="26"
-                                    MaxWidth="26"
-                                    Margin="0"
-                                    Padding="0"
-                                    HorizontalContentAlignment="Center"
-                                    VerticalContentAlignment="Center"
-                                    CornerRadius="6,0,0,6"
-                                    Background="#EEF7F4"
-                                    Foreground="#0C756A"
-                                    BorderBrush="#CFE6E1"
-                                    BorderThickness="1,1,0,1"
-                                    Command="{Binding ElementName=RootWindow, Path=DataContext.GiamSoLuongNhapCommand}"
-                                    CommandParameter="{Binding}">
-
-                                    <Rectangle Width="11"
-                                      Height="1.8"
-                                      Fill="#0C756A"
-                                      HorizontalAlignment="Center"
-                                      VerticalAlignment="Center" />
-                                  </Button>
-
-                                  <TextBox Grid.Column="1"
-                                    MinWidth="52"
-                                    Height="28"
-                                    Margin="0"
-                                    Padding="2"
-                                    TextAlignment="Center"
-                                    HorizontalContentAlignment="Center"
-                                    VerticalContentAlignment="Center"
-                                    Background="#F8FBFA"
-                                    BorderBrush="#CFE6E1"
-                                    BorderThickness="1"
-                                    Text="{Binding SoLuong, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-
-                                  <Button Grid.Column="2"
-                                    Width="26"
-                                    Height="28"
-                                    MinWidth="26"
-                                    MaxWidth="26"
-                                    Margin="0"
-                                    Padding="0"
-                                    HorizontalContentAlignment="Center"
-                                    VerticalContentAlignment="Center"
-                                    CornerRadius="0,6,6,0"
-                                    Background="#EEF7F4"
-                                    Foreground="#0C756A"
-                                    BorderBrush="#CFE6E1"
-                                    BorderThickness="0,1,1,1"
-                                    Command="{Binding ElementName=RootWindow, Path=DataContext.TangSoLuongNhapCommand}"
-                                    CommandParameter="{Binding}">
-
-                                    <Path Width="11"
-                                      Height="11"
-                                      Stretch="Uniform"
-                                      Fill="#0C756A"
-                                      Data="M 4.6,0 H 6.4 V 4.6 H 11 V 6.4 H 6.4 V 11 H 4.6 V 6.4 H 0 V 4.6 H 4.6 Z"
-                                      HorizontalAlignment="Center"
-                                      VerticalAlignment="Center" />
-                                  </Button>
-                                </Grid>
-
-                                <!-- GIÁ NHẬP (sửa trực tiếp, có định dạng tiền VN) -->
-                                <controls:MoneyTextBox Grid.Column="5"
-                                  Margin="0,0,8,0"
-                                  Height="28"
-                                  Value="{Binding DonGiaNhap, Mode=TwoWay}" />
-
-                                <!-- THÀNH TIỀN -->
-                                <TextBlock Grid.Column="6"
-                                  Text="{Binding ThanhTien, StringFormat={}{0:N0} đ}"
-                                  Foreground="#087F6E"
-                                  FontSize="13"
-                                  FontWeight="SemiBold"
-                                  VerticalAlignment="Center"
-                                  HorizontalAlignment="Right"
-                                  Margin="0,0,8,0" />
-
-                                <!-- XÓA DÒNG: nút tròn vuông 28x28, CornerRadius = 14 = nửa kích thước,
-                                     icon "×" vẽ bằng Path nên nằm đúng tâm hình tròn. -->
-                                <Button Grid.Column="7"
-                                  Width="28"
-                                  Height="28"
-                                  Margin="0"
-                                  Padding="0"
-                                  HorizontalContentAlignment="Center"
-                                  VerticalContentAlignment="Center"
-                                  CornerRadius="14"
-                                  Background="#FDECEC"
-                                  Foreground="#D92D20"
-                                  BorderBrush="#F1B7B1"
-                                  BorderThickness="1"
-                                  VerticalAlignment="Center"
-                                  HorizontalAlignment="Center"
-                                  ToolTip.Tip="Xóa dòng này"
-                                  Command="{Binding ElementName=RootWindow, Path=DataContext.XoaDongPhieuNhapCommand}"
-                                  CommandParameter="{Binding}">
-
-                                  <Path Width="10"
-                                    Height="10"
-                                    Stretch="Uniform"
-                                    Fill="#D92D20"
-                                    Data="M 0.8,0 L 5,4.2 L 9.2,0 L 10,0.8 L 5.8,5 L 10,9.2 L 9.2,10 L 5,5.8 L 0.8,10 L 0,9.2 L 4.2,5 L 0,0.8 Z"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center" />
                                 </Button>
                               </Grid>
-                            </Border>
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
-                      </ScrollViewer>
+                            </DataTemplate>
+                          </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
 
-                      <!-- RỖNG -->
-                      <StackPanel IsVisible="{Binding IsPhieuNhapEmpty}"
-                        VerticalAlignment="Center"
-                        HorizontalAlignment="Center">
+                        <!-- GIÁ NHẬP (sửa trực tiếp, có định dạng tiền VN) -->
+                        <DataGridTemplateColumn Header="GIÁ NHẬP" Width="118" MinWidth="110">
+                          <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
+                              <controls:MoneyTextBox Margin="0,0,8,0"
+                                                     Height="28"
+                                                     Value="{Binding DonGiaNhap, Mode=TwoWay}" />
+                            </DataTemplate>
+                          </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
 
-                        <TextBlock Text="🌼"
-                          FontSize="38"
-                          HorizontalAlignment="Center"
-                          Foreground="#CDE7E0" />
+                        <!-- THÀNH TIỀN -->
+                        <DataGridTemplateColumn Header="THÀNH TIỀN" Width="120" MinWidth="105">
+                          <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
+                              <TextBlock Text="{Binding ThanhTien, StringFormat={}{0:N0} đ}"
+                                         Foreground="#087F6E"
+                                         FontSize="13"
+                                         FontWeight="SemiBold"
+                                         VerticalAlignment="Center"
+                                         HorizontalAlignment="Right"
+                                         Margin="0,0,8,0" />
+                            </DataTemplate>
+                          </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
 
-                        <TextBlock Text="Chưa có hàng hóa nào trong phiếu"
-                          FontSize="15"
-                          FontWeight="SemiBold"
-                          Foreground="#61736E"
-                          HorizontalAlignment="Center"
-                          Margin="0,10,0,0" />
+                        <!-- XÓA DÒNG -->
+                        <DataGridTemplateColumn Header="" Width="44" MinWidth="40">
+                          <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
+                              <!-- Nút tròn vuông 28x28, CornerRadius = 14 = nửa kích thước,
+                                   icon "×" vẽ bằng Path nên nằm đúng tâm hình tròn. -->
+                              <Button Width="28"
+                                      Height="28"
+                                      Margin="0"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center"
+                                      CornerRadius="14"
+                                      Background="#FDECEC"
+                                      Foreground="#D92D20"
+                                      BorderBrush="#F1B7B1"
+                                      BorderThickness="1"
+                                      VerticalAlignment="Center"
+                                      HorizontalAlignment="Center"
+                                      ToolTip.Tip="Xóa dòng này"
+                                      Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).XoaDongPhieuNhapCommand}"
+                                      CommandParameter="{Binding}">
+                                <Path Width="10"
+                                      Height="10"
+                                      Stretch="Uniform"
+                                      Fill="#D92D20"
+                                      Data="M 0.8,0 L 5,4.2 L 9.2,0 L 10,0.8 L 5.8,5 L 10,9.2 L 9.2,10 L 5,5.8 L 0.8,10 L 0,9.2 L 4.2,5 L 0,0.8 Z"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center" />
+                              </Button>
+                            </DataTemplate>
+                          </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                      </DataGrid.Columns>
+                    </DataGrid>
 
-                        <TextBlock
-                          Text="Tìm hàng hóa ở ô trên rồi bấm vào kết quả để thêm vào phiếu"
-                          FontSize="12"
-                          Foreground="#98A2B3"
-                          HorizontalAlignment="Center"
-                          Margin="0,4,0,0" />
-                      </StackPanel>
-                    </Grid>
+                    <!-- RỖNG -->
+                    <StackPanel IsVisible="{Binding IsPhieuNhapEmpty}"
+                      IsHitTestVisible="False"
+                      VerticalAlignment="Center"
+                      HorizontalAlignment="Center">
 
+                      <TextBlock Text="🌼"
+                        FontSize="38"
+                        HorizontalAlignment="Center"
+                        Foreground="#CDE7E0" />
+
+                      <TextBlock Text="Chưa có hàng hóa nào trong phiếu"
+                        FontSize="15"
+                        FontWeight="SemiBold"
+                        Foreground="#61736E"
+                        HorizontalAlignment="Center"
+                        Margin="0,10,0,0" />
+
+                      <TextBlock
+                        Text="Tìm hàng hóa ở ô trên rồi bấm vào kết quả để thêm vào phiếu"
+                        FontSize="12"
+                        Foreground="#98A2B3"
+                        HorizontalAlignment="Center"
+                        Margin="0,4,0,0" />
+                    </StackPanel>
                   </Grid>
                 </Border>
 
