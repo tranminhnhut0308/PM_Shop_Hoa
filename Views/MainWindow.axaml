@@ -2278,12 +2278,6 @@
                 </StackPanel>
               </Grid>
 
-              <TextBlock Text="Địa chỉ (không bắt buộc)" Foreground="#61736E" FontSize="11" FontWeight="SemiBold" />
-              <TextBox Text="{Binding SaleCustomerAddress, Mode=TwoWay}"
-                       Watermark="Địa chỉ đầy đủ khi chọn khách"
-                       AcceptsReturn="True" TextWrapping="Wrap"
-                       MinHeight="32" MaxHeight="48" FontSize="11.5" />
-
               <CheckBox IsChecked="{Binding SaleInKemSdtDiaChi, Mode=TwoWay}"
                         Content="In kèm SĐT + địa chỉ lên hóa đơn" FontSize="11" />
 

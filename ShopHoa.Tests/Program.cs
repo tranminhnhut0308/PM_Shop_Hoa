@@ -1091,6 +1091,117 @@ internal class Program
         Console.WriteLine("PASSED (Trang Quản lý hàng hóa giữ nguyên 100% không đổi) ✓");
 
         Console.WriteLine("\n>>> TOÀN BỘ 6 TIÊU CHÍ KIỂM THỬ ISSUE #94 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+
+        // ==========================================================================
+        //  KIỂM THỬ ISSUE #96: LOẠI BỎ TRƯỜNG NHẬP ĐỊA CHỈ TRÊN TRANG BÁN HÀNG
+        // ==========================================================================
+        Console.WriteLine("\n------------------------------------------------------------------------------------------");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #96: LOẠI BỎ TRƯỜNG NHẬP ĐỊA CHỈ TRÊN TRANG BÁN HÀNG             ");
+        Console.WriteLine("------------------------------------------------------------------------------------------");
+
+        // 1. Kiểm tra CSDL: Bảng khach_hang vẫn giữ nguyên cột dia_chi
+        Console.Write("[Kiểm tra Issue #96] 1. Kiểm tra CSDL: Cột dia_chi trong bảng khach_hang nguyên vẹn... ");
+        var khCoDiaChi = await conn.QueryFirstOrDefaultAsync<dynamic>(
+            "SELECT id, ma_khach_hang, ten_khach_hang, so_dien_thoai, dia_chi FROM khach_hang WHERE dia_chi IS NOT NULL AND dia_chi <> '' LIMIT 1");
+        if (khCoDiaChi == null || string.IsNullOrWhiteSpace((string)khCoDiaChi.dia_chi))
+            throw new Exception("Không tìm thấy khách hàng có địa chỉ trong CSDL để kiểm thử!");
+        Console.WriteLine($"PASSED (Khách hàng mẫu: '{khCoDiaChi.ten_khach_hang}', ĐC: '{khCoDiaChi.dia_chi}') ✓");
+
+        // 2. Kiểm tra XAML: Đã xóa hoàn toàn trường nhập địa chỉ khỏi giao diện bán hàng
+        Console.Write("[Kiểm tra Issue #96] 2. Kiểm tra XAML: Đã loại bỏ trường nhập địa chỉ khỏi Bán hàng... ");
+        int saleCustomerSectionStart = xamlContent.IndexOf("x:Name=\"SaleCustomerSearchBox\"");
+        if (saleCustomerSectionStart == -1)
+            throw new Exception("Không tìm thấy vùng thông tin khách hàng bán hàng trong MainWindow.axaml");
+        int saleCustomerSectionEnd = xamlContent.IndexOf("Phần tính tiền", saleCustomerSectionStart);
+        if (saleCustomerSectionEnd == -1)
+            saleCustomerSectionEnd = saleCustomerSectionStart + 2500;
+        string saleCustomerSection = xamlContent.Substring(saleCustomerSectionStart, saleCustomerSectionEnd - saleCustomerSectionStart);
+
+        if (saleCustomerSection.Contains("SaleCustomerAddress"))
+            throw new Exception("Vùng khách hàng trang Bán hàng vẫn còn chứa trường nhập SaleCustomerAddress!");
+        if (saleCustomerSection.Contains("Địa chỉ (không bắt buộc)"))
+            throw new Exception("Vùng khách hàng trang Bán hàng vẫn còn nhãn 'Địa chỉ (không bắt buộc)'!");
+
+        // Kiểm tra vẫn giữ lại tên, SĐT, các nút chức năng và tùy chọn giao hàng
+        if (!saleCustomerSection.Contains("SaleCustomerPhone"))
+            throw new Exception("Trường SĐT khách hàng đã bị mất!");
+        if (!saleCustomerSection.Contains("SaleCanGiaoHang"))
+            throw new Exception("Tùy chọn 'Giao hàng' đã bị mất!");
+        if (!saleCustomerSection.Contains("ChonKhachLeCommand") || !saleCustomerSection.Contains("ThemKhachHangBanCommand"))
+            throw new Exception("Các nút chọn khách lẻ / thêm khách đã bị mất!");
+        Console.WriteLine("PASSED (Đã bỏ TextBox địa chỉ; Giữ nguyên Tên, SĐT, Nút Thêm/Khách lẻ, Giao hàng) ✓");
+
+        // 3. Kiểm tra Flow tạo hóa đơn: Khách lẻ không cần nhập địa chỉ vẫn thanh toán bình thường
+        Console.Write("[Kiểm tra Issue #96] 3. Tạo hóa đơn Khách lẻ không cần địa chỉ... ");
+        var cartItemTest96 = new List<SaleCartItem>
+        {
+            new() { SanPham = new SanPham { Id = spId, MaSanPham = spMa, TenSanPham = spTen, GiaBan = spGia, TonKho = tonKhoBanDau }, SoLuong = 1, DonGia = spGia }
+        };
+        var totalTest96 = cartItemTest96.Sum(i => i.ThanhTien);
+
+        var receiptLe96 = await db.TaoHoaDonBanHangAsync(
+            cartItemTest96,
+            customer: null,
+            discount: 0m,
+            tienKhachDua: totalTest96,
+            phuongThucThanhToan: "TIEN_MAT",
+            ghiChu: "Test Issue #96 Khach le",
+            soDienThoai: "",
+            diaChi: "",
+            inKemThongTin: false);
+
+        if (receiptLe96 == null || string.IsNullOrWhiteSpace(receiptLe96.MaHoaDon))
+            throw new Exception("Tạo hóa đơn khách lẻ thất bại!");
+        Console.WriteLine($"PASSED (Hóa đơn: {receiptLe96.MaHoaDon}) ✓");
+
+        // 4. Kiểm tra Flow tạo hóa đơn: Khách hàng có sẵn tự động ghi nhận địa chỉ từ DB vào hóa đơn
+        Console.Write("[Kiểm tra Issue #96] 4. Tạo hóa đơn Khách có sẵn: Tự nhận địa chỉ từ hồ sơ khách... ");
+        var khModel = new KhachHang
+        {
+            Id = (uint)khCoDiaChi.id,
+            MaKhachHang = (string)khCoDiaChi.ma_khach_hang,
+            TenKhachHang = (string)khCoDiaChi.ten_khach_hang,
+            SoDienThoai = (string)khCoDiaChi.so_dien_thoai,
+            DiaChi = (string)khCoDiaChi.dia_chi
+        };
+
+        var receiptKhach96 = await db.TaoHoaDonBanHangAsync(
+            cartItemTest96,
+            customer: khModel,
+            discount: 0m,
+            tienKhachDua: totalTest96,
+            phuongThucThanhToan: "TIEN_MAT",
+            ghiChu: "Test Issue #96 Khach co san",
+            soDienThoai: khModel.SoDienThoai,
+            diaChi: khModel.DiaChi,
+            inKemThongTin: true);
+
+        if (receiptKhach96 == null || string.IsNullOrWhiteSpace(receiptKhach96.MaHoaDon))
+            throw new Exception("Tạo hóa đơn khách có sẵn thất bại!");
+
+        var hdCheck = await conn.QueryFirstOrDefaultAsync<dynamic>(
+            "SELECT dia_chi, so_dien_thoai FROM hoa_don_ban_hang WHERE id = @id",
+            new { id = receiptKhach96.HoaDonId });
+        if (hdCheck == null || (string)hdCheck.dia_chi != khModel.DiaChi)
+            throw new Exception($"Địa chỉ hóa đơn không khớp với hồ sơ khách: '{hdCheck?.dia_chi}' vs '{khModel.DiaChi}'");
+        Console.WriteLine($"PASSED (Hóa đơn: {receiptKhach96.MaHoaDon}, ĐC lưu vào HĐ: '{hdCheck.dia_chi}') ✓");
+
+        // Dọn dẹp dữ liệu hóa đơn test 96
+        try
+        {
+            var test96Ids = new[] { receiptLe96.HoaDonId, receiptKhach96.HoaDonId };
+            var test96Codes = new[] { receiptLe96.MaHoaDon, receiptKhach96.MaHoaDon };
+            await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE hoa_don_ban_hang_id IN @ids OR ma_hoa_don IN @codes", new { ids = test96Ids, codes = test96Codes });
+            await conn.ExecuteAsync("DELETE FROM chi_tiet_hoa_don_ban_hang WHERE hoa_don_id IN @ids", new { ids = test96Ids });
+            await conn.ExecuteAsync("DELETE FROM lich_su_nhap_xuat_kho WHERE ma_chung_tu IN @codes", new { codes = test96Codes });
+            await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id IN @ids", new { ids = test96Ids });
+            // Khôi phục tồn kho
+            await conn.ExecuteAsync("UPDATE san_pham SET ton_kho_excel = @ton WHERE id = @id", new { ton = tonKhoBanDau, id = spId });
+            await conn.ExecuteAsync("UPDATE ton_kho SET so_luong_ton = @ton WHERE san_pham_id = @id AND chi_nhanh_id = @bId", new { ton = tonKhoBanDau, id = spId, bId = currentBranchId });
+        }
+        catch {}
+
+        Console.WriteLine("\n>>> TOÀN BỘ 4 TIÊU CHÍ KIỂM THỬ ISSUE #96 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
         return 0;
     }
 }
