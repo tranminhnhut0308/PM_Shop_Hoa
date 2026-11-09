@@ -779,16 +779,22 @@ internal class Program
         Console.WriteLine("PASSED ✓");
 
         // Lấy hoặc tạo sản phẩm và khách hàng để test
-        var spDb = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ma_san_pham, ten_san_pham, gia_ban, ton_kho FROM san_pham WHERE ton_kho >= 20 LIMIT 1");
+        var spDb = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ma_san_pham, ten_san_pham, gia_ban FROM san_pham LIMIT 1");
         if (spDb == null)
-            throw new Exception("Không tìm thấy sản phẩm có tồn kho >= 20 để test.");
+            throw new Exception("Không tìm thấy sản phẩm để test.");
 
         uint spId = (uint)spDb.id;
         string spMa = (string)spDb.ma_san_pham;
         string spTen = (string)spDb.ten_san_pham;
         decimal spGia = (decimal)spDb.gia_ban;
         if (spGia <= 0) spGia = 100000m;
-        decimal tonKhoBanDau = (decimal)spDb.ton_kho;
+        decimal tonKhoBanDau = await db.LayTonKhoThucTeAsync(spId);
+        if (tonKhoBanDau < 20)
+        {
+            tonKhoBanDau = 100m;
+            await conn.ExecuteAsync("UPDATE san_pham SET ton_kho_excel = @ton WHERE id = @id", new { ton = tonKhoBanDau, id = spId });
+            await conn.ExecuteAsync("UPDATE ton_kho SET so_luong_ton = @ton WHERE san_pham_id = @id AND chi_nhanh_id = @bId", new { ton = tonKhoBanDau, id = spId, bId = currentBranchId });
+        }
 
         var khDb = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ma_khach_hang, ten_khach_hang FROM khach_hang LIMIT 1");
         if (khDb == null)
@@ -914,28 +920,36 @@ internal class Program
 
             // 5. Khách hàng thanh toán hết công nợ
             Console.Write("[Kiểm tra Issue #91] 5. Khách hàng thanh toán hết công nợ... ");
-            var receiptThuNo = await db.ThuNoHoaDonAsync(
-                receipt4.MaHoaDon,
-                conNo4,
-                phuongThucThanhToan: "CHUYEN_KHOAN",
-                ghiChu: "Thanh toán dứt điểm công nợ qua Chuyển khoản");
+            try
+            {
+                var receiptThuNo = await db.ThuNoHoaDonAsync(
+                    receipt4.MaHoaDon,
+                    conNo4,
+                    phuongThucThanhToan: "CHUYEN_KHOAN",
+                    ghiChu: "Thanh toán dứt điểm công nợ qua Chuyển khoản");
 
-            if (receiptThuNo.ConNo != 0 || receiptThuNo.KhachDaThanhToan != total4)
-                throw new Exception($"Thu nợ xong nhưng công nợ chưa về 0: ConNo={receiptThuNo.ConNo}");
+                if (receiptThuNo.ConNo != 0 || receiptThuNo.KhachDaThanhToan != total4)
+                    throw new Exception($"Thu nợ xong nhưng công nợ chưa về 0: ConNo={receiptThuNo.ConNo}");
 
-            var ptThuNo = await conn.QueryFirstOrDefaultAsync<dynamic>(
-                "SELECT so_tien, phuong_thuc FROM phieu_chi WHERE hoa_don_ban_hang_id = @id AND phuong_thuc = 'CHUYEN_KHOAN' LIMIT 1",
-                new { id = receipt4.HoaDonId });
-            if (ptThuNo == null || (decimal)ptThuNo.so_tien != conNo4)
-                throw new Exception($"Phiếu thu nợ ngân hàng không khớp: {ptThuNo?.so_tien}");
-            Console.WriteLine($"PASSED (Thu nợ {receipt4.MaHoaDon}: Đã trả hết {conNo4:N0}đ Chuyển khoản, nợ = 0) ✓");
+                var ptThuNo = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                    "SELECT so_tien, phuong_thuc FROM phieu_chi WHERE ma_phieu_chi = @maPhieu LIMIT 1",
+                    new { maPhieu = receiptThuNo.MaPhieuThu });
+                if (ptThuNo == null || (decimal)ptThuNo.so_tien != conNo4)
+                    throw new Exception($"Phiếu thu nợ ngân hàng không khớp: {ptThuNo?.so_tien}");
+                Console.WriteLine($"PASSED (Thu nợ {receipt4.MaHoaDon}: Đã trả hết {conNo4:N0}đ Chuyển khoản, nợ = 0) ✓");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"FAILED: {ex.Message}");
+                throw;
+            }
 
             // 6. Kiểm tra sổ quỹ và lịch sử thanh toán
             Console.Write("[Kiểm tra Issue #91] 6. Kiểm tra sổ quỹ & phân loại nguồn tiền (Tiền mặt / Chuyển khoản)... ");
             var dsPhieuChi = (await conn.QueryAsync<dynamic>(
-                "SELECT phuong_thuc, so_tien FROM phieu_chi WHERE hoa_don_ban_hang_id IN @ids",
-                new { ids = createdInvoiceIds })).ToList();
-            if (dsPhieuChi.Count < 4) // hd1, hd2, hd3, hd4(ban dau) + hd4(thu no)
+                "SELECT phuong_thuc, so_tien FROM phieu_chi WHERE hoa_don_ban_hang_id IN @ids OR ma_hoa_don IN @codes",
+                new { ids = createdInvoiceIds, codes = createdInvoiceCodes })).ToList();
+            if (dsPhieuChi.Count < 5) // hd1, hd2, hd3, hd4(ban dau) + hd4(thu no) = 5 phiếu
                 throw new Exception($"Số lượng phiếu thu không đủ, thực tế: {dsPhieuChi.Count}");
             Console.WriteLine($"PASSED (Đã kiểm tra {dsPhieuChi.Count} phiếu thu vào đúng quỹ tương ứng) ✓");
 
@@ -953,9 +967,7 @@ internal class Program
 
             // 8. Kiểm tra tồn kho và tổng tiền hóa đơn
             Console.Write("[Kiểm tra Issue #91] 8. Kiểm tra tồn kho và khấu trừ chính xác... ");
-            var tonHienTai = await conn.ExecuteScalarAsync<decimal>(
-                "SELECT ton_kho FROM san_pham WHERE id = @id",
-                new { id = spId });
+            var tonHienTai = await db.LayTonKhoThucTeAsync(spId);
             var tongBan = 2 + 1 + 2 + 2; // 7 sản phẩm
             if (tonHienTai != tonKhoBanDau - tongBan)
                 throw new Exception($"Tồn kho trừ sai: Ban đầu={tonKhoBanDau}, Bán={tongBan}, Hiện tại={tonHienTai}");
@@ -966,20 +978,25 @@ internal class Program
             // Dọn dẹp dữ liệu test để cơ sở dữ liệu luôn nguyên vẹn
             if (createdInvoiceIds.Count > 0)
             {
-                await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE hoa_don_ban_hang_id IN @ids", new { ids = createdInvoiceIds });
-                await conn.ExecuteAsync("DELETE FROM chi_tiet_hoa_don_ban_hang WHERE hoa_don_id IN @ids", new { ids = createdInvoiceIds });
-                await conn.ExecuteAsync("DELETE FROM lich_su_xuat_nhap_kho WHERE ma_chung_tu IN @codes", new { codes = createdInvoiceCodes });
-                await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id IN @ids", new { ids = createdInvoiceIds });
+                try { await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE hoa_don_ban_hang_id IN @ids OR ma_hoa_don IN @codes", new { ids = createdInvoiceIds, codes = createdInvoiceCodes }); } catch {}
+                try { await conn.ExecuteAsync("DELETE FROM chi_tiet_hoa_don_ban_hang WHERE hoa_don_id IN @ids", new { ids = createdInvoiceIds }); } catch {}
+                try { await conn.ExecuteAsync("DELETE FROM lich_su_nhap_xuat_kho WHERE ma_chung_tu IN @codes", new { codes = createdInvoiceCodes }); } catch {}
+                try { await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id IN @ids", new { ids = createdInvoiceIds }); } catch {}
                 if (testCustomer != null)
                 {
-                    await conn.ExecuteAsync(
-                        "DELETE FROM lich_su_cong_no_khach_hang WHERE khach_hang_id = @khId AND ghi_chu LIKE '%từ hóa đơn HD%'",
-                        new { khId = testCustomer.Id });
+                    try
+                    {
+                        await conn.ExecuteAsync(
+                            "DELETE FROM lich_su_cong_no_khach_hang WHERE khach_hang_id = @khId AND ghi_chu LIKE '%từ hóa đơn HD%'",
+                            new { khId = testCustomer.Id });
+                    } catch {}
                 }
                 // Khôi phục tồn kho sản phẩm test
-                await conn.ExecuteAsync(
-                    "UPDATE san_pham SET ton_kho = @ton WHERE id = @id",
-                    new { ton = tonKhoBanDau, id = spId });
+                try
+                {
+                    await conn.ExecuteAsync("UPDATE san_pham SET ton_kho_excel = @ton WHERE id = @id", new { ton = tonKhoBanDau, id = spId });
+                    await conn.ExecuteAsync("UPDATE ton_kho SET so_luong_ton = @ton WHERE san_pham_id = @id AND chi_nhanh_id = @bId", new { ton = tonKhoBanDau, id = spId, bId = currentBranchId });
+                } catch {}
             }
         }
 
