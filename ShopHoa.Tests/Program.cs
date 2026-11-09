@@ -1001,6 +1001,96 @@ internal class Program
         }
 
         Console.WriteLine("\n>>> TOÀN BỘ 8 TIÊU CHÍ KIỂM THỬ ISSUE #91 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+
+        // ==========================================================================
+        //  KIỂM THỬ ISSUE #94: TỐI GIẢN HIỂN THỊ MÃ SẢN PHẨM TRÊN TRANG BÁN HÀNG VÀ NHẬP HÀNG
+        // ==========================================================================
+        Console.WriteLine("\n------------------------------------------------------------------------------------------");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #94: TỐI GIẢN HIỂN THỊ MÃ SẢN PHẨM TRÊN BÁN HÀNG & NHẬP HÀNG     ");
+        Console.WriteLine("------------------------------------------------------------------------------------------");
+
+        // 1. Kiểm tra CSDL: Mã sản phẩm tuyệt đối không bị xóa hoặc mất
+        Console.Write("[Kiểm tra Issue #94] 1. Kiểm tra CSDL: Mã sản phẩm nguyên vẹn, không bị xóa... ");
+        var spMau = await conn.QueryFirstOrDefaultAsync<dynamic>(
+            "SELECT id, ma_san_pham, ten_san_pham, ma_vach FROM san_pham WHERE ma_san_pham IS NOT NULL AND ma_san_pham <> '' LIMIT 1");
+        if (spMau == null || string.IsNullOrWhiteSpace((string)spMau.ma_san_pham))
+            throw new Exception("Không tìm thấy sản phẩm có mã sản phẩm trong CSDL!");
+        Console.WriteLine($"PASSED (SP mẫu: '{spMau.ma_san_pham}' - '{spMau.ten_san_pham}') ✓");
+
+        // 2. Kiểm tra tìm kiếm theo mã sản phẩm
+        Console.Write("[Kiểm tra Issue #94] 2. Tìm kiếm theo mã sản phẩm (Bán hàng & Nhập hàng)... ");
+        var kqMa = await db.TimKiemSanPhamBanHangAsync((string)spMau.ma_san_pham);
+        if (kqMa == null || kqMa.Count == 0 || !kqMa.Any(x => x.Id == (uint)spMau.id))
+            throw new Exception($"Tìm kiếm theo mã sản phẩm '{spMau.ma_san_pham}' không trả về sản phẩm tương ứng!");
+        Console.WriteLine($"PASSED (Tìm thấy {kqMa.Count} kết quả khi tìm bằng mã '{spMau.ma_san_pham}') ✓");
+
+        // 3. Kiểm tra tìm kiếm theo tên sản phẩm
+        Console.Write("[Kiểm tra Issue #94] 3. Tìm kiếm theo tên sản phẩm... ");
+        string tenSearch = ((string)spMau.ten_san_pham).Split(' ')[0];
+        var kqTen = await db.TimKiemSanPhamBanHangAsync(tenSearch);
+        if (kqTen == null || kqTen.Count == 0)
+            throw new Exception($"Tìm kiếm theo tên '{tenSearch}' không trả về kết quả!");
+        Console.WriteLine($"PASSED (Tìm thấy {kqTen.Count} kết quả khi tìm bằng tên '{tenSearch}') ✓");
+
+        // 4. Kiểm tra XAML MainWindow: Ẩn mã SP gợi ý bán hàng & tự động xuống dòng giỏ hàng
+        Console.Write("[Kiểm tra Issue #94] 4. Kiểm tra cấu trúc XAML Trang Bán hàng... ");
+        string xamlPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Views", "MainWindow.axaml");
+        if (!File.Exists(xamlPath))
+            xamlPath = Path.Combine(Directory.GetCurrentDirectory(), "Views", "MainWindow.axaml");
+        string xamlContent = await File.ReadAllTextAsync(xamlPath);
+
+        // ProductSearchResults không chứa binding MaSanPham
+        int pSearchResultsIdx = xamlContent.IndexOf("ItemsSource=\"{Binding ProductSearchResults}\"");
+        if (pSearchResultsIdx == -1)
+            throw new Exception("Không tìm thấy ProductSearchResults trong MainWindow.axaml");
+        int endPSearchIdx = xamlContent.IndexOf("</ListBox>", pSearchResultsIdx);
+        string pSearchResultsBlock = xamlContent.Substring(pSearchResultsIdx, endPSearchIdx - pSearchResultsIdx);
+        if (pSearchResultsBlock.Contains("{Binding MaSanPham}"))
+            throw new Exception("ProductSearchResults vẫn còn hiển thị mã sản phẩm!");
+
+        // SaleCart TextWrapping="Wrap"
+        int saleCartIdx = xamlContent.IndexOf("ItemsSource=\"{Binding SaleCart}\"");
+        if (saleCartIdx == -1)
+            throw new Exception("Không tìm thấy SaleCart trong MainWindow.axaml");
+        int endSaleCartIdx = xamlContent.IndexOf("</ItemsControl>", saleCartIdx);
+        string saleCartBlock = xamlContent.Substring(saleCartIdx, endSaleCartIdx - saleCartIdx);
+        if (saleCartBlock.Contains("{Binding MaSanPham}"))
+            throw new Exception("SaleCart không được hiển thị mã sản phẩm!");
+        if (!saleCartBlock.Contains("TextWrapping=\"Wrap\""))
+            throw new Exception("SaleCart cần có TextWrapping=\"Wrap\" để tên dài tự xuống dòng!");
+        Console.WriteLine("PASSED (Gợi ý bán hàng đã ẩn mã SP; Giỏ hàng tự động xuống dòng tên sản phẩm) ✓");
+
+        // 5. Kiểm tra XAML MainWindow: Trang Nhập hàng ẩn mã gợi ý & ẩn cột MÃ HÀNG
+        Console.Write("[Kiểm tra Issue #94] 5. Kiểm tra cấu trúc XAML Trang Nhập hàng... ");
+        int pnSuggestionsIdx = xamlContent.IndexOf("ItemsSource=\"{Binding PhieuNhapProductSuggestions}\"");
+        if (pnSuggestionsIdx == -1)
+            throw new Exception("Không tìm thấy PhieuNhapProductSuggestions trong MainWindow.axaml");
+        int endPnSuggestionsIdx = xamlContent.IndexOf("</ListBox>", pnSuggestionsIdx);
+        string pnSuggestionsBlock = xamlContent.Substring(pnSuggestionsIdx, endPnSuggestionsIdx - pnSuggestionsIdx);
+        if (pnSuggestionsBlock.Contains("{Binding MaSanPham}"))
+            throw new Exception("PhieuNhapProductSuggestions vẫn còn hiển thị mã sản phẩm!");
+
+        int gridPnIdx = xamlContent.IndexOf("x:Name=\"GridPhieuNhapItems\"");
+        if (gridPnIdx == -1)
+            throw new Exception("Không tìm thấy GridPhieuNhapItems trong MainWindow.axaml");
+        int endGridPnIdx = xamlContent.IndexOf("</DataGrid>", gridPnIdx);
+        string gridPnBlock = xamlContent.Substring(gridPnIdx, endGridPnIdx - gridPnIdx);
+        if (gridPnBlock.Contains("Header=\"MÃ HÀNG\""))
+            throw new Exception("GridPhieuNhapItems vẫn còn cột MÃ HÀNG!");
+        Console.WriteLine("PASSED (Gợi ý nhập hàng đã ẩn mã SP; Bảng hàng nhập đã ẩn cột MÃ HÀNG & cân đối cột) ✓");
+
+        // 6. Kiểm tra trang Quản lý hàng hóa: Vẫn giữ nguyên hiển thị mã sản phẩm
+        Console.Write("[Kiểm tra Issue #94] 6. Kiểm tra Trang Quản lý hàng hóa vẫn hiển thị mã SP... ");
+        int gridSpIdx = xamlContent.IndexOf("ItemsSource=\"{Binding SanPhams}\"");
+        if (gridSpIdx == -1)
+            throw new Exception("Không tìm thấy danh sách sản phẩm (ItemsSource=\"{Binding SanPhams}\") trong MainWindow.axaml");
+        int endGridSpIdx = xamlContent.IndexOf("</ItemsControl>", gridSpIdx);
+        string gridSpBlock = xamlContent.Substring(gridSpIdx, endGridSpIdx - gridSpIdx);
+        if (!gridSpBlock.Contains("{Binding MaSanPham}"))
+            throw new Exception("Trang quản lý hàng hóa bị mất binding MaSanPham!");
+        Console.WriteLine("PASSED (Trang Quản lý hàng hóa giữ nguyên 100% không đổi) ✓");
+
+        Console.WriteLine("\n>>> TOÀN BỘ 6 TIÊU CHÍ KIỂM THỬ ISSUE #94 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
         return 0;
     }
 }

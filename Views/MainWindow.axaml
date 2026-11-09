@@ -2097,16 +2097,11 @@
                               Command="{Binding ElementName=RootWindow, Path=DataContext.ThemVaoGioHangCommand}"
                               CommandParameter="{Binding}"
                               Click="OnThemSanPhamBanHangClicked">
-                        <StackPanel Spacing="2" VerticalAlignment="Center">
-                          <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Border Background="#E6F4F1" CornerRadius="4" Padding="4,1"
-                                    IsVisible="{Binding MaSanPham, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBlock Text="{Binding MaSanPham}" FontSize="11" FontWeight="Bold" Foreground="#0A8C78" />
-                            </Border>
-                            <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold"
-                                       Foreground="#163F38" TextTrimming="CharacterEllipsis" FontSize="13"
-                                       ToolTip.Tip="{Binding TenSanPham}" />
-                          </StackPanel>
+                        <StackPanel Spacing="3" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold"
+                                     Foreground="#163F38" TextTrimming="CharacterEllipsis" FontSize="13"
+                                     TextWrapping="Wrap" MaxLines="2"
+                                     ToolTip.Tip="{Binding TenSanPham}" />
                           <StackPanel Orientation="Horizontal" Spacing="10">
                             <TextBlock Text="{Binding GiaBan, StringFormat={}{0:N0} đ}"
                                        Foreground="#087F6E" FontWeight="Bold" FontSize="12" />
@@ -2150,7 +2145,7 @@
                         <StackPanel Grid.Column="0" Spacing="3">
                           <TextBlock Text="{Binding SanPham.TenSanPham}"
                                      FontWeight="SemiBold" Foreground="#163F38"
-                                     FontSize="13" TextTrimming="CharacterEllipsis"
+                                     FontSize="13" TextWrapping="Wrap"
                                      ToolTip.Tip="{Binding SanPham.TenSanPham}" />
                           <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                             <TextBlock Text="Đơn giá:" FontSize="11.5" Foreground="#667A74" VerticalAlignment="Center" />
@@ -5458,16 +5453,10 @@
                                              HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Border>
 
-                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                  <StackPanel Orientation="Horizontal" Spacing="5">
-                                    <Border Background="#E6F4F1" CornerRadius="4" Padding="4,1"
-                                            IsVisible="{Binding MaSanPham, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                      <TextBlock Text="{Binding MaSanPham}" FontSize="10.5" FontWeight="Bold" Foreground="#0A8C78" />
-                                    </Border>
-                                    <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold"
-                                               Foreground="#163F38" TextTrimming="CharacterEllipsis" FontSize="12.5"
-                                               ToolTip.Tip="{Binding TenSanPham}" />
-                                  </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                  <TextBlock Text="{Binding TenSanPham}" FontWeight="SemiBold"
+                                             Foreground="#163F38" TextWrapping="Wrap" MaxLines="2" FontSize="12.5"
+                                             ToolTip.Tip="{Binding TenSanPham}" />
 
                                   <StackPanel Orientation="Horizontal" Spacing="8">
                                     <TextBlock Text="{Binding GiaVon, StringFormat={}{0:N0} đ}"
@@ -5530,29 +5519,8 @@
                           </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <!-- MÃ HÀNG (nhấn để mở xem / chỉnh sửa chi tiết) -->
-                        <DataGridTemplateColumn Header="MÃ HÀNG" Width="110" MinWidth="95">
-                          <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
-                              <Button Background="Transparent"
-                                      BorderThickness="0"
-                                      Padding="0"
-                                      Cursor="Hand"
-                                      HorizontalAlignment="Left"
-                                      VerticalAlignment="Center"
-                                      ToolTip.Tip="Nhấn vào mã để xem / chỉnh sửa thông tin hàng hóa"
-                                      Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoChiTietSanPhamTuPhieuNhapCommand}"
-                                      CommandParameter="{Binding}">
-                                <Border Background="#E6F4F1" CornerRadius="4" Padding="5,2">
-                                  <TextBlock Text="{Binding MaSanPham}" FontSize="12" FontWeight="Bold" Foreground="#0A8C78" TextTrimming="CharacterEllipsis" />
-                                </Border>
-                              </Button>
-                            </DataTemplate>
-                          </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-
                         <!-- TÊN HÀNG (nhấn để mở xem / chỉnh sửa chi tiết, tự động xuống dòng) -->
-                        <DataGridTemplateColumn Header="TÊN HÀNG" Width="*" MinWidth="180">
+                        <DataGridTemplateColumn Header="TÊN HÀNG" Width="*" MinWidth="220">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
                               <Button Background="Transparent"
@@ -5580,7 +5548,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- ĐVT: hiển thị sẵn nếu hàng đã có ĐVT, hoặc cho chọn/thêm trực tiếp nếu hàng chưa có ĐVT -->
-                        <DataGridTemplateColumn Header="ĐVT" Width="90" MinWidth="80">
+                        <DataGridTemplateColumn Header="ĐVT" Width="95" MinWidth="85">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
                               <Grid VerticalAlignment="Center" Margin="0,0,8,0">
@@ -5649,7 +5617,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- SỐ LƯỢNG (sửa trực tiếp) -->
-                        <DataGridTemplateColumn Header="SỐ LƯỢNG" Width="110" MinWidth="106">
+                        <DataGridTemplateColumn Header="SỐ LƯỢNG" Width="115" MinWidth="110">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
                               <!-- Icon của 3 nút dùng hình học (Rectangle/Path) thay cho chữ "+", "−", "×":
@@ -5724,7 +5692,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- GIÁ NHẬP (sửa trực tiếp, có định dạng tiền VN) -->
-                        <DataGridTemplateColumn Header="GIÁ NHẬP" Width="118" MinWidth="110">
+                        <DataGridTemplateColumn Header="GIÁ NHẬP" Width="125" MinWidth="115">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
                               <controls:MoneyTextBox Margin="0,0,8,0"
@@ -5735,7 +5703,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- THÀNH TIỀN -->
-                        <DataGridTemplateColumn Header="THÀNH TIỀN" Width="120" MinWidth="105">
+                        <DataGridTemplateColumn Header="THÀNH TIỀN" Width="130" MinWidth="115">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
                               <TextBlock Text="{Binding ThanhTien, StringFormat={}{0:N0} đ}"
