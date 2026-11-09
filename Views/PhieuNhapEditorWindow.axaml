@@ -438,14 +438,13 @@
 
             <Separator Background="#EEF3F1" Margin="0,2" />
 
-            <!-- LÝ DO CHỈNH SỬA (BẮT BUỘC) -->
+            <!-- LÝ DO CHỈNH SỬA -->
             <StackPanel Spacing="5">
               <StackPanel Orientation="Horizontal" Spacing="4">
                 <TextBlock Text="Lý do chỉnh sửa" FontWeight="Bold" Foreground="#B45309" FontSize="12" />
-                <TextBlock Text="*" Foreground="#DC2626" FontWeight="Bold" />
               </StackPanel>
               <TextBox x:Name="TxtLyDoChinhSua" Classes="reason-input"
-                       Watermark="Bắt buộc: ghi rõ lý do sửa phiếu nhập (ví dụ: điều chỉnh số lượng hoa bị dập, NCC chiết khấu thêm, sửa đơn giá...)" />
+                       Watermark="Lý do sửa phiếu nhập (ví dụ: điều chỉnh số lượng hoa bị dập, NCC chiết khấu thêm, sửa đơn giá...) - không bắt buộc" />
             </StackPanel>
 
             <TextBlock x:Name="TxtError" Foreground="#DC2626" FontSize="12" TextWrapping="Wrap" IsVisible="False" />

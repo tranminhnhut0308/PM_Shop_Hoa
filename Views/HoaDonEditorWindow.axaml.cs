@@ -189,9 +189,7 @@ public partial class HoaDonEditorWindow : Window
         var lyDoSua = TxtLyDoChinhSua.Text?.Trim();
         if (string.IsNullOrWhiteSpace(lyDoSua))
         {
-            TxtError.Text = "Vui lòng nhập lý do chỉnh sửa hóa đơn (bắt buộc).";
-            TxtError.IsVisible = true;
-            return;
+            lyDoSua = "Không cung cấp lý do";
         }
 
         if (_items.Count == 0)

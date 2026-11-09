@@ -17,6 +17,8 @@ internal class Program
             return MoneyInputVerifier.Run();
         if (args.Contains("--verify-issue-87", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue87_ComboBoxNhaCungCap();
+        if (args.Contains("--verify-issue-89", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue89_KhongBatBuocLyDo();
 
         Console.WriteLine("==========================================================================================");
         Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG SHOP HOA: ĐỐI SOÁT TOÀN DIỆN THỐNG KÊ TRANG TỔNG QUAN (#69)  ");
@@ -80,8 +82,9 @@ internal class Program
             await KiemTraIssue68_LuuPhieuNhapMaRongAsync(csb.ConnectionString);
             KiemTraIssue68_MultiTab_DocLap();
             KiemTraIssue87_ComboBoxNhaCungCap();
+            KiemTraIssue89_KhongBatBuocLyDo();
 
-            Console.WriteLine("\n>>> TẤT CẢ CÁC BÀI KIỂM THỬ ISSUE #68, #69 & #87 ĐÃ VƯỢT QUA 100% THÀNH CÔNG! <<<");
+            Console.WriteLine("\n>>> TẤT CẢ CÁC BÀI KIỂM THỬ ISSUE #68, #69, #87 & #89 ĐÃ VƯỢT QUA 100% THÀNH CÔNG! <<<");
             return 0;
         }
         catch (Exception ex)
@@ -621,6 +624,106 @@ internal class Program
             throw new Exception($"ToString() mong muốn 'Vườn Lan Đà Lạt', thực tế: '{nccKhongMa}'");
 
         Console.WriteLine("PASSED ('Tất cả nhà cung cấp' & 'NCC Chị Linh ĐL' hiển thị đúng tên, không hiển thị tên class) ✓");
+        return 0;
+    }
+
+    public static int KiemTraIssue89_KhongBatBuocLyDo()
+    {
+        Console.Write("[Kiểm tra Issue #89] Bỏ bắt buộc nhập lý do khi chỉnh sửa hóa đơn & phiếu nhập... ");
+
+        // 1. Hóa đơn: để trống lý do -> tự động lưu 'Không cung cấp lý do'
+        var hdReqRong = new HoaDonEditRequest
+        {
+            HoaDonId = 1,
+            MaHoaDon = "HDTEST01",
+            LyDoSua = "",
+            Items = new List<HoaDonItemEditModel>
+            {
+                new() { SanPhamId = 1, SoLuong = 5, DonGia = 20000 }
+            }
+        };
+        DatabaseService.ValidateHoaDonEditRequest(hdReqRong);
+        if (hdReqRong.LyDoSua != "Không cung cấp lý do")
+            throw new Exception($"Lý do hóa đơn khi để trống phải là 'Không cung cấp lý do', thực tế: '{hdReqRong.LyDoSua}'");
+
+        // 2. Hóa đơn: có nhập lý do -> giữ nguyên lý do
+        var hdReqCoLyDo = new HoaDonEditRequest
+        {
+            HoaDonId = 1,
+            MaHoaDon = "HDTEST01",
+            LyDoSua = "Khách yêu cầu thêm 5 bông hoa hồng đỏ",
+            Items = new List<HoaDonItemEditModel>
+            {
+                new() { SanPhamId = 1, SoLuong = 10, DonGia = 20000 }
+            }
+        };
+        DatabaseService.ValidateHoaDonEditRequest(hdReqCoLyDo);
+        if (hdReqCoLyDo.LyDoSua != "Khách yêu cầu thêm 5 bông hoa hồng đỏ")
+            throw new Exception($"Lý do hóa đơn phải giữ nguyên, thực tế: '{hdReqCoLyDo.LyDoSua}'");
+
+        // 3. Phiếu nhập: để trống lý do -> tự động lưu 'Không cung cấp lý do'
+        var pnReqRong = new PhieuNhapEditRequest
+        {
+            PhieuNhapId = 1,
+            MaPhieuNhap = "PNTEST01",
+            NhaCungCapId = 2,
+            LyDoChinhSua = "   ",
+            Items = new List<PhieuNhapItemEditModel>
+            {
+                new() { SanPhamId = 10, SoLuong = 20, DonGiaNhap = 15000 }
+            }
+        };
+        DatabaseService.ValidatePhieuNhapEditRequest(pnReqRong);
+        if (pnReqRong.LyDoChinhSua != "Không cung cấp lý do")
+            throw new Exception($"Lý do phiếu nhập khi để trống phải là 'Không cung cấp lý do', thực tế: '{pnReqRong.LyDoChinhSua}'");
+
+        // 4. Phiếu nhập: có nhập lý do -> giữ nguyên lý do
+        var pnReqCoLyDo = new PhieuNhapEditRequest
+        {
+            PhieuNhapId = 1,
+            MaPhieuNhap = "PNTEST01",
+            NhaCungCapId = 2,
+            LyDoChinhSua = "Điều chỉnh giảm giá nhập hoa lan 10%",
+            Items = new List<PhieuNhapItemEditModel>
+            {
+                new() { SanPhamId = 10, SoLuong = 20, DonGiaNhap = 13500 }
+            }
+        };
+        DatabaseService.ValidatePhieuNhapEditRequest(pnReqCoLyDo);
+        if (pnReqCoLyDo.LyDoChinhSua != "Điều chỉnh giảm giá nhập hoa lan 10%")
+            throw new Exception($"Lý do phiếu nhập phải giữ nguyên, thực tế: '{pnReqCoLyDo.LyDoChinhSua}'");
+
+        // 5. Kiểm tra các quy tắc nghiệp vụ khác vẫn được bảo toàn (không bị bỏ sót):
+        // Hóa đơn không có sản phẩm -> phải báo lỗi
+        var hdKhongSp = new HoaDonEditRequest
+        {
+            HoaDonId = 1,
+            LyDoSua = "",
+            Items = new List<HoaDonItemEditModel>()
+        };
+        bool daBaoLoiHdKhongSp = false;
+        try { DatabaseService.ValidateHoaDonEditRequest(hdKhongSp); }
+        catch (InvalidOperationException) { daBaoLoiHdKhongSp = true; }
+        if (!daBaoLoiHdKhongSp)
+            throw new Exception("Hóa đơn không có sản phẩm phải bị từ chối!");
+
+        // Phiếu nhập thiếu nhà cung cấp -> phải báo lỗi
+        var pnThieuNcc = new PhieuNhapEditRequest
+        {
+            PhieuNhapId = 1,
+            NhaCungCapId = null,
+            Items = new List<PhieuNhapItemEditModel>
+            {
+                new() { SanPhamId = 10, SoLuong = 20, DonGiaNhap = 15000 }
+            }
+        };
+        bool daBaoLoiPnThieuNcc = false;
+        try { DatabaseService.ValidatePhieuNhapEditRequest(pnThieuNcc); }
+        catch (InvalidOperationException) { daBaoLoiPnThieuNcc = true; }
+        if (!daBaoLoiPnThieuNcc)
+            throw new Exception("Phiếu nhập thiếu nhà cung cấp phải bị từ chối!");
+
+        Console.WriteLine("PASSED (Để trống lý do tự động ghi 'Không cung cấp lý do' & giữ nguyên lý do khi có nhập) ✓");
         return 0;
     }
 }

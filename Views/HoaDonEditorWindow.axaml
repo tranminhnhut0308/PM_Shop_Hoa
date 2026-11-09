@@ -354,10 +354,9 @@
             <StackPanel Spacing="6">
               <StackPanel Orientation="Horizontal" Spacing="4">
                 <TextBlock Text="Lý do chỉnh sửa" FontWeight="Bold" Foreground="#B45309" FontSize="12" />
-                <TextBlock Text="*" Foreground="#DC2626" FontWeight="Bold" />
               </StackPanel>
               <TextBox x:Name="TxtLyDoChinhSua" Classes="reason-input"
-                       Watermark="Bắt buộc: ghi rõ lý do sửa hóa đơn (ví dụ: khách đổi số lượng, nhập nhầm đơn giá...)" />
+                       Watermark="Lý do sửa hóa đơn (ví dụ: khách đổi số lượng, nhập nhầm đơn giá...) - không bắt buộc" />
             </StackPanel>
 
             <TextBlock x:Name="TxtError" Foreground="#DC2626" FontSize="12" TextWrapping="Wrap" IsVisible="False" />

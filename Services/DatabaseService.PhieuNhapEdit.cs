@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Dapper;
 using MySqlConnector;
 using ShopHoa.Helpers;
@@ -229,13 +229,8 @@ public sealed partial class DatabaseService
     /// - Ghi vết kiểm toán vào lich_su_chinh_sua_phieu_nhap.
     /// Tất cả thực hiện trong MỘT Transaction an toàn.
     /// </summary>
-    public async Task CapNhatPhieuNhapHangAsync(PhieuNhapEditRequest request)
+    internal static void ValidatePhieuNhapEditRequest(PhieuNhapEditRequest request)
     {
-        Quyen.RequirePermission(
-            Session.CurrentUser,
-            PermissionKeys.PurchasesEdit,
-            "Bạn không có quyền chỉnh sửa phiếu nhập hàng.");
-
         if (request is null)
             throw new ArgumentNullException(nameof(request));
 
@@ -243,7 +238,9 @@ public sealed partial class DatabaseService
             throw new ArgumentException("Mã ID phiếu nhập không hợp lệ.", nameof(request));
 
         if (string.IsNullOrWhiteSpace(request.LyDoChinhSua))
-            throw new InvalidOperationException("Vui lòng nhập lý do chỉnh sửa phiếu nhập.");
+            request.LyDoChinhSua = "Không cung cấp lý do";
+        else
+            request.LyDoChinhSua = request.LyDoChinhSua.Trim();
 
         var dongHopLe = request.Items.Where(i => i.SanPhamId != 0 && i.SoLuong > 0).ToList();
         if (dongHopLe.Count == 0)
@@ -251,6 +248,17 @@ public sealed partial class DatabaseService
 
         if (request.NhaCungCapId is null or 0)
             throw new InvalidOperationException("Vui lòng chọn nhà cung cấp.");
+    }
+
+    public async Task CapNhatPhieuNhapHangAsync(PhieuNhapEditRequest request)
+    {
+        Quyen.RequirePermission(
+            Session.CurrentUser,
+            PermissionKeys.PurchasesEdit,
+            "Bạn không có quyền chỉnh sửa phiếu nhập hàng.");
+
+        ValidatePhieuNhapEditRequest(request);
+        var dongHopLe = request.Items.Where(i => i.SanPhamId != 0 && i.SoLuong > 0).ToList();
 
         if (!await EnsureLichSuChinhSuaPhieuNhapTableAsync())
             throw new InvalidOperationException("Không thể chuẩn bị bảng nhật ký phiếu nhập; thay đổi chưa được lưu.");
@@ -311,6 +319,12 @@ public sealed partial class DatabaseService
 
             if (oldPhieu is null)
                 throw new InvalidOperationException($"Không tìm thấy phiếu nhập có ID {request.PhieuNhapId}.");
+
+            if (string.Equals(oldPhieu.TrangThai, "DA_HUY", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(oldPhieu.TrangThai, "HUY", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Phiếu nhập này đã bị hủy, không thể chỉnh sửa.");
+            }
 
             var branchId = oldPhieu.ChiNhanhId != 0 ? oldPhieu.ChiNhanhId : (Session.CurrentUser?.ChiNhanhId ?? 1);
 
@@ -826,7 +840,7 @@ public sealed partial class DatabaseService
                     MaPhieuNhap = oldPhieu.MaPhieuNhap,
                     NguoiThucHienId = Session.CurrentUser?.Id,
                     TenNguoiThucHien = Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap ?? "Hệ thống",
-                    LyDo = request.LyDoChinhSua.Trim(),
+                    LyDo = string.IsNullOrWhiteSpace(request.LyDoChinhSua) ? "Không cung cấp lý do" : request.LyDoChinhSua.Trim(),
                     TongTienTruoc = oldPhieu.TongTienNhap,
                     TongTienSau = newTongTienNhap,
                     ChiPhiKhacTruoc = oldPhieu.ChiPhiKhac,
@@ -859,7 +873,7 @@ public sealed partial class DatabaseService
                 "PHIEU_NHAP",
                 request.PhieuNhapId,
                 oldPhieu.MaPhieuNhap,
-                $"Chỉnh sửa phiếu nhập {oldPhieu.MaPhieuNhap}. Lý do: {request.LyDoChinhSua}",
+                $"Chỉnh sửa phiếu nhập {oldPhieu.MaPhieuNhap}. Lý do: {(string.IsNullOrWhiteSpace(request.LyDoChinhSua) ? "Không cung cấp lý do" : request.LyDoChinhSua)}",
                 newTongTienNhap);
         }
         catch

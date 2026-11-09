@@ -139,13 +139,15 @@ public sealed partial class DatabaseService
         }
     }
 
-    private static void ValidateHoaDonEditRequest(HoaDonEditRequest request)
+    internal static void ValidateHoaDonEditRequest(HoaDonEditRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.HoaDonId == 0)
             throw new InvalidOperationException("Thiếu mã hóa đơn cần chỉnh sửa.");
         if (string.IsNullOrWhiteSpace(request.LyDoSua))
-            throw new InvalidOperationException("Vui lòng nhập lý do chỉnh sửa hóa đơn.");
+            request.LyDoSua = "Không cung cấp lý do";
+        else
+            request.LyDoSua = request.LyDoSua.Trim();
         if (request.Items is null || request.Items.Count == 0)
             throw new InvalidOperationException("Hóa đơn phải có ít nhất một sản phẩm.");
         if (request.Items.Any(item =>

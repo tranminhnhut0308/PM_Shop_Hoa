@@ -335,7 +335,7 @@ public sealed partial class DatabaseService
                 NguoiSuaId = state.UserId,
                 TenNguoiSua = Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap ?? "Hệ thống",
                 ThoiGianSua = state.Now,
-                LyDoSua = state.Request.LyDoSua.Trim(),
+                LyDoSua = string.IsNullOrWhiteSpace(state.Request.LyDoSua) ? "Không cung cấp lý do" : state.Request.LyDoSua.Trim(),
                 TongTienTruoc = state.Header.KhachCanTra,
                 TongTienSau = state.AmountDue,
                 GhiChuThayDoi = BuildHoaDonEditSummary(state),

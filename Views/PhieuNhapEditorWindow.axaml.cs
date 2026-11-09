@@ -268,13 +268,11 @@ public partial class PhieuNhapEditorWindow : Window
             return;
         }
 
-        // 3. Kiểm tra lý do chỉnh sửa (bắt buộc)
+        // 3. Lý do chỉnh sửa (không bắt buộc, mặc định "Không cung cấp lý do" nếu để trống)
         var lyDo = TxtLyDoChinhSua.Text?.Trim();
         if (string.IsNullOrWhiteSpace(lyDo))
         {
-            HienThiLoi("Vui lòng nhập lý do chỉnh sửa phiếu nhập để lưu vết kiểm toán.");
-            TxtLyDoChinhSua.Focus();
-            return;
+            lyDo = "Không cung cấp lý do";
         }
 
         BtnLuu.IsEnabled = false;
