@@ -59,6 +59,7 @@ public sealed partial class KhachHangDetailViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(TongDaThanhToanText))]
     [NotifyPropertyChangedFor(nameof(TongCongNoText))]
     [NotifyPropertyChangedFor(nameof(TongBanTruTraHangText))]
+    [NotifyPropertyChangedFor(nameof(SoDuTraTruocText))]
     [NotifyPropertyChangedFor(nameof(NguonCongNoText))]
     [NotifyPropertyChangedFor(nameof(SoHoaDonText))]
     [NotifyPropertyChangedFor(nameof(LanGhiCongNoText))]
@@ -66,6 +67,21 @@ public sealed partial class KhachHangDetailViewModel : ObservableObject
     private ThongKeMuaHangKhachHang? thongKe;
 
     public ObservableCollection<HoaDon> HoaDons { get; } = new();
+
+    public ObservableCollection<LichSuTraTruocItem> LichSuTraTruocs { get; } = new();
+
+    public bool HasLichSuTraTruoc => LichSuTraTruocs.Count > 0;
+
+    public void NapLichSuTraTruoc(IReadOnlyList<LichSuTraTruocItem> items)
+    {
+        LichSuTraTruocs.Clear();
+        foreach (var item in items)
+            LichSuTraTruocs.Add(item);
+        OnPropertyChanged(nameof(HasLichSuTraTruoc));
+    }
+
+    public string SoDuTraTruocText =>
+        ThongKe is null ? ChuaCo : FormatTien(ThongKe.SoDuTraTruoc);
 
     // ============================================================
     // TRẠNG THÁI TAB

@@ -37,6 +37,18 @@ public sealed class ThuNoKhachHangKetQua
     /// <summary>Mã khách hàng.</summary>
     public string MaKhachHang { get; init; } = "";
 
+    /// <summary>Số tiền cấn trừ vào công nợ.</summary>
+    public decimal TienCanTru { get; init; }
+
+    /// <summary>Số tiền thanh toán dư đưa vào số dư trả trước.</summary>
+    public decimal TienDu { get; init; }
+
+    /// <summary>Số dư trả trước trước khi thanh toán.</summary>
+    public decimal SoDuTraTruocTruoc { get; init; }
+
+    /// <summary>Số dư trả trước sau khi thanh toán.</summary>
+    public decimal SoDuTraTruocSau { get; init; }
+
     /// <summary>Danh sách mã phiếu thu đã ghi vào sổ quỹ.</summary>
     public IReadOnlyList<string> MaPhieuThus { get; init; } = [];
 }

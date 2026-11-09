@@ -24,6 +24,9 @@ public sealed class ThongKeMuaHangKhachHang
     /// <summary>Tổng nợ còn lại tính từ hóa đơn (hoa_don_ban_hang.con_no).</summary>
     public decimal TongConNoHoaDon { get; set; }
 
+    /// <summary>Số dư trả trước của khách hàng (tiền trả dư / cọc).</summary>
+    public decimal SoDuTraTruoc { get; set; }
+
     /// <summary>Nợ hiện tại đúng như cột "Nợ hiện tại" của bảng danh sách.</summary>
     public decimal TongConNoHienTai { get; set; }
 

@@ -36,6 +36,11 @@ public sealed class NhaCungCap
     public decimal ConNo { get; set; }
 
     /// <summary>
+    /// Số dư trả trước của nhà cung cấp (tiền thanh toán dư / tạm ứng), dùng để tự động cấn trừ phiếu nhập mới.
+    /// </summary>
+    public decimal SoDuTraTruoc { get; set; }
+
+    /// <summary>
     /// Tổng tiền đã mua của nhà cung cấp. Ưu tiên số tiền đọc từ file danh sách,
     /// không có thì mới tính từ các phiếu nhập hàng.
     /// </summary>

@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Globalization;
 using System.Text;
 using ClosedXML.Excel;
@@ -3010,12 +3010,12 @@ public sealed partial class DatabaseService
         var tienNoiBo = $"""
             COALESCE(
                 (
-                    SELECT SUM(ls.ghi_no - ls.ghi_co)
+                    SELECT GREATEST(0, SUM(ls.ghi_no - ls.ghi_co))
                     FROM lich_su_cong_no_khach_hang ls
                     WHERE ls.khach_hang_id = {idExpression}
                 ),
                 (
-                    SELECT SUM(hdcn.con_no)
+                    SELECT GREATEST(0, SUM(hdcn.con_no))
                     FROM hoa_don_ban_hang hdcn
                     WHERE hdcn.khach_hang_id = {idExpression}
                       AND hdcn.trang_thai_hoa_don = 'HOAN_THANH'
@@ -3043,10 +3043,10 @@ public sealed partial class DatabaseService
              """;
 
         if (!coCotKiotViet)
-            return (tienNoiBo, tienBanNoiBo, tienBanTruTraNoiBo);
+            return ($"GREATEST(0, {tienNoiBo})", tienBanNoiBo, tienBanTruTraNoiBo);
 
         return (
-            $"CASE WHEN kh.co_du_lieu_kiotviet = 1 THEN (COALESCE(kh.no_can_thu_hien_tai, 0) + {tienNoiBo}) ELSE {tienNoiBo} END",
+            $"GREATEST(0, CASE WHEN kh.co_du_lieu_kiotviet = 1 THEN (COALESCE(kh.no_can_thu_hien_tai, 0) + {tienNoiBo}) ELSE {tienNoiBo} END)",
             $"CASE WHEN kh.co_du_lieu_kiotviet = 1 THEN (COALESCE(kh.tong_ban, 0) + {tienBanNoiBo}) ELSE {tienBanNoiBo} END",
             $"CASE WHEN kh.co_du_lieu_kiotviet = 1 THEN (COALESCE(kh.tong_ban_tru_tra_hang, 0) + {tienBanTruTraNoiBo}) ELSE {tienBanTruTraNoiBo} END");
     }
@@ -3209,12 +3209,12 @@ public sealed partial class DatabaseService
         var tienNoiBo = $"""
             COALESCE(
                 (
-                    SELECT SUM(ls.ghi_no - ls.ghi_co)
+                    SELECT GREATEST(0, SUM(ls.ghi_no - ls.ghi_co))
                     FROM lich_su_cong_no_nha_cung_cap ls
                     WHERE ls.nha_cung_cap_id = {idExpression}
                 ),
                 (
-                    SELECT SUM(p_cn.con_no)
+                    SELECT GREATEST(0, SUM(p_cn.con_no))
                     FROM phieu_nhap_hang p_cn
                     WHERE p_cn.nha_cung_cap_id = {idExpression}
                       AND p_cn.trang_thai NOT IN ('LUU_TAM', 'HUY', 'DA_HUY')
@@ -3243,10 +3243,10 @@ public sealed partial class DatabaseService
         var tienMuaTruTraNoiBo = tienMuaNoiBo;
 
         if (!coCotKiotViet)
-            return (tienNoiBo, tienMuaNoiBo, tienMuaTruTraNoiBo);
+            return ($"GREATEST(0, {tienNoiBo})", tienMuaNoiBo, tienMuaTruTraNoiBo);
 
         return (
-            $"CASE WHEN ncc.co_du_lieu_kiotviet = 1 OR ncc.no_can_tra_hien_tai IS NOT NULL THEN (COALESCE(ncc.no_can_tra_hien_tai, 0) + {tienNoiBo}) ELSE {tienNoiBo} END",
+            $"GREATEST(0, CASE WHEN ncc.co_du_lieu_kiotviet = 1 OR ncc.no_can_tra_hien_tai IS NOT NULL THEN (COALESCE(ncc.no_can_tra_hien_tai, 0) + {tienNoiBo}) ELSE {tienNoiBo} END)",
             $"CASE WHEN ncc.co_du_lieu_kiotviet = 1 OR ncc.tong_mua IS NOT NULL THEN (COALESCE(ncc.tong_mua, 0) + {tienMuaNoiBo}) ELSE {tienMuaNoiBo} END",
             $"CASE WHEN ncc.co_du_lieu_kiotviet = 1 OR ncc.tong_mua_tru_tra_hang IS NOT NULL THEN (COALESCE(ncc.tong_mua_tru_tra_hang, 0) + {tienMuaTruTraNoiBo}) ELSE {tienMuaTruTraNoiBo} END");
     }
@@ -3317,6 +3317,7 @@ public sealed partial class DatabaseService
                   kh.phuong_xa AS PhuongXa,
                   kh.quan_huyen AS QuanHuyen,
                   kh.tinh_thanh AS TinhThanh,
+                  COALESCE(kh.so_du_tra_truoc, 0) AS SoDuTraTruoc,
                   kh.nhom_khach_hang_id AS NhomKhachHangId,
                   kh.ma_so_thue AS MaSoThue,
                   kh.ten_nguoi_mua_hoa_don AS TenNguoiMuaHoaDon,
@@ -3617,6 +3618,7 @@ public sealed partial class DatabaseService
             ) AS LanGhiCongNoGanNhat,
             -- Số tiền hiển thị: khi có dữ liệu file KiotViet thì lấy từ file,
             -- ngược lại lấy từ hóa đơn/sổ cái/trả hàng như trước.
+            COALESCE(kh.so_du_tra_truoc, 0) AS SoDuTraTruoc,
             {tien.TongBan} AS TongTienDaMua,
             {tien.NoHienTai} AS TongConNoHienTai,
             {tien.TongBanTruTraHang} AS TongBanTruTraHang
@@ -5548,8 +5550,23 @@ public sealed partial class DatabaseService
 
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
+        await EnsureTraTruocSchemaAsync(connection, transaction);
 
         var daCommit = false;
+
+        // Tự động kiểm tra và cấn trừ số dư trả trước của khách hàng (nếu có công nợ)
+        var tienCanTruTraTruoc = 0m;
+        var soDuTraTruocTruoc = 0m;
+        if (customer is not null && customer.Id > 0 && debtAmount > 0)
+        {
+            soDuTraTruocTruoc = await LaySoDuTraTruocKhachHangTrongGiaoDichAsync(connection, transaction, customer.Id);
+            if (soDuTraTruocTruoc > 0)
+            {
+                tienCanTruTraTruoc = Math.Min(debtAmount, soDuTraTruocTruoc);
+                debtAmount -= tienCanTruTraTruoc;
+                paymentStatus = debtAmount > 0 ? "CONG_NO" : "DA_THANH_TOAN";
+            }
+        }
 
         // Mã phiếu thu sổ quỹ sinh ra từ hóa đơn này (rỗng nếu khách trả 0 đồng).
         var maPhieuThu = "";
@@ -5690,10 +5707,10 @@ public sealed partial class DatabaseService
                             // Khách cần trả
                             KhachCanTra = amountDue,
 
-                            // Khách thực tế đã thanh toán
-                            KhachDaThanhToan = paidAmount,
+                            // Khách thực tế đã thanh toán (tiền khách đưa + tiền cấn trừ trả trước)
+                            KhachDaThanhToan = paidAmount + tienCanTruTraTruoc,
 
-                            // Công nợ
+                            // Công nợ còn lại sau khi cấn trừ
                             ConNo = debtAmount,
 
                             TrangThaiThanhToan = paymentStatus,
@@ -5731,6 +5748,33 @@ public sealed partial class DatabaseService
                     hoaDonGocId ?? 0,
                     maHoaDonGoc,
                     now);
+            }
+
+            if (tienCanTruTraTruoc > 0 && customer is not null)
+            {
+                var soDuTraTruocSau = soDuTraTruocTruoc - tienCanTruTraTruoc;
+                var maGdTraTruoc = await SinhMaGiaoDichTraTruocTrongGiaoDichAsync(
+                    connection,
+                    transaction,
+                    "CTKH",
+                    "lich_su_tra_truoc_khach_hang");
+
+                await GhiLichSuTraTruocKhachHangTrongGiaoDichAsync(
+                    connection,
+                    transaction,
+                    customer.Id,
+                    customer.MaKhachHang ?? "",
+                    maGdTraTruoc,
+                    "CAN_TRU_HOA_DON",
+                    "HOA_DON",
+                    invoiceCode,
+                    tienCanTruTraTruoc,
+                    soDuTraTruocTruoc,
+                    soDuTraTruocSau,
+                    "CAN_TRU",
+                    now,
+                    Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap,
+                    $"Tự động cấn trừ số dư trả trước vào hóa đơn {invoiceCode}");
             }
 
             // ============================================================
@@ -6326,6 +6370,7 @@ public sealed partial class DatabaseService
 
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
+        await EnsureTraTruocSchemaAsync(connection, transaction);
 
         var daCommit = false;
 
@@ -6393,15 +6438,9 @@ public sealed partial class DatabaseService
                 new { KhachHangId = khachHangId },
                 transaction);
 
-            if (conNoHienTai <= 0)
-                throw new InvalidOperationException("Khách hàng không còn công nợ cần thu.");
-
-            if (soTien > conNoHienTai)
-            {
-                throw new InvalidOperationException(
-                    $"Số tiền thu ({soTien:N0} đ) vượt quá công nợ mới nhất ({conNoHienTai:N0} đ). "
-                    + "Vui lòng tải lại công nợ trước khi thu.");
-            }
+            conNoHienTai = Math.Max(0m, conNoHienTai);
+            var tienThanhToanCongNo = Math.Min(soTien, conNoHienTai);
+            var tienThanhToanDu = Math.Max(0m, soTien - conNoHienTai);
 
             const string countLedgerSql = """
             SELECT COUNT(*)
@@ -6460,8 +6499,8 @@ public sealed partial class DatabaseService
                 userId,
                 coCotLienKet);
 
-            var conLai = soTien;
-            var tongDaThu = 0m;
+            var conLai = tienThanhToanCongNo;
+            var tongDaThuHoaDon = 0m;
             var soHoaDon = 0;
 
             foreach (var hd in hoaDons)
@@ -6492,7 +6531,7 @@ public sealed partial class DatabaseService
                     coCotLienKet,
                     maPhieuThu);
 
-                tongDaThu += thu;
+                tongDaThuHoaDon += thu;
                 conLai -= thu;
                 soHoaDon++;
             }
@@ -6510,7 +6549,39 @@ public sealed partial class DatabaseService
                     userId,
                     maPhieuThu);
 
-                tongDaThu += conLai;
+                tongDaThuHoaDon += conLai;
+            }
+
+            var soDuTraTruocTruoc = await LaySoDuTraTruocKhachHangTrongGiaoDichAsync(connection, transaction, khachHangId);
+            var soDuTraTruocSau = soDuTraTruocTruoc;
+
+            if (tienThanhToanDu > 0)
+            {
+                soDuTraTruocSau = soDuTraTruocTruoc + tienThanhToanDu;
+                var maGdTraTruoc = await SinhMaGiaoDichTraTruocTrongGiaoDichAsync(
+                    connection,
+                    transaction,
+                    "TTDU-KH",
+                    "lich_su_tra_truoc_khach_hang");
+
+                await GhiLichSuTraTruocKhachHangTrongGiaoDichAsync(
+                    connection,
+                    transaction,
+                    khachHangId,
+                    khach.MaKhachHang ?? "",
+                    maGdTraTruoc,
+                    "THANH_TOAN_DU",
+                    "PHIEU_THU",
+                    maPhieuThu,
+                    tienThanhToanDu,
+                    soDuTraTruocTruoc,
+                    soDuTraTruocSau,
+                    ChuanHoaPhuongThuc(phuongThucThanhToan),
+                    now,
+                    Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap,
+                    string.IsNullOrWhiteSpace(ghiChu)
+                        ? $"Khách hàng thanh toán dư {tienThanhToanDu:N0} đ qua phiếu thu {maPhieuThu}"
+                        : $"Khách hàng thanh toán dư {tienThanhToanDu:N0} đ qua phiếu thu {maPhieuThu}. {ghiChu.Trim()}");
             }
 
             const string insertPaymentHistorySql = """
@@ -6528,9 +6599,9 @@ public sealed partial class DatabaseService
                 {
                     KhachHangId = khachHangId,
                     MaGiaoDich = maPhieuThu,
-                    SoTien = tongDaThu,
+                    SoTien = soTien,
                     CongNoTruoc = conNoHienTai,
-                    CongNoSau = Math.Max(0m, conNoHienTai - tongDaThu),
+                    CongNoSau = Math.Max(0m, conNoHienTai - soTien),
                     ThoiGian = now,
                     PhuongThuc = ChuanHoaPhuongThuc(phuongThucThanhToan),
                     MaThamChieu = BlankToNull(maThamChieu),
@@ -6547,17 +6618,21 @@ public sealed partial class DatabaseService
                 "KHACH_HANG",
                 khachHangId,
                 null,
-                $"Thu nợ khách hàng {(tenKhach ?? khachHangId.ToString())}: {tongDaThu:N0} đ",
-                tongDaThu);
+                $"Thu nợ khách hàng {(tenKhach ?? khachHangId.ToString())}: {soTien:N0} đ",
+                soTien);
 
             return new ThuNoKhachHangKetQua
             {
                 KhachHangId = khachHangId,
                 MaKhachHang = khach.MaKhachHang ?? "",
                 TenKhachHang = tenKhach ?? "",
-                TongDaThu = tongDaThu,
+                TongDaThu = soTien,
                 CongNoTruoc = conNoHienTai,
-                ConNoConLai = Math.Max(0m, conNoHienTai - tongDaThu),
+                ConNoConLai = Math.Max(0m, conNoHienTai - soTien),
+                TienCanTru = tienThanhToanCongNo,
+                TienDu = tienThanhToanDu,
+                SoDuTraTruocTruoc = soDuTraTruocTruoc,
+                SoDuTraTruocSau = soDuTraTruocSau,
                 SoHoaDonDaThu = soHoaDon,
                 MaGiaoDich = maPhieuThu,
                 MaPhieuThus = [maPhieuThu]
@@ -7320,6 +7395,8 @@ public sealed partial class DatabaseService
                         },
                         transaction)).AsList();
 
+                    await EnsureTraTruocSchemaAsync(connection, transaction);
+
                     var debtExpression = TaoBieuThucTienNhaCungCap("ncc.id", coCotKiotViet).NoHienTai;
                     var debtBefore = await connection.ExecuteScalarAsync<decimal>(
                         $"""
@@ -7331,12 +7408,9 @@ public sealed partial class DatabaseService
                         new { Id = nhaCungCapId },
                         transaction);
 
-                    if (debtBefore <= 0)
-                        throw new InvalidOperationException("Nhà cung cấp không còn công nợ cần thanh toán.");
-                    if (soTien > debtBefore)
-                        throw new InvalidOperationException(
-                            $"Số tiền thanh toán ({soTien:N0} đ) vượt quá công nợ mới nhất ({debtBefore:N0} đ). "
-                            + "Vui lòng tải lại công nợ trước khi thanh toán.");
+                    debtBefore = Math.Max(0m, debtBefore);
+                    var tienThanhToanCongNo = Math.Min(soTien, debtBefore);
+                    var tienThanhToanDu = Math.Max(0m, soTien - debtBefore);
 
                     var ledgerCount = await connection.ExecuteScalarAsync<long>(
                         """
@@ -7370,7 +7444,7 @@ public sealed partial class DatabaseService
                     var method = ChuanHoaPhuongThuc(phuongThucThanhToan);
                     var reference = BlankToNull(maThamChieu);
                     var maPhieuChi = await SinhMaPhieuChiTrongGiaoDichAsync(connection, transaction);
-                    var remainingToAllocate = soTien;
+                    var remainingToAllocate = tienThanhToanCongNo;
                     var allocations = new List<PhanBoThanhToanNhaCungCap>();
 
                     foreach (var invoice in invoices)
@@ -7483,6 +7557,38 @@ public sealed partial class DatabaseService
                         coCotNguoiNopNhanGhiChu,
                         coCotPhieuNhap);
 
+                    var soDuTraTruocTruoc = await LaySoDuTraTruocNhaCungCapTrongGiaoDichAsync(connection, transaction, nhaCungCapId);
+                    var soDuTraTruocSau = soDuTraTruocTruoc;
+
+                    if (tienThanhToanDu > 0)
+                    {
+                        soDuTraTruocSau = soDuTraTruocTruoc + tienThanhToanDu;
+                        var maGdTraTruoc = await SinhMaGiaoDichTraTruocTrongGiaoDichAsync(
+                            connection,
+                            transaction,
+                            "TTDU-NCC",
+                            "lich_su_tra_truoc_ncc");
+
+                        await GhiLichSuTraTruocNhaCungCapTrongGiaoDichAsync(
+                            connection,
+                            transaction,
+                            nhaCungCapId,
+                            supplier.MaNhaCungCap ?? "",
+                            maGdTraTruoc,
+                            "THANH_TOAN_DU",
+                            "PHIEU_CHI",
+                            maPhieuChi,
+                            tienThanhToanDu,
+                            soDuTraTruocTruoc,
+                            soDuTraTruocSau,
+                            method,
+                            now,
+                            Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap,
+                            string.IsNullOrWhiteSpace(ghiChu)
+                                ? $"Thanh toán dư {tienThanhToanDu:N0} đ cho nhà cung cấp qua phiếu chi {maPhieuChi}"
+                                : $"Thanh toán dư {tienThanhToanDu:N0} đ cho nhà cung cấp qua phiếu chi {maPhieuChi}. {ghiChu.Trim()}");
+                    }
+
                     await connection.ExecuteAsync(
                         """
                         INSERT INTO lich_su_thanh_toan_cong_no_nha_cung_cap
@@ -7533,6 +7639,10 @@ public sealed partial class DatabaseService
                         SoTienThanhToan = soTien,
                         CongNoTruoc = debtBefore,
                         CongNoSau = Math.Max(0m, debtBefore - soTien),
+                        TienCanTru = tienThanhToanCongNo,
+                        TienDu = tienThanhToanDu,
+                        SoDuTraTruocTruoc = soDuTraTruocTruoc,
+                        SoDuTraTruocSau = soDuTraTruocSau,
                         SoPhieuNhapDuocPhanBo = allocations.Count,
                         PhanBo = allocations
                     };
@@ -8432,6 +8542,7 @@ public sealed partial class DatabaseService
             ncc.nguoi_lien_he AS NguoiLienHe,
             ncc.ghi_chu AS GhiChu,
             ncc.trang_thai AS TrangThai,
+            COALESCE(ncc.so_du_tra_truoc, 0) AS SoDuTraTruoc,
             ncc.ngay_tao AS NgayTao,
             COALESCE({tien.NoHienTai}, 0) AS ConNo,
             COALESCE({tien.TongMua}, 0) AS TongMua,
@@ -8837,6 +8948,7 @@ public sealed partial class DatabaseService
             SoLanGhiCongNo = congNo.SoLanGhiCongNo,
             TongCongNoLichSu = congNo.TongCongNoLichSu,
             LanGhiCongNoGanNhat = congNo.LanGhiCongNoGanNhat,
+            SoDuTraTruoc = nhacCungCap?.SoDuTraTruoc ?? 0m,
             CoDuLieuKiotViet = nhacCungCap?.CoDuLieuKiotViet == true,
             NoCanTraHienTaiExcel = nhacCungCap?.NoCanTraHienTaiExcel,
             TongMuaExcel = nhacCungCap?.TongMuaExcel,
@@ -10776,11 +10888,13 @@ public sealed partial class DatabaseService
         if (phieu.NhaCungCapId is not uint nccId || nccId == 0 || phieu.ConNo <= 0)
             return 0m;
 
-        var supplierId = await connection.ExecuteScalarAsync<uint?>(
-            "SELECT id FROM nha_cung_cap WHERE id = @Id FOR UPDATE;",
+        await EnsureTraTruocSchemaAsync(connection, transaction);
+
+        var supplier = await connection.QueryFirstOrDefaultAsync<NhaCungCap>(
+            "SELECT id AS Id, ma_nha_cung_cap AS MaNhaCungCap, so_du_tra_truoc AS SoDuTraTruoc FROM nha_cung_cap WHERE id = @Id FOR UPDATE;",
             new { Id = nccId },
             transaction);
-        if (supplierId is null)
+        if (supplier is null)
             throw new InvalidOperationException($"Không tìm thấy nhà cung cấp id {nccId} để cấn trừ khoản trả trước.");
 
         var balance = await connection.ExecuteScalarAsync<decimal>(
@@ -10793,7 +10907,7 @@ public sealed partial class DatabaseService
             new { NhaCungCapId = nccId },
             transaction);
 
-        var tienUngTruoc = Math.Max(0m, -balance);
+        var tienUngTruoc = Math.Max(supplier.SoDuTraTruoc, Math.Max(0m, -balance));
         var soTienCanTru = Math.Min(tienUngTruoc, phieu.ConNo);
         if (soTienCanTru <= 0)
             return 0m;
@@ -10843,6 +10957,31 @@ public sealed partial class DatabaseService
                 GhiChu = $"Cấn trừ khoản trả trước của nhà cung cấp vào phiếu nhập {phieu.MaPhieuNhap}."
             },
             transaction);
+
+        var soDuTruoc = supplier.SoDuTraTruoc;
+        var soDuSau = Math.Max(0m, soDuTruoc - soTienCanTru);
+        var maGdTraTruoc = await SinhMaGiaoDichTraTruocTrongGiaoDichAsync(
+            connection,
+            transaction,
+            "CTNCC",
+            "lich_su_tra_truoc_ncc");
+
+        await GhiLichSuTraTruocNhaCungCapTrongGiaoDichAsync(
+            connection,
+            transaction,
+            nccId,
+            supplier.MaNhaCungCap ?? "",
+            maGdTraTruoc,
+            "CAN_TRU_PHIEU_NHAP",
+            "PHIEU_NHAP",
+            phieu.MaPhieuNhap,
+            soTienCanTru,
+            soDuTruoc,
+            soDuSau,
+            "CAN_TRU",
+            now,
+            Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap,
+            $"Cấn trừ số dư trả trước vào phiếu nhập {phieu.MaPhieuNhap}");
 
         return soTienCanTru;
     }
@@ -10908,6 +11047,23 @@ public sealed partial class DatabaseService
                 phieu.ThoiGianNhap,
                 phieu.NguoiNhapId,
                 $"Đã thanh toán {soTienThanhToan:N0} cho phiếu {phieu.MaPhieuNhap}");
+        }
+
+        var soTienCanTru = phieu.DaThanhToan - soTienThanhToan;
+        if (soTienCanTru > 0)
+        {
+            await GhiMotDongCongNoNhaCungCapAsync(
+                connection,
+                transaction,
+                nccId,
+                branchId,
+                "CAN_TRU_TRA_TRUOC",
+                phieu.MaPhieuNhap,
+                0,
+                soTienCanTru,
+                phieu.ThoiGianNhap,
+                phieu.NguoiNhapId,
+                $"Cấn trừ số dư trả trước {soTienCanTru:N0} đ cho phiếu {phieu.MaPhieuNhap}");
         }
     }
 

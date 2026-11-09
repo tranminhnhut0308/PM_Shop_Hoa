@@ -27,6 +27,11 @@ public sealed class KhachHang
     /// </summary>
     public decimal NoHienTai { get; set; }
 
+    /// <summary>
+    /// Số dư trả trước của khách hàng (tiền trả dư / đặt cọc), dùng để tự động cấn trừ hóa đơn mới.
+    /// </summary>
+    public decimal SoDuTraTruoc { get; set; }
+
     /// <summary>Tổng tiền bán của khách hàng (SUM(khach_can_tra) hóa đơn đã hoàn thành).</summary>
     public decimal TongBan { get; set; }
 

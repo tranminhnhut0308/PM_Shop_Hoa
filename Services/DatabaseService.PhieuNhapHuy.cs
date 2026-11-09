@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -505,11 +505,30 @@ public sealed partial class DatabaseService
             // 5. Thanh toán và sổ quỹ: Xử lý tiền đã thanh toán (nếu có)
             string? maPhieuChiHoan = null;
             decimal soTienHoan = 0m;
+            decimal tienCanTruDaDung = 0m;
 
-            if (phieu.DaThanhToan > 0 &&
+            if (phieu.NhaCungCapId is uint nccIdHuy && nccIdHuy > 0)
+            {
+                await EnsureTraTruocSchemaAsync(connection, transaction);
+
+                tienCanTruDaDung = await connection.ExecuteScalarAsync<decimal>(
+                    """
+                    SELECT COALESCE(SUM(so_tien), 0)
+                    FROM lich_su_tra_truoc_ncc
+                    WHERE nha_cung_cap_id = @NhaCungCapId
+                      AND ma_chung_tu = @MaPhieuNhap
+                      AND loai_giao_dich = 'CAN_TRU_PHIEU_NHAP';
+                    """,
+                    new { NhaCungCapId = nccIdHuy, phieu.MaPhieuNhap },
+                    transaction);
+            }
+
+            var tienThucChiNhapKhongQuaTraTruoc = Math.Max(0m, phieu.DaThanhToan - tienCanTruDaDung);
+
+            if (tienThucChiNhapKhongQuaTraTruoc > 0 &&
                 yeuCau.PhuongAnTien is "HOAN_TIEN_MAT" or "HOAN_CHUYEN_KHOAN")
             {
-                soTienHoan = phieu.DaThanhToan;
+                soTienHoan = tienThucChiNhapKhongQuaTraTruoc;
                 maPhieuChiHoan = await SinhMaPhieuChiTrongGiaoDichAsync(connection, transaction);
                 var phuongThucHoan = yeuCau.PhuongAnTien == "HOAN_CHUYEN_KHOAN"
                     ? "CHUYEN_KHOAN"
@@ -612,9 +631,38 @@ public sealed partial class DatabaseService
                         $"Hoàn tiền {soTienHoan:N0} đ cho nhà cung cấp theo phiếu chi {maPhieuChiHoan}.");
                 }
             }
-            else if (phieu.DaThanhToan > 0)
+            else if (tienThucChiNhapKhongQuaTraTruoc > 0)
             {
                 // Nhà cung cấp giữ khoản trả trước; không phát sinh phiếu quỹ mới.
+            }
+
+            // ISSUE #97: Hoàn trả số dư trả trước đã cấn trừ cho phiếu nhập này (nếu có)
+            if (phieu.NhaCungCapId is uint nccIdHuy2 && nccIdHuy2 > 0 && tienCanTruDaDung > 0)
+            {
+                var soDuHienTai = await LaySoDuTraTruocNhaCungCapTrongGiaoDichAsync(connection, transaction, nccIdHuy2);
+                var soDuMoi = soDuHienTai + tienCanTruDaDung;
+                var maGdHoan = await SinhMaGiaoDichTraTruocTrongGiaoDichAsync(
+                    connection,
+                    transaction,
+                    "HTNCC",
+                    "lich_su_tra_truoc_ncc");
+
+                await GhiLichSuTraTruocNhaCungCapTrongGiaoDichAsync(
+                    connection,
+                    transaction,
+                    nccIdHuy2,
+                    phieu.MaNhaCungCap ?? "",
+                    maGdHoan,
+                    "HOAN_TRA",
+                    "PHIEU_NHAP",
+                    phieu.MaPhieuNhap,
+                    tienCanTruDaDung,
+                    soDuHienTai,
+                    soDuMoi,
+                    "CAN_TRU",
+                    thoiGianHuy,
+                    Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap,
+                    $"Hoàn trả {tienCanTruDaDung:N0} đ vào số dư trả trước do hủy phiếu nhập {phieu.MaPhieuNhap}. Lý do: {yeuCau.LyDoHuy.Trim()}");
             }
 
             // 6. Cập nhật trạng thái phiếu nhập thành ĐÃ HỦY

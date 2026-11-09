@@ -3460,7 +3460,7 @@
 
                                 <Border Classes="statBox" Background="White"
                                   IsVisible="{Binding Detail.HasCongNoData}">
-                                  <Grid ColumnDefinitions="*,*,*" ColumnSpacing="14">
+                                  <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="14">
                                     <StackPanel>
                                       <TextBlock Text="Tổng tiền đã mua" FontSize="11"
                                         Foreground="#61736E" />
@@ -3478,6 +3478,11 @@
                                       <TextBlock Text="{Binding Detail.TongCongNoText}" FontSize="18"
                                         FontWeight="Bold" Foreground="#D64545" Margin="0,3,0,0" />
                                     </StackPanel>
+                                    <StackPanel Grid.Column="3">
+                                      <TextBlock Text="Số dư trả trước" FontSize="11" Foreground="#61736E" />
+                                      <TextBlock Text="{Binding Detail.SoDuTraTruocText}" FontSize="18"
+                                        FontWeight="Bold" Foreground="#087F6E" Margin="0,3,0,0" />
+                                    </StackPanel>
                                   </Grid>
                                 </Border>
 
@@ -3492,6 +3497,26 @@
                                     Foreground="#667A74" />
                                   <TextBlock FontSize="12" Foreground="#667A74"
                                     Text="{Binding Detail.LanGhiCongNoText, StringFormat='Lần ghi công nợ gần nhất: {0}'}" />
+                                </StackPanel>
+
+                                <!-- Lịch sử sử dụng tiền trả trước -->
+                                <StackPanel IsVisible="{Binding Detail.HasLichSuTraTruoc}" Spacing="6" Margin="0,8,0,0">
+                                  <TextBlock Text="Lịch sử sử dụng tiền trả trước" FontWeight="Bold" FontSize="13" Foreground="#163F38" />
+                                  <Border Background="White" CornerRadius="8" BorderBrush="#E2ECE8" BorderThickness="1" Padding="10">
+                                    <ItemsControl ItemsSource="{Binding Detail.LichSuTraTruocs}">
+                                      <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                          <Grid ColumnDefinitions="120,130,120,120,*" ColumnSpacing="10" Margin="0,3">
+                                            <TextBlock Text="{Binding MaGiaoDich}" FontWeight="SemiBold" FontSize="11" Foreground="#163F38" />
+                                            <TextBlock Grid.Column="1" Text="{Binding ThoiGianHienThi}" FontSize="11" Foreground="#61736E" />
+                                            <TextBlock Grid.Column="2" Text="{Binding LoaiGiaoDichHienThi}" FontSize="11" Foreground="#087F6E" FontWeight="SemiBold" />
+                                            <TextBlock Grid.Column="3" Text="{Binding SoTien, StringFormat='{}{0:N0} đ'}" FontSize="11" FontWeight="Bold" Foreground="#087F6E" />
+                                            <TextBlock Grid.Column="4" Text="{Binding GhiChu}" FontSize="11" Foreground="#61736E" TextTrimming="CharacterEllipsis" />
+                                          </Grid>
+                                        </DataTemplate>
+                                      </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                  </Border>
                                 </StackPanel>
 
                               </StackPanel>
@@ -4886,43 +4911,70 @@
 
                                 <Border Classes="statBox" Background="White"
                                   IsVisible="{Binding Detail.HasCongNoData}">
-                                  <Grid ColumnDefinitions="*,*,*" ColumnSpacing="14">
-<StackPanel>
-                                       <TextBlock Text="Tổng tiền đã mua" FontSize="11"
+                                  <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="14">
+                                      <StackPanel>
+                                        <TextBlock Text="Tổng tiền đã mua" FontSize="11"
+                                          Foreground="#61736E" />
+                                        <TextBlock Text="{Binding Detail.TongMuaText}"
+                                          FontSize="18" FontWeight="Bold" Foreground="#163F38"
+                                          Margin="0,3,0,0" />
+                                      </StackPanel>
+                                      <StackPanel Grid.Column="1">
+                                        <TextBlock Text="Đã thanh toán" FontSize="11"
+                                          Foreground="#61736E" />
+                                        <TextBlock Text="{Binding Detail.TongDaThanhToanText}"
+                                          FontSize="18" FontWeight="Bold" Foreground="#087F6E"
+                                          Margin="0,3,0,0" />
+                                      </StackPanel>
+                                     <StackPanel Grid.Column="2">
+                                       <TextBlock Text="Còn nợ" FontSize="11"
                                          Foreground="#61736E" />
-                                       <TextBlock Text="{Binding Detail.TongMuaText}"
-                                         FontSize="18" FontWeight="Bold" Foreground="#163F38"
+                                       <TextBlock Text="{Binding Detail.TongCongNoText}"
+                                         FontSize="18" FontWeight="Bold" Foreground="#D64545"
                                          Margin="0,3,0,0" />
                                      </StackPanel>
-                                     <StackPanel Grid.Column="1">
-                                       <TextBlock Text="Đã thanh toán" FontSize="11"
+                                     <StackPanel Grid.Column="3">
+                                       <TextBlock Text="Số dư trả trước" FontSize="11"
                                          Foreground="#61736E" />
-                                       <TextBlock Text="{Binding Detail.TongDaThanhToanText}"
+                                       <TextBlock Text="{Binding Detail.SoDuTraTruocText}"
                                          FontSize="18" FontWeight="Bold" Foreground="#087F6E"
                                          Margin="0,3,0,0" />
                                      </StackPanel>
-                                    <StackPanel Grid.Column="2">
-                                      <TextBlock Text="Còn nợ" FontSize="11"
-                                        Foreground="#61736E" />
-                                      <TextBlock Text="{Binding Detail.TongCongNoText}"
-                                        FontSize="18" FontWeight="Bold" Foreground="#D64545"
-                                        Margin="0,3,0,0" />
-                                    </StackPanel>
-                                  </Grid>
-                                </Border>
+                                   </Grid>
+                                 </Border>
 
-                                <TextBlock Text="{Binding Detail.CongNoRongText}"
-                                  IsVisible="{Binding !Detail.HasCongNoData}"
-                                  Foreground="#98A2B3" FontSize="13" />
+                                 <TextBlock Text="{Binding Detail.CongNoRongText}"
+                                   IsVisible="{Binding !Detail.HasCongNoData}"
+                                   Foreground="#98A2B3" FontSize="13" />
 
-                                <StackPanel IsVisible="{Binding Detail.HasCongNoData}" Spacing="4">
-                                  <TextBlock Text="{Binding Detail.NguonCongNoText}"
-                                    FontSize="12" Foreground="#61736E" />
-                                  <TextBlock Text="{Binding Detail.SoLanGhiCongNoText, TargetNullValue='0'}"
-                                    FontSize="12" Foreground="#667A74" />
-                                  <TextBlock FontSize="12" Foreground="#667A74"
-                                    Text="{Binding Detail.LanGhiCongNoText, StringFormat='Lần ghi công nợ gần nhất: {0}'}" />
-                                </StackPanel>
+                                 <StackPanel IsVisible="{Binding Detail.HasCongNoData}" Spacing="4">
+                                   <TextBlock Text="{Binding Detail.NguonCongNoText}"
+                                     FontSize="12" Foreground="#61736E" />
+                                   <TextBlock Text="{Binding Detail.SoLanGhiCongNoText, TargetNullValue='0'}"
+                                     FontSize="12" Foreground="#667A74" />
+                                   <TextBlock FontSize="12" Foreground="#667A74"
+                                     Text="{Binding Detail.LanGhiCongNoText, StringFormat='Lần ghi công nợ gần nhất: {0}'}" />
+                                 </StackPanel>
+
+                                 <!-- Lịch sử sử dụng tiền trả trước -->
+                                 <StackPanel IsVisible="{Binding Detail.HasLichSuTraTruoc}" Spacing="6" Margin="0,8,0,0">
+                                   <TextBlock Text="Lịch sử sử dụng tiền trả trước" FontWeight="Bold" FontSize="13" Foreground="#163F38" />
+                                   <Border Background="White" CornerRadius="8" BorderBrush="#E2ECE8" BorderThickness="1" Padding="10">
+                                     <ItemsControl ItemsSource="{Binding Detail.LichSuTraTruocs}">
+                                       <ItemsControl.ItemTemplate>
+                                         <DataTemplate>
+                                           <Grid ColumnDefinitions="120,130,130,120,*" ColumnSpacing="10" Margin="0,3">
+                                             <TextBlock Text="{Binding MaGiaoDich}" FontWeight="SemiBold" FontSize="11" Foreground="#163F38" />
+                                             <TextBlock Grid.Column="1" Text="{Binding ThoiGianHienThi}" FontSize="11" Foreground="#61736E" />
+                                             <TextBlock Grid.Column="2" Text="{Binding LoaiGiaoDichHienThi}" FontSize="11" Foreground="#087F6E" FontWeight="SemiBold" />
+                                             <TextBlock Grid.Column="3" Text="{Binding SoTien, StringFormat='{}{0:N0} đ'}" FontSize="11" FontWeight="Bold" Foreground="#087F6E" />
+                                             <TextBlock Grid.Column="4" Text="{Binding GhiChu}" FontSize="11" Foreground="#61736E" TextTrimming="CharacterEllipsis" />
+                                           </Grid>
+                                         </DataTemplate>
+                                       </ItemsControl.ItemTemplate>
+                                     </ItemsControl>
+                                   </Border>
+                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
                                   <Button Classes="debt-primary"

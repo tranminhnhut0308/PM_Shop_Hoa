@@ -56,6 +56,7 @@ public sealed partial class NhaCungCapDetailViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(TongMuaText))]
     [NotifyPropertyChangedFor(nameof(TongDaThanhToanText))]
     [NotifyPropertyChangedFor(nameof(TongCongNoText))]
+    [NotifyPropertyChangedFor(nameof(SoDuTraTruocText))]
     [NotifyPropertyChangedFor(nameof(SoLanGhiCongNoText))]
     [NotifyPropertyChangedFor(nameof(LanGhiCongNoText))]
     [NotifyPropertyChangedFor(nameof(NguonCongNoText))]
@@ -67,6 +68,22 @@ public sealed partial class NhaCungCapDetailViewModel : ObservableObject
 
     /// <summary>Các dòng sổ cái công nợ của nhà cung cấp đang xem.</summary>
     public ObservableCollection<LichSuCongNoNhaCungCap> LichSuCongNos { get; } = new();
+
+    /// <summary>Lịch sử biến động số dư trả trước của nhà cung cấp.</summary>
+    public ObservableCollection<LichSuTraTruocItem> LichSuTraTruocs { get; } = new();
+
+    public bool HasLichSuTraTruoc => LichSuTraTruocs.Count > 0;
+
+    public void NapLichSuTraTruoc(IReadOnlyList<LichSuTraTruocItem> items)
+    {
+        LichSuTraTruocs.Clear();
+        foreach (var item in items)
+            LichSuTraTruocs.Add(item);
+        OnPropertyChanged(nameof(HasLichSuTraTruoc));
+    }
+
+    public string SoDuTraTruocText =>
+        ThongKe is null ? ChuaCo : FormatTien(ThongKe.SoDuTraTruoc);
 
     // ============================================================
     // TRẠNG THÁI TAB

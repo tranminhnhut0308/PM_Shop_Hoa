@@ -60,23 +60,17 @@ public sealed partial class MainWindowViewModel
         var khachHangId = row.CustomerId;
 
         decimal conNo;
+        decimal soDuTraTruoc = 0m;
 
         try
         {
             var thongKe = await _db.GetThongKeMuaHangCuaKhachHangAsync(khachHangId);
             conNo = thongKe.TongConNoHienTai;
+            soDuTraTruoc = thongKe.SoDuTraTruoc;
         }
         catch (Exception ex)
         {
             await ShowMessageAsync("Không đọc được công nợ", ex.Message);
-            return;
-        }
-
-        if (conNo <= 0)
-        {
-            await ShowMessageAsync(
-                "Thông báo",
-                $"Khách hàng {row.TenKhachHang} không còn công nợ.");
             return;
         }
 
@@ -85,6 +79,7 @@ public sealed partial class MainWindowViewModel
             row.MaKhachHang,
             row.TenKhachHang,
             conNo,
+            soDuTraTruoc,
             nguoiThuOptions,
             Session.CurrentUser?.Id);
         var ketQua = await dialog.ShowDialog<ThuNoKhachHangYeuCau?>(owner);
@@ -96,11 +91,18 @@ public sealed partial class MainWindowViewModel
         }
 
         var conNoDuKien = Math.Max(0m, conNo - ketQua.SoTien);
+        var tienDuDuKien = Math.Max(0m, ketQua.SoTien - Math.Max(0m, conNo));
+        var soDuSauDuKien = soDuTraTruoc + tienDuDuKien;
+        var thongBaoDu = tienDuDuKien > 0
+            ? $"\nTiền thanh toán dư: {tienDuDuKien:N0} đ\nSố dư trả trước mới: {soDuSauDuKien:N0} đ"
+            : "";
+
         var xacNhan = await ShowConfirmationAsync(
             "Xác nhận thanh toán công nợ",
             $"Khách hàng: {row.MaKhachHang} - {row.TenKhachHang}\n"
             + $"Số tiền thanh toán: {ketQua.SoTien:N0} đ\n"
-            + $"Công nợ còn lại dự kiến: {conNoDuKien:N0} đ\n\n"
+            + $"Công nợ còn lại dự kiến: {conNoDuKien:N0} đ"
+            + thongBaoDu + "\n\n"
             + "Xác nhận ghi nhận giao dịch này?",
             "Xác nhận thanh toán",
             "Hủy");

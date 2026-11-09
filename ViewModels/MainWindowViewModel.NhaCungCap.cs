@@ -493,6 +493,9 @@ public sealed partial class MainWindowViewModel
             var lichSu = await _db.GetLichSuCongNoNhaCungCapAsync(row.SupplierId, 100);
             detail.NapLichSuCongNo(lichSu);
 
+            var traTruoc = await _db.GetLichSuTraTruocNhaCungCapAsync(row.SupplierId);
+            detail.NapLichSuTraTruoc(traTruoc);
+
             var thongKe = await _db.GetThongKeTaiChinhNhaCungCapAsync(row.SupplierId);
             detail.ThongKe = thongKe;
         }
@@ -543,10 +546,12 @@ public sealed partial class MainWindowViewModel
         }
 
         decimal debt;
+        decimal soDuTraTruoc = 0m;
         try
         {
             var stats = await _db.GetThongKeTaiChinhNhaCungCapAsync(row.SupplierId);
             debt = stats.TongCongNoHienTai;
+            soDuTraTruoc = stats.SoDuTraTruoc;
         }
         catch (Exception ex)
         {
@@ -555,16 +560,11 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        if (debt <= 0)
-        {
-            await ShowMessageAsync("Thông báo", $"Nhà cung cấp {row.TenNhaCungCap} không còn công nợ.");
-            return;
-        }
-
         var dialog = new ThanhToanCongNoNhaCungCapWindow(
             row.MaNhaCungCap,
             row.TenNhaCungCap,
             debt,
+            soDuTraTruoc,
             Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap ?? "");
         var request = await dialog.ShowDialog<ThanhToanCongNoNhaCungCapYeuCau?>(owner);
         if (request is null)
@@ -574,11 +574,18 @@ public sealed partial class MainWindowViewModel
         }
 
         var estimatedDebtAfter = Math.Max(0m, debt - request.SoTien);
+        var tienDuDuKien = Math.Max(0m, request.SoTien - Math.Max(0m, debt));
+        var soDuSauDuKien = soDuTraTruoc + tienDuDuKien;
+        var thongBaoDu = tienDuDuKien > 0
+            ? $"\nTiền thanh toán dư (trả trước): {tienDuDuKien:N0} đ\nSố dư trả trước mới: {soDuSauDuKien:N0} đ"
+            : "";
+
         if (!await ShowConfirmationAsync(
                 "Xác nhận thanh toán nhà cung cấp",
                 $"Nhà cung cấp: {row.MaNhaCungCap} - {row.TenNhaCungCap}\n"
                 + $"Số tiền thanh toán: {request.SoTien:N0} đ\n"
-                + $"Công nợ còn lại dự kiến: {estimatedDebtAfter:N0} đ\n\n"
+                + $"Công nợ còn lại dự kiến: {estimatedDebtAfter:N0} đ"
+                + thongBaoDu + "\n\n"
                 + "Khoản thanh toán sẽ được phân bổ vào các phiếu nhập cũ nhất còn nợ. Tiếp tục?",
                 "Xác nhận thanh toán",
                 "Hủy"))

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -629,6 +629,7 @@ public sealed partial class DatabaseService
                 var congNoDaHoanTac = 0m;
                 var soTienHoanKhach = 0m;
                 var soTienChuyenTraTruoc = 0m;
+                var tienThucThuKhongQuaTraTruoc = header.KhachDaThanhToan;
                 string? maPhieuChiHoan = null;
 
                 var phuongAnTien = header.KhachDaThanhToan <= 0m
@@ -749,8 +750,24 @@ public sealed partial class DatabaseService
                         congNoDaHoanTac = header.ConNo;
                     }
 
+                    // ISSUE #97: Tính phần tiền đã dùng từ số dư trả trước để không hoàn tiền trùng lặp
+                    await EnsureTraTruocSchemaAsync(connection, transaction);
+
+                    var tienCanTruDaDung = await connection.ExecuteScalarAsync<decimal>(
+                        """
+                        SELECT COALESCE(SUM(so_tien), 0)
+                        FROM lich_su_tra_truoc_khach_hang
+                        WHERE khach_hang_id = @KhachHangId
+                          AND ma_chung_tu = @MaHoaDon
+                          AND loai_giao_dich = 'CAN_TRU_HOA_DON';
+                        """,
+                        new { KhachHangId = khId, MaHoaDon = header.MaHoaDon },
+                        transaction);
+
+                    tienThucThuKhongQuaTraTruoc = Math.Max(0m, header.KhachDaThanhToan - tienCanTruDaDung);
+
                     // 2b. Nếu hóa đơn đã thu tiền (> 0) và chọn chuyển sang khoản khách trả trước / giảm công nợ
-                    if (header.KhachDaThanhToan > 0 && phuongAnTien == PhuongAnXuLyTienKhiHuy.ChuyenKhoanKhachTraTruoc)
+                    if (tienThucThuKhongQuaTraTruoc > 0 && phuongAnTien == PhuongAnXuLyTienKhiHuy.ChuyenKhoanKhachTraTruoc)
                     {
                         var soDuCu = await connection.ExecuteScalarAsync<decimal>(
                             """
@@ -762,7 +779,7 @@ public sealed partial class DatabaseService
                             new { KhachHangId = khId },
                             transaction);
 
-                        var soDuMoi = soDuCu - header.KhachDaThanhToan;
+                        var soDuMoi = soDuCu - tienThucThuKhongQuaTraTruoc;
 
                         await connection.ExecuteAsync(
                             """
@@ -782,15 +799,71 @@ public sealed partial class DatabaseService
                                 KhachHangId = khId,
                                 ChiNhanhId = branchId,
                                 MaChungTu = header.MaHoaDon,
-                                GhiCo = header.KhachDaThanhToan,
+                                GhiCo = tienThucThuKhongQuaTraTruoc,
                                 SoDu = soDuMoi,
                                 ThoiGian = now,
                                 NguoiThucHienId = userId,
-                                GhiChu = $"Chuyển số tiền đã thu ({header.KhachDaThanhToan:N0} đ) của hóa đơn hủy {header.MaHoaDon} thành khoản khách trả trước / cấn trừ công nợ. Lý do: {lyDo}"
+                                GhiChu = $"Chuyển số tiền đã thu ({tienThucThuKhongQuaTraTruoc:N0} đ) của hóa đơn hủy {header.MaHoaDon} thành khoản khách trả trước / cấn trừ công nợ. Lý do: {lyDo}"
                             },
                             transaction);
 
-                        soTienChuyenTraTruoc = header.KhachDaThanhToan;
+                        soTienChuyenTraTruoc = tienThucThuKhongQuaTraTruoc;
+                    }
+
+                    if (tienCanTruDaDung > 0)
+                    {
+                        var soDuHienTai = await LaySoDuTraTruocKhachHangTrongGiaoDichAsync(connection, transaction, khId);
+                        var soDuMoi = soDuHienTai + tienCanTruDaDung;
+                        var maGdHoan = await SinhMaGiaoDichTraTruocTrongGiaoDichAsync(
+                            connection,
+                            transaction,
+                            "HTKH",
+                            "lich_su_tra_truoc_khach_hang");
+
+                        await GhiLichSuTraTruocKhachHangTrongGiaoDichAsync(
+                            connection,
+                            transaction,
+                            khId,
+                            header.MaKhachHang ?? "",
+                            maGdHoan,
+                            "HOAN_TRA",
+                            "HOA_DON",
+                            header.MaHoaDon,
+                            tienCanTruDaDung,
+                            soDuHienTai,
+                            soDuMoi,
+                            "CAN_TRU",
+                            now,
+                            Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap,
+                            $"Hoàn trả {tienCanTruDaDung:N0} đ vào số dư trả trước do hủy hóa đơn {header.MaHoaDon}. Lý do: {lyDo}");
+                    }
+
+                    if (soTienChuyenTraTruoc > 0)
+                    {
+                        var soDuHienTai = await LaySoDuTraTruocKhachHangTrongGiaoDichAsync(connection, transaction, khId);
+                        var soDuMoi = soDuHienTai + soTienChuyenTraTruoc;
+                        var maGdChuyen = await SinhMaGiaoDichTraTruocTrongGiaoDichAsync(
+                            connection,
+                            transaction,
+                            "HTKH",
+                            "lich_su_tra_truoc_khach_hang");
+
+                        await GhiLichSuTraTruocKhachHangTrongGiaoDichAsync(
+                            connection,
+                            transaction,
+                            khId,
+                            header.MaKhachHang ?? "",
+                            maGdChuyen,
+                            "HOAN_TRA",
+                            "HOA_DON",
+                            header.MaHoaDon,
+                            soTienChuyenTraTruoc,
+                            soDuHienTai,
+                            soDuMoi,
+                            "TIEN_MAT",
+                            now,
+                            Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap,
+                            $"Chuyển tiền đã thu thành số dư trả trước khi hủy hóa đơn {header.MaHoaDon}. Lý do: {lyDo}");
                     }
                 }
 
@@ -841,7 +914,7 @@ public sealed partial class DatabaseService
                     },
                     transaction);
 
-                if (header.KhachDaThanhToan > 0 && phuongAnTien == PhuongAnXuLyTienKhiHuy.HoanTienChoKhach)
+                if (tienThucThuKhongQuaTraTruoc > 0 && phuongAnTien == PhuongAnXuLyTienKhiHuy.HoanTienChoKhach)
                 {
                     // Nếu phiếu thu đã được hủy thì Sổ quỹ đã loại trừ số tiền thu,
                     // chỉ tạo phiếu chi hoàn tiền nếu không có phiếu thu nào bị hủy để tránh trừ quỹ 2 lần.
@@ -854,7 +927,7 @@ public sealed partial class DatabaseService
                             userId,
                             header.MaHoaDon,
                             header.TenKhachHang,
-                            header.KhachDaThanhToan,
+                            tienThucThuKhongQuaTraTruoc,
                             req.PhuongThucHoanTien,
                             lyDo,
                             now,
@@ -863,7 +936,7 @@ public sealed partial class DatabaseService
                             coCotExtraPhieuQuy);
                     }
 
-                    soTienHoanKhach = header.KhachDaThanhToan;
+                    soTienHoanKhach = tienThucThuKhongQuaTraTruoc;
                 }
 
                 // ============================================================

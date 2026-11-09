@@ -887,13 +887,15 @@ public partial class MainWindowViewModel : ObservableObject
 
             var historyTask = _db.GetLichSuMuaHangCuaKhachHangAsync(row.CustomerId);
             var statsTask = _db.GetThongKeMuaHangCuaKhachHangAsync(row.CustomerId);
+            var traTruocTask = _db.GetLichSuTraTruocKhachHangAsync(row.CustomerId);
 
-            await Task.WhenAll(historyTask, statsTask);
+            await Task.WhenAll(historyTask, statsTask, traTruocTask);
 
             if (SelectedCustomerId != row.CustomerId)
                 return;
 
             detail.NapLichSuMuaHang(await historyTask);
+            detail.NapLichSuTraTruoc(await traTruocTask);
             detail.ThongKe = await statsTask;
             detail.IsLoading = false;
 

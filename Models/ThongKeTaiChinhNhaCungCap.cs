@@ -21,6 +21,9 @@ public sealed class ThongKeTaiChinhNhaCungCap
     /// <summary>Tổng nợ còn lại trên các phiếu nhập.</summary>
     public decimal TongConNoPhieuNhap { get; set; }
 
+    /// <summary>Số dư trả trước của nhà cung cấp (tiền thanh toán dư / tạm ứng).</summary>
+    public decimal SoDuTraTruoc { get; set; }
+
     /// <summary>Nợ trên phiếu nhập đã được ghi nhận vào công nợ nhà cung cấp.</summary>
     public decimal TongConNoPhieuNhapDaGhiCongNo { get; set; }
 

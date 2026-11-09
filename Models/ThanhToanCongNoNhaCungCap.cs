@@ -18,6 +18,10 @@ public sealed class ThanhToanCongNoNhaCungCapKetQua
     public decimal SoTienThanhToan { get; init; }
     public decimal CongNoTruoc { get; init; }
     public decimal CongNoSau { get; init; }
+    public decimal TienCanTru { get; init; }
+    public decimal TienDu { get; init; }
+    public decimal SoDuTraTruocTruoc { get; init; }
+    public decimal SoDuTraTruocSau { get; init; }
     public int SoPhieuNhapDuocPhanBo { get; init; }
     public IReadOnlyList<PhanBoThanhToanNhaCungCap> PhanBo { get; init; } = [];
 }

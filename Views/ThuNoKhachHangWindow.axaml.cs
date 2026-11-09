@@ -17,9 +17,10 @@ public partial class ThuNoKhachHangWindow : Window
     };
 
     private readonly decimal _conNo;
+    private readonly decimal _soDuTraTruoc;
     private readonly uint? _nguoiThucHienIdMacDinh;
 
-    public ThuNoKhachHangWindow() : this("", "Khách hàng", 0m, Array.Empty<SoQuyLuaChonItem>(), null)
+    public ThuNoKhachHangWindow() : this("", "Khách hàng", 0m, 0m, Array.Empty<SoQuyLuaChonItem>(), null)
     {
     }
 
@@ -27,6 +28,17 @@ public partial class ThuNoKhachHangWindow : Window
         string maKhachHang,
         string tenKhachHang,
         decimal conNo,
+        IReadOnlyList<SoQuyLuaChonItem>? nguoiThuOptions = null,
+        uint? nguoiThucHienIdMacDinh = null)
+        : this(maKhachHang, tenKhachHang, conNo, 0m, nguoiThuOptions, nguoiThucHienIdMacDinh)
+    {
+    }
+
+    public ThuNoKhachHangWindow(
+        string maKhachHang,
+        string tenKhachHang,
+        decimal conNo,
+        decimal soDuTraTruoc,
         IReadOnlyList<SoQuyLuaChonItem>? nguoiThuOptions = null,
         uint? nguoiThucHienIdMacDinh = null)
     {
@@ -41,6 +53,7 @@ public partial class ThuNoKhachHangWindow : Window
                 && id == nguoiThucHienIdMacDinh);
 
         _conNo = conNo;
+        _soDuTraTruoc = soDuTraTruoc;
 
         TxtMaKhachHang.Text = string.IsNullOrWhiteSpace(maKhachHang)
             ? "—"
@@ -49,9 +62,10 @@ public partial class ThuNoKhachHangWindow : Window
             ? "Khách lẻ"
             : tenKhachHang;
         TxtConNo.Text = $"{conNo:N0} đ";
+        TxtSoDuTraTruocHienTai.Text = $"{soDuTraTruoc:N0} đ";
 
-        // Mặc định thu hết phần còn nợ cho tiện.
-        TienThuBox.Value = conNo;
+        // Mặc định thu hết phần còn nợ cho tiện (nếu còn nợ > 0).
+        TienThuBox.Value = Math.Max(0m, conNo);
         TienThuBox.ValueChanged += (_, _) => CapNhatConNoSauThu();
         NgayThanhToanPicker.SelectedDate = DateTimeOffset.Now.Date;
         GioThanhToanBox.Text = DateTime.Now.ToString("HH:mm", CultureInfo.InvariantCulture);
@@ -70,14 +84,6 @@ public partial class ThuNoKhachHangWindow : Window
             if (soTien <= 0)
             {
                 HienLoi("Số tiền thanh toán phải lớn hơn 0.");
-                if (btn != null) btn.IsEnabled = true;
-                return;
-            }
-
-            if (soTien > _conNo)
-            {
-                HienLoi($"Số tiền thanh toán ({soTien.ToString("N0", CultureInfo.InvariantCulture)} đ) "
-                    + $"vượt quá công nợ hiện tại ({_conNo.ToString("N0", CultureInfo.InvariantCulture)} đ).");
                 if (btn != null) btn.IsEnabled = true;
                 return;
             }
@@ -125,11 +131,20 @@ public partial class ThuNoKhachHangWindow : Window
 
     private void CapNhatConNoSauThu()
     {
-        var conNoSauThu = Math.Max(0m, _conNo - TienThuBox.Value);
+        var soTien = TienThuBox.Value;
+        var congNoDuocThanhToan = Math.Min(soTien, Math.Max(0m, _conNo));
+        var tienDu = Math.Max(0m, soTien - Math.Max(0m, _conNo));
+        var conNoSauThu = Math.Max(0m, _conNo - soTien);
+        var soDuTraTruocSau = _soDuTraTruoc + tienDu;
+
+        TxtCongNoDuocThanhToan.Text = $"{congNoDuocThanhToan:N0} đ";
+        TxtTienThanhToanDu.Text = $"{tienDu:N0} đ";
         TxtConNoSauThu.Text = $"{conNoSauThu:N0} đ";
         TxtConNoSauThu.Foreground = conNoSauThu > 0
             ? Avalonia.Media.Brush.Parse("#D64545")
             : Avalonia.Media.Brush.Parse("#087F6E");
+
+        TxtSoDuTraTruocSau.Text = $"{soDuTraTruocSau:N0} đ";
     }
 
     private void HienLoi(string thongDiep)

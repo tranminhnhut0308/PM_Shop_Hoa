@@ -84,8 +84,30 @@
                             Foreground="#D64545" FontSize="14" />
                     </Grid>
                     <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Số dư trả trước hiện tại" Foreground="#61736E" FontSize="13" />
+                        <TextBlock x:Name="TxtSoDuTraTruocHienTai" Grid.Column="1" FontWeight="SemiBold"
+                            Foreground="#087F6E" FontSize="13" />
+                    </Grid>
+                    <Border Height="1" Background="#E8F0ED" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Công nợ được thanh toán" Foreground="#61736E" FontSize="13" />
+                        <TextBlock x:Name="TxtCongNoDuocThanhToan" Grid.Column="1" FontWeight="SemiBold"
+                            Foreground="#163F38" FontSize="13" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Tiền thanh toán dư (trả trước)" Foreground="#61736E" FontSize="13" />
+                        <TextBlock x:Name="TxtTienThanhToanDu" Grid.Column="1" FontWeight="Bold"
+                            Foreground="#087F6E" FontSize="13" />
+                    </Grid>
+                    <Border Height="1" Background="#E8F0ED" />
+                    <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Text="Công nợ sau thanh toán" Foreground="#61736E" FontSize="13" />
                         <TextBlock x:Name="TxtConNoSauThu" Grid.Column="1" FontWeight="Bold"
+                            Foreground="#087F6E" FontSize="14" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Số dư trả trước sau giao dịch" Foreground="#61736E" FontSize="13" />
+                        <TextBlock x:Name="TxtSoDuTraTruocSau" Grid.Column="1" FontWeight="Bold"
                             Foreground="#087F6E" FontSize="14" />
                     </Grid>
                 </StackPanel>
