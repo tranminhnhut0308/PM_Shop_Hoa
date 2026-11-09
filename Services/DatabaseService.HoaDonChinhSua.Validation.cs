@@ -201,7 +201,8 @@ public sealed partial class DatabaseService
             SELECT COUNT(*)
             FROM INFORMATION_SCHEMA.TABLES
             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'giao_hang';
-            """);
+            """,
+            transaction: transaction);
         if (tableExists == 0)
             return;
 
@@ -229,7 +230,8 @@ public sealed partial class DatabaseService
             SELECT LOWER(COLUMN_NAME)
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'phieu_chi';
-            """)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            """,
+            transaction: transaction)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (columns.Count == 0 || !columns.Contains("loai_phieu"))
             return;
 

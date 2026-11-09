@@ -48,7 +48,19 @@ public sealed partial class DatabaseService
                 $"(tồn hiện tại {stock.SoLuongTon:N3}, cần thêm {Math.Max(0, delta):N3}).");
         }
 
-        await connection.ExecuteAsync(
+        await UpdateHoaDonEditStockAsync(connection, transaction, state, productId, stockAfter);
+        await WriteHoaDonEditStockHistoryAsync(
+            connection, transaction, state, productId, delta, stock, stockAfter);
+    }
+
+    private static async Task UpdateHoaDonEditStockAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        HoaDonEditState state,
+        uint productId,
+        decimal stockAfter)
+    {
+        var updatedStockRows = await connection.ExecuteAsync(
             """
             UPDATE ton_kho
             SET so_luong_ton = @TonSau, ngay_cap_nhat = @Now
@@ -62,8 +74,26 @@ public sealed partial class DatabaseService
                 SanPhamId = productId
             },
             transaction);
-        await WriteHoaDonEditStockHistoryAsync(
-            connection, transaction, state, productId, delta, stock, stockAfter);
+        if (updatedStockRows != 1)
+            throw new InvalidOperationException(
+                $"Không cập nhật được tồn kho sản phẩm ID {productId}; giao dịch chỉnh sửa hóa đơn sẽ được hủy.");
+
+        var updatedProductRows = await connection.ExecuteAsync(
+            """
+            UPDATE san_pham
+            SET ton_kho_excel = @TonSau, ngay_cap_nhat = @Now
+            WHERE id = @SanPhamId;
+            """,
+            new
+            {
+                TonSau = stockAfter,
+                state.Now,
+                SanPhamId = productId
+            },
+            transaction);
+        if (updatedProductRows != 1)
+            throw new InvalidOperationException(
+                $"Không đồng bộ được tồn kho sản phẩm ID {productId}; giao dịch chỉnh sửa hóa đơn sẽ được hủy.");
     }
 
     private static Task WriteHoaDonEditStockHistoryAsync(
