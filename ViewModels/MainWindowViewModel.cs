@@ -6008,10 +6008,13 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task ChonNhaCungCapNhapAsync(NhaCungCap? supplier)
     {
         if (supplier is null) return;
-        try {
+        try
+        {
             var fullNcc = await _db.GetNhaCungCapByIdAsync(supplier.Id);
             SelectedPhieuNhapNcc = fullNcc ?? supplier;
-        } catch {
+        }
+        catch
+        {
             SelectedPhieuNhapNcc = supplier;
         }
         ImportSupplierSearch = supplier.TenNhaCungCap;
@@ -6134,7 +6137,7 @@ public partial class MainWindowViewModel : ObservableObject
             await NotificationWindow.ShowErrorAsync("Không thể mở tài liệu: " + ex.Message, "Lỗi mở file", OwnerWindow);
         }
     }
-        public bool HasSelectedPhieuNhapNcc => SelectedPhieuNhapNcc is not null && SelectedPhieuNhapNcc.Id > 0;
+    public bool HasSelectedPhieuNhapNcc => SelectedPhieuNhapNcc is not null && SelectedPhieuNhapNcc.Id > 0;
     public string SelectedPhieuNhapNccDiaChiHienThi =>
         string.IsNullOrWhiteSpace(SelectedPhieuNhapNcc?.DiaChi) ? "Chưa cập nhật" : SelectedPhieuNhapNcc!.DiaChi!;
     public string SelectedPhieuNhapNccSdtHienThi =>
@@ -6171,10 +6174,13 @@ public partial class MainWindowViewModel : ObservableObject
             PhieuNhapSupplierSuggestions.Clear();
             OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
 
-            try {
+            try
+            {
                 var fullNcc = await _db.GetNhaCungCapByIdAsync(supplier.Id);
                 SelectedPhieuNhapNcc = fullNcc ?? supplier;
-            } catch {
+            }
+            catch
+            {
                 SelectedPhieuNhapNcc = supplier;
             }
             OnPropertyChanged(nameof(HasSelectedPhieuNhapNcc));
