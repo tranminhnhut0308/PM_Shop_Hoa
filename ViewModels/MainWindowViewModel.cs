@@ -161,6 +161,9 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(HienThiGoiYPhieuNhap));
         };
 
+        // Mặc định phương thức thanh toán bán hàng là Tiền mặt
+        selectedSalePaymentMethod = SalePaymentMethods[0];
+
         // Gọi load danh sách nhóm sản phẩm tự động khi ViewModel khởi tạo
         _ = LoadNhomSanPhamAsync();
     }
@@ -307,6 +310,19 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private NhaCungCap? selectedNhaCungCap;
     [ObservableProperty] private KhachHang? selectedSaleCustomer;
 
+    public IReadOnlyList<PhuongThucOption> SalePaymentMethods { get; } = new[]
+    {
+        new PhuongThucOption { Ma = "TIEN_MAT", Ten = "Tiền mặt" },
+        new PhuongThucOption { Ma = "CHUYEN_KHOAN", Ten = "Chuyển khoản" },
+        new PhuongThucOption { Ma = "THE", Ten = "Thẻ" },
+        new PhuongThucOption { Ma = "VI_DIEN_TU", Ten = "Ví điện tử" }
+    };
+
+    [ObservableProperty] private PhuongThucOption? selectedSalePaymentMethod;
+
+    private bool _isUserManualTienKhachDua;
+    private bool _isUpdatingTienKhachDuaInternally;
+
     /// <summary>
     /// Đang bán cho "Khách lẻ" (không gắn hồ sơ khách hàng) hay không.
     /// <para>
@@ -324,6 +340,12 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnSelectedSaleCustomerChanged(KhachHang? value)
     {
         OnPropertyChanged(nameof(LaKhachLe));
+        if (!_isUserManualTienKhachDua)
+        {
+            _isUpdatingTienKhachDuaInternally = true;
+            TienKhachDua = SaleTotal;
+            _isUpdatingTienKhachDuaInternally = false;
+        }
         RecalculatePayment();
     }
 
@@ -3665,10 +3687,14 @@ public partial class MainWindowViewModel : ObservableObject
         SaleDiscountAmount = 0;
         SaleDiscountMode = "Số tiền";
 
+        _isUpdatingTienKhachDuaInternally = true;
+        _isUserManualTienKhachDua = false;
         TienKhachDua = 0;
         TienThoi = 0;
         TienCongNo = 0;
         TrangThaiThanhToan = "";
+        SelectedSalePaymentMethod = SalePaymentMethods[0];
+        _isUpdatingTienKhachDuaInternally = false;
 
         SaleMaHoaDonHienThi = "";
         IsThanhToanDangXuLy = false;
@@ -3940,6 +3966,13 @@ public partial class MainWindowViewModel : ObservableObject
         SaleTotal = Math.Max(
             0,
             SaleSubtotal - SaleDiscountAmount);
+
+        if (!_isUserManualTienKhachDua)
+        {
+            _isUpdatingTienKhachDuaInternally = true;
+            TienKhachDua = SaleTotal;
+            _isUpdatingTienKhachDuaInternally = false;
+        }
 
         RecalculatePayment();
         ScheduleSaleCartAutoSave();
@@ -6381,6 +6414,10 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnTienKhachDuaChanged(decimal value)
     {
+        if (!_isUpdatingTienKhachDuaInternally)
+        {
+            _isUserManualTienKhachDua = (value != SaleTotal);
+        }
         RecalculatePayment();
     }
 
@@ -6561,15 +6598,48 @@ public partial class MainWindowViewModel : ObservableObject
         var customer = SelectedSaleCustomer;
         var customerName = customer?.TenKhachHang ?? "Khách lẻ";
         var discountSnapshot = SaleDiscountAmount;
-        var cashSnapshot = TienKhachDua;
         var hoaDonGocIdSnapshot = _hoaDonGocBiHuyId;
         var maHoaDonGocSnapshot = _maHoaDonGocBiHuy;
+
+        var isKhachLe = customer is null || customer.Id == 0;
+
+        // Xử lý tiền khách đưa theo 3 trường hợp của Issue #91:
+        // Trường hợp 1: Khách lẻ
+        // - Tự động lấy tổng tiền làm số tiền khách thanh toán
+        // - Không yêu cầu nhập số tiền khách đưa
+        // - Tự động ghi nhận thanh toán đủ 100%, tiền thối = 0, công nợ = 0
+        if (isKhachLe)
+        {
+            if (!_isUserManualTienKhachDua || TienKhachDua < SaleTotal)
+            {
+                _isUpdatingTienKhachDuaInternally = true;
+                TienKhachDua = Math.Max(0m, SaleTotal);
+                TienThoi = 0;
+                TienCongNo = 0;
+                _isUpdatingTienKhachDuaInternally = false;
+            }
+        }
+        else
+        {
+            // Trường hợp 2: Khách hàng có thông tin và thanh toán đủ
+            // Mặc định số tiền khách đưa bằng tổng tiền hóa đơn nếu chưa điều chỉnh thủ công
+            if (!_isUserManualTienKhachDua)
+            {
+                _isUpdatingTienKhachDuaInternally = true;
+                TienKhachDua = Math.Max(0m, SaleTotal);
+                TienThoi = 0;
+                TienCongNo = 0;
+                _isUpdatingTienKhachDuaInternally = false;
+            }
+        }
+
+        var cashSnapshot = TienKhachDua;
 
         // 2b. Khách lẻ không được phép mua chịu: bắt buộc thanh toán đủ trước khi
         // hoàn tất. Kiểm tra bằng số tiền thực tế (decimal) chứ không chỉ dựa vào
         // nội dung hiển thị, và chặn TRƯỚC khi gọi database nên không tạo hóa đơn,
         // không trừ tồn kho, không ghi sổ quỹ và không ghi công nợ.
-        if (customer is null || customer.Id == 0)
+        if (isKhachLe)
         {
             var canTra = Math.Max(0m, SaleTotal);
             var khachDua = Math.Max(0m, cashSnapshot);
@@ -6603,17 +6673,31 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         // 3. Xác nhận thanh toán
-        var confirmWindow = new ThanhToanConfirmWindow(
-            customerName,
-            SaleTotal,
-            TienKhachDua,
-            TienThoi,
-            TienCongNo);
-
-        if (!await confirmWindow.ShowDialog<bool>(owner))
+        // Bỏ cửa sổ xác nhận thanh toán trung gian đối với khách lẻ và khách thanh toán đủ (công nợ = 0).
+        // Chỉ hiển thị hộp thoại xác nhận khi có công nợ / thanh toán một phần (Trường hợp 3).
+        if (TienCongNo > 0)
         {
-            StatusMessage = "Đã hủy thanh toán.";
-            return;
+            var confirmWindow = new ThanhToanConfirmWindow(
+                customerName,
+                SaleTotal,
+                cashSnapshot,
+                TienThoi,
+                TienCongNo,
+                SelectedSalePaymentMethod?.Ma);
+
+            if (!await confirmWindow.ShowDialog<bool>(owner))
+            {
+                StatusMessage = "Đã hủy thanh toán.";
+                return;
+            }
+
+            var phuongThucDaChon = confirmWindow.PhuongThucThanhToan;
+            if (!string.IsNullOrWhiteSpace(phuongThucDaChon))
+            {
+                var match = SalePaymentMethods.FirstOrDefault(p => p.Ma == phuongThucDaChon);
+                if (match is not null)
+                    SelectedSalePaymentMethod = match;
+            }
         }
 
         // 4. Lưu vào database
@@ -6640,6 +6724,7 @@ public partial class MainWindowViewModel : ObservableObject
                 customer,
                 discountSnapshot,
                 cashSnapshot,
+                phuongThucThanhToan: SelectedSalePaymentMethod?.Ma ?? "TIEN_MAT",
                 ghiChu: SaleGhiChu,
                 soDienThoai: SaleCustomerPhone,
                 diaChi: diaChiDayDu,                 // ← dùng bản đã ghép

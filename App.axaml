@@ -2,6 +2,7 @@
     x:Class="ShopHoa.App"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:helpers="using:ShopHoa.Helpers"
     RequestedThemeVariant="Light">
 
     <Application.Styles>
@@ -9,6 +10,7 @@
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
         <Style Selector="Window">
             <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial" />
+            <Setter Property="helpers:WindowsImeTextInputFix.Enabled" Value="True" />
         </Style>
     </Application.Styles>
 

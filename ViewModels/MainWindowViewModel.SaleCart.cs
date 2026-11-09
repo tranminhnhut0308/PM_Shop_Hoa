@@ -187,7 +187,8 @@ public sealed partial class MainWindowViewModel
         state.DiscountInput = SaleDiscountInput;
         state.DiscountAmount = SaleDiscountAmount;
         state.TienKhachDua = TienKhachDua;
-        state.PhuongThucThanhToan = "Tiền mặt";
+        state.IsUserManualTienKhachDua = _isUserManualTienKhachDua;
+        state.PhuongThucThanhToan = SelectedSalePaymentMethod?.Ma ?? "TIEN_MAT";
         state.Subtotal = SaleSubtotal;
         state.TotalAmount = SaleTotal;
         state.UpdatedAt = DateTime.Now;
@@ -276,7 +277,16 @@ public sealed partial class MainWindowViewModel
             SaleDiscountMode = string.IsNullOrWhiteSpace(state.DiscountMode) ? "Số tiền" : state.DiscountMode;
             SaleDiscountInput = state.DiscountInput;
             SaleDiscountAmount = state.DiscountAmount;
+            _isUserManualTienKhachDua = state.IsUserManualTienKhachDua;
+            _isUpdatingTienKhachDuaInternally = true;
             TienKhachDua = state.TienKhachDua;
+            _isUpdatingTienKhachDuaInternally = false;
+
+            var ptMa = string.IsNullOrWhiteSpace(state.PhuongThucThanhToan) || state.PhuongThucThanhToan == "Tiền mặt"
+                ? "TIEN_MAT"
+                : state.PhuongThucThanhToan;
+            SelectedSalePaymentMethod = SalePaymentMethods.FirstOrDefault(p => p.Ma == ptMa)
+                ?? SalePaymentMethods[0];
 
             _hoaDonGocBiHuyId = state.HoaDonGocBiHuyId;
             _maHoaDonGocBiHuy = state.MaHoaDonGocBiHuy;

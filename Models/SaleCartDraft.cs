@@ -48,7 +48,8 @@ public sealed class SaleCartDraftState
     public decimal DiscountInput { get; set; }
     public decimal DiscountAmount { get; set; }
     public decimal TienKhachDua { get; set; }
-    public string PhuongThucThanhToan { get; set; } = "Tiền mặt";
+    public bool IsUserManualTienKhachDua { get; set; }
+    public string PhuongThucThanhToan { get; set; } = "TIEN_MAT";
     public decimal Subtotal { get; set; }
     public decimal TotalAmount { get; set; }
 

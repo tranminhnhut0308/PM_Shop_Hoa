@@ -104,6 +104,7 @@ public sealed partial class MainWindowViewModel
             case nameof(SaleDiscountInput):
             case nameof(SaleDiscountMode):
             case nameof(TienKhachDua):
+            case nameof(SelectedSalePaymentMethod):
                 ScheduleSaleCartAutoSave();
                 break;
         }

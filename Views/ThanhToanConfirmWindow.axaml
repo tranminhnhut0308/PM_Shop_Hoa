@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="clr-namespace:ShopHoa.Models"
     x:Class="ShopHoa.Views.ThanhToanConfirmWindow"
     Title="Xác nhận thanh toán"
     Width="460"
@@ -96,7 +97,13 @@
                         <TextBlock Text="Phương thức thanh toán" Foreground="#61736E"
                             FontSize="13" VerticalAlignment="Center" />
                         <ComboBox x:Name="CboPhuongThuc" Grid.Column="1"
-                            HorizontalAlignment="Stretch" />
+                            HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="models:PhuongThucOption">
+                                    <TextBlock Text="{Binding Ten}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </Grid>
                 </StackPanel>
             </Border>

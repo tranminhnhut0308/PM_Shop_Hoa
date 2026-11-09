@@ -23,13 +23,20 @@ public partial class ThanhToanConfirmWindow : Window
         CboPhuongThuc.SelectedIndex = 0;
     }
 
-    public ThanhToanConfirmWindow(string tenKhach, decimal tongTien, decimal khachDua, decimal tienThoi, decimal congNo) : this()
+    public ThanhToanConfirmWindow(string tenKhach, decimal tongTien, decimal khachDua, decimal tienThoi, decimal congNo, string? phuongThuc = null) : this()
     {
         TxtKhachHang.Text = tenKhach;
         TxtTongTien.Text = $"{tongTien:N0} đ";
         TxtTienKhachDua.Text = $"{khachDua:N0} đ";
         TxtTienThoi.Text = $"{tienThoi:N0} đ";
         TxtCongNo.Text = $"{congNo:N0} đ";
+
+        if (!string.IsNullOrWhiteSpace(phuongThuc))
+        {
+            var match = System.Linq.Enumerable.FirstOrDefault(DanhSachPhuongThuc, p => p.Ma == phuongThuc);
+            if (match is not null)
+                CboPhuongThuc.SelectedItem = match;
+        }
     }
 
     /// <summary>Mã phương thức thanh toán người dùng chọn (mặc định TIEN_MAT).</summary>

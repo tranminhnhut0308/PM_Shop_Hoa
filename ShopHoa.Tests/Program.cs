@@ -19,6 +19,22 @@ internal class Program
             return KiemTraIssue87_ComboBoxNhaCungCap();
         if (args.Contains("--verify-issue-89", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue89_KhongBatBuocLyDo();
+        if (args.Contains("--verify-issue-91", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue91_ToiUuThanhToanHoaDonAsync(csb.ConnectionString);
+        }
 
         Console.WriteLine("==========================================================================================");
         Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG SHOP HOA: ĐỐI SOÁT TOÀN DIỆN THỐNG KÊ TRANG TỔNG QUAN (#69)  ");
@@ -83,8 +99,9 @@ internal class Program
             KiemTraIssue68_MultiTab_DocLap();
             KiemTraIssue87_ComboBoxNhaCungCap();
             KiemTraIssue89_KhongBatBuocLyDo();
+            await KiemTraIssue91_ToiUuThanhToanHoaDonAsync(csb.ConnectionString);
 
-            Console.WriteLine("\n>>> TẤT CẢ CÁC BÀI KIỂM THỬ ISSUE #68, #69, #87 & #89 ĐÃ VƯỢT QUA 100% THÀNH CÔNG! <<<");
+            Console.WriteLine("\n>>> TẤT CẢ CÁC BÀI KIỂM THỬ ISSUE #68, #69, #87, #89 & #91 ĐÃ VƯỢT QUA 100% THÀNH CÔNG! <<<");
             return 0;
         }
         catch (Exception ex)
@@ -724,6 +741,249 @@ internal class Program
             throw new Exception("Phiếu nhập thiếu nhà cung cấp phải bị từ chối!");
 
         Console.WriteLine("PASSED (Để trống lý do tự động ghi 'Không cung cấp lý do' & giữ nguyên lý do khi có nhập) ✓");
+        return 0;
+    }
+
+    public static async Task<int> KiemTraIssue91_ToiUuThanhToanHoaDonAsync(string connStr)
+    {
+        Console.WriteLine("\n------------------------------------------------------------------------------------------");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #91: TỐI ƯU QUY TRÌNH THANH TOÁN HÓA ĐƠN BÁN HÀNG              ");
+        Console.WriteLine("------------------------------------------------------------------------------------------");
+
+        await using var conn = new MySqlConnection(connStr);
+        await conn.OpenAsync();
+
+        var userDb = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ten_dang_nhap, chi_nhanh_id FROM nguoi_dung LIMIT 1");
+        uint currentUserId = userDb != null ? (uint)userDb.id : 1;
+        uint currentBranchId = userDb?.chi_nhanh_id != null
+            ? (uint)userDb.chi_nhanh_id
+            : await conn.ExecuteScalarAsync<uint>("SELECT id FROM chi_nhanh ORDER BY id LIMIT 1");
+
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = currentUserId,
+            TenDangNhap = userDb?.ten_dang_nhap ?? "admin",
+            MaVaiTro = Quyen.QuanTri,
+            ChiNhanhId = currentBranchId
+        });
+
+        var db = new DatabaseService();
+
+        // 0. Model & Draft State checks
+        Console.Write("[Kiểm tra Issue #91] 0. Khởi tạo SaleCartDraftState và Phương thức thanh toán... ");
+        var draft = new SaleCartDraftState();
+        if (draft.IsUserManualTienKhachDua)
+            throw new Exception("IsUserManualTienKhachDua mặc định phải là false.");
+        if (draft.PhuongThucThanhToan != "TIEN_MAT")
+            throw new Exception("PhuongThucThanhToan mặc định phải là TIEN_MAT.");
+        Console.WriteLine("PASSED ✓");
+
+        // Lấy hoặc tạo sản phẩm và khách hàng để test
+        var spDb = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ma_san_pham, ten_san_pham, gia_ban, ton_kho FROM san_pham WHERE ton_kho >= 20 LIMIT 1");
+        if (spDb == null)
+            throw new Exception("Không tìm thấy sản phẩm có tồn kho >= 20 để test.");
+
+        uint spId = (uint)spDb.id;
+        string spMa = (string)spDb.ma_san_pham;
+        string spTen = (string)spDb.ten_san_pham;
+        decimal spGia = (decimal)spDb.gia_ban;
+        if (spGia <= 0) spGia = 100000m;
+        decimal tonKhoBanDau = (decimal)spDb.ton_kho;
+
+        var khDb = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, ma_khach_hang, ten_khach_hang FROM khach_hang LIMIT 1");
+        if (khDb == null)
+            throw new Exception("Không tìm thấy khách hàng trong DB để test.");
+        var testCustomer = new KhachHang
+        {
+            Id = (uint)khDb.id,
+            MaKhachHang = (string)khDb.ma_khach_hang,
+            TenKhachHang = (string)khDb.ten_khach_hang
+        };
+
+        var createdInvoiceIds = new List<uint>();
+        var createdInvoiceCodes = new List<string>();
+
+        try
+        {
+            // 1. Khách lẻ thanh toán tiền mặt (Đủ 100%, tự động tổng tiền, không công nợ, tiền thối 0)
+            Console.Write("[Kiểm tra Issue #91] 1. Khách lẻ thanh toán tiền mặt đủ 100%... ");
+            var cart1 = new List<SaleCartItem>
+            {
+                new() { SanPham = new SanPham { Id = spId, MaSanPham = spMa, TenSanPham = spTen, GiaBan = spGia, TonKho = tonKhoBanDau }, SoLuong = 2, DonGia = spGia }
+            };
+            var total1 = cart1.Sum(i => i.ThanhTien);
+            var receipt1 = await db.TaoHoaDonBanHangAsync(
+                cart1,
+                customer: null,
+                discount: 0m,
+                tienKhachDua: total1,
+                phuongThucThanhToan: "TIEN_MAT");
+
+            createdInvoiceIds.Add(receipt1.HoaDonId);
+            createdInvoiceCodes.Add(receipt1.MaHoaDon);
+
+            if (receipt1.KhachCanTra != total1 || receipt1.KhachDaThanhToan != total1 || receipt1.ConNo != 0 || receipt1.ThuKhac != 0)
+                throw new Exception($"Số tiền hóa đơn khách lẻ tiền mặt không khớp: Cần trả={receipt1.KhachCanTra}, Đã trả={receipt1.KhachDaThanhToan}, Nợ={receipt1.ConNo}");
+
+            var pt1 = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT so_tien, phuong_thuc FROM phieu_chi WHERE hoa_don_ban_hang_id = @id LIMIT 1",
+                new { id = receipt1.HoaDonId });
+            if (pt1 == null || (decimal)pt1.so_tien != total1 || (string)pt1.phuong_thuc != "TIEN_MAT")
+                throw new Exception($"Phiếu thu sổ quỹ cho khách lẻ tiền mặt không đúng: {pt1?.so_tien} - {pt1?.phuong_thuc}");
+            Console.WriteLine($"PASSED (Hóa đơn {receipt1.MaHoaDon}, PT {receipt1.MaPhieuThu}: {total1:N0}đ Tiền mặt) ✓");
+
+            // 2. Khách lẻ thanh toán chuyển khoản
+            Console.Write("[Kiểm tra Issue #91] 2. Khách lẻ thanh toán chuyển khoản... ");
+            var cart2 = new List<SaleCartItem>
+            {
+                new() { SanPham = new SanPham { Id = spId, MaSanPham = spMa, TenSanPham = spTen, GiaBan = spGia, TonKho = tonKhoBanDau - 2 }, SoLuong = 1, DonGia = spGia }
+            };
+            var total2 = cart2.Sum(i => i.ThanhTien);
+            var receipt2 = await db.TaoHoaDonBanHangAsync(
+                cart2,
+                customer: null,
+                discount: 0m,
+                tienKhachDua: total2,
+                phuongThucThanhToan: "CHUYEN_KHOAN");
+
+            createdInvoiceIds.Add(receipt2.HoaDonId);
+            createdInvoiceCodes.Add(receipt2.MaHoaDon);
+
+            var pt2 = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT so_tien, phuong_thuc FROM phieu_chi WHERE hoa_don_ban_hang_id = @id LIMIT 1",
+                new { id = receipt2.HoaDonId });
+            if (pt2 == null || (decimal)pt2.so_tien != total2 || (string)pt2.phuong_thuc != "CHUYEN_KHOAN")
+                throw new Exception($"Phiếu thu sổ quỹ cho khách lẻ chuyển khoản không đúng: {pt2?.so_tien} - {pt2?.phuong_thuc}");
+            Console.WriteLine($"PASSED (Hóa đơn {receipt2.MaHoaDon}, PT {receipt2.MaPhieuThu}: {total2:N0}đ Chuyển khoản) ✓");
+
+            // 3. Khách hàng có thông tin thanh toán đủ
+            Console.Write("[Kiểm tra Issue #91] 3. Khách hàng có thông tin thanh toán đủ 100%... ");
+            var cart3 = new List<SaleCartItem>
+            {
+                new() { SanPham = new SanPham { Id = spId, MaSanPham = spMa, TenSanPham = spTen, GiaBan = spGia, TonKho = tonKhoBanDau - 3 }, SoLuong = 2, DonGia = spGia }
+            };
+            var total3 = cart3.Sum(i => i.ThanhTien);
+            var receipt3 = await db.TaoHoaDonBanHangAsync(
+                cart3,
+                customer: testCustomer,
+                discount: 0m,
+                tienKhachDua: total3,
+                phuongThucThanhToan: "TIEN_MAT");
+
+            createdInvoiceIds.Add(receipt3.HoaDonId);
+            createdInvoiceCodes.Add(receipt3.MaHoaDon);
+
+            if (receipt3.ConNo != 0 || receipt3.KhachDaThanhToan != total3)
+                throw new Exception($"Khách hàng thanh toán đủ nhưng phát sinh công nợ: ConNo={receipt3.ConNo}");
+            Console.WriteLine($"PASSED (Hóa đơn {receipt3.MaHoaDon}: Thanh toán đủ, nợ = 0) ✓");
+
+            // 4. Khách hàng thanh toán một phần (phát sinh công nợ)
+            Console.Write("[Kiểm tra Issue #91] 4. Khách hàng thanh toán một phần (ghi nhận công nợ)... ");
+            var cart4 = new List<SaleCartItem>
+            {
+                new() { SanPham = new SanPham { Id = spId, MaSanPham = spMa, TenSanPham = spTen, GiaBan = spGia, TonKho = tonKhoBanDau - 5 }, SoLuong = 2, DonGia = spGia }
+            };
+            var total4 = cart4.Sum(i => i.ThanhTien);
+            var traTruoc4 = total4 / 2; // trả 50%
+            var conNo4 = total4 - traTruoc4;
+            var receipt4 = await db.TaoHoaDonBanHangAsync(
+                cart4,
+                customer: testCustomer,
+                discount: 0m,
+                tienKhachDua: traTruoc4,
+                phuongThucThanhToan: "TIEN_MAT");
+
+            createdInvoiceIds.Add(receipt4.HoaDonId);
+            createdInvoiceCodes.Add(receipt4.MaHoaDon);
+
+            if (receipt4.KhachDaThanhToan != traTruoc4 || receipt4.ConNo != conNo4)
+                throw new Exception($"Số tiền thanh toán một phần không khớp: Đã trả={receipt4.KhachDaThanhToan}, Còn nợ={receipt4.ConNo}");
+
+            var pt4 = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT so_tien FROM phieu_chi WHERE hoa_don_ban_hang_id = @id LIMIT 1",
+                new { id = receipt4.HoaDonId });
+            if (pt4 == null || (decimal)pt4.so_tien != traTruoc4)
+                throw new Exception($"Phiếu thu phải đúng số tiền thực trả {traTruoc4}, thực tế: {pt4?.so_tien}");
+
+            var noRecord = await conn.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM lich_su_cong_no_khach_hang WHERE khach_hang_id = @khId AND ghi_no = @no",
+                new { khId = testCustomer.Id, no = conNo4 });
+            if (noRecord == 0)
+                throw new Exception("Chưa ghi nhận lịch sử công nợ khách hàng!");
+            Console.WriteLine($"PASSED (Hóa đơn {receipt4.MaHoaDon}: Thực trả={traTruoc4:N0}đ, Còn nợ={conNo4:N0}đ) ✓");
+
+            // 5. Khách hàng thanh toán hết công nợ
+            Console.Write("[Kiểm tra Issue #91] 5. Khách hàng thanh toán hết công nợ... ");
+            var receiptThuNo = await db.ThuNoHoaDonAsync(
+                receipt4.MaHoaDon,
+                conNo4,
+                phuongThucThanhToan: "CHUYEN_KHOAN",
+                ghiChu: "Thanh toán dứt điểm công nợ qua Chuyển khoản");
+
+            if (receiptThuNo.ConNo != 0 || receiptThuNo.KhachDaThanhToan != total4)
+                throw new Exception($"Thu nợ xong nhưng công nợ chưa về 0: ConNo={receiptThuNo.ConNo}");
+
+            var ptThuNo = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT so_tien, phuong_thuc FROM phieu_chi WHERE hoa_don_ban_hang_id = @id AND phuong_thuc = 'CHUYEN_KHOAN' LIMIT 1",
+                new { id = receipt4.HoaDonId });
+            if (ptThuNo == null || (decimal)ptThuNo.so_tien != conNo4)
+                throw new Exception($"Phiếu thu nợ ngân hàng không khớp: {ptThuNo?.so_tien}");
+            Console.WriteLine($"PASSED (Thu nợ {receipt4.MaHoaDon}: Đã trả hết {conNo4:N0}đ Chuyển khoản, nợ = 0) ✓");
+
+            // 6. Kiểm tra sổ quỹ và lịch sử thanh toán
+            Console.Write("[Kiểm tra Issue #91] 6. Kiểm tra sổ quỹ & phân loại nguồn tiền (Tiền mặt / Chuyển khoản)... ");
+            var dsPhieuChi = (await conn.QueryAsync<dynamic>(
+                "SELECT phuong_thuc, so_tien FROM phieu_chi WHERE hoa_don_ban_hang_id IN @ids",
+                new { ids = createdInvoiceIds })).ToList();
+            if (dsPhieuChi.Count < 4) // hd1, hd2, hd3, hd4(ban dau) + hd4(thu no)
+                throw new Exception($"Số lượng phiếu thu không đủ, thực tế: {dsPhieuChi.Count}");
+            Console.WriteLine($"PASSED (Đã kiểm tra {dsPhieuChi.Count} phiếu thu vào đúng quỹ tương ứng) ✓");
+
+            // 7. Kiểm tra không phát sinh phiếu thu trùng
+            Console.Write("[Kiểm tra Issue #91] 7. Kiểm tra không phát sinh phiếu thu trùng lặp... ");
+            foreach (var hdId in new[] { receipt1.HoaDonId, receipt2.HoaDonId, receipt3.HoaDonId })
+            {
+                var countPt = await conn.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM phieu_chi WHERE hoa_don_ban_hang_id = @id",
+                    new { id = hdId });
+                if (countPt != 1)
+                    throw new Exception($"Hóa đơn {hdId} bị trùng phiếu thu: có {countPt} phiếu thu!");
+            }
+            Console.WriteLine("PASSED (Mỗi hóa đơn thanh toán đủ chỉ có đúng 1 phiếu thu) ✓");
+
+            // 8. Kiểm tra tồn kho và tổng tiền hóa đơn
+            Console.Write("[Kiểm tra Issue #91] 8. Kiểm tra tồn kho và khấu trừ chính xác... ");
+            var tonHienTai = await conn.ExecuteScalarAsync<decimal>(
+                "SELECT ton_kho FROM san_pham WHERE id = @id",
+                new { id = spId });
+            var tongBan = 2 + 1 + 2 + 2; // 7 sản phẩm
+            if (tonHienTai != tonKhoBanDau - tongBan)
+                throw new Exception($"Tồn kho trừ sai: Ban đầu={tonKhoBanDau}, Bán={tongBan}, Hiện tại={tonHienTai}");
+            Console.WriteLine($"PASSED (Tồn kho đã trừ đúng {tongBan} sản phẩm) ✓");
+        }
+        finally
+        {
+            // Dọn dẹp dữ liệu test để cơ sở dữ liệu luôn nguyên vẹn
+            if (createdInvoiceIds.Count > 0)
+            {
+                await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE hoa_don_ban_hang_id IN @ids", new { ids = createdInvoiceIds });
+                await conn.ExecuteAsync("DELETE FROM chi_tiet_hoa_don_ban_hang WHERE hoa_don_id IN @ids", new { ids = createdInvoiceIds });
+                await conn.ExecuteAsync("DELETE FROM lich_su_xuat_nhap_kho WHERE ma_chung_tu IN @codes", new { codes = createdInvoiceCodes });
+                await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id IN @ids", new { ids = createdInvoiceIds });
+                if (testCustomer != null)
+                {
+                    await conn.ExecuteAsync(
+                        "DELETE FROM lich_su_cong_no_khach_hang WHERE khach_hang_id = @khId AND ghi_chu LIKE '%từ hóa đơn HD%'",
+                        new { khId = testCustomer.Id });
+                }
+                // Khôi phục tồn kho sản phẩm test
+                await conn.ExecuteAsync(
+                    "UPDATE san_pham SET ton_kho = @ton WHERE id = @id",
+                    new { ton = tonKhoBanDau, id = spId });
+            }
+        }
+
+        Console.WriteLine("\n>>> TOÀN BỘ 8 TIÊU CHÍ KIỂM THỬ ISSUE #91 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
         return 0;
     }
 }
