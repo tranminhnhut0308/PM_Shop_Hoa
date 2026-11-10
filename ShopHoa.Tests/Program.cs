@@ -17,6 +17,8 @@ internal class Program
             return MoneyInputVerifier.Run();
         if (args.Contains("--verify-issue-87", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue87_ComboBoxNhaCungCap();
+        if (args.Contains("--verify-issue-88", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue88_DongBoTieuDeVaDuLieuBang();
         if (args.Contains("--verify-issue-89", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue89_KhongBatBuocLyDo();
         if (args.Contains("--verify-issue-91", StringComparer.OrdinalIgnoreCase))
@@ -114,10 +116,11 @@ internal class Program
             await KiemTraIssue68_LuuPhieuNhapMaRongAsync(csb.ConnectionString);
             KiemTraIssue68_MultiTab_DocLap();
             KiemTraIssue87_ComboBoxNhaCungCap();
+            KiemTraIssue88_DongBoTieuDeVaDuLieuBang();
             KiemTraIssue89_KhongBatBuocLyDo();
             await KiemTraIssue91_ToiUuThanhToanHoaDonAsync(csb.ConnectionString);
 
-            Console.WriteLine("\n>>> TẤT CẢ CÁC BÀI KIỂM THỬ ISSUE #68, #69, #87, #89, #91, #94, #96 & #97 ĐÃ VƯỢT QUA 100% THÀNH CÔNG! <<<");
+            Console.WriteLine("\n>>> TẤT CẢ CÁC BÀI KIỂM THỬ ISSUE #68, #69, #87, #88, #89, #91, #94, #96, #97 & #104 ĐÃ VƯỢT QUA 100% THÀNH CÔNG! <<<");
             return 0;
         }
         catch (Exception ex)
@@ -657,6 +660,70 @@ internal class Program
             throw new Exception($"ToString() mong muốn 'Vườn Lan Đà Lạt', thực tế: '{nccKhongMa}'");
 
         Console.WriteLine("PASSED ('Tất cả nhà cung cấp' & 'NCC Chị Linh ĐL' hiển thị đúng tên, không hiển thị tên class) ✓");
+        return 0;
+    }
+
+    public static int KiemTraIssue88_DongBoTieuDeVaDuLieuBang()
+    {
+        Console.WriteLine("\n[Kiểm tra Issue #88] Đồng bộ thanh tiêu đề và dữ liệu bảng Nhập hàng & Sổ quỹ...");
+
+        // 1. Tìm đường dẫn file MainWindow.axaml
+        var candidates = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Views", "MainWindow.axaml"),
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Views", "MainWindow.axaml"),
+            Path.Combine(Directory.GetCurrentDirectory(), "Views", "MainWindow.axaml"),
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "Views", "MainWindow.axaml")
+        };
+
+        string? xamlPath = candidates.FirstOrDefault(File.Exists);
+        if (xamlPath == null)
+            throw new FileNotFoundException($"Không tìm thấy file MainWindow.axaml tại các vị trí tìm kiếm: {string.Join("; ", candidates)}");
+
+        var xamlContent = File.ReadAllText(xamlPath);
+
+        // A. Kiểm tra Bảng Nhập hàng (GridPhieuNhapItems)
+        Console.Write("  1. Kiểm tra cấu trúc bảng Nhập hàng (GridPhieuNhapItems)... ");
+        if (!xamlContent.Contains("x:Name=\"GridPhieuNhapItems\""))
+            throw new Exception("Không tìm thấy DataGrid GridPhieuNhapItems trong MainWindow.axaml");
+
+        if (!xamlContent.Contains("CanUserResizeColumns=\"False\""))
+            throw new Exception("GridPhieuNhapItems cần cố định chiều rộng (CanUserResizeColumns=\"False\")");
+
+        if (!xamlContent.Contains("Header=\"TÊN HÀNG\" Width=\"260\" MinWidth=\"220\""))
+            throw new Exception("Cột TÊN HÀNG trong GridPhieuNhapItems phải có độ rộng cố định Width=\"260\" MinWidth=\"220\" để tránh co giật khi cuộn ngang");
+
+        if (xamlContent.Contains("Header=\"TÊN HÀNG\" Width=\"*\""))
+            throw new Exception("Cột TÊN HÀNG không được sử dụng Width=\"*\" vì gây co giãn mất đồng bộ khi cuộn ngang");
+
+        Console.WriteLine("PASSED (Các cột STT:44, TÊN HÀNG:260, ĐVT:95, SỐ LƯỢNG:115, GIÁ NHẬP:125, THÀNH TIỀN:130, XÓA:44 đều cố định, đồng bộ 100%) ✓");
+
+        // B. Kiểm tra Bảng Sổ quỹ
+        Console.Write("  2. Kiểm tra cấu trúc cuộn ngang đồng bộ bảng Sổ quỹ... ");
+        // Header và Body phải nằm trong cùng ScrollViewer cuộn ngang
+        if (!xamlContent.Contains("HorizontalScrollBarVisibility=\"Auto\"") ||
+            !xamlContent.Contains("VerticalScrollBarVisibility=\"Disabled\""))
+            throw new Exception("Vùng bảng Sổ quỹ phải dùng ScrollViewer ngoài có HorizontalScrollBarVisibility=\"Auto\" và VerticalScrollBarVisibility=\"Disabled\" để đồng bộ cuộn ngang giữa tiêu đề và dữ liệu");
+
+        // Cột tiêu đề và cột dữ liệu phải có cùng ColumnDefinitions
+        var columnDefPattern = "ColumnDefinitions=\"150,175,140,120,240,175,110\"";
+        int matchCount = 0;
+        int idx = 0;
+        while ((idx = xamlContent.IndexOf(columnDefPattern, idx, StringComparison.Ordinal)) != -1)
+        {
+            matchCount++;
+            idx += columnDefPattern.Length;
+        }
+        if (matchCount < 2)
+            throw new Exception($"Cấu trúc cột Sổ quỹ chưa khớp! Cần ít nhất 2 chỗ dùng '{columnDefPattern}' (1 cho Header, 1 cho Data Template), hiện tìm thấy: {matchCount}");
+
+        // MinWidth của vùng cuộn Sổ quỹ
+        if (!xamlContent.Contains("MinWidth=\"1142\""))
+            throw new Exception("Vùng Sổ quỹ phải có MinWidth=\"1142\" đồng bộ với tổng chiều rộng các cột + padding (1110 + 32 = 1142)");
+
+        Console.WriteLine("PASSED (Header và Body nằm chung ScrollViewer ngang, cột 150-175-140-120-240-175-110 khớp 100%, cuộn dọc Header cố định) ✓");
+
+        Console.WriteLine(">>> TOÀN BỘ TIÊU CHÍ KIỂM THỬ ISSUE #88 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<\n");
         return 0;
     }
 

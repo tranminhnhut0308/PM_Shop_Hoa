@@ -78,20 +78,10 @@ public sealed partial class MainWindowViewModel
                 if (!_dangCapNhatPresetNgay && !_dangHuyChonNgayTuyChon && value == "Tùy chỉnh")
                 {
                     _invoiceDatePresetBeforeCustom = previousPreset;
-                    _dangCapNhatPresetNgay = true;
-                    try
-                    {
-                        InvoiceFilterStartDate ??= NgayVietNamHomNay();
-                        InvoiceFilterEndDate ??= NgayVietNamHomNay();
-                    }
-                    finally
-                    {
-                        _dangCapNhatPresetNgay = false;
-                    }
-
-                    InvoiceCustomStartDateDraft = InvoiceFilterStartDate;
-                    InvoiceCustomEndDateDraft = InvoiceFilterEndDate;
-                    IsInvoiceCustomDatePickerOpen = false;
+                    var homNay = NgayVietNamHomNay();
+                    InvoiceCustomStartDateDraft = InvoiceFilterStartDate ?? InvoiceFilterEndDate ?? homNay;
+                    InvoiceCustomEndDateDraft = InvoiceFilterEndDate ?? InvoiceFilterStartDate ?? homNay;
+                    IsInvoiceCustomDatePickerOpen = true;
                 }
                 else if (!_dangCapNhatPresetNgay && !_dangHuyChonNgayTuyChon
                     && !string.IsNullOrWhiteSpace(value))
@@ -191,6 +181,7 @@ public sealed partial class MainWindowViewModel
     public bool IsInvoiceCustomDatePreset => SelectedInvoiceDatePreset == "Tùy chỉnh";
     public bool HasInvoiceDateFilter => InvoiceFilterStartDate.HasValue || InvoiceFilterEndDate.HasValue;
 
+    public bool IsInvoiceDatePresetAll => SelectedInvoiceDatePreset == "Mọi ngày";
     public bool IsInvoiceDatePresetToday => SelectedInvoiceDatePreset == "Hôm nay";
     public bool IsInvoiceDatePresetYesterday => SelectedInvoiceDatePreset == "Hôm qua";
     public bool IsInvoiceDatePresetLast7Days =>
@@ -200,6 +191,7 @@ public sealed partial class MainWindowViewModel
 
     private void ThongBaoPresetNgayHoaDon()
     {
+        OnPropertyChanged(nameof(IsInvoiceDatePresetAll));
         OnPropertyChanged(nameof(IsInvoiceDatePresetToday));
         OnPropertyChanged(nameof(IsInvoiceDatePresetYesterday));
         OnPropertyChanged(nameof(IsInvoiceDatePresetLast7Days));
@@ -257,6 +249,8 @@ public sealed partial class MainWindowViewModel
         InvoiceFilterEndDate = null;
         _selectedInvoiceDatePreset = "Mọi ngày";
         _dangCapNhatPresetNgay = false;
+        InvoiceCustomStartDateDraft = null;
+        InvoiceCustomEndDateDraft = null;
         OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
         OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
         ThongBaoPresetNgayHoaDon();
@@ -437,14 +431,14 @@ public sealed partial class MainWindowViewModel
         (SelectedInvoiceCustomer?.Id is not null || SelectedInvoiceCustomer?.IsWalkIn == true ? 1 : 0)
         + (SelectedInvoiceEmployee?.Id is not null ? 1 : 0)
         + (!string.IsNullOrWhiteSpace(InvoiceFilterMinTotal) ? 1 : 0)
-        + (!string.IsNullOrWhiteSpace(InvoiceFilterMaxTotal) ? 1 : 0)
-        + (SelectedInvoicePaymentStatus != "Tất cả" ? 1 : 0);
+        + (!string.IsNullOrWhiteSpace(InvoiceFilterMaxTotal) ? 1 : 0);
 
     public bool HasInvoiceAdvancedFilters => InvoiceAdvancedFilterCount > 0;
 
     public bool IsInvoicePaymentAll => SelectedInvoicePaymentStatus == "Tất cả";
     public bool IsInvoicePaymentPaid => SelectedInvoicePaymentStatus == "Đã thanh toán";
-    public bool IsInvoicePaymentUnpaid => SelectedInvoicePaymentStatus == "Chưa thanh toán";
+    public bool IsInvoicePaymentUnpaid =>
+        SelectedInvoicePaymentStatus is "Chưa thanh toán" or "Còn công nợ";
     public bool IsInvoicePaymentPartial => SelectedInvoicePaymentStatus == "Thanh toán một phần";
 
     [RelayCommand]
@@ -494,6 +488,9 @@ public sealed partial class MainWindowViewModel
                 InvoiceFilterStartDate = null;
                 InvoiceFilterEndDate = null;
                 _dangCapNhatPresetNgay = false;
+                InvoiceCustomStartDateDraft = null;
+                InvoiceCustomEndDateDraft = null;
+                IsInvoiceCustomDatePickerOpen = false;
                 OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
                 OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
                 ThongBaoPresetNgayHoaDon();
@@ -994,7 +991,40 @@ public sealed partial class MainWindowViewModel
 
     public async Task SearchInvoicesAsync(bool giuTrang)
     {
-        // 1. Kiểm tra ngày bắt đầu > ngày kết thúc
+        // 1. Với khoảng ngày tùy chỉnh, luôn áp dụng giá trị đang chọn trong DatePicker
+        //    trước khi truy vấn để tránh tìm kiếm bằng khoảng ngày cũ.
+        if (IsInvoiceCustomDatePreset)
+        {
+            if (!InvoiceCustomStartDateDraft.HasValue || !InvoiceCustomEndDateDraft.HasValue)
+            {
+                StatusMessage = "Vui lòng chọn cả ngày bắt đầu và ngày kết thúc cho khoảng tùy chỉnh.";
+                await ShowMessageAsync(
+                    "Thiếu khoảng thời gian",
+                    "Khi chọn Tùy chọn, vui lòng nhập cả ngày bắt đầu và ngày kết thúc.");
+                return;
+            }
+
+            if (InvoiceCustomStartDateDraft.Value.Date > InvoiceCustomEndDateDraft.Value.Date)
+            {
+                StatusMessage = "⚠️ Ngày bắt đầu không được lớn hơn ngày kết thúc. Vui lòng chọn lại.";
+                await ShowMessageAsync(
+                    "Khoảng thời gian không hợp lệ",
+                    "Ngày bắt đầu không được lớn hơn ngày kết thúc. Vui lòng kiểm tra lại khoảng thời gian lọc.");
+                return;
+            }
+
+            _dangCapNhatPresetNgay = true;
+            try
+            {
+                InvoiceFilterStartDate = InvoiceCustomStartDateDraft;
+                InvoiceFilterEndDate = InvoiceCustomEndDateDraft;
+            }
+            finally
+            {
+                _dangCapNhatPresetNgay = false;
+            }
+        }
+
         if (InvoiceFilterStartDate.HasValue && InvoiceFilterEndDate.HasValue
             && InvoiceFilterStartDate.Value.Date > InvoiceFilterEndDate.Value.Date)
         {
@@ -1002,16 +1032,6 @@ public sealed partial class MainWindowViewModel
             await ShowMessageAsync(
                 "Khoảng thời gian không hợp lệ",
                 "Ngày bắt đầu không được lớn hơn ngày kết thúc. Vui lòng kiểm tra lại khoảng thời gian lọc.");
-            return;
-        }
-
-        if (IsInvoiceCustomDatePreset
-            && (!InvoiceFilterStartDate.HasValue || !InvoiceFilterEndDate.HasValue))
-        {
-            StatusMessage = "Vui lòng chọn cả ngày bắt đầu và ngày kết thúc cho khoảng tùy chỉnh.";
-            await ShowMessageAsync(
-                "Thiếu khoảng thời gian",
-                "Khi chọn Tùy chỉnh, vui lòng nhập cả ngày bắt đầu và ngày kết thúc.");
             return;
         }
 
