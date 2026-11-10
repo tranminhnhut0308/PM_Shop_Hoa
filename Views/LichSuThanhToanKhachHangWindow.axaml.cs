@@ -119,29 +119,29 @@ public partial class LichSuThanhToanKhachHangWindow : Window
             string keyword,
             int page,
             int pageSize)
-        {
-            var summaryTask = _database.GetThongKeLichSuThanhToanCongNoKhachHangAsync(
-                _customerId, tuNgay, denNgay, keyword);
-            var recordsTask = _database.GetLichSuThanhToanCongNoKhachHangAsync(
-                _customerId, tuNgay, denNgay, keyword, pageSize, (page - 1) * pageSize);
-            await Task.WhenAll(summaryTask, recordsTask);
-            return (await summaryTask, await recordsTask);
-        }
+    {
+        var summaryTask = _database.GetThongKeLichSuThanhToanCongNoKhachHangAsync(
+            _customerId, tuNgay, denNgay, keyword);
+        var recordsTask = _database.GetLichSuThanhToanCongNoKhachHangAsync(
+            _customerId, tuNgay, denNgay, keyword, pageSize, (page - 1) * pageSize);
+        await Task.WhenAll(summaryTask, recordsTask);
+        return (await summaryTask, await recordsTask);
+    }
 
     private void HienThiTrang(
             ThanhToanCongNoLichSuThongKe summary,
             IReadOnlyList<ThanhToanCongNoKhachHang> records)
-        {
-            _summary = summary;
-            _totalCount = summary.TongSoGiaoDich;
-            _currentPage = Math.Clamp(_currentPage, 1, TongSoTrang);
-            _visibleRecords = records;
-            var firstIndex = (_currentPage - 1) * _pageSize;
-            for (var index = 0; index < records.Count; index++)
-                records[index].SoThuTuHienThi = firstIndex + index + 1;
-            CapNhatThongKe();
-            CapNhatTrangHienTai();
-        }
+    {
+        _summary = summary;
+        _totalCount = summary.TongSoGiaoDich;
+        _currentPage = Math.Clamp(_currentPage, 1, TongSoTrang);
+        _visibleRecords = records;
+        var firstIndex = (_currentPage - 1) * _pageSize;
+        for (var index = 0; index < records.Count; index++)
+            records[index].SoThuTuHienThi = firstIndex + index + 1;
+        CapNhatThongKe();
+        CapNhatTrangHienTai();
+    }
 
     private void XoaDuLieuTrang()
     {
