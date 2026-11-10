@@ -329,6 +329,9 @@ public sealed partial class MainWindowViewModel
 
             ImportSupplierSearch = state.TenNhaCungCap ?? "";
             PhieuNhapSupplierSuggestions.Clear();
+            _phieuNhapSupplierSearchCts?.Cancel();
+            IsPhieuNhapSupplierSuggestionsClosed = true;
+            PhieuNhapSupplierSelectedIndex = -1;
             OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
 
             PhieuNhapNgayNhap = state.NgayNhap ?? DateTime.Now;

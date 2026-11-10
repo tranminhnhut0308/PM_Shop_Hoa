@@ -35,6 +35,22 @@ internal class Program
             };
             return await KiemTraIssue91_ToiUuThanhToanHoaDonAsync(csb.ConnectionString);
         }
+        if (args.Contains("--verify-issue-104", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue104_HuyPhieuThanhToanCongNoAsync(csb.ConnectionString);
+        }
 
         Console.WriteLine("==========================================================================================");
         Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG SHOP HOA: ĐỐI SOÁT TOÀN DIỆN THỐNG KÊ TRANG TỔNG QUAN (#69)  ");
@@ -1208,6 +1224,11 @@ internal class Program
         // ==========================================================================
         await KiemTraIssue97_ThanhToanDuVaSoDuTraTruocAsync(connStr);
 
+        // ==========================================================================
+        // CÁC BÀI KIỂM THỬ ISSUE #104: HỦY PHIẾU THANH TOÁN TRONG LỊCH SỬ CÔNG NỢ
+        // ==========================================================================
+        await KiemTraIssue104_HuyPhieuThanhToanCongNoAsync(connStr);
+
         return 0;
     }
 
@@ -1470,5 +1491,274 @@ internal class Program
         catch {}
 
         Console.WriteLine("\n>>> TOÀN BỘ 9 TIÊU CHÍ KIỂM THỬ ISSUE #97 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+    }
+
+    private static async Task<int> KiemTraIssue104_HuyPhieuThanhToanCongNoAsync(string connectionString)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #104: HỦY PHIẾU THANH TOÁN TRONG LỊCH SỬ CÔNG NỢ KHÁCH HÀNG      ");
+        Console.WriteLine("==========================================================================================");
+
+        var db = new DatabaseService();
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+        await DatabaseService.EnsureTraTruocSchemaAsync(conn);
+
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "tester",
+            HoTen = "Kiem Thu Vien #104",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        });
+
+        var maKhTest = "KH_TEST_104_" + DateTime.Now.ToString("yyMMddHHmmss");
+        var hdTestCode = "HD_TEST_104_" + DateTime.Now.ToString("yyMMddHHmmss");
+        uint khId = 0;
+        uint hdId = 0;
+        var createdSlips = new List<string>();
+
+        try
+        {
+            // Tạo khách hàng test
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO khach_hang (ma_khach_hang, ten_khach_hang, so_dien_thoai, trang_thai, so_du_tra_truoc)
+                VALUES (@Ma, @Ten, '0912345678', 1, 0.00);
+                """,
+                new { Ma = maKhTest, Ten = "Khách Hàng Test 104" });
+            khId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM khach_hang WHERE ma_khach_hang = @Ma;", new { Ma = maKhTest });
+
+            // Tạo hóa đơn test 1.000.000đ, nợ 1.000.000đ
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO hoa_don_ban_hang (ma_hoa_don, khach_hang_id, chi_nhanh_id, nguoi_ban_id, thoi_gian_ban,
+                    tong_tien_hang, giam_gia, khach_can_tra, khach_da_thanh_toan, con_no,
+                    trang_thai_thanh_toan, trang_thai_hoa_don, ghi_chu)
+                VALUES (@MaHd, @KhId, 1, 1, NOW(),
+                    1000000, 0, 1000000, 0, 1000000,
+                    'CHUA_THANH_TOAN', 'HOAN_THANH', 'Hóa đơn nợ ban đầu test 104');
+                """,
+                new { MaHd = hdTestCode, KhId = khId });
+            hdId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM hoa_don_ban_hang WHERE ma_hoa_don = @MaHd;", new { MaHd = hdTestCode });
+
+            // Ghi nợ vào sổ cái công nợ
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO lich_su_cong_no_khach_hang (khach_hang_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu, ghi_no, ghi_co, so_du, thoi_gian, ghi_chu)
+                VALUES (@KhId, 1, 'GHI_NO', 'HOA_DON', @MaHd, 1000000, 0, 1000000, NOW(), 'Ghi nợ hóa đơn test 104');
+                """,
+                new { KhId = khId, MaHd = hdTestCode });
+
+            // 1. Thu nợ 400.000đ
+            var thuNo1 = await db.ThuNoKhachHangAsync(khId, 400000m, "TIEN_MAT", null, "Thu nợ đợt 1 test 104");
+            createdSlips.Add(thuNo1.MaGiaoDich);
+
+            // Kiểm tra hóa đơn sau thu nợ đợt 1: đã trả 400k, còn nợ 600k
+            var hdCheck1 = await conn.QueryFirstOrDefaultAsync(
+                "SELECT khach_da_thanh_toan, con_no, trang_thai_thanh_toan FROM hoa_don_ban_hang WHERE id = @Id;",
+                new { Id = hdId });
+            if ((decimal)hdCheck1.con_no != 600000m || ((string)hdCheck1.trang_thai_thanh_toan != "CONG_NO" && (string)hdCheck1.trang_thai_thanh_toan != "MOT_PHAN"))
+                throw new Exception($"Sau thu nợ đợt 1, hóa đơn còn nợ={hdCheck1.con_no}, trạng thái={hdCheck1.trang_thai_thanh_toan}");
+
+            // TEST 1: HỦY PHIẾU THANH TOÁN 400.000Đ THÀNH CÔNG VÀ HOÀN TÁC NỢ HÓA ĐƠN
+            Console.Write("[Kiểm tra Issue #104] 1. Hủy phiếu thanh toán -> Hoàn tác nợ hóa đơn và công nợ... ");
+            var huyRes1 = await db.HuyThanhToanCongNoKhachHangAsync(khId, thuNo1.MaGiaoDich, "Nhân viên nhập nhầm số tiền phiếu 1");
+            if (!huyRes1.ThanhCong)
+                throw new Exception($"Hủy phiếu {thuNo1.MaGiaoDich} thất bại: {huyRes1.ThongBao}");
+            if (huyRes1.SoTienHoanTac != 400000m)
+                throw new Exception($"Số tiền hoàn tác không khớp: {huyRes1.SoTienHoanTac} != 400000");
+            if (huyRes1.CongNoMoi != 1000000m)
+                throw new Exception($"Công nợ mới sau hoàn tác không khớp: {huyRes1.CongNoMoi} != 1000000");
+
+            var hdCheckSauHuy = await conn.QueryFirstOrDefaultAsync(
+                "SELECT khach_da_thanh_toan, con_no, trang_thai_thanh_toan FROM hoa_don_ban_hang WHERE id = @Id;",
+                new { Id = hdId });
+            if ((decimal)hdCheckSauHuy.khach_da_thanh_toan != 0m
+                || (decimal)hdCheckSauHuy.con_no != 1000000m
+                || (string)hdCheckSauHuy.trang_thai_thanh_toan != "CHUA_THANH_TOAN")
+            {
+                throw new Exception($"Hóa đơn sau hủy không được khôi phục đúng: Đã trả={hdCheckSauHuy.khach_da_thanh_toan}, Còn nợ={hdCheckSauHuy.con_no}, Trạng thái={hdCheckSauHuy.trang_thai_thanh_toan}");
+            }
+
+            var phanBoTrangThai = await conn.QueryFirstOrDefaultAsync<string>(
+                "SELECT trang_thai FROM thanh_toan WHERE ma_giao_dich = @MaGD LIMIT 1;",
+                new { MaGD = thuNo1.MaGiaoDich });
+            if (phanBoTrangThai != "HUY")
+                throw new Exception($"Dòng phân bổ thanh_toan chưa đổi thành HUY: {phanBoTrangThai}");
+
+            Console.WriteLine($"PASSED (Hoàn tác 400k, HĐ trở về nợ 1.0M - CHUA_THANH_TOAN) ✓");
+
+            // TEST 2: KIỂM TRA SỔ CÁI CÔNG NỢ VÀ AUDIT TRAIL
+            Console.Write("[Kiểm tra Issue #104] 2. Kiểm tra sổ cái công nợ khách hàng (loai_giao_dich = HUY_THANH_TOAN)... ");
+            var dongSoCaiHuy = await conn.QueryFirstOrDefaultAsync(
+                """
+                SELECT loai_giao_dich, ghi_no, ghi_co, ghi_chu
+                FROM lich_su_cong_no_khach_hang
+                WHERE khach_hang_id = @KhId AND ma_chung_tu = @MaGD
+                ORDER BY id DESC LIMIT 1;
+                """,
+                new { KhId = khId, MaGD = thuNo1.MaGiaoDich });
+            if (dongSoCaiHuy == null || (string)dongSoCaiHuy.loai_giao_dich != "HUY_THANH_TOAN" || (decimal)dongSoCaiHuy.ghi_no != 400000m)
+                throw new Exception("Sổ cái công nợ không có dòng HUY_THANH_TOAN ghi nợ 400.000đ hợp lệ.");
+
+            var tongNoSoCai = await conn.ExecuteScalarAsync<decimal>(
+                "SELECT COALESCE(SUM(ghi_no - ghi_co), 0) FROM lich_su_cong_no_khach_hang WHERE khach_hang_id = @KhId;",
+                new { KhId = khId });
+            if (tongNoSoCai != 1000000m)
+                throw new Exception($"Tổng nợ sổ cái không khớp 1.000.000đ sau hủy: {tongNoSoCai}");
+            Console.WriteLine($"PASSED (Sổ cái ghi nợ 400k HUY_THANH_TOAN, Tổng nợ = {tongNoSoCai:N0} đ) ✓");
+
+            // TEST 3: KIỂM TRA SỔ QUÝ (phieu_chi) VÀ LỊCH SỬ THANH TOÁN
+            Console.Write("[Kiểm tra Issue #104] 3. Kiểm tra phiếu thu sổ quỹ và trạng thái phiếu thanh toán... ");
+            var phieuQuy = await conn.QueryFirstOrDefaultAsync(
+                "SELECT trang_thai, ly_do_huy, nguoi_huy_id FROM phieu_chi WHERE ma_phieu_chi = @MaPT;",
+                new { MaPT = thuNo1.MaGiaoDich });
+            if (phieuQuy == null || (string)phieuQuy.trang_thai != "HUY")
+                throw new Exception($"Phiếu thu sổ quỹ {thuNo1.MaGiaoDich} chưa được chuyển trạng thái HUY.");
+
+            var phieuTT = await conn.QueryFirstOrDefaultAsync(
+                "SELECT trang_thai, ly_do_huy, nguoi_huy_id FROM lich_su_thanh_toan_cong_no_khach_hang WHERE ma_giao_dich = @MaGD;",
+                new { MaGD = thuNo1.MaGiaoDich });
+            if (phieuTT == null || (string)phieuTT.trang_thai != "HUY")
+                throw new Exception($"Phiếu thanh toán {thuNo1.MaGiaoDich} chưa được đánh dấu HUY trong lich_su_thanh_toan_cong_no_khach_hang.");
+            Console.WriteLine($"PASSED (Phiếu thu {thuNo1.MaGiaoDich} & Lịch sử đều chuyển HUY) ✓");
+
+            // TEST 4: CHẶN HỦY TRÙNG LẶP
+            Console.Write("[Kiểm tra Issue #104] 4. Chặn hủy phiếu đã hủy (chống trùng lặp)... ");
+            var caughtDuplicate = false;
+            try
+            {
+                await db.HuyThanhToanCongNoKhachHangAsync(khId, thuNo1.MaGiaoDich, "Hủy lại lần 2");
+            }
+            catch (InvalidOperationException ex)
+            {
+                caughtDuplicate = true;
+                if (!ex.Message.Contains("đã bị hủy", StringComparison.OrdinalIgnoreCase)
+                    && !ex.Message.Contains("đã được hủy", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new Exception($"Thông báo từ chối hủy trùng không rõ ràng: {ex.Message}");
+                }
+                Console.WriteLine($"PASSED (Từ chối chính xác: \"{ex.Message}\") ✓");
+            }
+            if (!caughtDuplicate)
+                throw new Exception("Hệ thống cho phép hủy trùng phiếu thanh toán đã hủy trước đó!");
+
+            // TEST 5: HỦY PHIẾU THANH TOÁN CÓ DƯ (ISSUE #97)
+            Console.Write("[Kiểm tra Issue #104] 5. Hủy phiếu thanh toán có phần thanh toán dư (trả trước)... ");
+            // Đang nợ 1.000.000đ, trả 1.500.000đ -> dư 500.000đ
+            var thuNo2 = await db.ThuNoKhachHangAsync(khId, 1500000m, "CHUYEN_KHOAN", null, "Thu nợ trả dư test 104");
+            createdSlips.Add(thuNo2.MaGiaoDich);
+
+            var duTruocCheck = await conn.ExecuteScalarAsync<decimal>(
+                "SELECT so_du_tra_truoc FROM khach_hang WHERE id = @KhId;",
+                new { KhId = khId });
+            if (duTruocCheck != 500000m)
+                throw new Exception($"Số dư trả trước không khớp 500.000đ: {duTruocCheck}");
+
+            var huyRes2 = await db.HuyThanhToanCongNoKhachHangAsync(khId, thuNo2.MaGiaoDich, "Hủy phiếu thanh toán dư");
+            if (!huyRes2.ThanhCong)
+                throw new Exception($"Hủy phiếu trả dư thất bại: {huyRes2.ThongBao}");
+            if (huyRes2.SoTienTraTruocTru != 500000m)
+                throw new Exception($"Số dư trả trước trừ lại không khớp 500.000đ: {huyRes2.SoTienTraTruocTru}");
+
+            var duSauHuy = await conn.ExecuteScalarAsync<decimal>(
+                "SELECT so_du_tra_truoc FROM khach_hang WHERE id = @KhId;",
+                new { KhId = khId });
+            if (duSauHuy != 0m)
+                throw new Exception($"Số dư trả trước của khách hàng không giảm về 0: {duSauHuy}");
+
+            var traTruocLog = await conn.QueryFirstOrDefaultAsync(
+                """
+                SELECT so_tien, so_du_sau, loai_giao_dich
+                FROM lich_su_tra_truoc_khach_hang
+                WHERE khach_hang_id = @KhId AND ma_chung_tu = @MaGD
+                ORDER BY id DESC LIMIT 1;
+                """,
+                new { KhId = khId, MaGD = thuNo2.MaGiaoDich });
+            if (traTruocLog == null || (decimal)traTruocLog.so_tien != 500000m || (decimal)traTruocLog.so_du_sau != 0m || (string)traTruocLog.loai_giao_dich != "HOAN_TRA")
+                throw new Exception("Lịch sử trả trước không ghi nhận dòng hoàn trả 500.000đ HOAN_TRA hợp lệ.");
+            Console.WriteLine($"PASSED (Thu hồi số dư trả trước 500k về 0, khôi phục nợ 1.0M) ✓");
+
+            // TEST 6: CHẶN HỦY KHI TIỀN DƯ ĐÃ ĐƯỢC DÙNG CHO ĐƠN HÀNG SAU
+            Console.Write("[Kiểm tra Issue #104] 6. Chặn hủy khi số dư trả trước đã bị cấn trừ hết vào đơn mới... ");
+            var thuNo3 = await db.ThuNoKhachHangAsync(khId, 1500000m, "CHUYEN_KHOAN", null, "Thu nợ dư để test chặn tiêu hết");
+            createdSlips.Add(thuNo3.MaGiaoDich);
+
+            // Giả lập khách hàng đã dùng 450.000đ số dư trả trước cấn trừ vào hóa đơn mới (còn lại 50.000đ < 500.000đ dư của phiếu)
+            await conn.ExecuteAsync("UPDATE khach_hang SET so_du_tra_truoc = 50000 WHERE id = @KhId;", new { KhId = khId });
+
+            var caughtInsufficientPrepayment = false;
+            try
+            {
+                await db.HuyThanhToanCongNoKhachHangAsync(khId, thuNo3.MaGiaoDich, "Thử hủy phiếu khi tiền dư đã tiêu");
+            }
+            catch (InvalidOperationException ex)
+            {
+                caughtInsufficientPrepayment = true;
+                if (!ex.Message.Contains("số dư trả trước", StringComparison.OrdinalIgnoreCase))
+                    throw new Exception($"Thông báo chặn không đề cập đến số dư trả trước: {ex.Message}");
+                Console.WriteLine($"PASSED (Chặn hủy thành công: \"{ex.Message}\") ✓");
+            }
+            if (!caughtInsufficientPrepayment)
+                throw new Exception("Hệ thống không chặn hủy khi số dư trả trước đã bị sử dụng!");
+
+            // Khôi phục lại số dư trả trước để hủy sạch
+            await conn.ExecuteAsync("UPDATE khach_hang SET so_du_tra_truoc = 500000 WHERE id = @KhId;", new { KhId = khId });
+            await db.HuyThanhToanCongNoKhachHangAsync(khId, thuNo3.MaGiaoDich, "Hủy dọn dẹp phiếu 3");
+
+            // TEST 7: KIỂM TRA VALIDATION THAM SỐ
+            Console.Write("[Kiểm tra Issue #104] 7. Kiểm tra validation (lý do hủy bắt buộc, mã phiếu không tồn tại)... ");
+            var errReasonCaught = false;
+            try
+            {
+                await db.HuyThanhToanCongNoKhachHangAsync(khId, "PT_NOT_EXIST", "   ");
+            }
+            catch (ArgumentException)
+            {
+                errReasonCaught = true;
+            }
+            if (!errReasonCaught)
+                throw new Exception("Không ném ArgumentException khi lý do hủy để trống/khoảng trắng.");
+
+            var caughtNonExistent = false;
+            try
+            {
+                await db.HuyThanhToanCongNoKhachHangAsync(khId, "PT_KHONG_TON_TAI_12345", "Lý do hợp lệ");
+            }
+            catch (InvalidOperationException ex)
+            {
+                caughtNonExistent = true;
+                if (!ex.Message.Contains("Không tìm thấy", StringComparison.OrdinalIgnoreCase))
+                    throw new Exception($"Thông báo phiếu không tồn tại không đúng: {ex.Message}");
+            }
+            if (!caughtNonExistent)
+                throw new Exception("Hệ thống báo thành công cho mã phiếu không tồn tại!");
+            Console.WriteLine($"PASSED (Bắt buộc lý do hủy và kiểm tra mã phiếu hợp lệ) ✓");
+
+            Console.WriteLine("\n>>> TOÀN BỘ 7 TIÊU CHÍ KIỂM THỬ ISSUE #104 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+            return 0;
+        }
+        finally
+        {
+            // Dọn dẹp dữ liệu test
+            try
+            {
+                if (khId > 0)
+                {
+                    await conn.ExecuteAsync("DELETE FROM lich_su_tra_truoc_khach_hang WHERE khach_hang_id = @KhId;", new { KhId = khId });
+                    await conn.ExecuteAsync("DELETE FROM thanh_toan WHERE khach_hang_id = @KhId;", new { KhId = khId });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_thanh_toan_cong_no_khach_hang WHERE khach_hang_id = @KhId;", new { KhId = khId });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_cong_no_khach_hang WHERE khach_hang_id = @KhId;", new { KhId = khId });
+                    if (createdSlips.Count > 0)
+                        await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE ma_phieu_chi IN @Slips;", new { Slips = createdSlips });
+                    if (hdId > 0)
+                        await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id = @HdId;", new { HdId = hdId });
+                    await conn.ExecuteAsync("DELETE FROM khach_hang WHERE id = @KhId;", new { KhId = khId });
+                }
+            }
+            catch {}
+        }
     }
 }

@@ -8475,6 +8475,11 @@ public sealed partial class DatabaseService
 
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
 
+        // Tìm cả theo tên/mã đã bỏ dấu để gõ "nha cung cap hoa" vẫn ra "Nhà cung cấp Hoa".
+        var searchChuanHoa = ChuauHoaTuKhoa(search);
+        var maChuanHoa = BieuThucChuanHoaSql("ncc.ma_nha_cung_cap");
+        var tenChuanHoa = BieuThucChuanHoaSql("ncc.ten_nha_cung_cap");
+
         var sql = $"""
         SELECT
         {TaoDanhSachCotNhaCungCap(coCotKiotViet)}
@@ -8486,6 +8491,8 @@ public sealed partial class DatabaseService
                 OR ncc.ten_nha_cung_cap LIKE CONCAT('%', @Search, '%')
                 OR ncc.so_dien_thoai LIKE CONCAT('%', @Search, '%')
                 OR ncc.email LIKE CONCAT('%', @Search, '%')
+                OR {maChuanHoa} LIKE CONCAT('%', @SearchChuanHoa, '%')
+                OR {tenChuanHoa} LIKE CONCAT('%', @SearchChuanHoa, '%')
               )
         ORDER BY ncc.ten_nha_cung_cap;
         """;
@@ -8495,7 +8502,8 @@ public sealed partial class DatabaseService
                 sql,
                 new
                 {
-                    Search = search ?? ""
+                    Search = search ?? "",
+                    SearchChuanHoa = searchChuanHoa
                 })
         ).AsList();
     }

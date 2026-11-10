@@ -144,11 +144,6 @@
                 Padding="16,13">
                 <StackPanel Spacing="8">
                     <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Text="Mã phiếu nhập" Foreground="#61736E" FontSize="13" />
-                        <TextBlock x:Name="TxtMaPhieuNhap" Grid.Column="1" FontWeight="SemiBold"
-                            Foreground="#163F38" FontSize="13" />
-                    </Grid>
-                    <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Text="Nhà cung cấp" Foreground="#61736E" FontSize="13" />
                         <TextBlock x:Name="TxtNhaCungCap" Grid.Column="1" FontWeight="SemiBold"
                             Foreground="#163F38" FontSize="13" TextAlignment="Right" />

@@ -27,6 +27,8 @@ public partial class LichSuThanhToanKhachHangWindow : Window
     private bool _updatingDateRange;
     private int _loadVersion;
 
+    public bool CoThayDoi { get; private set; }
+
     public LichSuThanhToanKhachHangWindow()
         : this(new DatabaseService(), 0, "", "Khách hàng")
     {
@@ -289,7 +291,9 @@ public partial class LichSuThanhToanKhachHangWindow : Window
 
     private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        BtnDetail.IsEnabled = LichSuGrid.SelectedItem is ThanhToanCongNoKhachHang;
+        var selected = LichSuGrid.SelectedItem as ThanhToanCongNoKhachHang;
+        BtnDetail.IsEnabled = selected is not null;
+        BtnHuy.IsEnabled = selected is { CoTheHuy: true };
     }
 
     private void OnRowDetailClick(object? sender, RoutedEventArgs e)
@@ -298,6 +302,79 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         {
             LichSuGrid.SelectedItem = record;
             OnDetailClick(sender, e);
+        }
+    }
+
+    private void OnRowHuyClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: ThanhToanCongNoKhachHang record })
+        {
+            LichSuGrid.SelectedItem = record;
+            OnHuyClick(sender, e);
+        }
+    }
+
+    private async void OnHuyClick(object? sender, RoutedEventArgs e)
+    {
+        if (LichSuGrid.SelectedItem is not ThanhToanCongNoKhachHang record)
+            return;
+
+        if (record.DaHuy)
+        {
+            var dialogBao = new ConfirmationWindow(
+                "Không thể hủy phiếu",
+                $"Phiếu thanh toán {record.MaGiaoDich} đã được hủy trước đó vào lúc {record.ThoiGianHuyText}.",
+                "Đóng");
+            await dialogBao.ShowDialog<bool>(this);
+            return;
+        }
+
+        var huyWindow = new HuyThanhToanCongNoWindow(record, $"{_customerCode} - {_customerName}");
+        var lyDo = await huyWindow.ShowDialog<string?>(this);
+
+        if (string.IsNullOrWhiteSpace(lyDo))
+            return;
+
+        await ThucHienHuyPhieuAsync(record, lyDo);
+    }
+
+    private async Task ThucHienHuyPhieuAsync(ThanhToanCongNoKhachHang record, string lyDo)
+    {
+        try
+        {
+            var ketQua = await _database.HuyThanhToanCongNoKhachHangAsync(
+                record.MaGiaoDich,
+                lyDo,
+                Session.CurrentUser?.Id,
+                Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap);
+
+            CoThayDoi = true;
+
+            var noiDungThanhCong = new StringBuilder();
+            noiDungThanhCong.AppendLine($"Đã hủy thành công phiếu thanh toán {record.MaGiaoDich}.");
+            noiDungThanhCong.AppendLine($"Số tiền hoàn tác: {ketQua.TienHoanTacCongNo:N0} đ");
+            noiDungThanhCong.AppendLine($"Công nợ mới của khách hàng: {ketQua.CongNoSauKhiHuy:N0} đ");
+            if (ketQua.SoHoaDonHoanTac > 0)
+                noiDungThanhCong.AppendLine($"Số hóa đơn khôi phục nợ: {ketQua.SoHoaDonHoanTac}");
+            if (ketQua.TienHoanTacTraTruoc > 0)
+                noiDungThanhCong.AppendLine($"Số dư trả trước đã trừ lại: {ketQua.TienHoanTacTraTruoc:N0} đ");
+            noiDungThanhCong.AppendLine("Phiếu thu trong sổ quỹ đã được chuyển sang trạng thái Đã hủy.");
+
+            var successDialog = new ConfirmationWindow(
+                "Hủy phiếu thanh toán thành công",
+                noiDungThanhCong.ToString().TrimEnd(),
+                "Đồng ý");
+            await successDialog.ShowDialog<bool>(this);
+
+            await NapDuLieuAsync();
+        }
+        catch (Exception ex)
+        {
+            var errDialog = new ConfirmationWindow(
+                "Lỗi khi hủy phiếu thanh toán",
+                "Đã xảy ra lỗi: " + ex.Message,
+                "Đóng");
+            await errDialog.ShowDialog<bool>(this);
         }
     }
 
@@ -334,6 +411,7 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         LichSuGrid.ItemsSource = _visibleRecords;
         LichSuGrid.SelectedItem = null;
         BtnDetail.IsEnabled = false;
+        BtnHuy.IsEnabled = false;
         TxtPage.Text = $"Trang {_currentPage:N0} / {TongSoTrang:N0}";
         var first = _totalCount == 0 ? 0 : skip + 1;
         var last = Math.Min(skip + _visibleRecords.Count, _totalCount);

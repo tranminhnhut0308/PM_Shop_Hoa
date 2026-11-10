@@ -174,6 +174,20 @@ public sealed partial class MainWindowViewModel
                 row.MaKhachHang,
                 row.TenKhachHang);
             await window.ShowDialog(OwnerWindow);
+
+            if (window.CoThayDoi)
+            {
+                await LoadCustomersAsync();
+                var refreshedRow = CustomerRows.FirstOrDefault(r => r.CustomerId == row.CustomerId);
+                if (refreshedRow is not null)
+                {
+                    await MoChiTietKhachHangAsync(refreshedRow);
+                    if (refreshedRow.Detail is not null)
+                        refreshedRow.Detail.SelectedTab = "congno";
+                }
+                await Task.WhenAll(LoadInvoicesAsync(), TaiLaiSoQuyAsync());
+                _ = LamMoiTongQuanNeuDangMoAsync();
+            }
         }
         catch (Exception ex)
         {

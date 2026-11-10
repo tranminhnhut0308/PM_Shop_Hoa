@@ -1,0 +1,191 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ShopHoa.Views.HuyThanhToanCongNoWindow"
+        Title="Xác nhận hủy phiếu thanh toán"
+        Width="600"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="#F4F7F6"
+        FontFamily="Inter, Segoe UI, Arial">
+
+  <Border Background="White"
+          Margin="16"
+          CornerRadius="14"
+          BorderBrush="#E2ECE8"
+          BorderThickness="1"
+          BoxShadow="0 10 28 #14000000"
+          ClipToBounds="True">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+      <!-- HEADER -->
+      <Border Grid.Row="0"
+              Background="#FEF2F2"
+              BorderBrush="#FECACA"
+              BorderThickness="0,0,0,1"
+              Padding="20,16">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+          <Border Width="40" Height="40" CornerRadius="20" Background="#FEE2E2"
+                  VerticalAlignment="Center">
+            <TextBlock Text="⚠️" FontSize="18" HorizontalAlignment="Center"
+                       VerticalAlignment="Center" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+            <TextBlock Text="Xác nhận hủy phiếu thanh toán"
+                       FontSize="16"
+                       FontWeight="Bold"
+                       Foreground="#991B1B" />
+            <TextBlock Text="Số tiền đã thanh toán sẽ được hoàn tác vào công nợ khách hàng."
+                       FontSize="12"
+                       Foreground="#7F1D1D" />
+          </StackPanel>
+          <Border Grid.Column="2"
+                  Background="#DC2626"
+                  CornerRadius="8"
+                  Padding="10,5"
+                  VerticalAlignment="Center">
+            <TextBlock x:Name="TxtMaPhieuBadge"
+                       Text="#PT..."
+                       Foreground="White"
+                       FontWeight="Bold"
+                       FontSize="12.5" />
+          </Border>
+        </Grid>
+      </Border>
+
+      <!-- BODY -->
+      <ScrollViewer Grid.Row="1" MaxHeight="520" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20,16" Spacing="14">
+
+          <!-- THÔNG TIN PHIẾU -->
+          <Border Background="#F9FAFB"
+                  BorderBrush="#E5E7EB"
+                  BorderThickness="1"
+                  CornerRadius="10"
+                  Padding="14">
+            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="16">
+              <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
+                <TextBlock Text="MÃ PHIẾU THANH TOÁN" FontSize="11" Foreground="#6B7280" FontWeight="SemiBold" />
+                <TextBlock x:Name="TxtMaPhieu" Text="PT000001" FontSize="13" FontWeight="Bold" Foreground="#111827" />
+              </StackPanel>
+
+              <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2">
+                <TextBlock Text="SỐ TIỀN THANH TOÁN" FontSize="11" Foreground="#6B7280" FontWeight="SemiBold" />
+                <TextBlock x:Name="TxtSoTien" Text="0 đ" FontSize="14" FontWeight="Bold" Foreground="#DC2626" />
+              </StackPanel>
+
+              <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
+                <TextBlock Text="KHÁCH HÀNG" FontSize="11" Foreground="#6B7280" FontWeight="SemiBold" />
+                <TextBlock x:Name="TxtKhachHang" Text="Khách hàng" FontSize="13" Foreground="#111827" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+
+              <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                <TextBlock Text="NGÀY THANH TOÁN" FontSize="11" Foreground="#6B7280" FontWeight="SemiBold" />
+                <TextBlock x:Name="TxtThoiGian" Text="--/--/----" FontSize="13" Foreground="#111827" />
+              </StackPanel>
+
+              <StackPanel Grid.Row="2" Grid.Column="0" Spacing="2">
+                <TextBlock Text="PHƯƠNG THỨC" FontSize="11" Foreground="#6B7280" FontWeight="SemiBold" />
+                <TextBlock x:Name="TxtPhuongThuc" Text="Tiền mặt" FontSize="13" Foreground="#111827" />
+              </StackPanel>
+
+              <StackPanel Grid.Row="2" Grid.Column="1" Spacing="2">
+                <TextBlock Text="MÃ THAM CHIẾU" FontSize="11" Foreground="#6B7280" FontWeight="SemiBold" />
+                <TextBlock x:Name="TxtMaThamChieu" Text="--" FontSize="13" Foreground="#111827" />
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <!-- CẢNH BÁO HOÀN TÁC CÔNG NỢ -->
+          <Border Background="#FFFBEB"
+                  BorderBrush="#FDE68A"
+                  BorderThickness="1"
+                  CornerRadius="10"
+                  Padding="12,10">
+            <StackPanel Spacing="6">
+              <TextBlock Text="Bạn có chắc chắn muốn hủy phiếu thanh toán này không?"
+                         FontSize="12.5"
+                         FontWeight="Bold"
+                         Foreground="#92400E" />
+              <TextBlock Text="• Số tiền đã thanh toán sẽ được hoàn tác vào công nợ khách hàng."
+                         FontSize="12"
+                         Foreground="#78350F" />
+              <TextBlock Text="• Trạng thái các hóa đơn liên quan sẽ được khôi phục nợ tương ứng."
+                         FontSize="12"
+                         Foreground="#78350F" />
+              <TextBlock Text="• Phiếu thu tương ứng trong sổ quỹ sẽ chuyển sang trạng thái Đã hủy."
+                         FontSize="12"
+                         Foreground="#78350F" />
+              <TextBlock Text="• Thao tác này sẽ lưu vết kiểm toán và không thể khôi phục."
+                         FontSize="12"
+                         FontWeight="SemiBold"
+                         Foreground="#B45309" />
+            </StackPanel>
+          </Border>
+
+          <!-- LÝ DO HỦY (BẮT BUỘC) -->
+          <StackPanel Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <TextBlock Text="Lý do hủy phiếu" FontSize="13" FontWeight="Bold" Foreground="#374151" />
+              <TextBlock Text="(*)" FontSize="13" FontWeight="Bold" Foreground="#DC2626" />
+            </StackPanel>
+            <TextBox x:Name="TxtLyDoHuy"
+                     Watermark="Nhập lý do hủy phiếu thanh toán (bắt buộc)..."
+                     AcceptsReturn="True"
+                     Height="68"
+                     TextWrapping="Wrap"
+                     CornerRadius="8"
+                     BorderBrush="#D1D5DB"
+                     Padding="10,8"
+                     FontSize="13" />
+            <TextBlock x:Name="TxtLoiValidate"
+                       Text=""
+                       FontSize="12"
+                       Foreground="#DC2626"
+                       IsVisible="False" />
+          </StackPanel>
+
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- FOOTER -->
+      <Border Grid.Row="2"
+              Background="#F9FAFB"
+              BorderBrush="#E5E7EB"
+              BorderThickness="0,1,0,0"
+              Padding="20,12">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+          <Button Grid.Column="1"
+                  Content="Bỏ qua"
+                  Width="110"
+                  Height="38"
+                  CornerRadius="8"
+                  Background="White"
+                  BorderBrush="#D1D5DB"
+                  BorderThickness="1"
+                  Foreground="#374151"
+                  FontWeight="SemiBold"
+                  FontSize="13"
+                  HorizontalContentAlignment="Center"
+                  VerticalContentAlignment="Center"
+                  Click="OnBoQuaClick" />
+          <Button Grid.Column="2"
+                  x:Name="BtnXacNhanHuy"
+                  Content="Xác nhận hủy"
+                  Width="140"
+                  Height="38"
+                  CornerRadius="8"
+                  Background="#DC2626"
+                  Foreground="White"
+                  FontWeight="SemiBold"
+                  FontSize="13"
+                  HorizontalContentAlignment="Center"
+                  VerticalContentAlignment="Center"
+                  Click="OnXacNhanHuyClick" />
+        </Grid>
+      </Border>
+
+    </Grid>
+  </Border>
+</Window>

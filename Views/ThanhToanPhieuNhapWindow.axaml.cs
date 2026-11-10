@@ -26,7 +26,6 @@ public partial class ThanhToanPhieuNhapWindow : Window
 
     public ThanhToanPhieuNhapWindow(PhieuNhapHang phieu)
         : this(
-            phieu.MaPhieuNhap,
             phieu.TenNhaCungCap,
             phieu.TongTienNhap,
             phieu.DaThanhToan,
@@ -37,7 +36,6 @@ public partial class ThanhToanPhieuNhapWindow : Window
 
     public ThanhToanPhieuNhapWindow(PhieuNhapHangDetail detail)
         : this(
-            detail.MaPhieuNhap,
             detail.TenNhaCungCap,
             detail.TongTienNhap,
             detail.DaThanhToan,
@@ -47,7 +45,6 @@ public partial class ThanhToanPhieuNhapWindow : Window
     }
 
     private ThanhToanPhieuNhapWindow(
-        string maPhieuNhap,
         string? tenNhaCungCap,
         decimal tongTienNhap,
         decimal daThanhToan,
@@ -63,7 +60,6 @@ public partial class ThanhToanPhieuNhapWindow : Window
         _tongTienNhap = tongTienNhap;
         _conNo = conNo;
 
-        TxtMaPhieuNhap.Text = string.IsNullOrWhiteSpace(maPhieuNhap) ? "—" : maPhieuNhap;
         TxtNhaCungCap.Text = string.IsNullOrWhiteSpace(tenNhaCungCap)
             ? "Không có nhà cung cấp"
             : tenNhaCungCap;

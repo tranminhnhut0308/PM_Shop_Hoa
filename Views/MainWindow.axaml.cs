@@ -239,21 +239,26 @@ public partial class MainWindow : Window
 
         viewModel.ImportSupplierSearch = textBox.Text ?? string.Empty;
 
-        if (viewModel.TimKiemNhaCungCapNhapCommand.CanExecute(null))
-        {
-            _ = viewModel.TimKiemNhaCungCapNhapCommand.ExecuteAsync(textBox.Text);
-        }
+        // Luôn gọi lần tìm mới: lần trước sẽ tự bị huỷ,
+        // tránh trường hợp gõ nhanh mà danh sách vẫn là kết quả của ký tự cũ.
+        _ = viewModel.TimKiemNhaCungCapNhapCommand.ExecuteAsync(textBox.Text);
     }
 
-    private void OnPhieuNhapNgayNhapBoxPointerPressed(
-    object? sender,
-        PointerPressedEventArgs e)
+    private void OnPhieuNhapNgayNhapBoxLostFocus(
+        object? sender,
+        RoutedEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel viewModel)
+        if (DataContext is MainWindowViewModel viewModel)
+            viewModel.KiemTraVaCapNhatPhieuNhapNgayNhapTuText();
+    }
+
+    private void OnPhieuNhapNgayNhapBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || DataContext is not MainWindowViewModel viewModel)
             return;
 
-        // Ô ngày nhập chỉ để hiển thị, bấm vào để mở lịch chọn ngày
-        viewModel.MoLichPhieuNhapCommand.Execute(null);
+        viewModel.KiemTraVaCapNhatPhieuNhapNgayNhapTuText();
+        e.Handled = true;
     }
 
     private void OnBaoCaoPhieuNhapSearchTextChanged(
@@ -1495,23 +1500,76 @@ public partial class MainWindow : Window
         // Giữ nguyên danh sách sản phẩm bên trái, vị trí cuộn và nội dung ô tìm kiếm.
     }
 
-    private void OnImportSupplierSearchKeyDown(object? sender, KeyEventArgs e)
+    private async void OnImportSupplierSearchKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter
-            || sender is not TextBox textBox
-            || string.IsNullOrWhiteSpace(textBox.Text)
-            || DataContext is not MainWindowViewModel viewModel)
-        {
+        if (sender is not TextBox textBox || DataContext is not MainWindowViewModel viewModel)
             return;
+
+        switch (e.Key)
+        {
+            case Key.Down:
+                if (viewModel.HienThiGoiYNhaCungCap)
+                {
+                    viewModel.DiChuyenChonNhaCungCap(1);
+                    e.Handled = true;
+                }
+                return;
+
+            case Key.Up:
+                if (viewModel.HienThiGoiYNhaCungCap)
+                {
+                    viewModel.DiChuyenChonNhaCungCap(-1);
+                    e.Handled = true;
+                }
+                return;
+
+            case Key.Escape:
+                if (!viewModel.IsPhieuNhapSupplierSuggestionsClosed)
+                {
+                    viewModel.DongGoiYNhaCungCap();
+                    e.Handled = true;
+                }
+                return;
+
+            case Key.Enter:
+                break;
+
+            default:
+                // Backspace/Delete và các phím soạn thảo khác do TextBox tự xử lý.
+                return;
         }
 
-        var nhaCungCap = viewModel.PhieuNhapSupplierSuggestions.FirstOrDefault();
+        // Enter trên ô Nhà cung cấp chỉ dùng để chọn gợi ý,
+        // không để sự kiện lọt xuống và kích hoạt nhầm nút Lưu phiếu.
+        e.Handled = true;
+
+        var keyword = (textBox.Text ?? string.Empty).Trim();
+        if (keyword.Length == 0)
+            return;
+
+        // Người dùng bấm Enter trước khi kết quả tìm kiếm kịp về:
+        // tìm ngay để không bỏ lỡ lựa chọn.
+        if (viewModel.PhieuNhapSupplierSuggestions.Count == 0)
+            await viewModel.TimKiemNhaCungCapNhapNgayAsync(keyword);
+
+        if (viewModel.PhieuNhapSupplierSuggestions.Count == 0)
+            return;
+
+        var nhaCungCap = viewModel.PhieuNhapSelectedSupplier
+                         ?? viewModel.PhieuNhapSupplierSuggestions.FirstOrDefault();
 
         if (nhaCungCap is null || !viewModel.ChonNhaCungCapNhapCommand.CanExecute(nhaCungCap))
             return;
 
         viewModel.ChonNhaCungCapNhapCommand.Execute(nhaCungCap);
-        e.Handled = true;
+    }
+
+    private void OnImportSupplierSearchResultSelectionChanged(
+        object? sender,
+        SelectionChangedEventArgs e)
+    {
+        if (sender is ListBox listBox && listBox.SelectedItem is not null)
+            listBox.ScrollIntoView(listBox.SelectedItem);
     }
 
     private void InvoiceRow_OnDoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)

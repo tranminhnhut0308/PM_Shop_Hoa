@@ -41,8 +41,6 @@ public partial class HuyPhieuNhapWindow : Window
 
     private void KhoiTaoGiaoDien()
     {
-        TxtMaPhieuBadge.Text = "#" + _detail.MaPhieuNhap;
-        TxtMaPhieu.Text = _detail.MaPhieuNhap;
         TxtNhaCungCap.Text = $"{_detail.TenNhaCungCapHienThi} ({_detail.MaNhaCungCapHienThi})";
         TxtTongTienNhap.Text = _detail.TongTienNhapText;
         TxtDaThanhToan.Text = _detail.DaThanhToanText;

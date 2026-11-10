@@ -171,13 +171,6 @@
       <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
         <StackPanel Spacing="4">
           <TextBlock Text="Chỉnh sửa phiếu nhập hàng" FontSize="20" FontWeight="Bold" Foreground="#163F38" />
-          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <TextBlock Text="Mã phiếu:" FontSize="12" Foreground="#61736E" VerticalAlignment="Center" />
-            <TextBlock x:Name="TxtMaPhieuNhap" FontSize="14" FontWeight="Bold" Foreground="#087F6E" VerticalAlignment="Center" />
-            <Border Background="#EEF7F4" BorderBrush="#CDE7E0" BorderThickness="1" CornerRadius="4" Padding="8,2">
-              <TextBlock Text="Mã phiếu cố định" FontSize="11" Foreground="#4B6B63" />
-            </Border>
-          </StackPanel>
         </StackPanel>
 
         <Border Grid.Column="1" Background="#E8F6F1" CornerRadius="8" Padding="14,8" VerticalAlignment="Center">
@@ -188,9 +181,9 @@
 
         <!-- 2. THÔNG TIN CHUNG (ISSUE #61) -->
     <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E5EAE8" BorderThickness="1" CornerRadius="10" Padding="16,13">
-      <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+      <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
         <TextBlock Text="THÔNG TIN PHIẾU NHẬP" Classes="section-title" />
-        <Grid Grid.Row="1" ColumnDefinitions="220,14,*,14,160,14,150,14,140">
+        <Grid Grid.Row="1" ColumnDefinitions="220,14,*,14,180">
           <StackPanel Grid.Column="0">
             <TextBlock Text="Ngày nhận hàng" Classes="field-label" />
             <DatePicker x:Name="DpThoiGianNhap" Height="38"
@@ -208,32 +201,8 @@
           </StackPanel>
 
           <StackPanel Grid.Column="4">
-            <TextBlock Text="Số HĐ đầu vào" Classes="field-label" />
-            <TextBox x:Name="TxtSoHoaDon" Height="38" Watermark="Số HĐ đầu vào..." />
-          </StackPanel>
-
-          <StackPanel Grid.Column="6">
-            <TextBlock Text="Ngày hóa đơn" Classes="field-label" />
-            <DatePicker x:Name="DpNgayHoaDon" Height="38"
-                        DayFormat="d" MonthFormat="MM" YearFormat="yyyy"
-                        HorizontalAlignment="Stretch" />
-          </StackPanel>
-
-          <StackPanel Grid.Column="8">
             <TextBlock Text="Phương thức TT" Classes="field-label" />
             <ComboBox x:Name="CbbPhuongThuc" Height="38" HorizontalAlignment="Stretch" />
-          </StackPanel>
-        </Grid>
-
-        <!-- HÀNG THÔNG TIN GIAO NHẬN -->
-        <Grid Grid.Row="2" ColumnDefinitions="*,14,*">
-          <StackPanel Grid.Column="0">
-            <TextBlock Text="Tên người giao hàng (Đại diện NCC / Shipper)" Classes="field-label" />
-            <TextBox x:Name="TxtTenNguoiGiaoHang" Height="36" Watermark="Tên người giao hàng..." />
-          </StackPanel>
-          <StackPanel Grid.Column="2">
-            <TextBlock Text="Số điện thoại người giao hàng" Classes="field-label" />
-            <TextBox x:Name="TxtSdtNguoiGiaoHang" Height="36" Watermark="SĐT người giao hàng..." />
           </StackPanel>
         </Grid>
       </Grid>

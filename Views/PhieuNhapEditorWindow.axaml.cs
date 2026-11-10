@@ -40,13 +40,10 @@ public partial class PhieuNhapEditorWindow : Window
         _suppliers = suppliers;
         _items = new ObservableCollection<PhieuNhapItemEditModel>(_request.Items);
 
-        // 1. Header
-        TxtMaPhieuNhap.Text = _request.MaPhieuNhap;
-
-        // 2. Ngày nhập
+        // 1. Ngày nhập
         DpThoiGianNhap.SelectedDate = _request.ThoiGianNhap;
 
-        // 3. Nhà cung cấp
+        // 2. Nhà cung cấp
         AcbNhaCungCap.ItemsSource = _suppliers;
         AcbNhaCungCap.ItemFilter = (search, item) =>
         {
@@ -68,16 +65,10 @@ public partial class PhieuNhapEditorWindow : Window
             AcbNhaCungCap.Text = selectedSupplier.DisplayText;
         }
 
-        // 4. Số HĐ đầu vào, ngày hóa đơn, người giao hàng & Ghi chú
-        TxtSoHoaDon.Text = _request.SoHoaDonDauVao ?? "";
-        DpNgayHoaDon.SelectedDate = _request.NgayHoaDonDauVao.HasValue
-            ? new DateTimeOffset(_request.NgayHoaDonDauVao.Value)
-            : null;
-        TxtTenNguoiGiaoHang.Text = _request.TenNguoiGiaoHang ?? "";
-        TxtSdtNguoiGiaoHang.Text = _request.SdtNguoiGiaoHang ?? "";
+        // 3. Ghi chú
         TxtGhiChu.Text = _request.GhiChu ?? "";
 
-        // 5. Phương thức thanh toán
+        // 4. Phương thức thanh toán
         CbbPhuongThuc.ItemsSource = new[] { "Tiền mặt", "Chuyển khoản" };
         var pt = _request.PhuongThucThanhToan?.ToUpperInvariant() ?? "TIEN_MAT";
         CbbPhuongThuc.SelectedIndex = (pt.Contains("CHUYEN_KHOAN") || pt.Contains("NGAN_HANG") || pt.Contains("BANK")) ? 1 : 0;
@@ -291,18 +282,6 @@ public partial class PhieuNhapEditorWindow : Window
                 _request.ThoiGianNhap = new DateTime(d.Year, d.Month, d.Day, _request.ThoiGianNhap.Hour, _request.ThoiGianNhap.Minute, _request.ThoiGianNhap.Second);
             }
 
-            _request.SoHoaDonDauVao = TxtSoHoaDon.Text?.Trim();
-            if (DpNgayHoaDon.SelectedDate.HasValue)
-            {
-                var ngayHoaDon = DpNgayHoaDon.SelectedDate.Value.DateTime;
-                _request.NgayHoaDonDauVao = ngayHoaDon.Date;
-            }
-            else
-            {
-                _request.NgayHoaDonDauVao = null;
-            }
-            _request.TenNguoiGiaoHang = TxtTenNguoiGiaoHang.Text?.Trim();
-            _request.SdtNguoiGiaoHang = TxtSdtNguoiGiaoHang.Text?.Trim();
             _request.GhiChu = TxtGhiChu.Text?.Trim();
             _request.PhuongThucThanhToan = CbbPhuongThuc.SelectedIndex == 1 ? "CHUYEN_KHOAN" : "TIEN_MAT";
             _request.ChiPhiKhac = NumChiPhiKhac.Value;

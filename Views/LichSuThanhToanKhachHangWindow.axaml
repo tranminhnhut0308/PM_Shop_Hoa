@@ -242,13 +242,22 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Người thực hiện" Binding="{Binding NguoiThucHien}" Width="150" />
-                    <DataGridTemplateColumn Header="Thao tác" Width="110">
+                    <DataGridTemplateColumn Header="Thao tác" Width="180">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <Button Content="Xem chi tiết" Padding="8,5"
-                                    Background="#EAF5F2" Foreground="#087F6E"
-                                    CornerRadius="6" BorderThickness="0"
-                                    Click="OnRowDetailClick" />
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <Button Content="Chi tiết" Padding="8,5"
+                                        Background="#EAF5F2" Foreground="#087F6E"
+                                        CornerRadius="6" BorderThickness="0"
+                                        Click="OnRowDetailClick" />
+                                    <Button Content="Hủy phiếu" Padding="8,5"
+                                        Background="#FEE4E2" Foreground="#D92D20"
+                                        CornerRadius="6" BorderThickness="0"
+                                        IsEnabled="{Binding CoTheHuy}"
+                                        Opacity="{Binding OpacityNutHuy}"
+                                        ToolTip.Tip="{Binding ToolTipHuy}"
+                                        Click="OnRowHuyClick" />
+                                </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
@@ -301,6 +310,9 @@
                 </WrapPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal"
                     HorizontalAlignment="Right" Spacing="10">
+                <Button x:Name="BtnHuy" Content="Hủy phiếu đã chọn" Padding="16,8"
+                    Background="#D92D20" Foreground="White" CornerRadius="6"
+                    Click="OnHuyClick" IsEnabled="False" />
                 <Button x:Name="BtnDetail" Content="Xem chi tiết giao dịch" Padding="16,8"
                     Background="#087F6E" Foreground="White" CornerRadius="6"
                     Click="OnDetailClick" IsEnabled="False" />

@@ -26,6 +26,8 @@ public partial class MainWindowViewModel : ObservableObject
     private CancellationTokenSource? _productSearchCts;
     private CancellationTokenSource? _saleSearchCts;
     private CancellationTokenSource? _phieuNhapProductSearchCts;
+    private CancellationTokenSource? _phieuNhapSupplierSearchCts;
+    private int _phieuNhapSupplierSearchVersion;
     private string _saleSearchKeywordDaTim = string.Empty;
     private string _phieuNhapKeywordDaTim = string.Empty;
     private int _productLoadVersion;
@@ -5392,6 +5394,9 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private int phieuNhapSearchSelectedIndex = -1;
     [ObservableProperty] private bool isPhieuNhapSuggestionsClosed;
     [ObservableProperty] private string importSupplierSearch = "";
+    [ObservableProperty] private int phieuNhapSupplierSelectedIndex = -1;
+    [ObservableProperty] private bool isPhieuNhapSupplierSuggestionsClosed;
+    [ObservableProperty] private bool isSearchingPhieuNhapSuppliers;
     [ObservableProperty] private ProductOption? selectedPhieuNhapNhom;
     [ObservableProperty] private bool isSearchingPhieuNhapProducts;
 
@@ -5405,6 +5410,21 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnIsPhieuNhapSuggestionsClosedChanged(bool value) =>
         OnPropertyChanged(nameof(HienThiGoiYPhieuNhap));
+
+    partial void OnPhieuNhapSupplierSelectedIndexChanged(int value) =>
+        OnPropertyChanged(nameof(PhieuNhapSelectedSupplier));
+
+    partial void OnIsPhieuNhapSupplierSuggestionsClosedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+        OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
+    }
+
+    partial void OnImportSupplierSearchChanged(string value) =>
+        OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
+
+    partial void OnIsSearchingPhieuNhapSuppliersChanged(bool value) =>
+        OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
     [ObservableProperty] private string phieuNhapMa = "";
     [ObservableProperty] private string phieuNhapSoHoaDonDauVao = "";
     [ObservableProperty] private DateTimeOffset? phieuNhapNgayHoaDonDauVao;
@@ -5434,9 +5454,89 @@ public partial class MainWindowViewModel : ObservableObject
 
     public string PhieuNhapTongTienNhapText => PhieuNhapTongTienNhap.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"));
 
-    /// <summary>Ngày nhập hiển thị theo định dạng Việt Nam dd/MM/yyyy HH:mm.</summary>
-    public string PhieuNhapNgayNhapText => PhieuNhapNgayNhap?.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
-                                           ?? string.Empty;
+    /// <summary>
+    /// Nội dung người dùng nhập trực tiếp trong ô Ngày nhập.
+    /// Chỉ được chuyển thành <see cref="PhieuNhapNgayNhap"/> khi rời ô / nhấn Enter / lưu phiếu,
+    /// nhờ vậy không bị tự đổi giá trị khi người dùng đang gõ dở.
+    /// </summary>
+    private string _phieuNhapNgayNhapText =
+        DateTime.Now.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+
+    public string PhieuNhapNgayNhapText
+    {
+        get => _phieuNhapNgayNhapText;
+        set => SetProperty(ref _phieuNhapNgayNhapText, value);
+    }
+
+    private static readonly string[] DinhDangNgayNhap =
+    [
+        "dd/MM/yyyy HH:mm",
+        "dd/MM/yyyy H:mm",
+        "dd/MM/yyyy H:m",
+        "d/M/yyyy HH:mm",
+        "d/M/yyyy H:mm",
+        "d/M/yyyy H:m",
+        "dd/MM/yyyy HH:mm:ss",
+        "dd/MM/yyyy H:m:s",
+        "d/M/yyyy H:mm:ss",
+        "d/M/yyyy H:m:s",
+        "dd/MM/yyyy",
+        "d/M/yyyy",
+        "dd-MM-yyyy HH:mm",
+        "dd-MM-yyyy",
+        "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd"
+    ];
+
+    /// <summary>
+    /// Đọc chuỗi người dùng gõ trong ô Ngày nhập và cập nhật giá trị thật.
+    /// Trả về false nếu chuỗi sai định dạng; khi đó giữ nguyên ngày cũ và
+    /// giữ nguyên nội dung ô để người dùng sửa lại (không tự ghi đè).
+    /// </summary>
+    public bool KiemTraVaCapNhatPhieuNhapNgayNhapTuText()
+    {
+        var text = (PhieuNhapNgayNhapText ?? string.Empty).Trim();
+
+        if (text.Length == 0)
+        {
+            CapNhatTextPhieuNhapNgayNhap();
+            return true;
+        }
+
+        if (!DateTime.TryParseExact(
+                text,
+                DinhDangNgayNhap,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var ngayGio))
+        {
+            StatusMessage = "Ngày nhập không hợp lệ. Vui lòng nhập theo định dạng dd/MM/yyyy HH:mm.";
+            return false;
+        }
+
+        // Chỉ nhập ngày: giữ nguyên phần giờ đang có thay vì tự đổi về 00:00.
+        if (!text.Contains(':') && PhieuNhapNgayNhap.HasValue)
+            ngayGio = ngayGio.Date + PhieuNhapNgayNhap.Value.TimeOfDay;
+
+        if (PhieuNhapNgayNhap != ngayGio)
+            PhieuNhapNgayNhap = ngayGio;
+        else
+            CapNhatTextPhieuNhapNgayNhap();
+
+        return true;
+    }
+
+    private void CapNhatTextPhieuNhapNgayNhap()
+    {
+        var text = PhieuNhapNgayNhap?.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
+                   ?? string.Empty;
+
+        if (_phieuNhapNgayNhapText != text)
+        {
+            _phieuNhapNgayNhapText = text;
+            OnPropertyChanged(nameof(PhieuNhapNgayNhapText));
+        }
+    }
 
     /// <summary>Công nợ còn phải trả cho nhà cung cấp, khớp với cột con_no trong database.</summary>
     public decimal PhieuNhapConNo => Math.Max(0, PhieuNhapTongTienNhap - PhieuNhapDaThanhToan);
@@ -5510,7 +5610,44 @@ public partial class MainWindowViewModel : ObservableObject
         _phieuNhapProductSearchCts?.Cancel();
     }
 
-    public bool HasPhieuNhapSupplierSuggestions => PhieuNhapSupplierSuggestions.Count > 0;
+    public bool HasPhieuNhapSupplierSuggestions =>
+        !IsPhieuNhapSupplierSuggestionsClosed && PhieuNhapSupplierSuggestions.Count > 0;
+
+    public bool HienThiGoiYNhaCungCap => HasPhieuNhapSupplierSuggestions;
+
+    public bool HienThiThongBaoKhongTimThayNhaCungCap =>
+        !IsSearchingPhieuNhapSuppliers
+        && !IsPhieuNhapSupplierSuggestionsClosed
+        && !string.IsNullOrWhiteSpace(ImportSupplierSearch)
+        && PhieuNhapSupplierSuggestions.Count == 0
+        && !DaChonNhaCungCapNhap;
+
+    public NhaCungCap? PhieuNhapSelectedSupplier =>
+        PhieuNhapSupplierSelectedIndex >= 0
+        && PhieuNhapSupplierSelectedIndex < PhieuNhapSupplierSuggestions.Count
+            ? PhieuNhapSupplierSuggestions[PhieuNhapSupplierSelectedIndex]
+            : null;
+
+    public void DiChuyenChonNhaCungCap(int delta)
+    {
+        if (PhieuNhapSupplierSuggestions.Count == 0)
+            return;
+
+        var current = PhieuNhapSupplierSelectedIndex;
+        if (current < 0)
+            current = delta > 0 ? -1 : PhieuNhapSupplierSuggestions.Count;
+
+        PhieuNhapSupplierSelectedIndex =
+            Math.Clamp(current + delta, 0, PhieuNhapSupplierSuggestions.Count - 1);
+        IsPhieuNhapSupplierSuggestionsClosed = false;
+    }
+
+    public void DongGoiYNhaCungCap()
+    {
+        _phieuNhapSupplierSearchCts?.Cancel();
+        IsPhieuNhapSupplierSuggestionsClosed = true;
+        PhieuNhapSupplierSelectedIndex = -1;
+    }
 
     public bool IsNhapHangListVisible => !IsNhapHangFormVisible;
 
@@ -5548,9 +5685,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnPhieuNhapNgayNhapChanged(DateTime? value)
     {
-        OnPropertyChanged(nameof(PhieuNhapNgayNhapText));
+        CapNhatTextPhieuNhapNgayNhap();
 
-        // Chọn xong ngày thì đóng lịch luôn
+        // Chọn xong ngày (hoặc nhập xong) thì đóng lịch luôn
         IsPhieuNhapCalendarOpen = false;
     }
 
@@ -5668,6 +5805,9 @@ public partial class MainWindowViewModel : ObservableObject
         PhieuNhapItems.Clear();
         PhieuNhapProductSuggestions.Clear();
         PhieuNhapSupplierSuggestions.Clear();
+        _phieuNhapSupplierSearchCts?.Cancel();
+        IsPhieuNhapSupplierSuggestionsClosed = true;
+        PhieuNhapSupplierSelectedIndex = -1;
         HuyTimKiemSanPhamNhap();
         _phieuNhapKeywordDaTim = string.Empty;
         PhieuNhapSearchSelectedIndex = -1;
@@ -5973,34 +6113,94 @@ public partial class MainWindowViewModel : ObservableObject
             .Equals(SelectedPhieuNhapNcc.TenNhaCungCap, StringComparison.OrdinalIgnoreCase);
 
     [RelayCommand]
-    private async Task TimKiemNhaCungCapNhapAsync(string? keyword)
+    private Task TimKiemNhaCungCapNhapAsync(string? keyword) =>
+        TimKiemNhaCungCapNhapCoreAsync(keyword, coDoTre: true);
+
+    /// <summary>Tìm ngay, bỏ qua độ trễ, dùng khi nhấn Enter trong ô nhà cung cấp.</summary>
+    public Task TimKiemNhaCungCapNhapNgayAsync(string? keyword = null) =>
+        TimKiemNhaCungCapNhapCoreAsync(keyword, coDoTre: false);
+
+    private async Task TimKiemNhaCungCapNhapCoreAsync(string? keyword, bool coDoTre)
     {
         // Không gán đè khi lệnh được gọi không có tham số,
         // nếu không TextBox sẽ bị xoá ngay khi vừa gõ ký tự đầu tiên.
         if (keyword is not null && keyword != ImportSupplierSearch)
             ImportSupplierSearch = keyword;
 
+        // Người dùng sửa từ khóa khác tên NCC đã chọn thì bỏ lựa chọn cũ,
+        // tránh lưu nhầm nhà cung cấp trong khi ô tìm kiếm đã đổi nội dung.
+        if (SelectedPhieuNhapNcc is not null && !DaChonNhaCungCapNhap)
+            SelectedPhieuNhapNcc = null;
+
+        // Đã chọn xong NCC thì không tìm lại, tránh mở lại danh sách gợi ý.
+        if (DaChonNhaCungCapNhap)
+        {
+            _phieuNhapSupplierSearchCts?.Cancel();
+            IsPhieuNhapSupplierSuggestionsClosed = true;
+            PhieuNhapSupplierSelectedIndex = -1;
+            PhieuNhapSupplierSuggestions.Clear();
+            OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+            OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
+            return;
+        }
+
+        _phieuNhapSupplierSearchCts?.Cancel();
+        _phieuNhapSupplierSearchCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _phieuNhapSupplierSearchCts = cts;
+        var version = ++_phieuNhapSupplierSearchVersion;
+
+        var tuKhoa = ImportSupplierSearch;
+        IsPhieuNhapSupplierSuggestionsClosed = false;
+        PhieuNhapSupplierSelectedIndex = -1;
+        IsSearchingPhieuNhapSuppliers = true;
+
         try
         {
             PhieuNhapSupplierSuggestions.Clear();
             OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+            OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
 
-            if (string.IsNullOrWhiteSpace(ImportSupplierSearch))
+            if (string.IsNullOrWhiteSpace(tuKhoa))
                 return;
 
-            // Đã chọn xong NCC thì không tìm lại, tránh mở lại danh sách gợi ý
-            if (DaChonNhaCungCapNhap)
-                return;
+            // Gõ nhanh thì chỉ chờ một nhịp ngắn rồi mới gọi database;
+            // mỗi lần gõ mới sẽ huỷ lần tìm trước đó.
+            if (coDoTre)
+            {
+                await Task.Delay(250, cts.Token);
+                cts.Token.ThrowIfCancellationRequested();
+            }
 
-            var suppliers = await _db.GetNhaCungCapAsync(ImportSupplierSearch);
+            var suppliers = await _db.GetNhaCungCapAsync(tuKhoa);
+
+            cts.Token.ThrowIfCancellationRequested();
+            if (version != _phieuNhapSupplierSearchVersion
+                || IsPhieuNhapSupplierSuggestionsClosed)
+                return;
 
             foreach (var supplier in suppliers.Take(20))
                 PhieuNhapSupplierSuggestions.Add(supplier);
-            OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+
+            PhieuNhapSupplierSelectedIndex = -1;
+        }
+        catch (OperationCanceledException)
+        {
+            // Lần tìm cũ bị thay thế bởi từ khóa mới.
         }
         catch (Exception ex)
         {
-            StatusMessage = "Không thể tìm nhà cung cấp: " + ex.Message;
+            if (version == _phieuNhapSupplierSearchVersion)
+                StatusMessage = "Không thể tìm nhà cung cấp: " + ex.Message;
+        }
+        finally
+        {
+            if (version == _phieuNhapSupplierSearchVersion)
+            {
+                IsSearchingPhieuNhapSuppliers = false;
+                OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+                OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
+            }
         }
     }
 
@@ -6018,8 +6218,12 @@ public partial class MainWindowViewModel : ObservableObject
             SelectedPhieuNhapNcc = supplier;
         }
         ImportSupplierSearch = supplier.TenNhaCungCap;
+        _phieuNhapSupplierSearchCts?.Cancel();
+        IsPhieuNhapSupplierSuggestionsClosed = true;
+        PhieuNhapSupplierSelectedIndex = -1;
         PhieuNhapSupplierSuggestions.Clear();
         OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+        OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
         OnPropertyChanged(nameof(HasSelectedPhieuNhapNcc));
         OnPropertyChanged(nameof(SelectedPhieuNhapNccDiaChiHienThi));
         OnPropertyChanged(nameof(SelectedPhieuNhapNccSdtHienThi));
@@ -6151,6 +6355,7 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedPhieuNhapNccDiaChiHienThi));
         OnPropertyChanged(nameof(SelectedPhieuNhapNccSdtHienThi));
         OnPropertyChanged(nameof(SelectedPhieuNhapNccMstHienThi));
+        OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
     }
 
     [RelayCommand]
@@ -6171,8 +6376,11 @@ public partial class MainWindowViewModel : ObservableObject
             // Tự động chọn nhà cung cấp vừa thêm cho phiếu nhập
             SelectedPhieuNhapNcc = supplier;
             ImportSupplierSearch = supplier.TenNhaCungCap;
+            IsPhieuNhapSupplierSuggestionsClosed = true;
+            PhieuNhapSupplierSelectedIndex = -1;
             PhieuNhapSupplierSuggestions.Clear();
             OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+            OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
 
             try
             {
@@ -6205,6 +6413,13 @@ public partial class MainWindowViewModel : ObservableObject
         if (IsSavingPhieuNhap)
             return;
 
+        // Cập nhật ngày giờ người dùng vừa gõ trực tiếp (nếu có) trước khi lưu.
+        if (!KiemTraVaCapNhatPhieuNhapNgayNhapTuText())
+        {
+            await BaoLoiLuuPhieuNhapAsync(
+                "Ngày nhập không hợp lệ. Vui lòng nhập theo định dạng dd/MM/yyyy HH:mm.");
+            return;
+        }
         // ------------------------------------------
         // VALIDATE
         // Mọi lỗi nghiệp vụ đều báo qua hộp thoại và GIỮ NGUYÊN form,

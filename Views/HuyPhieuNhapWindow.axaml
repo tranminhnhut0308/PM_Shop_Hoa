@@ -26,7 +26,7 @@
         BorderBrush="#FECACA"
         BorderThickness="0,0,0,1"
         Padding="20,16">
-        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
           <Border Width="40" Height="40" CornerRadius="20" Background="#FEE2E2"
             VerticalAlignment="Center">
             <TextBlock Text="🚫" FontSize="18" HorizontalAlignment="Center"
@@ -41,17 +41,6 @@
               FontSize="12"
               Foreground="#7F1D1D" />
           </StackPanel>
-          <Border Grid.Column="2"
-            Background="#DC2626"
-            CornerRadius="8"
-            Padding="10,5"
-            VerticalAlignment="Center">
-            <TextBlock x:Name="TxtMaPhieuBadge"
-              Text="#PN..."
-              Foreground="White"
-              FontWeight="Bold"
-              FontSize="12.5" />
-          </Border>
         </Grid>
       </Border>
 
@@ -65,17 +54,14 @@
             BorderThickness="1"
             CornerRadius="10"
             Padding="14,12">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="150,*" RowSpacing="8">
+            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="150,*" RowSpacing="8">
 
-              <TextBlock Grid.Row="0" Grid.Column="0" Text="Mã phiếu nhập:" Foreground="#64748B" FontSize="12.5" />
-              <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtMaPhieu" Text="-" FontWeight="Bold" Foreground="#0F172A" FontSize="13" />
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="Nhà cung cấp:" Foreground="#64748B" FontSize="12.5" />
+              <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtNhaCungCap" Text="-" FontWeight="SemiBold" Foreground="#0F172A" FontSize="13" />
 
-              <TextBlock Grid.Row="1" Grid.Column="0" Text="Nhà cung cấp:" Foreground="#64748B" FontSize="12.5" />
-              <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TxtNhaCungCap" Text="-" FontWeight="SemiBold" Foreground="#0F172A" FontSize="13" />
+              <Border Grid.Row="1" Grid.ColumnSpan="2" Height="1" Background="#E2E8F0" Margin="0,2" />
 
-              <Border Grid.Row="2" Grid.ColumnSpan="2" Height="1" Background="#E2E8F0" Margin="0,2" />
-
-              <Grid Grid.Row="3" Grid.ColumnSpan="2" ColumnDefinitions="*,*,*" ColumnSpacing="10">
+              <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="*,*,*" ColumnSpacing="10">
                 <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="10,8">
                   <StackPanel Spacing="2">
                     <TextBlock Text="Tổng tiền nhập" FontSize="11" Foreground="#64748B" />

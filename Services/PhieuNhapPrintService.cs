@@ -33,7 +33,7 @@ public static class PhieuNhapPrintService
         var sb = new StringBuilder();
 
         sb.Append("<!DOCTYPE html><html lang=\"vi\"><head><meta charset=\"utf-8\">");
-        sb.Append("<title>").Append(Enc($"Phiếu nhập {detail.MaPhieuNhap}")).Append("</title>");
+        sb.Append("<title>Phiếu nhập hàng</title>");
         sb.Append("<style>");
         sb.Append("body{font-family:'Segoe UI',Arial,sans-serif;color:#263B35;margin:0;padding:24px;background:#fff;}");
         sb.Append(".wrap{max-width:560px;margin:0 auto;}");
@@ -78,7 +78,6 @@ public static class PhieuNhapPrintService
         sb.Append("</div><hr class=\"hr\">");
 
         sb.Append("<h1 class=\"center\">PHIẾU NHẬP HÀNG</h1>");
-        sb.Append("<div class=\"center muted\">Mã phiếu: ").Append(Enc(detail.MaPhieuNhap)).Append("</div>");
         sb.Append("<div class=\"center muted\">Ngày nhập: ")
           .Append(Enc(detail.ThoiGianNhap.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)))
           .Append("</div>");
@@ -88,8 +87,6 @@ public static class PhieuNhapPrintService
         if (!string.IsNullOrWhiteSpace(detail.MaNhaCungCap))
             DongThongTin(sb, "Mã nhà cung cấp", detail.MaNhaCungCap!);
         DongThongTin(sb, "Nhân viên nhập", detail.TenNhanVienHienThi);
-        if (detail.CoSoHoaDon)
-            DongThongTin(sb, "Số hóa đơn đầu vào", detail.SoHoaDonDauVao!);
         if (detail.CoMaDatHang)
             DongThongTin(sb, "Mã đặt hàng nhập", detail.MaDatHangNhap!);
         DongThongTin(sb, "Phương thức thanh toán", detail.PhuongThucThanhToanHienThi);

@@ -9,6 +9,7 @@ public sealed class PhanBoThanhToanKhachHang
 public sealed class ThanhToanCongNoKhachHang
 {
     public ulong Id { get; set; }
+    public uint KhachHangId { get; set; }
     public string MaKhachHang { get; set; } = "";
     public string MaGiaoDich { get; set; } = "";
     public DateTime ThoiGian { get; set; }
@@ -23,6 +24,9 @@ public sealed class ThanhToanCongNoKhachHang
     public string TrangThai { get; set; } = "HOAN_THANH";
     public bool DaHuy => TrangThai.Equals("HUY", StringComparison.OrdinalIgnoreCase);
     public string TrangThaiHienThi => DaHuy ? "Đã hủy" : "Hoàn thành";
+    public bool CoTheHuy => !DaHuy;
+    public string ToolTipHuy => DaHuy ? "Phiếu này đã bị hủy, không thể hủy lại." : "Hủy phiếu thanh toán này và hoàn tác công nợ";
+    public double OpacityNutHuy => DaHuy ? 0.35 : 1.0;
     public int SoThuTuHienThi { get; set; }
 
     public string? NguoiHuy { get; set; }
