@@ -457,7 +457,7 @@ internal class Program
     private static async Task KiemTraIssue68_LuuPhieuNhapMaRongAsync(string connStr)
     {
         Console.Write("[Kiểm tra Issue #68] 2. Lưu phiếu nhập khi mã rỗng (Tự sinh trong Transaction & Rollback an toàn)... ");
-        
+
         await using var conn = new MySqlConnection(connStr);
         await conn.OpenAsync();
 
@@ -579,7 +579,7 @@ internal class Program
     private static void KiemTraIssue68_MultiTab_DocLap()
     {
         Console.Write("[Kiểm tra Issue #68] 3. Tính độc lập đa tab phiếu nhập (Multi-tab state isolation)... ");
-        
+
         var tab1 = new PhieuNhapTab { SoThuTu = 1 };
         tab1.State.NhaCungCapId = 101;
         tab1.State.TenNhaCungCap = "Nhà cung cấp A";
@@ -1061,10 +1061,10 @@ internal class Program
             // Dọn dẹp dữ liệu test để cơ sở dữ liệu luôn nguyên vẹn
             if (createdInvoiceIds.Count > 0)
             {
-                try { await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE hoa_don_ban_hang_id IN @ids OR ma_hoa_don IN @codes", new { ids = createdInvoiceIds, codes = createdInvoiceCodes }); } catch {}
-                try { await conn.ExecuteAsync("DELETE FROM chi_tiet_hoa_don_ban_hang WHERE hoa_don_id IN @ids", new { ids = createdInvoiceIds }); } catch {}
-                try { await conn.ExecuteAsync("DELETE FROM lich_su_nhap_xuat_kho WHERE ma_chung_tu IN @codes", new { codes = createdInvoiceCodes }); } catch {}
-                try { await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id IN @ids", new { ids = createdInvoiceIds }); } catch {}
+                try { await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE hoa_don_ban_hang_id IN @ids OR ma_hoa_don IN @codes", new { ids = createdInvoiceIds, codes = createdInvoiceCodes }); } catch { }
+                try { await conn.ExecuteAsync("DELETE FROM chi_tiet_hoa_don_ban_hang WHERE hoa_don_id IN @ids", new { ids = createdInvoiceIds }); } catch { }
+                try { await conn.ExecuteAsync("DELETE FROM lich_su_nhap_xuat_kho WHERE ma_chung_tu IN @codes", new { codes = createdInvoiceCodes }); } catch { }
+                try { await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id IN @ids", new { ids = createdInvoiceIds }); } catch { }
                 if (testCustomer != null)
                 {
                     try
@@ -1072,14 +1072,16 @@ internal class Program
                         await conn.ExecuteAsync(
                             "DELETE FROM lich_su_cong_no_khach_hang WHERE khach_hang_id = @khId AND ghi_chu LIKE '%từ hóa đơn HD%'",
                             new { khId = testCustomer.Id });
-                    } catch {}
+                    }
+                    catch { }
                 }
                 // Khôi phục tồn kho sản phẩm test
                 try
                 {
                     await conn.ExecuteAsync("UPDATE san_pham SET ton_kho_excel = @ton WHERE id = @id", new { ton = tonKhoBanDau, id = spId });
                     await conn.ExecuteAsync("UPDATE ton_kho SET so_luong_ton = @ton WHERE san_pham_id = @id AND chi_nhanh_id = @bId", new { ton = tonKhoBanDau, id = spId, bId = currentBranchId });
-                } catch {}
+                }
+                catch { }
             }
         }
 
@@ -1282,7 +1284,7 @@ internal class Program
             await conn.ExecuteAsync("UPDATE san_pham SET ton_kho_excel = @ton WHERE id = @id", new { ton = tonKhoBanDau, id = spId });
             await conn.ExecuteAsync("UPDATE ton_kho SET so_luong_ton = @ton WHERE san_pham_id = @id AND chi_nhanh_id = @bId", new { ton = tonKhoBanDau, id = spId, bId = currentBranchId });
         }
-        catch {}
+        catch { }
 
         Console.WriteLine("\n>>> TOÀN BỘ 4 TIÊU CHÍ KIỂM THỬ ISSUE #96 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
 
@@ -1555,7 +1557,7 @@ internal class Program
             await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE ma_phieu_chi = @MaPC;", new { MaPC = ttNccRes.MaGiaoDich });
             await conn.ExecuteAsync("DELETE FROM nha_cung_cap WHERE id = @Id;", new { Id = nccId });
         }
-        catch {}
+        catch { }
 
         Console.WriteLine("\n>>> TOÀN BỘ 9 TIÊU CHÍ KIỂM THỬ ISSUE #97 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
     }
@@ -1825,7 +1827,7 @@ internal class Program
                     await conn.ExecuteAsync("DELETE FROM khach_hang WHERE id = @KhId;", new { KhId = khId });
                 }
             }
-            catch {}
+            catch { }
         }
     }
 }
