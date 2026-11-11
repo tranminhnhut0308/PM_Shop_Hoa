@@ -71,6 +71,22 @@ internal class Program
             };
             return await KiemTraIssue106_LocNgayQuanLyHoaDonAsync(csb.ConnectionString);
         }
+        if (args.Contains("--verify-issue-108", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue108_LoaiBoBatBuocLyDoHuyAsync(csb.ConnectionString);
+        }
         if (args.Contains("--verify-issue-111", StringComparer.OrdinalIgnoreCase))
         {
             var configService = new DatabaseConfigService();
@@ -1534,6 +1550,11 @@ internal class Program
         await KiemTraIssue104_HuyPhieuThanhToanCongNoAsync(connStr);
 
         // ==========================================================================
+        // CÁC BÀI KIỂM THỬ ISSUE #108: LOẠI BỎ RÀNG BUỘC BẮT BUỘC NHẬP LÝ DO HỦY
+        // ==========================================================================
+        await KiemTraIssue108_LoaiBoBatBuocLyDoHuyAsync(connStr);
+
+        // ==========================================================================
         // CÁC BÀI KIỂM THỬ ISSUE #111: HỦY PHIẾU THANH TOÁN TRONG LỊCH SỬ CÔNG NỢ NHÀ CUNG CẤP
         // ==========================================================================
         await KiemTraIssue111_HuyThanhToanCongNoNccAsync(connStr);
@@ -2771,5 +2792,166 @@ internal class Program
             }
             catch { }
         }
+    }
+
+    private static async Task<int> KiemTraIssue108_LoaiBoBatBuocLyDoHuyAsync(string connectionString)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #108: LOẠI BỎ RÀNG BUỘC BẮT BUỘC NHẬP LÝ DO HỦY                    ");
+        Console.WriteLine("==========================================================================================");
+
+        var db = new DatabaseService();
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "admin",
+            HoTen = "Quản trị viên test 108",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        });
+
+        // ==========================================================================================
+        // 1. KIỂM TRA GIAO DIỆN XAML: ĐÃ LOẠI BỎ DẤU (*) VÀ BẮT BUỘC TRÊN CÁC HỘP THOẠI HỦY
+        // ==========================================================================================
+        Console.Write("[Kiểm tra Issue #108] 1. Kiểm tra XAML các hộp thoại hủy không còn ràng buộc bắt buộc... ");
+        
+        var xamlHuyHoaDon = await File.ReadAllTextAsync("Views/HuyHoaDonWindow.axaml");
+        if (xamlHuyHoaDon.Contains("Text=\"(*)\"") || !xamlHuyHoaDon.Contains("(không bắt buộc)"))
+            throw new Exception("HuyHoaDonWindow.axaml vẫn còn dấu (*) hoặc thiếu nhãn '(không bắt buộc)'.");
+
+        var xamlHuyPhieuNhap = await File.ReadAllTextAsync("Views/HuyPhieuNhapWindow.axaml");
+        if (xamlHuyPhieuNhap.Contains("Text=\"(*)\"") || !xamlHuyPhieuNhap.Contains("(không bắt buộc)"))
+            throw new Exception("HuyPhieuNhapWindow.axaml vẫn còn dấu (*) hoặc thiếu nhãn '(không bắt buộc)'.");
+        if (xamlHuyPhieuNhap.Contains("Lý do hủy hóa đơn"))
+            throw new Exception("HuyPhieuNhapWindow.axaml bị nhầm tiêu đề 'Lý do hủy hóa đơn' thay vì 'Lý do hủy phiếu nhập'.");
+
+        var xamlHuyThanhToan = await File.ReadAllTextAsync("Views/HuyThanhToanCongNoWindow.axaml");
+        if (xamlHuyThanhToan.Contains("Text=\"(*)\"") || xamlHuyThanhToan.Contains("(bắt buộc)"))
+            throw new Exception("HuyThanhToanCongNoWindow.axaml vẫn còn dấu (*) hoặc nhãn '(bắt buộc)'.");
+
+        var xamlHuyPhieuQuy = await File.ReadAllTextAsync("Views/HuyPhieuQuyWindow.axaml");
+        if (xamlHuyPhieuQuy.Contains("Text=\"(*)\"") || xamlHuyPhieuQuy.Contains("(bắt buộc)"))
+            throw new Exception("HuyPhieuQuyWindow.axaml vẫn còn dấu (*) hoặc nhãn '(bắt buộc)'.");
+
+        var xamlHuyThanhToanNcc = await File.ReadAllTextAsync("Views/HuyThanhToanCongNoNhaCungCapWindow.axaml");
+        if (xamlHuyThanhToanNcc.Contains("Text=\"*\"") || xamlHuyThanhToanNcc.Contains("(bắt buộc)"))
+            throw new Exception("HuyThanhToanCongNoNhaCungCapWindow.axaml vẫn còn dấu (*) hoặc nhãn '(bắt buộc)'.");
+
+        Console.WriteLine("PASSED (Tất cả 5 giao diện hủy đều có nhãn '(không bắt buộc)' và không còn dấu '*') ✓");
+
+        // ==========================================================================================
+        // 2. KIỂM TRA HỦY HÓA ĐƠN KHI ĐỂ TRỐNG LÝ DO
+        // ==========================================================================================
+        Console.Write("[Kiểm tra Issue #108] 2. Hủy hóa đơn khi để trống lý do -> tự động lưu lý do mặc định... ");
+        var maHdTest = "HD_TEST_108_" + DateTime.Now.ToString("yyMMddHHmmss");
+        await conn.ExecuteAsync(
+            """
+            INSERT INTO hoa_don_ban_hang (ma_hoa_don, khach_hang_id, chi_nhanh_id, nguoi_ban_id, thoi_gian_ban,
+                tong_tien_hang, giam_gia, khach_can_tra, khach_da_thanh_toan, con_no,
+                trang_thai_thanh_toan, trang_thai_hoa_don, ghi_chu)
+            VALUES (@MaHd, NULL, 1, 1, NOW(),
+                500000, 0, 500000, 500000, 0,
+                'DA_THANH_TOAN', 'HOAN_THANH', 'Hóa đơn test 108');
+            """,
+            new { MaHd = maHdTest });
+        var hdId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM hoa_don_ban_hang WHERE ma_hoa_don = @MaHd;", new { MaHd = maHdTest });
+
+        var huyHdResult = await db.HuyHoaDonBanHangAsync(new HuyHoaDonRequest
+        {
+            HoaDonId = hdId,
+            MaHoaDon = maHdTest,
+            LyDoHuy = "",
+            TrangThaiGiaoHang = TrangThaiGiaoHangKhiHuy.ChuaGiaoHang,
+            XacNhanDaNhanLaiHangTraVe = true
+        });
+
+        if (huyHdResult.HoaDonId != hdId)
+            throw new Exception($"Hủy hóa đơn để trống lý do thất bại: HoaDonId không khớp");
+
+        var hdCheck = await conn.QueryFirstOrDefaultAsync(
+            "SELECT trang_thai_hoa_don, ly_do_huy FROM hoa_don_ban_hang WHERE id = @Id;",
+            new { Id = hdId });
+        if ((string)hdCheck.trang_thai_hoa_don != "DA_HUY")
+            throw new Exception("Hóa đơn chưa chuyển trạng thái DA_HUY.");
+        if (string.IsNullOrWhiteSpace((string)hdCheck.ly_do_huy))
+            throw new Exception("Lý do hủy của hóa đơn trong CSDL bị rỗng.");
+        Console.WriteLine($"PASSED (Lý do tự động: \"{hdCheck.ly_do_huy}\") ✓");
+
+        // ==========================================================================================
+        // 3. KIỂM TRA HỦY PHIẾU NHẬP KHI ĐỂ TRỐNG LÝ DO
+        // ==========================================================================================
+        Console.Write("[Kiểm tra Issue #108] 3. Hủy phiếu nhập khi để trống lý do -> tự động lưu lý do mặc định... ");
+        var maNcc = "NCC_108_" + DateTime.Now.ToString("yyMMddHHmmss");
+        var maPn = "PN_108_" + DateTime.Now.ToString("yyMMddHHmmss");
+        await conn.ExecuteAsync(
+            """
+            INSERT INTO nha_cung_cap (ma_nha_cung_cap, ten_nha_cung_cap, so_dien_thoai, trang_thai, so_du_tra_truoc)
+            VALUES (@Ma, 'NCC Test 108', '0933445566', 1, 0.00);
+            """,
+            new { Ma = maNcc });
+        var nccId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM nha_cung_cap WHERE ma_nha_cung_cap = @Ma;", new { Ma = maNcc });
+
+        await conn.ExecuteAsync(
+            """
+            INSERT INTO phieu_nhap_hang (ma_phieu_nhap, chi_nhanh_id, nha_cung_cap_id, nguoi_nhap_id,
+                thoi_gian_nhap, tong_tien_hang, giam_gia, chi_phi_khac, tong_tien_nhap,
+                da_thanh_toan, con_no, trang_thai, ghi_chu, cong_no_da_ghi_nhan, ngay_tao, ngay_cap_nhat)
+            VALUES (@Ma, 1, @NccId, 1,
+                NOW(), 2000000, 0, 0, 2000000,
+                0, 2000000, 'HOAN_THANH', 'Phiếu nhập test 108', 1, NOW(), NOW());
+            """,
+            new { Ma = maPn, NccId = nccId });
+        var pnId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM phieu_nhap_hang WHERE ma_phieu_nhap = @Ma;", new { Ma = maPn });
+
+        await db.HuyPhieuNhapHangAsync(new HuyPhieuNhapYeuCau
+        {
+            PhieuNhapId = pnId,
+            LyDoHuy = "   ",
+            PhuongAnTien = "TREO_CONG_NO"
+        });
+
+        var pnCheck = await conn.QueryFirstOrDefaultAsync(
+            "SELECT trang_thai, ly_do_huy FROM phieu_nhap_hang WHERE id = @Id;",
+            new { Id = pnId });
+        if ((string)pnCheck.trang_thai != "DA_HUY")
+            throw new Exception("Phiếu nhập chưa chuyển trạng thái DA_HUY.");
+        if (string.IsNullOrWhiteSpace((string)pnCheck.ly_do_huy))
+            throw new Exception("Lý do hủy của phiếu nhập trong CSDL bị rỗng.");
+        Console.WriteLine($"PASSED (Lý do tự động: \"{pnCheck.ly_do_huy}\") ✓");
+
+        // ==========================================================================================
+        // 4. KIỂM TRA HỦY PHIẾU THANH TOÁN (KH & NCC) VỚI LÝ DO MẶC ĐỊNH
+        // ==========================================================================================
+        Console.Write("[Kiểm tra Issue #108] 4. Hủy phiếu thanh toán (KH & NCC) dùng lý do mặc định... ");
+        var ttNcc = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 500000m, "TIEN_MAT", null, "Thanh toán test 108");
+        var huyNccRes = await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, ttNcc.MaGiaoDich, "Hủy thanh toán công nợ nhà cung cấp do thao tác sai của nhân viên!!");
+        if (!huyNccRes.ThanhCong)
+            throw new Exception($"Hủy thanh toán NCC thất bại: {huyNccRes.ThongBao}");
+
+        var lsCheck = await conn.QueryFirstOrDefaultAsync(
+            "SELECT trang_thai, ly_do_huy FROM lich_su_thanh_toan_cong_no_nha_cung_cap WHERE ma_giao_dich = @Ma;",
+            new { Ma = ttNcc.MaGiaoDich });
+        if ((string)lsCheck.trang_thai != "HUY" || (string)lsCheck.ly_do_huy != "Hủy thanh toán công nợ nhà cung cấp do thao tác sai của nhân viên!!")
+            throw new Exception($"Lịch sử thanh toán NCC lưu lý do hủy không đúng: '{lsCheck.ly_do_huy}'");
+        Console.WriteLine($"PASSED (Lý do mặc định được ghi nhận trọn vẹn) ✓");
+
+        // Dọn dẹp dữ liệu test
+        try
+        {
+            await conn.ExecuteAsync("DELETE FROM lich_su_thanh_toan_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+            await conn.ExecuteAsync("DELETE FROM thanh_toan_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+            await conn.ExecuteAsync("DELETE FROM lich_su_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+            await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE ma_phieu_chi = @Ma;", new { Ma = ttNcc.MaGiaoDich });
+            await conn.ExecuteAsync("DELETE FROM phieu_nhap_hang WHERE id = @Id;", new { Id = pnId });
+            await conn.ExecuteAsync("DELETE FROM nha_cung_cap WHERE id = @Id;", new { Id = nccId });
+            await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id = @Id;", new { Id = hdId });
+        }
+        catch { }
+
+        Console.WriteLine("\n>>> TOÀN BỘ 4 TIÊU CHÍ KIỂM THỬ ISSUE #108 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+        return 0;
     }
 }

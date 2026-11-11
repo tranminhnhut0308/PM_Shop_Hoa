@@ -190,10 +190,10 @@
             </StackPanel>
           </Border>
 
-          <!-- 4. LÝ DO HỦY (BẮT BUỘC) -->
+          <!-- 4. LÝ DO HỦY (KHÔNG BẮT BUỘC) -->
           <StackPanel Spacing="6">
             <StackPanel Orientation="Horizontal" Spacing="4">
-              <TextBlock Text="3. Lý do hủy hóa đơn"
+              <TextBlock Text="3. Lý do hủy phiếu nhập"
                 FontWeight="Bold"
                 FontSize="13"
                 Foreground="#163F38" />

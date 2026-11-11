@@ -250,7 +250,7 @@ public sealed partial class DatabaseService
             throw new ArgumentException("Mã ID phiếu nhập không hợp lệ.", nameof(yeuCau));
 
         if (string.IsNullOrWhiteSpace(yeuCau.LyDoHuy))
-            throw new InvalidOperationException("Vui lòng nhập lý do hủy phiếu nhập hàng (bắt buộc).");
+            yeuCau.LyDoHuy = "Hủy phiếu nhập do thao tác sai của nhân viên!!";
 
         if (!await EnsureHuyPhieuNhapSchemaAsync())
             throw new InvalidOperationException("Không thể chuẩn bị cấu trúc lưu lịch sử hủy phiếu nhập.");

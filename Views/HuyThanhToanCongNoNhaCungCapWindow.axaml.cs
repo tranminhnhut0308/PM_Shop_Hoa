@@ -44,10 +44,7 @@ public partial class HuyThanhToanCongNoNhaCungCapWindow : Window
         var lyDo = (TxtLyDoHuy.Text ?? "").Trim();
         if (string.IsNullOrWhiteSpace(lyDo))
         {
-            TxtLoiValidate.Text = "Vui lòng nhập lý do hủy giao dịch thanh toán.";
-            TxtLoiValidate.IsVisible = true;
-            TxtLyDoHuy.Focus();
-            return;
+            lyDo = "Hủy thanh toán công nợ nhà cung cấp do thao tác sai của nhân viên!!";
         }
 
         TxtLoiValidate.IsVisible = false;

@@ -459,7 +459,10 @@ public sealed partial class DatabaseService
 
         var lyDo = (req.LyDoHuy ?? "").Trim();
         if (lyDo.Length == 0)
-            throw new InvalidOperationException("Bắt buộc phải nhập lý do hủy hóa đơn.");
+        {
+            lyDo = "Hủy hóa đơn do thao tác sai của nhân viên!!";
+            req.LyDoHuy = lyDo;
+        }
 
         if (lyDo.Length > 500)
             throw new InvalidOperationException("Lý do hủy không được vượt quá 500 ký tự.");

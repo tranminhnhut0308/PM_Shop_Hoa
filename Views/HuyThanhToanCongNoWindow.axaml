@@ -124,13 +124,14 @@
             </StackPanel>
           </Border>
 
-          <!-- LÝ DO HỦY (BẮT BUỘC) -->
+          <!-- LÝ DO HỦY (KHÔNG BẮT BUỘC) -->
           <StackPanel Spacing="6">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <TextBlock Text="Lý do hủy phiếu" FontSize="13" FontWeight="Bold" Foreground="#374151" />
+              <TextBlock Text="(không bắt buộc)" FontSize="12" Foreground="#64748B" VerticalAlignment="Center" />
             </StackPanel>
             <TextBox x:Name="TxtLyDoHuy"
-                     Watermark="Nhập lý do hủy phiếu thanh toán (bắt buộc)..."
+                     Watermark="Nhập lý do hủy phiếu thanh toán (không bắt buộc)..."
                      AcceptsReturn="True"
                      Height="68"
                      TextWrapping="Wrap"
