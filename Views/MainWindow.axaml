@@ -2417,13 +2417,7 @@
                     </DataTemplate>
                   </ComboBox.ItemTemplate>
                 </ComboBox>
-                <Button Grid.Column="1" Classes="toolbar-action" Content="＋"
-                  Height="38" Width="36" Padding="0"
-                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                  FontSize="15" FontWeight="Bold"
-                  ToolTip.Tip="Thêm nhóm hàng mới"
-                  Command="{Binding ThemNhomHangNhanhCommand}"
-                  IsVisible="{Binding CanCreateProduct}" />
+              
               </Grid>
 
               <!-- NÚT SẮP XẾP LINH HOẠT (Tên, Mã, Giá) -->
@@ -2462,7 +2456,7 @@
 
               <Button Grid.Column="5"
                 Classes="toolbar-action"
-                Content="⇩  Import file"
+                Content="⇩  Nhập file"
                 Command="{Binding ThemSanPhamTuFileCommand}"
                 Margin="0"
                 Height="38"

@@ -84,7 +84,6 @@
                     Grid.Column="1"
                     Height="38"
                     HorizontalAlignment="Stretch"
-                    DisplayMemberBinding="{Binding TenNhaCungCap}"
                     SelectedValueBinding="{Binding Id}"
                     SelectionChanged="OnNhaCungCapSelectionChanged">
                     <ComboBox.ItemTemplate>
