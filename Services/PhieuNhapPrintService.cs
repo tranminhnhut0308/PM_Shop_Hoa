@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Text;
 using ShopHoa.Models;
 
@@ -6,16 +8,21 @@ namespace ShopHoa.Services;
 
 /// <summary>
 /// Dựng bản in phiếu nhập hàng dạng HTML rồi mở bằng trình duyệt mặc định để
-/// người dùng in lại (Ctrl+P). Cách này không phụ thuộc driver máy in và chạy
-/// được trên cả Windows lẫn Linux, phù hợp để "xuất lại" phiếu nhập cũ.
+/// người dùng in lại (Ctrl+P) hoặc xuất PDF qua trình duyệt headless. Cách này
+/// không phụ thuộc driver máy in và chạy được trên cả Windows lẫn Linux.
 /// </summary>
 public static class PhieuNhapPrintService
 {
     private static readonly CultureInfo Vi = CultureInfo.GetCultureInfo("vi-VN");
 
+    /// <summary>Tên file PDF gợi ý theo mã phiếu nhập, ví dụ: PhieuNhap_PN261111_0001.pdf.</summary>
+    public static string TaoTenFilePdf(string maPhieuNhap)
+        => $"PhieuNhap_{MaAnToan(maPhieuNhap)}.pdf";
+
     /// <summary>Ghi phiếu nhập ra file HTML tạm và trả về đường dẫn file.</summary>
-    public static string LuuFileTam(PhieuNhapHangDetail detail, ThongTinTiem tiem)
+    public static string LuuFileTam(PhieuNhapHangDetail detail, ThongTinTiem? tiem = null)
     {
+        tiem ??= new ThongTinTiem();
         var ten = MaAnToan(detail.MaPhieuNhap);
         var thuMuc = Path.Combine(Path.GetTempPath(), "ShopHoa", "PhieuNhap");
         Directory.CreateDirectory(thuMuc);
@@ -27,13 +34,161 @@ public static class PhieuNhapPrintService
         return duongDan;
     }
 
-    /// <summary>Dựng nội dung HTML hoàn chỉnh của phiếu nhập.</summary>
-    public static string TaoHtml(PhieuNhapHangDetail detail, ThongTinTiem tiem)
+    /// <summary>
+    /// Xuất phiếu nhập ra PDF bằng trình duyệt headless (Edge/Chrome).
+    /// </summary>
+    public static async Task<(bool ThanhCong, string? DuongDan, string? Loi)> XuatPdfAsync(
+        PhieuNhapHangDetail detail,
+        ThongTinTiem? tiem,
+        string duongDanPdf)
     {
+        tiem ??= new ThongTinTiem();
+        var duongDanHtml = LuuFileTam(detail, tiem);
+        var filePdfTam = Path.Combine(
+            Path.GetTempPath(),
+            $"phieunhap-{MaAnToan(detail.MaPhieuNhap)}-{Guid.NewGuid():N}.pdf");
+
+        try
+        {
+            var trinhDuyet = PhieuThuPrintService.TimTrinhDuyetCoSan();
+            if (trinhDuyet is null)
+            {
+                return (false, null,
+                    "Không tìm thấy Microsoft Edge hoặc Google Chrome trên máy. " +
+                    "Hãy dùng nút \"In phiếu nhập\" rồi chọn \"Lưu dưới dạng PDF\" " +
+                    "trong hộp thoại in của trình duyệt.");
+            }
+
+            var thanhCong = await InPdfBangTrinhDuyetAsync(trinhDuyet, duongDanHtml, filePdfTam);
+            if (!thanhCong || !LaFilePdf(filePdfTam))
+            {
+                return (false, null,
+                    "Trình duyệt không tạo được file PDF. Hãy dùng nút \"In phiếu nhập\" " +
+                    "rồi chọn \"Lưu dưới dạng PDF\" trong hộp thoại in.");
+            }
+
+            var thuMucDich = Path.GetDirectoryName(duongDanPdf);
+            if (!string.IsNullOrWhiteSpace(thuMucDich))
+                Directory.CreateDirectory(thuMucDich);
+
+            File.Move(filePdfTam, duongDanPdf, overwrite: true);
+            return (true, duongDanPdf, null);
+        }
+        catch (Exception ex)
+        {
+            return (false, null, ex.Message);
+        }
+        finally
+        {
+            TryDelete(filePdfTam);
+        }
+    }
+
+    private static async Task<bool> InPdfBangTrinhDuyetAsync(
+        string trinhDuyet,
+        string duongDanHtml,
+        string duongDanPdf)
+    {
+        var url = new Uri(duongDanHtml).AbsoluteUri;
+        var thuMucProfile = Path.Combine(Path.GetTempPath(), "ShopHoa", "HeadlessProfile");
+
+        foreach (var cheDoHeadless in new[] { "--headless=new", "--headless" })
+        {
+            var thanhCong = await ChayLenhInAsync(trinhDuyet, cheDoHeadless, url, duongDanPdf, thuMucProfile);
+            if (thanhCong && LaFilePdf(duongDanPdf))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static async Task<bool> ChayLenhInAsync(
+        string trinhDuyet,
+        string cheDoHeadless,
+        string url,
+        string duongDanPdf,
+        string thuMucProfile)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = trinhDuyet,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                Arguments = string.Join(' ',
+                    cheDoHeadless,
+                    "--disable-gpu",
+                    "--disable-extensions",
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    $"--user-data-dir=\"{thuMucProfile}\"",
+                    "--no-pdf-header-footer",
+                    "--print-to-pdf-no-header",
+                    $"--print-to-pdf=\"{duongDanPdf}\"",
+                    $"\"{url}\"")
+            };
+
+            using var process = Process.Start(psi);
+            if (process is null)
+                return false;
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await process.WaitForExitAsync(cts.Token);
+            return process.ExitCode == 0 && LaFilePdf(duongDanPdf);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool LaFilePdf(string duongDan)
+    {
+        try
+        {
+            if (!File.Exists(duongDan))
+                return false;
+
+            var fi = new FileInfo(duongDan);
+            if (fi.Length < 100)
+                return false;
+
+            using var fs = File.OpenRead(duongDan);
+            Span<byte> header = stackalloc byte[4];
+            var read = fs.Read(header);
+            return read == 4 &&
+                   header[0] == 0x25 && // %
+                   header[1] == 0x50 && // P
+                   header[2] == 0x44 && // D
+                   header[3] == 0x46;   // F
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void TryDelete(string duongDan)
+    {
+        try
+        {
+            if (File.Exists(duongDan))
+                File.Delete(duongDan);
+        }
+        catch
+        {
+        }
+    }
+
+    /// <summary>Dựng nội dung HTML hoàn chỉnh của phiếu nhập.</summary>
+    public static string TaoHtml(PhieuNhapHangDetail detail, ThongTinTiem? tiem = null)
+    {
+        tiem ??= new ThongTinTiem();
         var sb = new StringBuilder();
 
         sb.Append("<!DOCTYPE html><html lang=\"vi\"><head><meta charset=\"utf-8\">");
-        sb.Append("<title>Phiếu nhập hàng</title>");
+        sb.Append("<title>Phiếu nhập hàng - ").Append(Enc(detail.MaPhieuNhap)).Append("</title>");
         sb.Append("<style>");
         sb.Append("body{font-family:'Segoe UI',Arial,sans-serif;color:#263B35;margin:0;padding:24px;background:#fff;}");
         sb.Append(".wrap{max-width:560px;margin:0 auto;}");
@@ -78,11 +233,14 @@ public static class PhieuNhapPrintService
         sb.Append("</div><hr class=\"hr\">");
 
         sb.Append("<h1 class=\"center\">PHIẾU NHẬP HÀNG</h1>");
-        sb.Append("<div class=\"center muted\">Ngày nhập: ")
+        sb.Append("<div class=\"center muted\">Mã phiếu: <b>")
+          .Append(Enc(detail.MaPhieuNhap))
+          .Append("</b> &bull; Ngày nhập: ")
           .Append(Enc(detail.ThoiGianNhap.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)))
           .Append("</div>");
 
         sb.Append("<table>");
+        DongThongTin(sb, "Mã phiếu nhập", detail.MaPhieuNhap);
         DongThongTin(sb, "Nhà cung cấp", detail.TenNhaCungCapHienThi);
         if (!string.IsNullOrWhiteSpace(detail.MaNhaCungCap))
             DongThongTin(sb, "Mã nhà cung cấp", detail.MaNhaCungCap!);

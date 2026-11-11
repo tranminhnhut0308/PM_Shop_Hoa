@@ -899,12 +899,12 @@ public sealed partial class DatabaseService
                             },
                             transaction);
 
-                        // Khôi phục công nợ nhà cung cấp (ghi có = tăng nợ phải trả lại)
+                        // Khôi phục công nợ nhà cung cấp (ghi nợ = tăng nợ phải trả lại)
                         if (pnInfo.NhaCungCapId is > 0)
                         {
                             var soDuCu = await connection.ExecuteScalarAsync<decimal>(
                                 """
-                                SELECT COALESCE(SUM(ghi_co - ghi_no), 0)
+                                SELECT COALESCE(SUM(ghi_no - ghi_co), 0)
                                 FROM lich_su_cong_no_nha_cung_cap
                                 WHERE nha_cung_cap_id = @NccId
                                 FOR UPDATE;
@@ -921,14 +921,14 @@ public sealed partial class DatabaseService
                                  ghi_no, ghi_co, so_du, thoi_gian, nguoi_thuc_hien_id, ghi_chu)
                                 VALUES
                                 (@NccId, @ChiNhanhId, 'HUY_THANH_TOAN', 'PHIEU_CHI', @MaChungTu,
-                                 0, @GhiCo, @SoDu, @ThoiGian, @NguoiThucHienId, @GhiChu);
+                                 @GhiNo, 0, @SoDu, @ThoiGian, @NguoiThucHienId, @GhiChu);
                                 """,
                                 new
                                 {
                                     NccId = pnInfo.NhaCungCapId.Value,
                                     ChiNhanhId = phieu.ChiNhanhId,
                                     MaChungTu = phieu.MaPhieuChi,
-                                    GhiCo = soTienPhieu,
+                                    GhiNo = soTienPhieu,
                                     SoDu = soDuMoi,
                                     ThoiGian = now,
                                     NguoiThucHienId = userHuyId,
@@ -1008,12 +1008,12 @@ public sealed partial class DatabaseService
                             new { MaPhieu = phieu.MaPhieuChi, Now = now, UserId = userHuyId, LyDoHuy = lyDoHuy.Trim() },
                             transaction);
 
-                        // Khôi phục công nợ nhà cung cấp
+                        // Khôi phục công nợ nhà cung cấp (ghi nợ = tăng nợ phải trả lại)
                         if (lstt.NhaCungCapId > 0)
                         {
                             var soDuCu = await connection.ExecuteScalarAsync<decimal>(
                                 """
-                                SELECT COALESCE(SUM(ghi_co - ghi_no), 0)
+                                SELECT COALESCE(SUM(ghi_no - ghi_co), 0)
                                 FROM lich_su_cong_no_nha_cung_cap
                                 WHERE nha_cung_cap_id = @NccId
                                 FOR UPDATE;
@@ -1030,14 +1030,14 @@ public sealed partial class DatabaseService
                                  ghi_no, ghi_co, so_du, thoi_gian, nguoi_thuc_hien_id, ghi_chu)
                                 VALUES
                                 (@NccId, @ChiNhanhId, 'HUY_THANH_TOAN', 'PHIEU_CHI', @MaChungTu,
-                                 0, @GhiCo, @SoDu, @ThoiGian, @NguoiThucHienId, @GhiChu);
+                                 @GhiNo, 0, @SoDu, @ThoiGian, @NguoiThucHienId, @GhiChu);
                                 """,
                                 new
                                 {
                                     NccId = lstt.NhaCungCapId,
                                     ChiNhanhId = phieu.ChiNhanhId,
                                     MaChungTu = phieu.MaPhieuChi,
-                                    GhiCo = soTienPhieu,
+                                    GhiNo = soTienPhieu,
                                     SoDu = soDuMoi,
                                     ThoiGian = now,
                                     NguoiThucHienId = userHuyId,

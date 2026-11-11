@@ -177,7 +177,11 @@ public sealed class PhieuNhapHangDetail
 
     public string TrangThaiHienThi => IsDaHuy ? "Đã hủy" : (IsLuuTam ? "Lưu tạm" : "Đã nhập hàng");
 
-    public string TieuDe => "Chi tiết phiếu nhập hàng";
+    public string TieuDe => string.IsNullOrWhiteSpace(MaPhieuNhap)
+        ? "Chi tiết phiếu nhập hàng"
+        : $"Chi tiết phiếu nhập hàng — {MaPhieuNhap}";
+
+    public ThongTinTiem? ThongTinTiem { get; set; }
 
     public string ThoiGianNhapText =>
         ThoiGianNhap.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);

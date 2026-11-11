@@ -1,12 +1,13 @@
 using System;
+using System.Diagnostics;
 using System.IO;
-using Avalonia.Platform.Storage;
-using ShopHoa.Helpers;
-using System;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
+using ShopHoa.Services;
 
 namespace ShopHoa.Views;
 
@@ -43,20 +44,25 @@ public partial class PhieuNhapDetailWindow : Window
     /// </summary>
     private readonly Func<PhieuNhapHangDetail, Window, Task>? _muaLai;
 
+    /// <summary>
+    /// Hàm lấy thông tin tiệm để phục vụ in / xuất PDF.
+    /// </summary>
+    private readonly Func<Task<ThongTinTiem>>? _layThongTinTiem;
+
     public PhieuNhapDetailWindow()
         : this(new PhieuNhapHangDetail())
     {
     }
 
     public PhieuNhapDetailWindow(PhieuNhapHangDetail detail)
-        : this(detail, null, null, null, null, null)
+        : this(detail, null, null, null, null, null, null)
     {
     }
 
     public PhieuNhapDetailWindow(
         PhieuNhapHangDetail detail,
         Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? thanhToan)
-        : this(detail, thanhToan, null, null, null, null)
+        : this(detail, thanhToan, null, null, null, null, null)
     {
     }
 
@@ -64,7 +70,7 @@ public partial class PhieuNhapDetailWindow : Window
         PhieuNhapHangDetail detail,
         Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? thanhToan,
         Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? chinhSua)
-        : this(detail, thanhToan, chinhSua, null, null, null)
+        : this(detail, thanhToan, chinhSua, null, null, null, null)
     {
     }
 
@@ -75,6 +81,18 @@ public partial class PhieuNhapDetailWindow : Window
         Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? huyPhieu,
         Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? khoiPhuc,
         Func<PhieuNhapHangDetail, Window, Task>? muaLai)
+        : this(detail, thanhToan, chinhSua, huyPhieu, khoiPhuc, muaLai, null)
+    {
+    }
+
+    public PhieuNhapDetailWindow(
+        PhieuNhapHangDetail detail,
+        Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? thanhToan,
+        Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? chinhSua,
+        Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? huyPhieu,
+        Func<PhieuNhapHangDetail, Window, Task<PhieuNhapHangDetail?>>? khoiPhuc,
+        Func<PhieuNhapHangDetail, Window, Task>? muaLai,
+        Func<Task<ThongTinTiem>>? layThongTinTiem)
     {
         InitializeComponent();
         _thanhToan = thanhToan;
@@ -82,6 +100,7 @@ public partial class PhieuNhapDetailWindow : Window
         _huyPhieu = huyPhieu;
         _khoiPhuc = khoiPhuc;
         _muaLai = muaLai;
+        _layThongTinTiem = layThongTinTiem;
         DataContext = detail;
         CapNhatGiaoDien(detail);
     }
@@ -236,6 +255,151 @@ public partial class PhieuNhapDetailWindow : Window
     private void OnCloseClicked(object? sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    private async Task<ThongTinTiem> LayThongTinTiemAsync()
+    {
+        if (_layThongTinTiem is not null)
+        {
+            try
+            {
+                var tiem = await _layThongTinTiem();
+                if (tiem is not null)
+                    return tiem;
+            }
+            catch (Exception ex)
+            {
+                SafeLog.WriteError("Loi lay thong tin tiem tu callback", ex);
+            }
+        }
+
+        try
+        {
+            var storeInfo = new StoreInfoService(new DatabaseService().TaoKetNoiAsync);
+            return await storeInfo.LayThongTinKemLogoAsync();
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Loi nap thong tin tiem mac dinh", ex);
+            return new ThongTinTiem();
+        }
+    }
+
+    private async void SaoChepMaButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not PhieuNhapHangDetail detail || string.IsNullOrWhiteSpace(detail.MaPhieuNhap))
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            await NotificationWindow.ShowWarningAsync(
+                "Không truy cập được bộ nhớ tạm của hệ thống.",
+                "Lỗi sao chép",
+                this);
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(detail.MaPhieuNhap.Trim());
+            await NotificationWindow.ShowSuccessAsync(
+                $"Đã sao chép mã phiếu \"{detail.MaPhieuNhap.Trim()}\" vào bộ nhớ tạm.",
+                "Đã sao chép",
+                this);
+        }
+        catch (Exception ex)
+        {
+            await NotificationWindow.ShowErrorAsync(
+                "Không sao chép được mã phiếu: " + ex.Message,
+                "Lỗi sao chép",
+                this);
+        }
+    }
+
+    private async void InPhieuButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not PhieuNhapHangDetail detail)
+            return;
+
+        InPhieuButton.IsEnabled = false;
+        try
+        {
+            var tiem = await LayThongTinTiemAsync();
+            var duongDan = PhieuNhapPrintService.LuuFileTam(detail, tiem);
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = duongDan,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            await NotificationWindow.ShowErrorAsync(
+                "Không mở được bản in phiếu nhập: " + ex.Message,
+                "Lỗi in phiếu",
+                this);
+        }
+        finally
+        {
+            InPhieuButton.IsEnabled = true;
+        }
+    }
+
+    private async void XuatPdfButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not PhieuNhapHangDetail detail)
+            return;
+
+        try
+        {
+            var saveFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Xuất phiếu nhập hàng ra tập tin PDF",
+                SuggestedFileName = PhieuNhapPrintService.TaoTenFilePdf(detail.MaPhieuNhap),
+                DefaultExtension = "pdf",
+                ShowOverwritePrompt = true,
+                FileTypeChoices = [new FilePickerFileType("PDF") { Patterns = ["*.pdf"] }]
+            });
+
+            if (saveFile is null)
+                return;
+
+            XuatPdfButton.IsEnabled = false;
+
+            var tiem = await LayThongTinTiemAsync();
+            var (thanhCong, duongDan, loi) = await PhieuNhapPrintService.XuatPdfAsync(
+                detail,
+                tiem,
+                saveFile.Path.LocalPath);
+
+            if (thanhCong)
+            {
+                await NotificationWindow.ShowSuccessAsync(
+                    $"Đã xuất file PDF phiếu nhập thành công:\n{duongDan}",
+                    "Xuất PDF hoàn tất",
+                    this);
+            }
+            else
+            {
+                await NotificationWindow.ShowErrorAsync(
+                    loi ?? "Không xuất được file PDF.",
+                    "Không xuất được PDF",
+                    this);
+            }
+        }
+        catch (Exception ex)
+        {
+            await NotificationWindow.ShowErrorAsync(
+                "Lỗi khi xuất PDF: " + ex.Message,
+                "Lỗi xuất PDF",
+                this);
+        }
+        finally
+        {
+            XuatPdfButton.IsEnabled = true;
+        }
     }
 
     private async void MoChungTuButton_OnClick(object? sender, RoutedEventArgs e)

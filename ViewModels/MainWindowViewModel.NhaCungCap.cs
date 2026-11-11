@@ -681,6 +681,19 @@ public sealed partial class MainWindowViewModel
                 row?.MaNhaCungCap ?? "",
                 row?.TenNhaCungCap ?? "");
             await window.ShowDialog(OwnerWindow);
+
+            if (window.CoThayDoi)
+            {
+                await LamMoiSauThanhToanPhieuNhapAsync();
+                if (row is not null)
+                {
+                    var refreshedRow = SupplierRows.FirstOrDefault(item => item.SupplierId == row.SupplierId);
+                    if (refreshedRow is not null && refreshedRow.IsExpanded)
+                    {
+                        await ToggleSupplierDetailAsync(refreshedRow);
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {

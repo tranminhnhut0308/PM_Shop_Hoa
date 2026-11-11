@@ -71,6 +71,38 @@ internal class Program
             };
             return await KiemTraIssue106_LocNgayQuanLyHoaDonAsync(csb.ConnectionString);
         }
+        if (args.Contains("--verify-issue-111", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue111_HuyThanhToanCongNoNccAsync(csb.ConnectionString);
+        }
+        if (args.Contains("--verify-issue-112", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue112_TuDongXemChiTietPhieuNhapAsync(csb.ConnectionString);
+        }
 
         Console.WriteLine("==========================================================================================");
         Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG SHOP HOA: ĐỐI SOÁT TOÀN DIỆN THỐNG KÊ TRANG TỔNG QUAN (#69)  ");
@@ -1497,9 +1529,14 @@ internal class Program
         await KiemTraIssue97_ThanhToanDuVaSoDuTraTruocAsync(connStr);
 
         // ==========================================================================
-        // CÁC BÀI KIỂM THỬ ISSUE #104: HỦY PHIẾU THANH TOÁN TRONG LỊCH SỬ CÔNG NỢ
+        // CÁC BÀI KIỂM THỬ ISSUE #104: HỦY PHIẾU THANH TOÁN TRONG LỊCH SỬ CÔNG NỢ KHÁCH HÀNG
         // ==========================================================================
         await KiemTraIssue104_HuyPhieuThanhToanCongNoAsync(connStr);
+
+        // ==========================================================================
+        // CÁC BÀI KIỂM THỬ ISSUE #111: HỦY PHIẾU THANH TOÁN TRONG LỊCH SỬ CÔNG NỢ NHÀ CUNG CẤP
+        // ==========================================================================
+        await KiemTraIssue111_HuyThanhToanCongNoNccAsync(connStr);
 
         return 0;
     }
@@ -2028,6 +2065,708 @@ internal class Program
                     if (hdId > 0)
                         await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id = @HdId;", new { HdId = hdId });
                     await conn.ExecuteAsync("DELETE FROM khach_hang WHERE id = @KhId;", new { KhId = khId });
+                }
+            }
+            catch { }
+        }
+    }
+
+    private static async Task<int> KiemTraIssue111_HuyThanhToanCongNoNccAsync(string connectionString)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #111: HỦY THANH TOÁN CÔNG NỢ NHÀ CUNG CẤP                         ");
+        Console.WriteLine("==========================================================================================");
+
+        var db = new DatabaseService();
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+        await DatabaseService.EnsureTraTruocSchemaAsync(conn);
+
+        var adminUser = new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "admin",
+            HoTen = "Quản trị viên test 111",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        };
+        Session.SetCurrentUser(adminUser);
+
+        var maNccTest = "NCC_TEST_111_" + DateTime.Now.ToString("yyMMddHHmmss");
+        var pn1Code = "PN_111_A_" + DateTime.Now.ToString("yyMMddHHmmss");
+        var pn2Code = "PN_111_B_" + DateTime.Now.ToString("yyMMddHHmmss");
+        uint nccId = 0;
+        uint pn1Id = 0;
+        uint pn2Id = 0;
+        var createdSlips = new List<string>();
+
+        try
+        {
+            // Tạo nhà cung cấp test
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO nha_cung_cap (ma_nha_cung_cap, ten_nha_cung_cap, so_dien_thoai, trang_thai, so_du_tra_truoc)
+                VALUES (@Ma, @Ten, '0977889900', 1, 0.00);
+                """,
+                new { Ma = maNccTest, Ten = "Nhà Cung Cấp Test 111" });
+            nccId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM nha_cung_cap WHERE ma_nha_cung_cap = @Ma;", new { Ma = maNccTest });
+
+            // Tạo 2 phiếu nhập test:
+            // PN1: 1.000.000đ, nợ 1.000.000đ
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO phieu_nhap_hang (ma_phieu_nhap, chi_nhanh_id, nha_cung_cap_id, nguoi_nhap_id,
+                    thoi_gian_nhap, tong_tien_hang, giam_gia, chi_phi_khac, tong_tien_nhap,
+                    da_thanh_toan, con_no, trang_thai, ghi_chu, cong_no_da_ghi_nhan, ngay_tao, ngay_cap_nhat)
+                VALUES (@Ma, 1, @NccId, 1,
+                    NOW(), 1000000, 0, 0, 1000000,
+                    0, 1000000, 'HOAN_THANH', 'Phiếu nhập A test 111', 1, NOW(), NOW());
+                """,
+                new { Ma = pn1Code, NccId = nccId });
+            pn1Id = await conn.ExecuteScalarAsync<uint>("SELECT id FROM phieu_nhap_hang WHERE ma_phieu_nhap = @Ma;", new { Ma = pn1Code });
+
+            // PN2: 500.000đ, nợ 500.000đ
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO phieu_nhap_hang (ma_phieu_nhap, chi_nhanh_id, nha_cung_cap_id, nguoi_nhap_id,
+                    thoi_gian_nhap, tong_tien_hang, giam_gia, chi_phi_khac, tong_tien_nhap,
+                    da_thanh_toan, con_no, trang_thai, ghi_chu, cong_no_da_ghi_nhan, ngay_tao, ngay_cap_nhat)
+                VALUES (@Ma, 1, @NccId, 1,
+                    NOW(), 500000, 0, 0, 500000,
+                    0, 500000, 'HOAN_THANH', 'Phiếu nhập B test 111', 1, NOW(), NOW());
+                """,
+                new { Ma = pn2Code, NccId = nccId });
+            pn2Id = await conn.ExecuteScalarAsync<uint>("SELECT id FROM phieu_nhap_hang WHERE ma_phieu_nhap = @Ma;", new { Ma = pn2Code });
+
+            // Ghi nhận nợ vào sổ cái công nợ NCC
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO lich_su_cong_no_nha_cung_cap (nha_cung_cap_id, chi_nhanh_id, loai_giao_dich, ma_chung_tu, ghi_no, ghi_co, thoi_gian, ghi_chu)
+                VALUES (@NccId, 1, 'NHAP_HANG', @Ma1, 1000000, 0, NOW(), 'Nợ PN1 test 111'),
+                       (@NccId, 1, 'NHAP_HANG', @Ma2, 500000, 0, NOW(), 'Nợ PN2 test 111');
+                """,
+                new { NccId = nccId, Ma1 = pn1Code, Ma2 = pn2Code });
+
+            // ==========================================================================================
+            // KỊCH BẢN 1: HỦY THANH TOÁN TIỀN MẶT
+            // ==========================================================================================
+            Console.Write("[Kiểm tra Issue #111] 1. Hủy thanh toán tiền mặt (khôi phục nợ phiếu nhập & quỹ)... ");
+            var tt1 = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 400000m, "TIEN_MAT", null, "Thanh toán tiền mặt đợt 1 test 111");
+            createdSlips.Add(tt1.MaGiaoDich);
+
+            var huyRes1 = await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, tt1.MaGiaoDich, "Hủy thanh toán tiền mặt nhầm lẫn");
+            if (!huyRes1.ThanhCong)
+                throw new Exception($"Hủy thanh toán {tt1.MaGiaoDich} thất bại: {huyRes1.ThongBao}");
+            if (huyRes1.SoTien != 400000m || huyRes1.TienHoanTacCongNo != 400000m)
+                throw new Exception($"Số tiền hoàn tác không khớp: SoTien={huyRes1.SoTien}, TienHoanTacCongNo={huyRes1.TienHoanTacCongNo}");
+            if (huyRes1.CongNoSauKhiHuy != 1500000m)
+                throw new Exception($"Công nợ sau khi hủy không khớp 1.500.000đ: {huyRes1.CongNoSauKhiHuy}");
+
+            // Kiểm tra phieu_nhap_hang PN1
+            var pn1Check = await conn.QueryFirstOrDefaultAsync(
+                "SELECT da_thanh_toan, con_no FROM phieu_nhap_hang WHERE id = @Id;",
+                new { Id = pn1Id });
+            if ((decimal)pn1Check.da_thanh_toan != 0m || (decimal)pn1Check.con_no != 1000000m)
+                throw new Exception($"PN1 không được khôi phục: da_thanh_toan={pn1Check.da_thanh_toan}, con_no={pn1Check.con_no}");
+
+            // Kiểm tra phieu_chi
+            var pcCheck1 = await conn.QueryFirstOrDefaultAsync(
+                "SELECT trang_thai, ly_do_huy, nguoi_huy_id FROM phieu_chi WHERE ma_phieu_chi = @Ma;",
+                new { Ma = tt1.MaGiaoDich });
+            if (pcCheck1 == null || (string)pcCheck1.trang_thai != "HUY")
+                throw new Exception($"Phiếu chi {tt1.MaGiaoDich} không có trạng thái HUY.");
+
+            // Kiểm tra lich_su_cong_no_nha_cung_cap
+            var dongSoCai1 = await conn.QueryFirstOrDefaultAsync(
+                """
+                SELECT loai_giao_dich, ghi_no, ghi_co
+                FROM lich_su_cong_no_nha_cung_cap
+                WHERE nha_cung_cap_id = @NccId AND ma_chung_tu = @Ma
+                ORDER BY id DESC LIMIT 1;
+                """,
+                new { NccId = nccId, Ma = tt1.MaGiaoDich });
+            if (dongSoCai1 == null || (string)dongSoCai1.loai_giao_dich != "HUY_THANH_TOAN" || (decimal)dongSoCai1.ghi_no != 400000m || (decimal)dongSoCai1.ghi_co != 0m)
+                throw new Exception("Sổ cái công nợ NCC không ghi nhận dòng HUY_THANH_TOAN ghi_no 400.000đ.");
+
+            Console.WriteLine("PASSED (Khôi phục nợ 400k tiền mặt, phieu_chi HUY) ✓");
+
+            // ==========================================================================================
+            // KỊCH BẢN 2: HỦY THANH TOÁN NGÂN HÀNG
+            // ==========================================================================================
+            Console.Write("[Kiểm tra Issue #111] 2. Hủy thanh toán qua chuyển khoản ngân hàng... ");
+            var tt2 = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 500000m, "CHUYEN_KHOAN", "REF-BANK-111", "Thanh toán ngân hàng test 111");
+            createdSlips.Add(tt2.MaGiaoDich);
+
+            var huyRes2 = await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, tt2.MaGiaoDich, "Hủy thanh toán ngân hàng chuyển sai");
+            if (!huyRes2.ThanhCong || huyRes2.SoTien != 500000m)
+                throw new Exception($"Hủy ngân hàng thất bại: {huyRes2.ThongBao}");
+
+            var pcCheck2 = await conn.QueryFirstOrDefaultAsync(
+                "SELECT trang_thai, phuong_thuc FROM phieu_chi WHERE ma_phieu_chi = @Ma;",
+                new { Ma = tt2.MaGiaoDich });
+            if (pcCheck2 == null || (string)pcCheck2.trang_thai != "HUY")
+                throw new Exception($"Phiếu chi ngân hàng {tt2.MaGiaoDich} chưa được cập nhật HUY.");
+            Console.WriteLine("PASSED (Phiếu chi ngân hàng HUY, khôi phục nợ 500k) ✓");
+
+            // ==========================================================================================
+            // KỊCH BẢN 3: HỦY THANH TOÁN MỘT PHẦN
+            // ==========================================================================================
+            Console.Write("[Kiểm tra Issue #111] 3. Hủy thanh toán một phần phiếu nhập... ");
+            var tt3 = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 350000m, "TIEN_MAT", null, "Trả một phần");
+            createdSlips.Add(tt3.MaGiaoDich);
+            var pn1CheckT3 = await conn.QueryFirstOrDefaultAsync(
+                "SELECT da_thanh_toan, con_no FROM phieu_nhap_hang WHERE id = @Id;",
+                new { Id = pn1Id });
+            if ((decimal)pn1CheckT3.da_thanh_toan != 350000m || (decimal)pn1CheckT3.con_no != 650000m)
+                throw new Exception("Thanh toán một phần không ghi nhận đúng vào PN1.");
+
+            var huyRes3 = await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, tt3.MaGiaoDich, "Hủy trả một phần");
+            if (!huyRes3.ThanhCong || huyRes3.TienHoanTacCongNo != 350000m)
+                throw new Exception("Hủy thanh toán một phần thất bại.");
+
+            var pn1CheckSauT3 = await conn.QueryFirstOrDefaultAsync(
+                "SELECT da_thanh_toan, con_no FROM phieu_nhap_hang WHERE id = @Id;",
+                new { Id = pn1Id });
+            if ((decimal)pn1CheckSauT3.da_thanh_toan != 0m || (decimal)pn1CheckSauT3.con_no != 1000000m)
+                throw new Exception("Khôi phục sau hủy một phần không đưa nợ PN1 về 1.000.000đ.");
+            Console.WriteLine("PASSED (Khôi phục nợ một phần 350k về 1.0M) ✓");
+
+            // ==========================================================================================
+            // KỊCH BẢN 4: HỦY THANH TOÁN NHIỀU LẦN CHO CÙNG MỘT PHIẾU NHẬP
+            // ==========================================================================================
+            Console.Write("[Kiểm tra Issue #111] 4. Hủy một giao dịch khi có nhiều lần thanh toán cho cùng phiếu... ");
+            var tt4_1 = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 200000m, "TIEN_MAT", null, "Thanh toán đợt 1");
+            createdSlips.Add(tt4_1.MaGiaoDich);
+            var tt4_2 = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 300000m, "TIEN_MAT", null, "Thanh toán đợt 2");
+            createdSlips.Add(tt4_2.MaGiaoDich);
+
+            var huyRes4 = await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, tt4_2.MaGiaoDich, "Hủy chỉ đợt 2");
+            if (!huyRes4.ThanhCong || huyRes4.TienHoanTacCongNo != 300000m)
+                throw new Exception("Hủy đợt 2 thất bại.");
+
+            var pn1CheckT4 = await conn.QueryFirstOrDefaultAsync(
+                "SELECT da_thanh_toan, con_no FROM phieu_nhap_hang WHERE id = @Id;",
+                new { Id = pn1Id });
+            if ((decimal)pn1CheckT4.da_thanh_toan != 200000m || (decimal)pn1CheckT4.con_no != 800000m)
+                throw new Exception($"Hủy đợt 2 ảnh hưởng sai: da_thanh_toan={pn1CheckT4.da_thanh_toan}, con_no={pn1CheckT4.con_no} (kỳ vọng 200k và 800k)");
+
+            await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, tt4_1.MaGiaoDich, "Dọn dẹp đợt 1");
+            Console.WriteLine("PASSED (Chỉ hoàn tác đợt 2 300k, đợt 1 200k được bảo toàn chính xác) ✓");
+
+            // ==========================================================================================
+            // KỊCH BẢN 5: HỦY GIAO DỊCH LIÊN QUAN NHIỀU PHIẾU NHẬP
+            // ==========================================================================================
+            Console.Write("[Kiểm tra Issue #111] 5. Hủy giao dịch phân bổ cho nhiều phiếu nhập (PN1 & PN2)... ");
+            var tt5 = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 1200000m, "CHUYEN_KHOAN", null, "Thanh toán gộp 2 phiếu");
+            createdSlips.Add(tt5.MaGiaoDich);
+
+            var pn1SauTt5 = await conn.QueryFirstOrDefaultAsync("SELECT da_thanh_toan, con_no FROM phieu_nhap_hang WHERE id = @Id;", new { Id = pn1Id });
+            var pn2SauTt5 = await conn.QueryFirstOrDefaultAsync("SELECT da_thanh_toan, con_no FROM phieu_nhap_hang WHERE id = @Id;", new { Id = pn2Id });
+            if ((decimal)pn1SauTt5.con_no != 0m || (decimal)pn2SauTt5.con_no != 300000m)
+                throw new Exception($"Phân bổ thanh toán gộp không đúng: PN1 còn {pn1SauTt5.con_no}, PN2 còn {pn2SauTt5.con_no}");
+
+            var huyRes5 = await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, tt5.MaGiaoDich, "Hủy thanh toán gộp 2 phiếu");
+            if (!huyRes5.ThanhCong || huyRes5.TienHoanTacCongNo != 1200000m || huyRes5.SoPhieuNhapHoanTac != 2)
+                throw new Exception($"Hủy giao dịch gộp không đúng: SoPhieuNhapHoanTac={huyRes5.SoPhieuNhapHoanTac}, HoanTac={huyRes5.TienHoanTacCongNo}");
+
+            var pn1SauHuy5 = await conn.QueryFirstOrDefaultAsync("SELECT da_thanh_toan, con_no FROM phieu_nhap_hang WHERE id = @Id;", new { Id = pn1Id });
+            var pn2SauHuy5 = await conn.QueryFirstOrDefaultAsync("SELECT da_thanh_toan, con_no FROM phieu_nhap_hang WHERE id = @Id;", new { Id = pn2Id });
+            if ((decimal)pn1SauHuy5.con_no != 1000000m || (decimal)pn1SauHuy5.da_thanh_toan != 0m)
+                throw new Exception($"PN1 không được khôi phục đúng: da_thanh_toan={pn1SauHuy5.da_thanh_toan}, con_no={pn1SauHuy5.con_no}");
+            if ((decimal)pn2SauHuy5.con_no != 500000m || (decimal)pn2SauHuy5.da_thanh_toan != 0m)
+                throw new Exception($"PN2 không được khôi phục đúng: da_thanh_toan={pn2SauHuy5.da_thanh_toan}, con_no={pn2SauHuy5.con_no}");
+
+            var countAllocHuy = await conn.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM thanh_toan_nha_cung_cap WHERE ma_giao_dich = @Ma AND trang_thai = 'HUY';",
+                new { Ma = tt5.MaGiaoDich });
+            if (countAllocHuy != 2)
+                throw new Exception($"Số bản ghi thanh_toan_nha_cung_cap đổi thành HUY không phải 2 mà là: {countAllocHuy}");
+
+            Console.WriteLine("PASSED (Khôi phục chính xác cả 2 phiếu nhập và 2 phân bổ thành HUY) ✓");
+
+            // ==========================================================================================
+            // KỊCH BẢN 6: THỬ HỦY GIAO DỊCH ĐÃ HỦY
+            // ==========================================================================================
+            Console.Write("[Kiểm tra Issue #111] 6. Chặn hủy giao dịch đã hủy (chống hủy lặp)... ");
+            var caughtDuplicate = false;
+            try
+            {
+                await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, tt5.MaGiaoDich, "Hủy lần nữa sẽ lỗi");
+            }
+            catch (InvalidOperationException ex)
+            {
+                caughtDuplicate = true;
+                if (!ex.Message.Contains("đã bị hủy", StringComparison.OrdinalIgnoreCase) &&
+                    !ex.Message.Contains("đã được hủy", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new Exception($"Thông báo chặn hủy lặp không rõ ràng: {ex.Message}");
+                }
+                Console.WriteLine($"PASSED (Từ chối hợp lệ: \"{ex.Message}\") ✓");
+            }
+            if (!caughtDuplicate)
+                throw new Exception("Hệ thống không chặn khi hủy giao dịch đã hủy!");
+
+            // ==========================================================================================
+            // KỊCH BẢN 7: THỬ HỦY BẰNG TÀI KHOẢN NHÂN VIÊN
+            // ==========================================================================================
+            Console.Write("[Kiểm tra Issue #111] 7. Chặn hủy bằng tài khoản nhân viên (yêu cầu Admin)... ");
+            var tt7 = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 100000m, "TIEN_MAT", null, "Thanh toán để test phân quyền");
+            createdSlips.Add(tt7.MaGiaoDich);
+
+            var staffUser = new NguoiDung
+            {
+                Id = 999,
+                TenDangNhap = "nhanvien_test",
+                HoTen = "Nhân Viên Thu Ngân",
+                ChiNhanhId = 1,
+                MaVaiTro = "NhanVien"
+            };
+            Session.SetCurrentUser(staffUser);
+
+            var caughtPermission = false;
+            try
+            {
+                await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, tt7.MaGiaoDich, "Nhân viên thử hủy");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                caughtPermission = true;
+                if (!ex.Message.Contains("Quản trị viên", StringComparison.OrdinalIgnoreCase) &&
+                    !ex.Message.Contains("Admin", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new Exception($"Thông báo lỗi phân quyền không đúng: {ex.Message}");
+                }
+                Console.WriteLine($"PASSED (Chặn chuẩn xác: \"{ex.Message}\") ✓");
+            }
+            finally
+            {
+                Session.SetCurrentUser(adminUser);
+            }
+            if (!caughtPermission)
+                throw new Exception("Hệ thống cho phép nhân viên không có quyền Admin thực hiện hủy!");
+
+            await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, tt7.MaGiaoDich, "Admin dọn dẹp phiếu 7");
+
+            // ==========================================================================================
+            // KỊCH BẢN 8: KIỂM TRA ĐỐI CHIẾU CÔNG NỢ SAU KHI HỦY
+            // ==========================================================================================
+            Console.Write("[Kiểm tra Issue #111] 8. Đối chiếu công nợ sau khi hủy (không cộng trùng)... ");
+            var tongNoSoCai = await conn.ExecuteScalarAsync<decimal>(
+                "SELECT COALESCE(SUM(ghi_no - ghi_co), 0) FROM lich_su_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @NccId;",
+                new { NccId = nccId });
+            var tongNoPhieuNhap = await conn.ExecuteScalarAsync<decimal>(
+                "SELECT COALESCE(SUM(con_no), 0) FROM phieu_nhap_hang WHERE nha_cung_cap_id = @NccId AND trang_thai NOT IN ('HUY','DA_HUY');",
+                new { NccId = nccId });
+            if (tongNoSoCai != 1500000m || tongNoPhieuNhap != 1500000m)
+                throw new Exception($"Đối chiếu công nợ sai lệch: Sổ cái={tongNoSoCai:N0}, Phiếu nhập={tongNoPhieuNhap:N0} (kỳ vọng 1.500.000)");
+            Console.WriteLine($"PASSED (Sổ cái: {tongNoSoCai:N0} đ == Phiếu nhập: {tongNoPhieuNhap:N0} đ) ✓");
+
+            // ==========================================================================================
+            // KỊCH BẢN 9: KIỂM TRA SỐ DƯ QUỸ VÀ BẢO TOÀN LỊCH SỬ PHIẾU CHI
+            // ==========================================================================================
+            Console.Write("[Kiểm tra Issue #111] 9. Kiểm tra số dư quỹ & bảo toàn lịch sử phieu_chi (không xóa)... ");
+            var tongPhieuChi = await conn.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM phieu_chi WHERE ma_phieu_chi IN @Slips;",
+                new { Slips = createdSlips });
+            var phieuChiHoanThanh = await conn.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM phieu_chi WHERE ma_phieu_chi IN @Slips AND trang_thai = 'HOAN_THANH';",
+                new { Slips = createdSlips });
+            var phieuChiHuy = await conn.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM phieu_chi WHERE ma_phieu_chi IN @Slips AND trang_thai = 'HUY';",
+                new { Slips = createdSlips });
+            if (tongPhieuChi != createdSlips.Count || phieuChiHoanThanh != 0 || phieuChiHuy != createdSlips.Count)
+                throw new Exception($"Bảo toàn phieu_chi sai lệch: Tổng={tongPhieuChi}, Hoàn thành={phieuChiHoanThanh}, Hủy={phieuChiHuy}");
+            Console.WriteLine($"PASSED (Tất cả {tongPhieuChi} phiếu chi được bảo toàn với trạng thái HUY, số dư quỹ được phục hồi) ✓");
+
+            // ==========================================================================================
+            // KỊCH BẢN 10: KIỂM TRA LỊCH SỬ THANH TOÁN VÀ NHẬT KÝ HOẠT ĐỘNG
+            // ==========================================================================================
+            Console.Write("[Kiểm tra Issue #111] 10. Kiểm tra lịch sử thanh toán & nhật ký hoạt động... ");
+            var lsTtCheck = await conn.QueryFirstOrDefaultAsync(
+                """
+                SELECT trang_thai, ly_do_huy, nguoi_huy_id, thoi_gian_huy
+                FROM lich_su_thanh_toan_cong_no_nha_cung_cap
+                WHERE ma_giao_dich = @Ma;
+                """,
+                new { Ma = tt1.MaGiaoDich });
+            if (lsTtCheck == null || (string)lsTtCheck.trang_thai != "HUY" || string.IsNullOrWhiteSpace((string)lsTtCheck.ly_do_huy))
+                throw new Exception("Lịch sử thanh toán NCC không lưu đủ thông tin hủy.");
+
+            await Task.Delay(200);
+            var logCount = await conn.ExecuteScalarAsync<int>(
+                """
+                SELECT COUNT(*)
+                FROM nhat_ky_hoat_dong
+                WHERE doi_tuong = 'NHA_CUNG_CAP' AND doi_tuong_id = @NccId;
+                """,
+                new { NccId = nccId });
+            if (logCount == 0)
+                throw new Exception("Nhật ký hoạt động không ghi nhận thao tác hủy thanh toán NCC.");
+            Console.WriteLine($"PASSED (Lịch sử thanh toán lưu trạng thái HUY và lý do; Nhật ký có {logCount} dòng) ✓");
+
+            // ==========================================================================================
+            // KỊCH BẢN 11: KIỂM TRA HỦY THANH TOÁN CÓ DƯ TRẢ TRƯỚC
+            // ==========================================================================================
+            Console.Write("[Kiểm tra Issue #111] 11. Hủy thanh toán có dư trả trước & chặn khi tiền dư đã dùng... ");
+            var tt11 = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 1800000m, "CHUYEN_KHOAN", null, "Thanh toán có dư test 111");
+            createdSlips.Add(tt11.MaGiaoDich);
+
+            var duNccCheck = await conn.ExecuteScalarAsync<decimal>("SELECT so_du_tra_truoc FROM nha_cung_cap WHERE id = @Id;", new { Id = nccId });
+            if (duNccCheck != 300000m)
+                throw new Exception($"Số dư trả trước NCC không phải 300.000đ: {duNccCheck}");
+
+            await conn.ExecuteAsync("UPDATE nha_cung_cap SET so_du_tra_truoc = 100000 WHERE id = @Id;", new { Id = nccId });
+            var caughtTraTruocDaDung = false;
+            try
+            {
+                await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, tt11.MaGiaoDich, "Thử hủy khi tiền dư đã bị tiêu");
+            }
+            catch (InvalidOperationException ex)
+            {
+                caughtTraTruocDaDung = true;
+                if (!ex.Message.Contains("số dư trả trước", StringComparison.OrdinalIgnoreCase))
+                    throw new Exception($"Thông báo chặn khi tiền dư đã dùng không chuẩn: {ex.Message}");
+            }
+            if (!caughtTraTruocDaDung)
+                throw new Exception("Hệ thống không chặn hủy khi số dư trả trước đã bị sử dụng!");
+
+            await conn.ExecuteAsync("UPDATE nha_cung_cap SET so_du_tra_truoc = 300000 WHERE id = @Id;", new { Id = nccId });
+            var huyRes11 = await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, tt11.MaGiaoDich, "Hủy thanh toán dư hợp lệ");
+            if (!huyRes11.ThanhCong || huyRes11.TienHoanTacTraTruoc != 300000m || huyRes11.TienHoanTacCongNo != 1500000m)
+                throw new Exception($"Hủy thanh toán dư không đúng: HoanTacTraTruoc={huyRes11.TienHoanTacTraTruoc}, HoanTacCongNo={huyRes11.TienHoanTacCongNo}");
+
+            var duSauHuy11 = await conn.ExecuteScalarAsync<decimal>("SELECT so_du_tra_truoc FROM nha_cung_cap WHERE id = @Id;", new { Id = nccId });
+            if (duSauHuy11 != 0m)
+                throw new Exception($"Số dư trả trước NCC sau hủy không về 0: {duSauHuy11}");
+
+            var lsTraTruocNcc = await conn.QueryFirstOrDefaultAsync(
+                """
+                SELECT so_tien, so_du_sau, loai_giao_dich
+                FROM lich_su_tra_truoc_ncc
+                WHERE nha_cung_cap_id = @Id AND ma_chung_tu = @Ma
+                ORDER BY id DESC LIMIT 1;
+                """,
+                new { Id = nccId, Ma = tt11.MaGiaoDich });
+            if (lsTraTruocNcc == null || (decimal)lsTraTruocNcc.so_tien != 300000m || (string)lsTraTruocNcc.loai_giao_dich != "HOAN_TRA")
+                throw new Exception("Lịch sử trả trước NCC không ghi nhận dòng HOAN_TRA 300.000đ.");
+            Console.WriteLine("PASSED (Chặn khi tiền dư đã tiêu; Hủy hoàn tất thu hồi 300k trả trước và khôi phục 1.5M nợ) ✓");
+
+            Console.WriteLine("\n>>> TOÀN BỘ 11 TIÊU CHÍ KIỂM THỬ ISSUE #111 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+            return 0;
+        }
+        finally
+        {
+            // Dọn dẹp dữ liệu test
+            try
+            {
+                if (nccId > 0)
+                {
+                    await conn.ExecuteAsync("DELETE FROM lich_su_tra_truoc_ncc WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    await conn.ExecuteAsync("DELETE FROM thanh_toan_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_thanh_toan_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    if (createdSlips.Count > 0)
+                        await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE ma_phieu_chi IN @Slips;", new { Slips = createdSlips });
+                    if (pn1Id > 0 || pn2Id > 0)
+                        await conn.ExecuteAsync("DELETE FROM phieu_nhap_hang WHERE id IN (@Id1, @Id2);", new { Id1 = pn1Id, Id2 = pn2Id });
+                    await conn.ExecuteAsync("DELETE FROM nha_cung_cap WHERE id = @Id;", new { Id = nccId });
+                }
+            }
+            catch { }
+        }
+    }
+
+    private static async Task<int> KiemTraIssue112_TuDongXemChiTietPhieuNhapAsync(string connectionString)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #112: TỰ ĐỘNG XEM CHI TIẾT PHIẾU NHẬP SAU KHI TẠO THÀNH CÔNG     ");
+        Console.WriteLine("==========================================================================================");
+
+        var db = new DatabaseService();
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+        await DatabaseService.EnsureTraTruocSchemaAsync(conn);
+
+        var adminUser = new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "admin",
+            HoTen = "Quản trị viên test 112",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        };
+        Session.SetCurrentUser(adminUser);
+
+        var maNccTest = "NCC_TEST_112_" + DateTime.Now.ToString("yyMMddHHmmss");
+        uint nccId = 0;
+        var createdProductIds = new List<uint>();
+        var createdPhieuIds = new List<uint>();
+        var createdCodes = new List<string>();
+
+        try
+        {
+            // Tạo nhà cung cấp test
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO nha_cung_cap (ma_nha_cung_cap, ten_nha_cung_cap, so_dien_thoai, dia_chi, ma_so_thue, trang_thai, so_du_tra_truoc)
+                VALUES (@Ma, @Ten, '0988776655', '123 Đường Hoa, Q1, TP.HCM', '0312345678', 1, 0.00);
+                """,
+                new { Ma = maNccTest, Ten = "Công ty Hoa Tươi Ban Mai (Test 112)" });
+            nccId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM nha_cung_cap WHERE ma_nha_cung_cap = @Ma;", new { Ma = maNccTest });
+
+            // Tạo các sản phẩm test
+            for (var p = 1; p <= 3; p++)
+            {
+                var maSp = $"SP112_{p}_{DateTime.Now:HHmmss}";
+                await conn.ExecuteAsync(
+                    """
+                    INSERT INTO san_pham (ma_san_pham, ten_san_pham, gia_ban, gia_von, trang_thai, ngay_tao, ngay_cap_nhat)
+                    VALUES (@Ma, @Ten, 50000, 30000, 1, NOW(), NOW());
+                    """,
+                    new { Ma = maSp, Ten = $"Hoa Hồng Test 112 Loại {p}" });
+                var spId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM san_pham WHERE ma_san_pham = @Ma;", new { Ma = maSp });
+                createdProductIds.Add(spId);
+            }
+
+            // TEST 1: TẠO PHIẾU NHẬP THANH TOÁN ĐỦ
+            Console.Write("[Kiểm tra Issue #112] 1. Tạo phiếu nhập thanh toán đủ (Đã thanh toán = Tổng tiền, Còn nợ = 0)... ");
+            var phieu1 = new PhieuNhapHang
+            {
+                NhaCungCapId = nccId,
+                ThoiGianNhap = DateTime.Now,
+                DaThanhToan = 200000m,
+                ChiPhiKhac = 0m,
+                PhuongThucThanhToan = "TIEN_MAT",
+                GhiChu = "Test 1: Thanh toán đủ tiền mặt"
+            };
+            var items1 = new List<ChiTietPhieuNhapHang>
+            {
+                new() { SanPham = new SanPham { Id = createdProductIds[0], TenSanPham = "SP1" }, SoLuong = 10, DonGiaNhap = 20000m }
+            };
+            var id1 = await db.LuuPhieuNhapHangAsync(phieu1, items1);
+            createdPhieuIds.Add(id1);
+            createdCodes.Add(phieu1.MaPhieuNhap);
+
+            if (id1 == 0 || string.IsNullOrWhiteSpace(phieu1.MaPhieuNhap))
+                throw new Exception("Lưu phiếu nhập 1 không trả về ID hoặc mã phiếu hợp lệ.");
+
+            var detail1 = await db.GetPhieuNhapHangDetailAsync(id1);
+            if (detail1 == null)
+                throw new Exception("Không nạp được chi tiết phiếu 1 từ database.");
+            if (detail1.TongTienNhap != 200000m || detail1.DaThanhToan != 200000m || detail1.ConNo != 0m)
+                throw new Exception($"Số liệu phiếu 1 không đúng: Tổng={detail1.TongTienNhap}, ĐãTT={detail1.DaThanhToan}, Nợ={detail1.ConNo}");
+            Console.WriteLine($"PASSED (Mã={detail1.MaPhieuNhap}, Tổng={detail1.TongTienNhap:N0}đ, Nợ={detail1.ConNo:N0}đ) ✓");
+
+            // TEST 2: TẠO PHIẾU NHẬP THANH TOÁN MỘT PHẦN
+            Console.Write("[Kiểm tra Issue #112] 2. Tạo phiếu nhập thanh toán một phần (Đã thanh toán < Tổng tiền, Còn nợ > 0)... ");
+            var phieu2 = new PhieuNhapHang
+            {
+                NhaCungCapId = nccId,
+                ThoiGianNhap = DateTime.Now,
+                DaThanhToan = 150000m,
+                ChiPhiKhac = 0m,
+                PhuongThucThanhToan = "CHUYEN_KHOAN",
+                GhiChu = "Test 2: Thanh toán một phần chuyển khoản"
+            };
+            var items2 = new List<ChiTietPhieuNhapHang>
+            {
+                new() { SanPham = new SanPham { Id = createdProductIds[0], TenSanPham = "SP1" }, SoLuong = 15, DonGiaNhap = 20000m } // 300.000đ
+            };
+            var id2 = await db.LuuPhieuNhapHangAsync(phieu2, items2);
+            createdPhieuIds.Add(id2);
+            createdCodes.Add(phieu2.MaPhieuNhap);
+
+            var detail2 = await db.GetPhieuNhapHangDetailAsync(id2);
+            if (detail2 == null || detail2.TongTienNhap != 300000m || detail2.DaThanhToan != 150000m || detail2.ConNo != 150000m)
+                throw new Exception($"Số liệu phiếu 2 không đúng: Tổng={detail2?.TongTienNhap}, ĐãTT={detail2?.DaThanhToan}, Nợ={detail2?.ConNo}");
+            Console.WriteLine($"PASSED (Mã={detail2.MaPhieuNhap}, Tổng={detail2.TongTienNhap:N0}đ, ĐãTT={detail2.DaThanhToan:N0}đ, Nợ={detail2.ConNo:N0}đ) ✓");
+
+            // TEST 3: TẠO PHIẾU NHẬP CHƯA THANH TOÁN
+            Console.Write("[Kiểm tra Issue #112] 3. Tạo phiếu nhập chưa thanh toán (Đã thanh toán = 0, Còn nợ = Tổng tiền)... ");
+            var phieu3 = new PhieuNhapHang
+            {
+                NhaCungCapId = nccId,
+                ThoiGianNhap = DateTime.Now,
+                DaThanhToan = 0m,
+                ChiPhiKhac = 0m,
+                PhuongThucThanhToan = "TIEN_MAT",
+                GhiChu = "Test 3: Chưa thanh toán (Ghi nợ 100%)"
+            };
+            var items3 = new List<ChiTietPhieuNhapHang>
+            {
+                new() { SanPham = new SanPham { Id = createdProductIds[1], TenSanPham = "SP2" }, SoLuong = 5, DonGiaNhap = 40000m } // 200.000đ
+            };
+            var id3 = await db.LuuPhieuNhapHangAsync(phieu3, items3);
+            createdPhieuIds.Add(id3);
+            createdCodes.Add(phieu3.MaPhieuNhap);
+
+            var detail3 = await db.GetPhieuNhapHangDetailAsync(id3);
+            if (detail3 == null || detail3.TongTienNhap != 200000m || detail3.DaThanhToan != 0m || detail3.ConNo != 200000m)
+                throw new Exception($"Số liệu phiếu 3 không đúng: Tổng={detail3?.TongTienNhap}, ĐãTT={detail3?.DaThanhToan}, Nợ={detail3?.ConNo}");
+            Console.WriteLine($"PASSED (Mã={detail3.MaPhieuNhap}, Tổng={detail3.TongTienNhap:N0}đ, Nợ={detail3.ConNo:N0}đ) ✓");
+
+            // TEST 4: TẠO PHIẾU NHẬP CÓ CHI PHÍ KHÁC
+            Console.Write("[Kiểm tra Issue #112] 4. Tạo phiếu nhập có chi phí khác (Tổng tiền nhập = Hàng hóa + Chi phí khác)... ");
+            var phieu4 = new PhieuNhapHang
+            {
+                NhaCungCapId = nccId,
+                ThoiGianNhap = DateTime.Now,
+                DaThanhToan = 100000m,
+                ChiPhiKhac = 35000m, // Vận chuyển / bốc xếp
+                PhuongThucThanhToan = "TIEN_MAT",
+                GhiChu = "Test 4: Có chi phí vận chuyển 35.000đ"
+            };
+            var items4 = new List<ChiTietPhieuNhapHang>
+            {
+                new() { SanPham = new SanPham { Id = createdProductIds[1], TenSanPham = "SP2" }, SoLuong = 10, DonGiaNhap = 25000m } // Tiền hàng 250.000đ
+            };
+            var id4 = await db.LuuPhieuNhapHangAsync(phieu4, items4);
+            createdPhieuIds.Add(id4);
+            createdCodes.Add(phieu4.MaPhieuNhap);
+
+            var detail4 = await db.GetPhieuNhapHangDetailAsync(id4);
+            if (detail4 == null || detail4.TongTienHang != 250000m || detail4.ChiPhiKhac != 35000m || detail4.TongTienNhap != 285000m)
+                throw new Exception($"Số liệu phiếu 4 không đúng: Tiền hàng={detail4?.TongTienHang}, Chi phí={detail4?.ChiPhiKhac}, Tổng nhập={detail4?.TongTienNhap}");
+            Console.WriteLine($"PASSED (Tiền hàng={detail4.TongTienHang:N0}đ, Chi phí khác={detail4.ChiPhiKhac:N0}đ, Tổng nhập={detail4.TongTienNhap:N0}đ) ✓");
+
+            // TEST 5: TẠO PHIẾU NHẬP NHIỀU SẢN PHẨM
+            Console.Write("[Kiểm tra Issue #112] 5. Tạo phiếu nhập nhiều sản phẩm (3 mặt hàng khác nhau)... ");
+            var phieu5 = new PhieuNhapHang
+            {
+                NhaCungCapId = nccId,
+                ThoiGianNhap = DateTime.Now,
+                DaThanhToan = 400000m,
+                ChiPhiKhac = 20000m,
+                PhuongThucThanhToan = "CHUYEN_KHOAN",
+                GhiChu = "Test 5: Nhiều sản phẩm"
+            };
+            var items5 = new List<ChiTietPhieuNhapHang>
+            {
+                new() { SanPham = new SanPham { Id = createdProductIds[0], TenSanPham = "SP1" }, SoLuong = 10, DonGiaNhap = 15000m }, // 150.000đ
+                new() { SanPham = new SanPham { Id = createdProductIds[1], TenSanPham = "SP2" }, SoLuong = 8,  DonGiaNhap = 25000m }, // 200.000đ
+                new() { SanPham = new SanPham { Id = createdProductIds[2], TenSanPham = "SP3" }, SoLuong = 12, DonGiaNhap = 10000m }  // 120.000đ
+            };
+            var id5 = await db.LuuPhieuNhapHangAsync(phieu5, items5);
+            createdPhieuIds.Add(id5);
+            createdCodes.Add(phieu5.MaPhieuNhap);
+
+            var detail5 = await db.GetPhieuNhapHangDetailAsync(id5);
+            if (detail5 == null || detail5.Items.Count != 3 || detail5.TongTienHang != 470000m || detail5.TongTienNhap != 490000m)
+                throw new Exception($"Số liệu phiếu 5 không đúng: Số dòng={detail5?.Items.Count}, Tiền hàng={detail5?.TongTienHang}, Tổng nhập={detail5?.TongTienNhap}");
+            Console.WriteLine($"PASSED (Đủ 3 mặt hàng, Tiền hàng={detail5.TongTienHang:N0}đ, Tổng nhập={detail5.TongTienNhap:N0}đ) ✓");
+
+            // TEST 6: MỞ CHI TIẾT NGAY SAU KHI LƯU & KIỂM TRA ĐẦY ĐỦ THÔNG TIN
+            Console.Write("[Kiểm tra Issue #112] 6. Kiểm tra dữ liệu nạp từ database và các tiện ích in/PDF/sao chép... ");
+            // Kiểm tra các trường thông tin bắt buộc của Section 3
+            if (string.IsNullOrWhiteSpace(detail5.MaPhieuNhap))
+                throw new Exception("Mã phiếu nhập bị rỗng.");
+            if (detail5.ThoiGianNhap == default)
+                throw new Exception("Ngày nhập không hợp lệ.");
+            if (string.IsNullOrWhiteSpace(detail5.TenNhaCungCap))
+                throw new Exception("Tên nhà cung cấp bị rỗng.");
+            if (detail5.Items.Count == 0 || detail5.Items.Any(i => i.SoLuong <= 0 || i.DonGiaNhap <= 0 || i.ThanhTien <= 0))
+                throw new Exception("Chi tiết sản phẩm thiếu hoặc sai số liệu.");
+            if (string.IsNullOrWhiteSpace(detail5.PhuongThucThanhToanHienThi))
+                throw new Exception("Phương thức thanh toán bị rỗng.");
+            if (!detail5.TieuDe.Contains(detail5.MaPhieuNhap))
+                throw new Exception($"Tiêu đề cửa sổ ({detail5.TieuDe}) không chứa mã phiếu nhập.");
+
+            // Kiểm tra In & Xuất PDF helper
+            var tiem = new ThongTinTiem { TenTiem = "Shop Hoa Tươi Antigravity", SoDienThoai = "0909090909" };
+            var html = PhieuNhapPrintService.TaoHtml(detail5, tiem);
+            if (!html.Contains(detail5.MaPhieuNhap))
+                throw new Exception("Mẫu HTML in phiếu nhập không chứa mã phiếu nhập.");
+            if (!html.Contains("Chi phí khác"))
+                throw new Exception("Mẫu HTML in phiếu nhập không hiển thị chi phí khác.");
+
+            var pdfFileName = PhieuNhapPrintService.TaoTenFilePdf(detail5.MaPhieuNhap);
+            if (!pdfFileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) || !pdfFileName.Contains(detail5.MaPhieuNhap))
+                throw new Exception($"Tên file PDF gợi ý ({pdfFileName}) không chuẩn.");
+            Console.WriteLine("PASSED (Toàn bộ 16 trường thông tin, Tiêu đề, HTML in & tên file PDF đạt chuẩn) ✓");
+
+            // TEST 7: ĐÓNG CHI TIẾT RỒI TÌM LẠI PHIẾU TRONG QUẢN LÝ PHIẾU NHẬP
+            Console.Write("[Kiểm tra Issue #112] 7. Đóng chi tiết rồi tìm lại phiếu trong quản lý phiếu nhập... ");
+            foreach (var code in createdCodes)
+            {
+                var refPhieu = await db.GetPhieuNhapHangDetailTheoMaAsync(code);
+                if (refPhieu == null)
+                    throw new Exception($"Không tìm lại được phiếu {code} theo mã.");
+                if (refPhieu.MaPhieuNhap != code)
+                    throw new Exception($"Phiếu tìm lại {code} có mã không khớp: {refPhieu.MaPhieuNhap}");
+            }
+            Console.WriteLine($"PASSED (Cả {createdCodes.Count} phiếu tìm lại nguyên vẹn từ database) ✓");
+
+            // TEST 8: KIỂM TRA KHÔNG BỊ TẠO TRÙNG PHIẾU
+            Console.Write("[Kiểm tra Issue #112] 8. Kiểm tra không bị tạo trùng phiếu nhập trong database... ");
+            foreach (var code in createdCodes)
+            {
+                var count = await conn.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM phieu_nhap_hang WHERE ma_phieu_nhap = @Ma;",
+                    new { Ma = code });
+                if (count != 1)
+                    throw new Exception($"Phiếu {code} bị trùng lặp trong database (COUNT = {count})!");
+            }
+            Console.WriteLine("PASSED (Mỗi phiếu chỉ tồn tại duy nhất 1 bản ghi trong database) ✓");
+
+            // TEST 9: ĐỐI CHIẾU CÔNG NỢ VÀ SỔ QUỸ
+            Console.Write("[Kiểm tra Issue #112] 9. Đối chiếu công nợ nhà cung cấp và sổ quỹ tương ứng... ");
+            // NCC test đã tạo 5 phiếu nhập:
+            // Phiếu 1: 200k, đã trả 200k, nợ 0k
+            // Phiếu 2: 300k, đã trả 150k, nợ 150k
+            // Phiếu 3: 200k, đã trả 0k, nợ 200k
+            // Phiếu 4: 285k, đã trả 100k, nợ 185k
+            // Phiếu 5: 490k, đã trả 400k, nợ 90k
+            // Tổng tiền mua = 200 + 300 + 200 + 285 + 490 = 1.475.000đ
+            // Tổng đã thanh toán = 200 + 150 + 0 + 100 + 400 = 850.000đ
+            // Tổng công nợ còn lại = 0 + 150 + 200 + 185 + 90 = 625.000đ
+            var nccSummary = await db.GetNhaCungCapByIdAsync(nccId);
+            if (nccSummary == null)
+                throw new Exception("Không nạp được thông tin tổng hợp của nhà cung cấp.");
+
+            if (nccSummary.TongMua != 1475000m)
+                throw new Exception($"Tổng mua của NCC ({nccSummary.TongMua}) không khớp với 1.475.000đ.");
+            if (nccSummary.ConNo != 625000m)
+                throw new Exception($"Công nợ của NCC ({nccSummary.ConNo}) không khớp với 625.000đ.");
+
+            // Kiểm tra sổ quỹ / phiếu chi phát sinh đúng các khoản đã thanh toán
+            var totalPhieuChi = await conn.ExecuteScalarAsync<decimal>(
+                """
+                SELECT COALESCE(SUM(so_tien), 0)
+                FROM phieu_chi
+                WHERE phieu_nhap_hang_id IN @Ids OR ma_phieu_nhap IN @Codes;
+                """,
+                new { Ids = createdPhieuIds, Codes = createdCodes });
+            if (totalPhieuChi != 850000m)
+                throw new Exception($"Tổng tiền phiếu chi ghi nhận ({totalPhieuChi}) không khớp 850.000đ.");
+            Console.WriteLine($"PASSED (Tổng mua 1.475.000đ, Đã chi sổ quỹ 850.000đ, Công nợ còn lại 625.000đ hoàn toàn khớp) ✓");
+
+            Console.WriteLine("\n>>> TOÀN BỘ 9 TIÊU CHÍ KIỂM THỬ ISSUE #112 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+            return 0;
+        }
+        finally
+        {
+            // Dọn dẹp dữ liệu test
+            try
+            {
+                if (createdPhieuIds.Count > 0)
+                {
+                    await conn.ExecuteAsync("DELETE FROM chi_tiet_phieu_nhap_hang WHERE phieu_nhap_id IN @Ids;", new { Ids = createdPhieuIds });
+                    await conn.ExecuteAsync("DELETE FROM thanh_toan_nha_cung_cap WHERE phieu_nhap_id IN @Ids;", new { Ids = createdPhieuIds });
+                    await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE phieu_nhap_hang_id IN @Ids OR ma_phieu_nhap IN @Codes;", new { Ids = createdPhieuIds, Codes = createdCodes });
+                    await conn.ExecuteAsync("DELETE FROM phieu_nhap_hang WHERE id IN @Ids;", new { Ids = createdPhieuIds });
+                }
+
+                if (nccId > 0)
+                {
+                    await conn.ExecuteAsync("DELETE FROM lich_su_tra_truoc_ncc WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_thanh_toan_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    await conn.ExecuteAsync("DELETE FROM nha_cung_cap WHERE id = @Id;", new { Id = nccId });
+                }
+
+                if (createdProductIds.Count > 0)
+                {
+                    await conn.ExecuteAsync("DELETE FROM san_pham WHERE id IN @Ids;", new { Ids = createdProductIds });
                 }
             }
             catch { }

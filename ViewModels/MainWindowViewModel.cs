@@ -5479,10 +5479,13 @@ public partial class MainWindowViewModel : ObservableObject
     /// Truy vấn lại đầy đủ header + dòng hàng theo khoá chính phieu_nhap_hang.id,
     /// không sửa/xóa. Nếu phiếu không còn trong database thì báo rõ cho người dùng.
     /// </summary>
-    [RelayCommand]
-    private async Task XemChiTietPhieuNhapAsync(PhieuNhapHang? item)
+    /// <summary>
+    /// Hiển thị cửa sổ chi tiết của một phiếu nhập hàng theo id phiếu trong database.
+    /// Dữ liệu được nạp trực tiếp từ cơ sở dữ liệu, đảm bảo chính xác tuyệt đối (Issue #112).
+    /// </summary>
+    public async Task HienThiChiTietPhieuNhapAsync(uint phieuNhapId, string? maPhieu = null)
     {
-        if (item is null || OwnerWindow is null)
+        if (phieuNhapId == 0 || OwnerWindow is null)
             return;
 
         if (!CanViewPurchaseDetail && !CanViewPurchases)
@@ -5491,11 +5494,9 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        var maPhieu = item.MaPhieuNhap;
-
         try
         {
-            var detail = await _db.GetPhieuNhapHangDetailAsync(item.Id);
+            var detail = await _db.GetPhieuNhapHangDetailAsync(phieuNhapId);
 
             if (detail is null)
             {
@@ -5511,7 +5512,8 @@ public partial class MainWindowViewModel : ObservableObject
                 ChinhSuaTuChiTietPhieuNhapAsync,
                 HuyTuChiTietPhieuNhapAsync,
                 KhoiPhucTuChiTietPhieuNhapAsync,
-                MuaLaiTuChiTietPhieuNhapAsync);
+                MuaLaiTuChiTietPhieuNhapAsync,
+                LayThongTinTiemChoHoaDonAsync);
             await window.ShowDialog(OwnerWindow);
         }
         catch (Exception ex)
@@ -5522,6 +5524,15 @@ public partial class MainWindowViewModel : ObservableObject
 
             SafeLog.WriteError("Loi xem chi tiet phieu nhap", ex);
         }
+    }
+
+    [RelayCommand]
+    private async Task XemChiTietPhieuNhapAsync(PhieuNhapHang? item)
+    {
+        if (item is null || item.Id == 0)
+            return;
+
+        await HienThiChiTietPhieuNhapAsync(item.Id, item.MaPhieuNhap);
     }
 
     /// <summary>
@@ -6714,6 +6725,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         var tongTienVuaLuu = PhieuNhapTongTienNhapText;
         string maPhieuVuaLuu = PhieuNhapMa;
+        uint phieuVuaLuuId = 0;
 
         try
         {
@@ -6736,7 +6748,8 @@ public partial class MainWindowViewModel : ObservableObject
 
             // Lưu header + chi tiết + tồn kho + giá vốn + ĐVT + công nợ + chứng từ + audit trong MỘT transaction.
             // Service tự rollback toàn bộ nếu bất kỳ bước nào lỗi.
-            _phieuNhapId = await _db.LuuPhieuNhapHangAsync(phieu, dongHopLe, ActivePhieuNhapTab?.DraftId, PhieuNhapChungTus);
+            phieuVuaLuuId = await _db.LuuPhieuNhapHangAsync(phieu, dongHopLe, ActivePhieuNhapTab?.DraftId, PhieuNhapChungTus);
+            _phieuNhapId = phieuVuaLuuId;
 
             maPhieuVuaLuu = phieu.MaPhieuNhap;
             PhieuNhapMa = phieu.MaPhieuNhap;
@@ -6830,6 +6843,12 @@ public partial class MainWindowViewModel : ObservableObject
         // KhoiTaoPhieuNhapMoiAsync() để PhieuNhapMa = "" nếu sinh mã thất bại
         // (lỗi SQL/kết nối). Không được báo "sẵn sàng" khi mã còn rỗng.
         StatusMessage = $"✅ Đã lưu thành công phiếu nhập {maPhieuVuaLuu}.";
+
+        // Tự động mở cửa sổ chi tiết phiếu nhập vừa tạo (Issue #112)
+        if (phieuVuaLuuId > 0)
+        {
+            await HienThiChiTietPhieuNhapAsync(phieuVuaLuuId, maPhieuVuaLuu);
+        }
     }
 
     partial void OnTienKhachDuaChanged(decimal value)

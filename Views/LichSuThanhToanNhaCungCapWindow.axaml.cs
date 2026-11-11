@@ -30,6 +30,8 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
     private bool _updatingDateRange;
     private int _loadVersion;
 
+    public bool CoThayDoi { get; private set; }
+
     public LichSuThanhToanNhaCungCapWindow()
         : this(new DatabaseService(), null, "", "Nhà cung cấp")
     {
@@ -240,6 +242,7 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
         LichSuGrid.ItemsSource = _visibleRecords;
         LichSuGrid.SelectedItem = null;
         BtnDetail.IsEnabled = false;
+        BtnHuy.IsEnabled = false;
         CapNhatThongKe();
         CapNhatPhanTrang();
     }
@@ -250,6 +253,8 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
         _totalCount = 0;
         _visibleRecords = [];
         LichSuGrid.ItemsSource = _visibleRecords;
+        BtnDetail.IsEnabled = false;
+        BtnHuy.IsEnabled = false;
         CapNhatThongKe();
         CapNhatPhanTrang();
     }
@@ -372,7 +377,9 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
 
     private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        BtnDetail.IsEnabled = LichSuGrid.SelectedItem is ThanhToanCongNoNhaCungCap;
+        var record = LichSuGrid.SelectedItem as ThanhToanCongNoNhaCungCap;
+        BtnDetail.IsEnabled = record is not null;
+        BtnHuy.IsEnabled = record is { DaHuy: false } && Quyen.IsAdmin(Session.CurrentUser);
     }
 
     private void OnGridDoubleTapped(object? sender, TappedEventArgs e)
@@ -386,6 +393,92 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
         {
             LichSuGrid.SelectedItem = record;
             OnDetailClick(sender, e);
+        }
+    }
+
+    private void OnRowHuyClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: ThanhToanCongNoNhaCungCap record })
+        {
+            LichSuGrid.SelectedItem = record;
+            OnHuyClick(sender, e);
+        }
+    }
+
+    private async void OnHuyClick(object? sender, RoutedEventArgs e)
+    {
+        if (LichSuGrid.SelectedItem is not ThanhToanCongNoNhaCungCap record)
+        {
+            TxtTrangThai.Text = "Vui lòng chọn một giao dịch cần hủy.";
+            return;
+        }
+
+        if (!Quyen.IsAdmin(Session.CurrentUser))
+        {
+            var noPermDialog = new ConfirmationWindow(
+                "Không có quyền",
+                "Chỉ tài khoản Quản trị (Admin) mới có quyền hủy phiếu thanh toán công nợ nhà cung cấp.",
+                "Đóng");
+            await noPermDialog.ShowDialog<bool>(this);
+            return;
+        }
+
+        if (record.DaHuy)
+        {
+            var dialogBao = new ConfirmationWindow(
+                "Không thể hủy phiếu",
+                $"Giao dịch thanh toán {record.MaGiaoDich} đã được hủy trước đó vào lúc {record.ThoiGianHuyText}.",
+                "Đóng");
+            await dialogBao.ShowDialog<bool>(this);
+            return;
+        }
+
+        var huyWindow = new HuyThanhToanCongNoNhaCungCapWindow(record);
+        var lyDo = await huyWindow.ShowDialog<string?>(this);
+
+        if (string.IsNullOrWhiteSpace(lyDo))
+            return;
+
+        await ThucHienHuyPhieuAsync(record, lyDo);
+    }
+
+    private async Task ThucHienHuyPhieuAsync(ThanhToanCongNoNhaCungCap record, string lyDo)
+    {
+        try
+        {
+            var ketQua = await _database.HuyThanhToanCongNoNhaCungCapAsync(
+                record.MaGiaoDich,
+                lyDo,
+                Session.CurrentUser?.Id,
+                Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap);
+
+            CoThayDoi = true;
+
+            var noiDungThanhCong = new StringBuilder();
+            noiDungThanhCong.AppendLine($"Đã hủy thành công giao dịch thanh toán {record.MaGiaoDich}.");
+            noiDungThanhCong.AppendLine($"Số tiền hoàn tác vào nợ NCC: {ketQua.TienHoanTacCongNo:N0} đ");
+            noiDungThanhCong.AppendLine($"Công nợ mới của nhà cung cấp: {ketQua.CongNoSauKhiHuy:N0} đ");
+            if (ketQua.SoPhieuNhapHoanTac > 0)
+                noiDungThanhCong.AppendLine($"Số phiếu nhập khôi phục nợ: {ketQua.SoPhieuNhapHoanTac}");
+            if (ketQua.TienHoanTacTraTruoc > 0)
+                noiDungThanhCong.AppendLine($"Số dư trả trước đã trừ lại: {ketQua.TienHoanTacTraTruoc:N0} đ");
+            noiDungThanhCong.AppendLine("Phiếu chi trong sổ quỹ đã được chuyển sang trạng thái Đã hủy.");
+
+            var successDialog = new ConfirmationWindow(
+                "Hủy phiếu thanh toán thành công",
+                noiDungThanhCong.ToString().TrimEnd(),
+                "Đồng ý");
+            await successDialog.ShowDialog<bool>(this);
+
+            await NapDuLieuAsync();
+        }
+        catch (Exception ex)
+        {
+            var errDialog = new ConfirmationWindow(
+                "Lỗi khi hủy phiếu thanh toán",
+                "Đã xảy ra lỗi: " + ex.Message,
+                "Đóng");
+            await errDialog.ShowDialog<bool>(this);
         }
     }
 

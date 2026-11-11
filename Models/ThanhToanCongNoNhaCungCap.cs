@@ -52,6 +52,9 @@ public sealed class ThanhToanCongNoNhaCungCap
     public string TrangThai { get; set; } = "HOAN_THANH";
     public bool DaHuy => TrangThai.Equals("HUY", StringComparison.OrdinalIgnoreCase);
     public string TrangThaiHienThi => DaHuy ? "Đã hủy" : "Hoàn thành";
+    public bool CoTheHuy => !DaHuy;
+    public string ToolTipHuy => DaHuy ? "Giao dịch này đã bị hủy, không thể hủy lại." : "Hủy giao dịch thanh toán này và hoàn tác công nợ";
+    public double OpacityNutHuy => DaHuy ? 0.35 : 1.0;
 
     public string? NguoiHuy { get; set; }
     public DateTime? ThoiGianHuy { get; set; }
