@@ -2925,6 +2925,23 @@
 
                         <Rectangle Height="1" Fill="#D9EAE4" />
 
+                        <TextBlock Text="Trạng thái hoạt động" FontSize="12"
+                          FontWeight="SemiBold" Foreground="#163F38" />
+
+                        <StackPanel Spacing="2">
+                          <RadioButton GroupName="CustomerTrangThai"
+                            Content="Đang hoạt động" FontSize="13" Padding="0,6"
+                            IsChecked="{Binding CustomerTrangThaiFilter, Mode=TwoWay, Converter={StaticResource LuaChonRadioConverter}, ConverterParameter=danghoatdong}" />
+                          <RadioButton GroupName="CustomerTrangThai"
+                            Content="Ngừng hoạt động" FontSize="13" Padding="0,6"
+                            IsChecked="{Binding CustomerTrangThaiFilter, Mode=TwoWay, Converter={StaticResource LuaChonRadioConverter}, ConverterParameter=ngunghoatdong}" />
+                          <RadioButton GroupName="CustomerTrangThai"
+                            Content="Tất cả" FontSize="13" Padding="0,6"
+                            IsChecked="{Binding CustomerTrangThaiFilter, Mode=TwoWay, Converter={StaticResource LuaChonRadioConverter}, ConverterParameter=tatca}" />
+                        </StackPanel>
+
+                        <Rectangle Height="1" Fill="#D9EAE4" />
+
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                           <Button Classes="toolbar-action" Content="Xóa" Margin="0"
                             Command="{Binding ClearCustomerFilterCommand}"
@@ -3150,7 +3167,11 @@
                                   IsVisible="{Binding $parent[Window].DataContext.CanEditCustomer}" />
                                 <Button Grid.Column="3" Classes="toolbar-action" Content="🗑 Xóa"
                                   Margin="0" Command="{Binding XoaCommand}"
-                                  IsVisible="{Binding $parent[Window].DataContext.CanDeleteCustomer}" />
+                                  IsVisible="{Binding CoTheXoa}" />
+                                 <Button Grid.Column="3" Classes="toolbar-action" Content="🔄 Kích hoạt lại"
+                                   Margin="0" Command="{Binding KichHoatLaiCommand}"
+                                   IsVisible="{Binding CoTheKichHoatLai}"
+                                   ToolTip.Tip="Kích hoạt lại khách hàng này để tiếp tục hoạt động" />
                               </Grid>
 
                               <!-- ĐANG TẢI CHI TIẾT -->
@@ -4408,6 +4429,23 @@
 
                         <Rectangle Height="1" Fill="#D9EAE4" />
 
+                        <TextBlock Text="Trạng thái hoạt động" FontSize="12"
+                          FontWeight="SemiBold" Foreground="#163F38" />
+
+                        <StackPanel Spacing="2">
+                          <RadioButton GroupName="SupplierTrangThai"
+                            Content="Đang hoạt động" FontSize="13" Padding="0,6"
+                            IsChecked="{Binding SupplierTrangThaiFilter, Mode=TwoWay, Converter={StaticResource LuaChonRadioConverter}, ConverterParameter=danghoatdong}" />
+                          <RadioButton GroupName="SupplierTrangThai"
+                            Content="Ngừng hoạt động" FontSize="13" Padding="0,6"
+                            IsChecked="{Binding SupplierTrangThaiFilter, Mode=TwoWay, Converter={StaticResource LuaChonRadioConverter}, ConverterParameter=ngunghoatdong}" />
+                          <RadioButton GroupName="SupplierTrangThai"
+                            Content="Tất cả" FontSize="13" Padding="0,6"
+                            IsChecked="{Binding SupplierTrangThaiFilter, Mode=TwoWay, Converter={StaticResource LuaChonRadioConverter}, ConverterParameter=tatca}" />
+                        </StackPanel>
+
+                        <Rectangle Height="1" Fill="#D9EAE4" />
+
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                           <Button Classes="toolbar-action" Content="Xóa" Margin="0"
                             Command="{Binding ClearSupplierFilterCommand}"
@@ -4641,7 +4679,12 @@
                                 <Button Grid.Column="3" Classes="toolbar-action"
                                   Content="🗑 Xóa" Margin="0"
                                   Command="{Binding XoaCommand}"
-                                  IsVisible="{Binding $parent[Window].DataContext.CanDeleteSupplier}" />
+                                  IsVisible="{Binding CoTheXoa}" />
+                                 <Button Grid.Column="3" Classes="toolbar-action"
+                                   Content="🔄 Kích hoạt lại" Margin="0"
+                                   Command="{Binding KichHoatLaiCommand}"
+                                   IsVisible="{Binding CoTheKichHoatLai}"
+                                   ToolTip.Tip="Kích hoạt lại nhà cung cấp này để tiếp tục hoạt động" />
                               </Grid>
 
                               <!-- ĐANG TẢI CHI TIẾT -->
@@ -5880,9 +5923,10 @@
                         ColumnSpacing="6">
 
                         <TextBox Name="PhieuNhapNgayNhapBox"
-                          Text="{Binding PhieuNhapNgayNhapText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          Text="{Binding PhieuNhapNgayNhapText, Mode=OneWay}"
                           Watermark="dd/MM/yyyy HH:mm"
                           ToolTip.Tip="Nhập trực tiếp ngày giờ (dd/MM/yyyy HH:mm) hoặc bấm 📅 để chọn"
+                          TextChanged="OnPhieuNhapNgayNhapBoxTextChanged"
                           LostFocus="OnPhieuNhapNgayNhapBoxLostFocus"
                           KeyDown="OnPhieuNhapNgayNhapBoxKeyDown"
                           Padding="10,8"

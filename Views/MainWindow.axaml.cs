@@ -244,6 +244,18 @@ public partial class MainWindow : Window
         _ = viewModel.TimKiemNhaCungCapNhapCommand.ExecuteAsync(textBox.Text);
     }
 
+    private void OnPhieuNhapNgayNhapBoxTextChanged(
+        object? sender,
+        TextChangedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel || sender is not TextBox textBox)
+            return;
+
+        // Chỉ đồng bộ nội dung đang gõ sang ViewModel. Binding là OneWay nên
+        // không bị ghi ngược lại làm nhảy con trỏ khi sửa giữa chuỗi.
+        viewModel.PhieuNhapNgayNhapText = textBox.Text ?? string.Empty;
+    }
+
     private void OnPhieuNhapNgayNhapBoxLostFocus(
         object? sender,
         RoutedEventArgs e)

@@ -69,4 +69,12 @@ public static class Quyen
             throw new UnauthorizedAccessException(message ?? "Bạn không có quyền thực hiện chức năng này.");
         }
     }
+
+    public static void RequireAdmin(NguoiDung? nguoiDung, string? message = null)
+    {
+        if (!IsAdmin(nguoiDung))
+        {
+            throw new UnauthorizedAccessException(message ?? "Chỉ tài khoản Quản trị (Admin) mới có quyền thực hiện chức năng này.");
+        }
+    }
 }

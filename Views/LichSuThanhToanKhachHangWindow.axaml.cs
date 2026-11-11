@@ -433,97 +433,26 @@ public partial class LichSuThanhToanKhachHangWindow : Window
 
         try
         {
+            // Đọc đúng dữ liệu thực tế từ database: công nợ trước/sau lấy
+            // nguyên vẹn từ sổ cái, danh sách phân bổ chứng từ lấy theo mã
+            // phiếu thu để hiển thị đủ mọi chứng từ liên quan.
             var allocations = await _database.GetPhanBoThanhToanKhachHangAsync(record.MaGiaoDich);
-            var dialog = new ConfirmationWindow(
-                "Chi tiết giao dịch thanh toán khách hàng",
-                TaoNoiDungChiTiet(record, allocations),
-                "Đóng");
-            await dialog.ShowDialog<bool>(this);
+            var chiTiet = ChiTietThanhToanKhachHang.Tao(
+                record,
+                string.IsNullOrWhiteSpace(record.MaKhachHang) ? _customerCode : record.MaKhachHang,
+                _customerName,
+                allocations,
+                record.MaThamChieu);
+
+            var dialog = new ChiTietThanhToanKhachHangWindow(_database, chiTiet);
+            await dialog.ShowDialog(this);
         }
         catch (Exception ex)
         {
             TxtDateError.Text = "Không đọc được chi tiết giao dịch: " + ex.Message;
+            TxtDateError.Foreground = Avalonia.Media.Brushes.Firebrick;
             TxtDateError.IsVisible = true;
         }
-    }
-
-    private string TaoNoiDungChiTiet(
-        ThanhToanCongNoKhachHang record,
-        IReadOnlyList<PhanBoThanhToanKhachHang> allocations)
-    {
-        var detail = new StringBuilder();
-        ThemThongTinGiaoDich(detail, record);
-        ThemThongTinCongNo(detail, record);
-        ThemThongTinHuy(detail, record);
-        ThemPhanBoHoaDon(detail, record, allocations);
-        return detail.ToString();
-    }
-
-    private void ThemThongTinGiaoDich(StringBuilder detail, ThanhToanCongNoKhachHang record)
-    {
-        detail.AppendLine("══════════ THÔNG TIN GIAO DỊCH ══════════");
-        detail.AppendLine($"Mã giao dịch / Phiếu thu: {record.MaGiaoDich}");
-        detail.AppendLine("Loại giao dịch: Thu nợ khách hàng (Thanh toán công nợ)");
-        detail.AppendLine($"Khách hàng: {_customerCode} - {_customerName}");
-        detail.AppendLine($"Thời gian: {record.ThoiGianText}");
-        detail.AppendLine($"Phương thức thanh toán: {record.PhuongThucHienThi}");
-        detail.AppendLine($"Mã tham chiếu / chứng từ: {record.MaThamChieuHienThi}");
-        detail.AppendLine($"Người thực hiện: {record.NguoiThucHien}");
-        detail.AppendLine($"Ghi chú: {record.GhiChuHienThi}");
-        detail.AppendLine();
-    }
-
-    private static void ThemThongTinCongNo(StringBuilder detail, ThanhToanCongNoKhachHang record)
-    {
-        detail.AppendLine("══════════ TÌNH TRẠNG CÔNG NỢ ══════════");
-        detail.AppendLine($"Công nợ trước thanh toán: {record.CongNoTruoc:N0} đ");
-        detail.AppendLine($"Số tiền thanh toán:       {record.SoTien:N0} đ");
-        detail.AppendLine($"Công nợ sau thanh toán:   {record.CongNoSau:N0} đ");
-        detail.AppendLine($"Trạng thái giao dịch: {record.TrangThaiHienThi}");
-        detail.AppendLine();
-    }
-
-    private static void ThemThongTinHuy(StringBuilder detail, ThanhToanCongNoKhachHang record)
-    {
-        if (record.DaHuy)
-        {
-            detail.AppendLine("══════════ THÔNG TIN HỦY GIAO DỊCH ══════════");
-            detail.AppendLine("Trạng thái: ĐÃ HỦY (Đã hoàn tác công nợ)");
-            detail.AppendLine($"Người hủy: {record.NguoiHuy}");
-            detail.AppendLine($"Thời gian hủy: {record.ThoiGianHuyText}");
-            detail.AppendLine($"Lý do hủy: {record.LyDoHuy}");
-        }
-        else
-        {
-            detail.AppendLine("Trạng thái: Hoàn thành");
-            detail.AppendLine($"Liên kết Sổ quỹ: Phiếu thu {record.MaGiaoDich} (Đã ghi vào sổ quỹ)");
-        }
-
-        detail.AppendLine();
-    }
-
-    private static void ThemPhanBoHoaDon(
-        StringBuilder detail,
-        ThanhToanCongNoKhachHang record,
-        IReadOnlyList<PhanBoThanhToanKhachHang> allocations)
-    {
-        detail.AppendLine("══════════ PHÂN BỔ VÀO HÓA ĐƠN BÁN HÀNG ══════════");
-        for (var index = 0; index < allocations.Count; index++)
-        {
-            var allocation = allocations[index];
-            detail.AppendLine($"  {index + 1}. Hóa đơn {allocation.MaHoaDon}: {allocation.SoTien:N0} đ");
-        }
-
-        if (allocations.Count == 0)
-        {
-            detail.AppendLine("Không có dữ liệu phân bổ hóa đơn cho giao dịch này (thu công nợ tổng).");
-            return;
-        }
-
-        var allocatedTotal = allocations.Sum(allocation => allocation.SoTien);
-        detail.AppendLine($"Tổng tiền đã phân bổ: {allocatedTotal:N0} đ ({allocations.Count} hóa đơn)");
-        if (record.SoTien > allocatedTotal)
-            detail.AppendLine($"Số tiền thanh toán chưa gắn hóa đơn: {record.SoTien - allocatedTotal:N0} đ");
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();

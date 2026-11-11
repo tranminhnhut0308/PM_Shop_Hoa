@@ -583,9 +583,10 @@ public sealed class DashboardService
     };
 
     /// <summary>
-    /// Lịch sử hoạt động của các tài khoản con (nhân viên, thu ngân, quản lý...).
+    /// Lịch sử hoạt động của TẤT CẢ tài khoản (kể cả Quản trị viên Admin).
     /// Chỉ tải khi tài khoản đang đăng nhập là Quản trị viên (Admin).
-    /// Kết hợp bảng nhat_ky_hoat_dong với các giao dịch bán hàng, nhập kho, thu chi do tài khoản con thực hiện.
+    /// Kết hợp bảng nhat_ky_hoat_dong với các giao dịch bán hàng, nhập kho, thu chi
+    /// của mọi người dùng (nhân viên, thu ngân, quản lý, admin).
     /// </summary>
     public async Task<List<TongQuanHoatDongTaiKhoanCon>> TaiHoatDongTaiKhoanConAsync(CancellationToken token)
     {
@@ -632,12 +633,10 @@ public sealed class DashboardService
                     nk.thoi_gian AS ThoiGian
                 FROM nhat_ky_hoat_dong nk
                 LEFT JOIN nguoi_dung nd ON nk.nguoi_dung_id = nd.id
-                WHERE LOWER(COALESCE(nk.ten_dang_nhap, nd.ten_dang_nhap, '')) NOT LIKE '%admin%'
-                  AND (nk.vai_tro IS NULL OR (LOWER(nk.vai_tro) NOT LIKE '%quan_tri%' AND LOWER(nk.vai_tro) NOT LIKE '%admin%'))
 
                 UNION ALL
 
-                -- 2. Hóa đơn bán hàng từ tài khoản nhân viên
+                -- 2. Hóa đơn bán hàng của mọi tài khoản (kể cả admin)
                 SELECT
                     CAST(hd.id AS UNSIGNED) AS Id,
                     hd.nguoi_ban_id AS NguoiDungId,
@@ -657,13 +656,11 @@ public sealed class DashboardService
                 FROM hoa_don_ban_hang hd
                 INNER JOIN nguoi_dung nd ON hd.nguoi_ban_id = nd.id
                 LEFT JOIN khach_hang kh ON hd.khach_hang_id = kh.id
-                WHERE LOWER(nd.ten_dang_nhap) NOT LIKE '%admin%'
-                  AND nd.id NOT IN (SELECT ndvt2.nguoi_dung_id FROM nguoi_dung_vai_tro ndvt2 JOIN vai_tro vt2 ON vt2.id = ndvt2.vai_tro_id WHERE UPPER(vt2.ma_vai_tro) IN ('QUAN_TRI', 'ADMIN') OR LOWER(vt2.ten_vai_tro) LIKE '%quản trị%' OR LOWER(vt2.ten_vai_tro) LIKE '%admin%')
-                  AND hd.ma_hoa_don NOT IN (SELECT COALESCE(ma_chung_tu, '') FROM nhat_ky_hoat_dong WHERE ma_chung_tu IS NOT NULL)
+                WHERE hd.ma_hoa_don NOT IN (SELECT COALESCE(ma_chung_tu, '') FROM nhat_ky_hoat_dong WHERE ma_chung_tu IS NOT NULL)
 
                 UNION ALL
 
-                -- 3. Phiếu nhập hàng từ tài khoản nhân viên
+                -- 3. Phiếu nhập hàng của mọi tài khoản (kể cả admin)
                 SELECT
                     CAST(pn.id AS UNSIGNED) AS Id,
                     pn.nguoi_nhap_id AS NguoiDungId,
@@ -683,13 +680,11 @@ public sealed class DashboardService
                 FROM phieu_nhap_hang pn
                 INNER JOIN nguoi_dung nd ON pn.nguoi_nhap_id = nd.id
                 LEFT JOIN nha_cung_cap ncc ON pn.nha_cung_cap_id = ncc.id
-                WHERE LOWER(nd.ten_dang_nhap) NOT LIKE '%admin%'
-                  AND nd.id NOT IN (SELECT ndvt2.nguoi_dung_id FROM nguoi_dung_vai_tro ndvt2 JOIN vai_tro vt2 ON vt2.id = ndvt2.vai_tro_id WHERE UPPER(vt2.ma_vai_tro) IN ('QUAN_TRI', 'ADMIN') OR LOWER(vt2.ten_vai_tro) LIKE '%quản trị%' OR LOWER(vt2.ten_vai_tro) LIKE '%admin%')
-                  AND pn.ma_phieu_nhap NOT IN (SELECT COALESCE(ma_chung_tu, '') FROM nhat_ky_hoat_dong WHERE ma_chung_tu IS NOT NULL)
+                WHERE pn.ma_phieu_nhap NOT IN (SELECT COALESCE(ma_chung_tu, '') FROM nhat_ky_hoat_dong WHERE ma_chung_tu IS NOT NULL)
 
                 UNION ALL
 
-                -- 4. Phiếu sổ quỹ từ tài khoản nhân viên
+                -- 4. Phiếu sổ quỹ của mọi tài khoản (kể cả admin)
                 SELECT
                     CAST(pc.id AS UNSIGNED) AS Id,
                     pc.nguoi_thuc_hien_id AS NguoiDungId,
@@ -708,9 +703,7 @@ public sealed class DashboardService
                     pc.thoi_gian_chi AS ThoiGian
                 FROM phieu_chi pc
                 INNER JOIN nguoi_dung nd ON pc.nguoi_thuc_hien_id = nd.id
-                WHERE LOWER(nd.ten_dang_nhap) NOT LIKE '%admin%'
-                  AND nd.id NOT IN (SELECT ndvt2.nguoi_dung_id FROM nguoi_dung_vai_tro ndvt2 JOIN vai_tro vt2 ON vt2.id = ndvt2.vai_tro_id WHERE UPPER(vt2.ma_vai_tro) IN ('QUAN_TRI', 'ADMIN') OR LOWER(vt2.ten_vai_tro) LIKE '%quản trị%' OR LOWER(vt2.ten_vai_tro) LIKE '%admin%')
-                  AND pc.ma_phieu_chi NOT IN (SELECT COALESCE(ma_chung_tu, '') FROM nhat_ky_hoat_dong WHERE ma_chung_tu IS NOT NULL)
+                WHERE pc.ma_phieu_chi NOT IN (SELECT COALESCE(ma_chung_tu, '') FROM nhat_ky_hoat_dong WHERE ma_chung_tu IS NOT NULL)
             ) AS hoat_dong_sub
             ORDER BY ThoiGian DESC
             LIMIT 100;

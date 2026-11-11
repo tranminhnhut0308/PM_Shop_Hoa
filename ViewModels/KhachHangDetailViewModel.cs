@@ -43,6 +43,8 @@ public sealed partial class KhachHangDetailViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(DiaChiXuatHoaDon))]
     [NotifyPropertyChangedFor(nameof(ChuCaiDau))]
     [NotifyPropertyChangedFor(nameof(LoaiKhachHangHienThi))]
+    [NotifyPropertyChangedFor(nameof(IsNgungHoatDong))]
+    [NotifyPropertyChangedFor(nameof(TrangThaiHienThi))]
     private KhachHang? customer;
 
     [ObservableProperty] private bool isLoading;
@@ -135,6 +137,11 @@ public sealed partial class KhachHangDetailViewModel : ObservableObject
 
     public string LoaiKhachHangHienThi =>
         Customer?.LoaiKhachHang == "DOANH_NGHIEP" ? "Khách doanh nghiệp" : "Khách cá nhân";
+
+    public bool IsNgungHoatDong => (Customer?.TrangThai ?? true) == false;
+
+    public string TrangThaiHienThi =>
+        IsNgungHoatDong ? "Ngừng hoạt động" : "Đang hoạt động";
 
     /// <summary>Gộp địa chỉ + phường/xã + quận/huyện + tỉnh/thành thành một chuỗi.</summary>
     public string DiaChiDayDu

@@ -57,7 +57,24 @@ public sealed partial class NhaCungCapRowViewModel : ObservableObject
     private void Xoa()
         => _chuSo?.XoaNhaCungCapCommand.Execute(Supplier);
 
+    /// <summary>Kích hoạt lại nhà cung cấp đã ngừng hoạt động (chỉ Admin).</summary>
+    [RelayCommand]
+    private void KichHoatLai()
+        => _chuSo?.KichHoatLaiNhaCungCapCommand.Execute(Supplier);
+
     public uint SupplierId => Supplier.Id;
+
+    public bool TrangThai => Supplier.TrangThai;
+
+    public bool IsNgungHoatDong => !Supplier.TrangThai;
+
+    public string TrangThaiHienThi => Supplier.TrangThai ? "Đang hoạt động" : "Ngừng hoạt động";
+
+    /// <summary>Chỉ Admin mới có quyền xóa hoặc chuyển trạng thái khi nhà cung cấp đang hoạt động.</summary>
+    public bool CoTheXoa => (_chuSo?.CanDeleteSupplier == true) && !IsNgungHoatDong;
+
+    /// <summary>Chỉ Admin mới có quyền kích hoạt lại khi nhà cung cấp đang ngừng hoạt động.</summary>
+    public bool CoTheKichHoatLai => (_chuSo?.CanDeleteSupplier == true) && IsNgungHoatDong;
 
     public string MaNhaCungCap => HienThi(Supplier.MaNhaCungCap);
 
@@ -119,6 +136,34 @@ public sealed partial class NhaCungCapRowViewModel : ObservableObject
 
     partial void OnIsExpandedChanged(bool value)
         => OnPropertyChanged(nameof(KyHieuMoRong));
+
+    public void NapLai(NhaCungCap supplier)
+    {
+        Supplier = supplier;
+        OnPropertyChanged(nameof(Supplier));
+        OnPropertyChanged(nameof(SupplierId));
+        OnPropertyChanged(nameof(MaNhaCungCap));
+        OnPropertyChanged(nameof(TenNhaCungCap));
+        OnPropertyChanged(nameof(SoDienThoai));
+        OnPropertyChanged(nameof(Email));
+        OnPropertyChanged(nameof(DiaChi));
+        OnPropertyChanged(nameof(NgayTaoText));
+        OnPropertyChanged(nameof(ConNo));
+        OnPropertyChanged(nameof(ConNoText));
+        OnPropertyChanged(nameof(TongMua));
+        OnPropertyChanged(nameof(TongMuaTruTraHang));
+        OnPropertyChanged(nameof(TongMuaText));
+        OnPropertyChanged(nameof(TongMuaTruTraHangText));
+        OnPropertyChanged(nameof(CoConNo));
+        OnPropertyChanged(nameof(ConNoBackground));
+        OnPropertyChanged(nameof(ConNoForeground));
+        OnPropertyChanged(nameof(ChuCaiDau));
+        OnPropertyChanged(nameof(TrangThai));
+        OnPropertyChanged(nameof(IsNgungHoatDong));
+        OnPropertyChanged(nameof(TrangThaiHienThi));
+        OnPropertyChanged(nameof(CoTheXoa));
+        OnPropertyChanged(nameof(CoTheKichHoatLai));
+    }
 
     private static string HienThi(string? value)
         => string.IsNullOrWhiteSpace(value) ? ChuaCo : value.Trim();

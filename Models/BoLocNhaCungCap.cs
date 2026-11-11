@@ -18,6 +18,18 @@ public sealed class BoLocNhaCungCap
     /// <summary>Chỉ xem nhà cung cấp đã không còn nợ.</summary>
     public const int CongNoKhongConNo = 2;
 
+    /// <summary>Xem tất cả trạng thái.</summary>
+    public const int TrangThaiTatCa = -1;
+
+    /// <summary>Chỉ xem nhà cung cấp đang hoạt động.</summary>
+    public const int TrangThaiDangHoatDong = 1;
+
+    /// <summary>Chỉ xem nhà cung cấp đã ngừng hoạt động.</summary>
+    public const int TrangThaiNgungHoatDong = 0;
+
+    /// <summary>Trạng thái hoạt động: 1 = Đang hoạt động, 0 = Ngừng hoạt động, -1 = Tất cả.</summary>
+    public int TrangThaiMode { get; set; } = TrangThaiDangHoatDong;
+
     /// <summary>Chuỗi tìm kiếm: mã NCC, tên, số điện thoại hoặc email.</summary>
     public string TimKiem { get; set; } = "";
 
@@ -56,6 +68,7 @@ public sealed class BoLocNhaCungCap
         || !string.IsNullOrWhiteSpace(Email)
         || !string.IsNullOrWhiteSpace(DiaChi)
         || CongNoMode != CongNoTatCa
+        || TrangThaiMode != TrangThaiDangHoatDong
         || ConNoTu.HasValue
         || ConNoDen.HasValue;
 
@@ -85,6 +98,11 @@ public sealed class BoLocNhaCungCap
                 dieuKien.Add("còn nợ");
             else if (CongNoMode == CongNoKhongConNo)
                 dieuKien.Add("không còn nợ");
+
+            if (TrangThaiMode == TrangThaiNgungHoatDong)
+                dieuKien.Add("ngừng hoạt động");
+            else if (TrangThaiMode == TrangThaiTatCa)
+                dieuKien.Add("tất cả trạng thái");
 
             if (ConNoTu.HasValue || ConNoDen.HasValue)
                 dieuKien.Add("khoảng công nợ");

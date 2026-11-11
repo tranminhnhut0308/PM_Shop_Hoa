@@ -50,6 +50,13 @@ public sealed partial class MainWindowViewModel
     [NotifyPropertyChangedFor(nameof(SupplierRongHint))]
     private string? supplierCongNoFilter = CongNoTatCa;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SupplierHasFilter))]
+    [NotifyPropertyChangedFor(nameof(SupplierFilterButtonText))]
+    [NotifyPropertyChangedFor(nameof(SupplierRongText))]
+    [NotifyPropertyChangedFor(nameof(SupplierRongHint))]
+    private string? supplierTrangThaiFilter = TrangThaiDangHoatDong;
+
     [ObservableProperty] private bool isSupplierFilterPanelOpen;
 
     [ObservableProperty] private bool isLoadingSuppliers;
@@ -117,8 +124,9 @@ public sealed partial class MainWindowViewModel
     /// Panel lọc chỉ còn một điều kiện là "Tình trạng công nợ".
     /// Ô tìm kiếm ở thanh trên cố ý không tính vào đây.
     /// </summary>
-    public bool SupplierHasFilter => !string.IsNullOrWhiteSpace(SupplierCongNoFilter)
-        && SupplierCongNoFilter != CongNoTatCa;
+    public bool SupplierHasFilter =>
+        (!string.IsNullOrWhiteSpace(SupplierCongNoFilter) && SupplierCongNoFilter != CongNoTatCa)
+        || (!string.IsNullOrWhiteSpace(SupplierTrangThaiFilter) && SupplierTrangThaiFilter != TrangThaiDangHoatDong);
 
     public int SupplierTotalPages
     {
@@ -204,12 +212,36 @@ public sealed partial class MainWindowViewModel
     /// Nhãn nút bộ lọc. Chỉ có một điều kiện là tình trạng công nợ nên nhãn
     /// ghi rõ đang lọc gì: "Bộ lọc", "Bộ lọc (Còn nợ)", "Bộ lọc (Không còn nợ)".
     /// </summary>
-    public string SupplierFilterButtonText => SupplierCongNoFilter switch
+    public string SupplierFilterButtonText
     {
-        CongNoConNo => "Bộ lọc (Còn nợ)",
-        CongNoKhongConNo => "Bộ lọc (Không còn nợ)",
-        _ => "Bộ lọc"
-    };
+        get
+        {
+            var dieuKien = new List<string>();
+            switch (SupplierCongNoFilter)
+            {
+                case CongNoConNo:
+                    dieuKien.Add("Còn nợ");
+                    break;
+                case CongNoKhongConNo:
+                    dieuKien.Add("Không còn nợ");
+                    break;
+            }
+
+            switch (SupplierTrangThaiFilter)
+            {
+                case TrangThaiNgungHoatDong:
+                    dieuKien.Add("Ngừng hoạt động");
+                    break;
+                case TrangThaiTatCaFilter:
+                    dieuKien.Add("Tất cả trạng thái");
+                    break;
+            }
+
+            return dieuKien.Count == 0
+                ? "Bộ lọc"
+                : $"Bộ lọc ({string.Join(", ", dieuKien)})";
+        }
+    }
 
     /// <summary>Mũi tên của nút mở/đóng menu bộ lọc.</summary>
     public string SupplierFilterArrowText => IsSupplierFilterPanelOpen ? "▲" : "▼";
@@ -299,7 +331,13 @@ public sealed partial class MainWindowViewModel
     private BoLocNhaCungCap TaoBoLocNhaCungCap() => new()
     {
         TimKiem = SupplierSearch?.Trim() ?? "",
-        CongNoMode = ChuyenCongNoFilterSangSo(SupplierCongNoFilter)
+        CongNoMode = ChuyenCongNoFilterSangSo(SupplierCongNoFilter),
+        TrangThaiMode = SupplierTrangThaiFilter switch
+        {
+            TrangThaiNgungHoatDong => BoLocNhaCungCap.TrangThaiNgungHoatDong,
+            TrangThaiTatCaFilter => BoLocNhaCungCap.TrangThaiTatCa,
+            _ => BoLocNhaCungCap.TrangThaiDangHoatDong
+        }
     };
 
     /// <summary>Đổi lựa chọn trên ComboBox thành mã số mà SQL hiểu.</summary>
@@ -376,6 +414,7 @@ public sealed partial class MainWindowViewModel
     private async Task ClearSupplierFilterAsync()
     {
         SupplierCongNoFilter = CongNoTatCa;
+        SupplierTrangThaiFilter = TrangThaiDangHoatDong;
         SupplierPage = 1;
 
         await LoadSupplierPageAsync();

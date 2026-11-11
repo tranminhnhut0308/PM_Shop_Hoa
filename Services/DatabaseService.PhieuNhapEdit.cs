@@ -873,7 +873,10 @@ public sealed partial class DatabaseService
                 "PHIEU_NHAP",
                 request.PhieuNhapId,
                 oldPhieu.MaPhieuNhap,
-                $"Chỉnh sửa phiếu nhập {oldPhieu.MaPhieuNhap}. Lý do: {(string.IsNullOrWhiteSpace(request.LyDoChinhSua) ? "Không cung cấp lý do" : request.LyDoChinhSua)}",
+                $"Chỉnh sửa phiếu nhập {oldPhieu.MaPhieuNhap}. Lý do: {(string.IsNullOrWhiteSpace(request.LyDoChinhSua) ? "Không cung cấp lý do" : request.LyDoChinhSua)}" +
+                    (string.IsNullOrWhiteSpace(chiTietThayDoiText)
+                        ? ""
+                        : Environment.NewLine + chiTietThayDoiText),
                 newTongTienNhap);
         }
         catch

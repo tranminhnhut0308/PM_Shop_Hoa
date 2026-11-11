@@ -1,0 +1,327 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ShopHoa.Views.ChiTietThanhToanKhachHangWindow"
+        x:CompileBindings="False"
+        Title="Chi tiết thanh toán công nợ"
+        Width="1020"
+        Height="700"
+        MinWidth="920"
+        MinHeight="600"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True"
+        Background="#F4F7F6"
+        FontFamily="Inter, Segoe UI, Arial"
+        RequestedThemeVariant="Light">
+
+  <Window.Styles>
+    <Style Selector="Button">
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button:disabled">
+      <Setter Property="Opacity" Value="0.5" />
+    </Style>
+    <Style Selector="Button.maChungTu">
+      <Setter Property="Background" Value="#EAF5F2" />
+      <Setter Property="Foreground" Value="#087F6E" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="12.5" />
+    </Style>
+    <Style Selector="Button.maChungTu:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#DDF2EC" />
+    </Style>
+  </Window.Styles>
+
+  <Border Background="White"
+          Margin="14"
+          CornerRadius="14"
+          BorderBrush="#D8E5E0"
+          BorderThickness="1"
+          BoxShadow="0 10 28 #14000000"
+          ClipToBounds="True">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+      <!-- ==========================================================
+           TIÊU ĐỀ GIAO DỊCH (Phần 2A)
+           ========================================================== -->
+      <Border Grid.Row="0" Padding="22,16">
+        <Border.Background>
+          <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+            <GradientStop Color="#087F6E" Offset="0" />
+            <GradientStop Color="#0B5E52" Offset="1" />
+          </LinearGradientBrush>
+        </Border.Background>
+
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="16">
+          <Border Width="48" Height="48" CornerRadius="24" Background="#33FFFFFF"
+                  VerticalAlignment="Center">
+            <TextBlock Text="🧾" FontSize="22" HorizontalAlignment="Center"
+                       VerticalAlignment="Center" />
+          </Border>
+
+          <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+            <TextBlock Text="Chi tiết thanh toán công nợ" FontSize="19"
+                       FontWeight="Bold" Foreground="White" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock x:Name="TxtLoaiGiaoDich" Text="Thu tiền khách hàng"
+                         FontSize="12.5" Foreground="#D9F2EC" />
+              <TextBlock Text="•" FontSize="12.5" Foreground="#D9F2EC" />
+              <TextBlock x:Name="TxtMaPhieuThuHeader" Text="PT000001"
+                         FontSize="12.5" Foreground="#D9F2EC" FontWeight="SemiBold" />
+            </StackPanel>
+          </StackPanel>
+
+          <Border x:Name="StatusBadge" Grid.Column="2"
+                  Background="#E7FBF2" CornerRadius="8" Padding="12,5"
+                  VerticalAlignment="Center">
+            <TextBlock x:Name="TxtTrangThaiBadge" Text="Hoàn thành"
+                       Foreground="#027A48" FontWeight="Bold" FontSize="12.5" />
+          </Border>
+
+          <StackPanel Grid.Column="3" Spacing="2" VerticalAlignment="Center">
+            <TextBlock Text="SỐ TIỀN THANH TOÁN" FontSize="10.5"
+                       Foreground="#C9EDE4" FontWeight="SemiBold" />
+            <TextBlock x:Name="TxtSoTienHeader" Text="0 đ" FontSize="24"
+                       FontWeight="Bold" Foreground="White" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- ==========================================================
+           NỘI DUNG CHI TIẾT (Phần 2B + 2C + 2D)
+           ========================================================== -->
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled">
+        <Grid ColumnDefinitions="1.15*,0.85*" ColumnSpacing="16"
+              Margin="20,16,20,8" MinWidth="820">
+
+          <!-- CỘT TRÁI: THÔNG TIN GIAO DỊCH + CHỨNG TỪ LIÊN QUAN -->
+          <StackPanel Grid.Column="0" Spacing="14">
+
+            <!-- THÔNG TIN KHÁCH HÀNG & GIAO DỊCH (Phần 2B) -->
+            <Border Background="#FFFFFF" BorderBrush="#D8E5E0" BorderThickness="1"
+                    CornerRadius="12" Padding="18,14">
+              <StackPanel Spacing="12">
+                <TextBlock Text="THÔNG TIN KHÁCH HÀNG &amp; GIAO DỊCH" FontSize="11.5"
+                           FontWeight="SemiBold" Foreground="#61736E" />
+
+                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                      RowSpacing="12" ColumnSpacing="18">
+                  <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
+                    <TextBlock Text="MÃ KHÁCH HÀNG" FontSize="10.5" Foreground="#71827D" FontWeight="SemiBold" />
+                    <TextBlock x:Name="TxtMaKhachHang" Text="—" FontSize="13.5"
+                               FontWeight="SemiBold" Foreground="#163F38" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                  <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2">
+                    <TextBlock Text="TÊN KHÁCH HÀNG" FontSize="10.5" Foreground="#71827D" FontWeight="SemiBold" />
+                    <TextBlock x:Name="TxtTenKhachHang" Text="—" FontSize="13.5"
+                               FontWeight="SemiBold" Foreground="#163F38" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                  <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
+                    <TextBlock Text="NGÀY GIỜ GIAO DỊCH" FontSize="10.5" Foreground="#71827D" FontWeight="SemiBold" />
+                    <TextBlock x:Name="TxtThoiGian" Text="—" FontSize="13.5" Foreground="#163F38" />
+                  </StackPanel>
+                  <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                    <TextBlock Text="PHƯƠNG THỨC THANH TOÁN" FontSize="10.5" Foreground="#71827D" FontWeight="SemiBold" />
+                    <TextBlock x:Name="TxtPhuongThuc" Text="—" FontSize="13.5" Foreground="#163F38" />
+                  </StackPanel>
+                  <StackPanel Grid.Row="2" Grid.Column="0" Spacing="2">
+                    <TextBlock Text="NGƯỜI THỰC HIỆN" FontSize="10.5" Foreground="#71827D" FontWeight="SemiBold" />
+                    <TextBlock x:Name="TxtNguoiThucHien" Text="—" FontSize="13.5" Foreground="#163F38" />
+                  </StackPanel>
+                  <StackPanel Grid.Row="2" Grid.Column="1" Spacing="2">
+                    <TextBlock Text="MÃ THAM CHIẾU / CHỨNG TỪ" FontSize="10.5" Foreground="#71827D" FontWeight="SemiBold" />
+                    <TextBlock x:Name="TxtMaThamChieu" Text="—" FontSize="13.5"
+                               Foreground="#163F38" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                  <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Spacing="2">
+                    <TextBlock Text="GHI CHÚ" FontSize="10.5" Foreground="#71827D" FontWeight="SemiBold" />
+                    <TextBlock x:Name="TxtGhiChu" Text="—" FontSize="13"
+                               Foreground="#31534B" TextWrapping="Wrap" MaxLines="3"
+                               TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <!-- CHỨNG TỪ LIÊN QUAN (Phần 2D) -->
+            <Border Background="#FFFFFF" BorderBrush="#D8E5E0" BorderThickness="1"
+                    CornerRadius="12" Padding="18,14">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="CHỨNG TỪ LIÊN QUAN" FontSize="11.5"
+                             FontWeight="SemiBold" Foreground="#61736E" />
+                  <TextBlock x:Name="TxtSoChungTu" Grid.Column="1" Text="0 chứng từ"
+                             FontSize="11" Foreground="#71827D" VerticalAlignment="Center" />
+                </Grid>
+
+                <ItemsControl x:Name="ChungTuList" Background="Transparent">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Background="#F8FAFC" BorderBrush="#E2ECE8" BorderThickness="1"
+                              CornerRadius="9" Padding="12,8" Margin="0,0,0,8">
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="12">
+                          <Border Background="#EAF5F2" CornerRadius="6" Padding="8,3"
+                                  VerticalAlignment="Center">
+                            <TextBlock Text="{Binding LoaiHienThi}" FontSize="11"
+                                       FontWeight="SemiBold" Foreground="#087F6E" />
+                          </Border>
+                          <Button Grid.Column="1" Classes="maChungTu"
+                                  Content="{Binding MaChungTu}" Tag="{Binding}"
+                                  Click="OnMoChungTuClick" IsEnabled="{Binding CoTheMo}"
+                                  ToolTip.Tip="Nhấn để mở chứng từ liên quan" />
+                          <TextBlock Grid.Column="3" Text="{Binding SoTienPhanBoHienThi}"
+                                     FontSize="13" FontWeight="SemiBold" Foreground="#31534B"
+                                     VerticalAlignment="Center" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock x:Name="TxtKhongChungTu" IsVisible="False"
+                           Text="Giao dịch thu công nợ tổng, không gắn với hóa đơn hay phiếu nhập nào."
+                           FontSize="12.5" Foreground="#71827D" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- CỘT PHẢI: CHI TIẾT CÔNG NỢ (Phần 2C) -->
+          <StackPanel Grid.Column="1" Spacing="14">
+
+            <Border Background="#FFFFFF" BorderBrush="#D8E5E0" BorderThickness="1"
+                    CornerRadius="12" Padding="18,14">
+              <StackPanel Spacing="14">
+                <TextBlock Text="CHI TIẾT CÔNG NỢ" FontSize="11.5"
+                           FontWeight="SemiBold" Foreground="#61736E" />
+
+                <Grid ColumnDefinitions="*,Auto" RowSpacing="6">
+                  <TextBlock Text="Công nợ trước thanh toán" FontSize="13" Foreground="#31534B"
+                             VerticalAlignment="Center" />
+                  <TextBlock x:Name="TxtCongNoTruoc" Grid.Column="1" Text="0 đ"
+                             FontSize="14" FontWeight="Bold" Foreground="#31534B"
+                             VerticalAlignment="Center" />
+                </Grid>
+
+                <!-- Số tiền thanh toán — màu xanh, nổi bật -->
+                <Border Background="#F0F9F6" BorderBrush="#D8EDE6" BorderThickness="1"
+                        CornerRadius="10" Padding="14,10">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                      <TextBlock Text="SỐ TIỀN ĐÃ THANH TOÁN" FontSize="10.5"
+                                 FontWeight="SemiBold" Foreground="#087F6E" />
+                      <TextBlock Text="(khấu trừ trực tiếp vào công nợ)" FontSize="10"
+                                 Foreground="#7BA398" />
+                    </StackPanel>
+                    <TextBlock x:Name="TxtSoTienChiTiet" Grid.Column="1" Text="0 đ"
+                               FontSize="20" FontWeight="Bold" Foreground="#087F6E"
+                               VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+
+                <!-- Công nợ sau thanh toán — màu đỏ khi còn nợ, xanh lá khi trả hết -->
+                <Grid ColumnDefinitions="*,Auto" RowSpacing="6">
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="Công nợ sau thanh toán" FontSize="13" Foreground="#31534B" />
+                    <TextBlock Text="(công nợ còn lại của khách hàng)" FontSize="10"
+                               Foreground="#71827D" />
+                  </StackPanel>
+                  <TextBlock x:Name="TxtCongNoSau" Grid.Column="1" Text="0 đ"
+                             FontSize="18" FontWeight="Bold" Foreground="#D92D20"
+                             VerticalAlignment="Center" />
+                </Grid>
+
+                <StackPanel Spacing="8" Margin="0,4,0,0">
+                  <Border Height="1" Background="#EDF3F1" />
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="Trạng thái công nợ" FontSize="12.5" Foreground="#31534B"
+                               VerticalAlignment="Center" />
+                    <Border x:Name="CongNoBadge" Grid.Column="1" Background="#ECFDF3"
+                            CornerRadius="6" Padding="10,4">
+                      <TextBlock x:Name="TxtCongNoBadge" Text="Đã trả hết công nợ"
+                                 FontSize="12" FontWeight="SemiBold" Foreground="#027A48" />
+                    </Border>
+                  </Grid>
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="Sổ quỹ" FontSize="12.5" Foreground="#31534B"
+                               VerticalAlignment="Center" />
+                    <TextBlock x:Name="TxtSoQuy" Grid.Column="1" Text="Đã ghi phiếu thu vào sổ quỹ"
+                               FontSize="12" FontWeight="SemiBold" Foreground="#027A48"
+                               VerticalAlignment="Center" />
+                  </Grid>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- THÔNG TIN HỦY PHIẾU (chỉ hiện khi phiếu đã hủy) -->
+            <Border x:Name="HuyCard" IsVisible="False"
+                    Background="#FFFBFA" BorderBrush="#FECACA" BorderThickness="1"
+                    CornerRadius="12" Padding="18,14">
+              <StackPanel Spacing="12">
+                <TextBlock Text="THÔNG TIN HỦY PHIẾU" FontSize="11.5"
+                           FontWeight="SemiBold" Foreground="#B42318" />
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                  <TextBlock Grid.Row="0" Text="Người hủy" FontSize="12.5" Foreground="#7A2E24"
+                             VerticalAlignment="Center" />
+                  <TextBlock x:Name="TxtNguoiHuy" Grid.Row="0" Grid.Column="1" Text="—"
+                             FontSize="13" FontWeight="SemiBold" Foreground="#991B1B"
+                             VerticalAlignment="Center" />
+                  <TextBlock Grid.Row="1" Text="Thời gian hủy" FontSize="12.5" Foreground="#7A2E24"
+                             VerticalAlignment="Center" />
+                  <TextBlock x:Name="TxtThoiGianHuy" Grid.Row="1" Grid.Column="1" Text="—"
+                             FontSize="13" FontWeight="SemiBold" Foreground="#991B1B"
+                             VerticalAlignment="Center" />
+                  <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="LÝ DO HỦY" FontSize="10.5"
+                             Foreground="#B42318" FontWeight="SemiBold" Margin="0,4,0,0" />
+                </Grid>
+                <TextBlock x:Name="TxtLyDoHuy" Text="—" FontSize="12.5"
+                           Foreground="#7A2E24" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Grid>
+      </ScrollViewer>
+
+      <!-- ==========================================================
+           THANH NÚT CHỨC NĂNG: IN / PDF / SAO CHÉP / EXCEL (Phần 3-6)
+           ========================================================== -->
+      <Border Grid.Row="2" Background="#F9FBFA" BorderBrush="#E2ECE8"
+              BorderThickness="0,1,0,0" Padding="20,12">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+          <TextBlock x:Name="TxtTrangThai" Text="" FontSize="12" Foreground="#61736E"
+                     VerticalAlignment="Center" TextWrapping="Wrap" MaxLines="2"
+                     TextTrimming="CharacterEllipsis" />
+
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+            <Button x:Name="BtnIn" Content="🖨  In phiếu thu" Padding="16,9"
+                    Background="#087F6E" Foreground="White" BorderThickness="0"
+                    CornerRadius="8" FontWeight="SemiBold"
+                    ToolTip.Tip="In biên nhận thanh toán công nợ (A4 hoặc K80 theo cấu hình)"
+                    Click="OnInClick" />
+            <Button x:Name="BtnPdf" Content="Xuất PDF" Padding="14,9"
+                    Background="#FFFFFF" Foreground="#087F6E" BorderBrush="#087F6E"
+                    BorderThickness="1.5" CornerRadius="8" FontWeight="SemiBold"
+                    ToolTip.Tip="Lưu biên nhận thành file PDF theo mã phiếu thu"
+                    Click="OnPdfClick" />
+            <Button x:Name="BtnSaoChep" Content="Sao chép nội dung" Padding="14,9"
+                    Background="#FFFFFF" Foreground="#31534B" BorderBrush="#C6D8D1"
+                    BorderThickness="1" CornerRadius="8"
+                    ToolTip.Tip="Sao chép nội dung biên nhận để gửi khách hàng qua Zalo / Messenger"
+                    Click="OnSaoChepClick" />
+            <Button x:Name="BtnExcel" Content="Xuất Excel" Padding="14,9"
+                    Background="#FFFFFF" Foreground="#31534B" BorderBrush="#C6D8D1"
+                    BorderThickness="1" CornerRadius="8"
+                    ToolTip.Tip="Xuất giao dịch này ra file Excel"
+                    Click="OnExcelClick" />
+            <Button Content="Đóng" MinWidth="96" Padding="14,9"
+                    Background="#52645E" Foreground="White" BorderThickness="0"
+                    CornerRadius="8" Click="OnDongClick" />
+          </StackPanel>
+        </Grid>
+      </Border>
+    </Grid>
+  </Border>
+</Window>

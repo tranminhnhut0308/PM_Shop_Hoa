@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Globalization;
 using System.Text;
 using ClosedXML.Excel;
@@ -1404,6 +1404,19 @@ public sealed partial class DatabaseService
 
         await using var connection = await OpenAsync();
 
+        // Đọc giá bán hiện tại trước khi cập nhật để ghi vào nhật ký hoạt động
+        // (giá trị trước ➔ giá trị sau khi sửa).
+        const string selectGiaCuSql = """
+        SELECT ten_san_pham, ma_san_pham, gia_ban
+        FROM san_pham
+        WHERE id = @ProductId
+        LIMIT 1;
+        """;
+
+        var hangCu = await connection.QueryFirstOrDefaultAsync<(string? TenSanPham, string? MaSanPham, decimal GiaBan)?>(
+            selectGiaCuSql,
+            new { ProductId = productId });
+
         // Parameterized query: giá bán do người dùng nhập không bao giờ nối vào SQL.
         const string sql = """
         UPDATE san_pham
@@ -1412,15 +1425,28 @@ public sealed partial class DatabaseService
         WHERE id = @ProductId;
         """;
 
+        var giaBanMoi = Math.Round(giaBan, 2, MidpointRounding.AwayFromZero);
+
         var affectedRows = await connection.ExecuteAsync(
             sql,
             new
             {
                 ProductId = productId,
-                GiaBan = Math.Round(giaBan, 2, MidpointRounding.AwayFromZero)
+                GiaBan = giaBanMoi
             });
 
         // MySQL trả 0 dòng bị ảnh hưởng khi sản phẩm không tồn tại.
+        if (affectedRows > 0 && hangCu.HasValue)
+        {
+            _ = LogSubAccountActivityAsync(
+                "Sửa giá bán",
+                "SAN_PHAM",
+                productId,
+                hangCu.Value.MaSanPham,
+                $"Sửa giá bán '{hangCu.Value.TenSanPham}' ({hangCu.Value.MaSanPham}): {hangCu.Value.GiaBan:N0} đ ➔ {giaBanMoi:N0} đ",
+                giaBanMoi);
+        }
+
         return affectedRows > 0;
     }
 
@@ -2934,6 +2960,11 @@ public sealed partial class DatabaseService
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.CustomersDelete, "Bạn không có quyền xóa khách hàng.");
         await using var connection = await OpenAsync();
 
+        // Đọc tên/mã trước khi xóa mềm để ghi nhật ký hoạt động.
+        var thongTinCu = await connection.QueryFirstOrDefaultAsync<(string TenKhachHang, string? MaKhachHang)?>(
+            "SELECT ten_khach_hang, ma_khach_hang FROM khach_hang WHERE id = @Id AND trang_thai = 1 LIMIT 1;",
+            new { Id = customerId });
+
         // Giữ lại lịch sử hóa đơn/công nợ; danh sách khách hàng chỉ hiển thị bản ghi còn hoạt động.
         var affectedRows = await connection.ExecuteAsync(
             "UPDATE khach_hang SET trang_thai = 0, ngay_cap_nhat = NOW() WHERE id = @Id AND trang_thai = 1;",
@@ -2941,6 +2972,17 @@ public sealed partial class DatabaseService
 
         if (affectedRows == 0)
             throw new InvalidOperationException("Khách hàng không tồn tại hoặc đã bị xóa.");
+
+        if (thongTinCu.HasValue)
+        {
+            _ = LogSubAccountActivityAsync(
+                "Xóa khách hàng",
+                "KHACH_HANG",
+                customerId,
+                thongTinCu.Value.MaKhachHang,
+                $"Xóa khách hàng {thongTinCu.Value.TenKhachHang}" +
+                    (string.IsNullOrWhiteSpace(thongTinCu.Value.MaKhachHang) ? "" : $" ({thongTinCu.Value.MaKhachHang})"));
+        }
     }
 
     /// <summary>
@@ -3266,7 +3308,8 @@ public sealed partial class DatabaseService
         int pageSize,
         bool dayDuThongTin = false,
         uint nhomKhachHangId = 0,
-        string? congNoFilter = null)
+        string? congNoFilter = null,
+        int? trangThai = 1)
     {
         await EnsureHoaDonTrackingColumnsAsync();
         var safePage = page < 1 ? 1 : page;
@@ -3280,6 +3323,12 @@ public sealed partial class DatabaseService
         // Bộ lọc nhóm khách hàng và tình trạng công nợ, dùng cùng biểu thức
         // NoHienTai với cột tiền trong bảng nên số liệu lọc luôn khớp.
         var noHienTai = TaoBieuThucTienKhachHang(coBangTraHang, "kh.id", coCotKiotViet).NoHienTai;
+        var dieuKienTrangThai = trangThai switch
+        {
+            0 => "AND kh.trang_thai = 0 ",
+            1 => "AND kh.trang_thai = 1 ",
+            _ => ""
+        };
         var dieuKienNhom = nhomKhachHangId == 0
             ? ""
             : "AND kh.nhom_khach_hang_id = @NhomKhachHangId ";
@@ -3293,8 +3342,8 @@ public sealed partial class DatabaseService
         var countSql = $"""
         SELECT COUNT(*)
         FROM khach_hang kh
-        WHERE kh.trang_thai = 1
-          {dieuKienNhom}{dieuKienCongNo}
+        WHERE 1 = 1
+          {dieuKienTrangThai}{dieuKienNhom}{dieuKienCongNo}
           AND (
                 @Search = ''
                 OR kh.ma_khach_hang LIKE CONCAT('%', @Search, '%')
@@ -3317,6 +3366,7 @@ public sealed partial class DatabaseService
                   kh.phuong_xa AS PhuongXa,
                   kh.quan_huyen AS QuanHuyen,
                   kh.tinh_thanh AS TinhThanh,
+                  kh.trang_thai AS TrangThai,
                   COALESCE(kh.so_du_tra_truoc, 0) AS SoDuTraTruoc,
                   kh.nhom_khach_hang_id AS NhomKhachHangId,
                   kh.ma_so_thue AS MaSoThue,
@@ -3334,6 +3384,7 @@ public sealed partial class DatabaseService
                   kh.ten_khach_hang AS TenKhachHang,
                   kh.so_dien_thoai AS SoDienThoai,
                   kh.email AS Email,
+                  kh.trang_thai AS TrangThai,
                   COALESCE(
                       NULLIF(TRIM(kh.dia_chi), ''),
                       NULLIF(
@@ -3357,8 +3408,8 @@ public sealed partial class DatabaseService
         FROM khach_hang kh
         LEFT JOIN nhom_khach_hang nkh
             ON nkh.id = kh.nhom_khach_hang_id
-        WHERE kh.trang_thai = 1
-          {dieuKienNhom}{dieuKienCongNo}
+        WHERE 1 = 1
+          {dieuKienTrangThai}{dieuKienNhom}{dieuKienCongNo}
           AND (
                 @Search = ''
                 OR kh.ma_khach_hang LIKE CONCAT('%', @Search, '%')
@@ -3414,14 +3465,14 @@ public sealed partial class DatabaseService
             kh.ten_cong_ty AS TenCongTy,
             kh.dia_chi_xuat_hoa_don AS DiaChiXuatHoaDon,
             kh.ghi_chu AS GhiChu,
+            kh.trang_thai AS TrangThai,
             kh.ngay_tao AS NgayTao,
             kh.ngay_cap_nhat AS NgayCapNhat,
             nkh.ten_nhom AS NhomKhachHang
         FROM khach_hang kh
         LEFT JOIN nhom_khach_hang nkh
             ON nkh.id = kh.nhom_khach_hang_id
-        WHERE kh.trang_thai = 1
-          AND kh.id = @Id;
+        WHERE kh.id = @Id;
         """;
 
         await using var connection = await OpenAsync();
@@ -8586,7 +8637,12 @@ public sealed partial class DatabaseService
     {
         var dieuKien = new StringBuilder();
 
-        dieuKien.Append("ncc.trang_thai = 1");
+        if (loc.TrangThaiMode == BoLocNhaCungCap.TrangThaiDangHoatDong)
+            dieuKien.Append("ncc.trang_thai = 1");
+        else if (loc.TrangThaiMode == BoLocNhaCungCap.TrangThaiNgungHoatDong)
+            dieuKien.Append("ncc.trang_thai = 0");
+        else
+            dieuKien.Append("1 = 1");
 
         // Ô tìm kiếm: mã NCC, tên, số điện thoại, email.
         dieuKien.Append(
@@ -8802,8 +8858,7 @@ public sealed partial class DatabaseService
         {TaoDanhSachCotNhaCungCap(coCotKiotViet)},
         {TaoDanhSachCotFileNhaCungCap()}
         {NhaCungCapFrom}
-        WHERE ncc.trang_thai = 1
-          AND ncc.id = @Id;
+        WHERE ncc.id = @Id;
         """;
 
         await using var connection = await OpenAsync();
@@ -9094,7 +9149,7 @@ public sealed partial class DatabaseService
             SELECT LAST_INSERT_ID();
             """;
 
-        return await connection.ExecuteScalarAsync<uint>(
+        var newSupplierId = await connection.ExecuteScalarAsync<uint>(
             sql,
             new
             {
@@ -9123,6 +9178,16 @@ public sealed partial class DatabaseService
                 supplier.TenCongTy,
                 ChiNhanhId = Session.CurrentUser?.ChiNhanhId
             });
+
+        _ = LogSubAccountActivityAsync(
+            "Thêm nhà cung cấp",
+            "NHA_CUNG_CAP",
+            newSupplierId,
+            supplier.MaNhaCungCap,
+            $"Thêm nhà cung cấp mới: {supplier.TenNhaCungCap}" +
+                (string.IsNullOrWhiteSpace(supplier.MaNhaCungCap) ? "" : $" ({supplier.MaNhaCungCap})"));
+
+        return newSupplierId;
     }
 
     public async Task CapNhatNhaCungCapAsync(NhaCungCap supplier)
@@ -9147,9 +9212,56 @@ public sealed partial class DatabaseService
         WHERE id = @Id AND trang_thai = 1;
         """;
 
+        // Đọc dữ liệu cũ trước khi cập nhật để ghi chi tiết trước ➔ sau vào nhật ký.
+        const string selectCuSql = """
+        SELECT ten_nha_cung_cap, so_dien_thoai, email, dia_chi, ma_so_thue, nguoi_lien_he, ghi_chu
+        FROM nha_cung_cap
+        WHERE id = @Id AND trang_thai = 1
+        LIMIT 1;
+        """;
+
+        var nccCu = await connection.QueryFirstOrDefaultAsync<(
+            string TenNhaCungCap,
+            string? SoDienThoai,
+            string? Email,
+            string? DiaChi,
+            string? MaSoThue,
+            string? NguoiLienHe,
+            string? GhiChu)?>(
+            selectCuSql,
+            new { supplier.Id });
+
         var affectedRows = await connection.ExecuteAsync(sql, supplier);
         if (affectedRows == 0)
             throw new InvalidOperationException("Nhà cung cấp không tồn tại hoặc đã bị xóa.");
+
+        if (nccCu.HasValue)
+        {
+            var thayDoi = new List<string>();
+            if (!string.Equals(nccCu.Value.TenNhaCungCap, supplier.TenNhaCungCap, StringComparison.Ordinal))
+                thayDoi.Add($"tên '{nccCu.Value.TenNhaCungCap}' ➔ '{supplier.TenNhaCungCap}'");
+            if (!string.Equals(nccCu.Value.SoDienThoai, supplier.SoDienThoai, StringComparison.Ordinal))
+                thayDoi.Add($"SĐT '{nccCu.Value.SoDienThoai ?? ""}' ➔ '{supplier.SoDienThoai ?? ""}'");
+            if (!string.Equals(nccCu.Value.Email, supplier.Email, StringComparison.Ordinal))
+                thayDoi.Add($"email '{nccCu.Value.Email ?? ""}' ➔ '{supplier.Email ?? ""}'");
+            if (!string.Equals(nccCu.Value.DiaChi, supplier.DiaChi, StringComparison.Ordinal))
+                thayDoi.Add($"địa chỉ '{nccCu.Value.DiaChi ?? ""}' ➔ '{supplier.DiaChi ?? ""}'");
+            if (!string.Equals(nccCu.Value.MaSoThue, supplier.MaSoThue, StringComparison.Ordinal))
+                thayDoi.Add($"mã số thuế '{nccCu.Value.MaSoThue ?? ""}' ➔ '{supplier.MaSoThue ?? ""}'");
+            if (!string.Equals(nccCu.Value.NguoiLienHe, supplier.NguoiLienHe, StringComparison.Ordinal))
+                thayDoi.Add($"người liên hệ '{nccCu.Value.NguoiLienHe ?? ""}' ➔ '{supplier.NguoiLienHe ?? ""}'");
+
+            var chiTiet = thayDoi.Count > 0
+                ? string.Join("; ", thayDoi)
+                : "Cập nhật lại thông tin nhà cung cấp";
+
+            _ = LogSubAccountActivityAsync(
+                "Cập nhật nhà cung cấp",
+                "NHA_CUNG_CAP",
+                supplier.Id,
+                supplier.MaNhaCungCap,
+                $"Sửa nhà cung cấp {supplier.TenNhaCungCap}: {chiTiet}");
+        }
     }
 
     /// <summary>
@@ -9199,12 +9311,28 @@ public sealed partial class DatabaseService
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SuppliersDelete, "Bạn không có quyền xóa nhà cung cấp.");
         await using var connection = await OpenAsync();
 
+        // Đọc tên/mã trước khi xóa mềm để ghi nhật ký hoạt động.
+        var thongTinCu = await connection.QueryFirstOrDefaultAsync<(string TenNhaCungCap, string? MaNhaCungCap)?>(
+            "SELECT ten_nha_cung_cap, ma_nha_cung_cap FROM nha_cung_cap WHERE id = @Id AND trang_thai = 1 LIMIT 1;",
+            new { Id = supplierId });
+
         var affectedRows = await connection.ExecuteAsync(
             "UPDATE nha_cung_cap SET trang_thai = 0, ngay_cap_nhat = NOW() WHERE id = @Id AND trang_thai = 1;",
             new { Id = supplierId });
 
         if (affectedRows == 0)
             throw new InvalidOperationException("Nhà cung cấp không tồn tại hoặc đã bị xóa.");
+
+        if (thongTinCu.HasValue)
+        {
+            _ = LogSubAccountActivityAsync(
+                "Xóa nhà cung cấp",
+                "NHA_CUNG_CAP",
+                supplierId,
+                thongTinCu.Value.MaNhaCungCap,
+                $"Xóa nhà cung cấp {thongTinCu.Value.TenNhaCungCap}" +
+                    (string.IsNullOrWhiteSpace(thongTinCu.Value.MaNhaCungCap) ? "" : $" ({thongTinCu.Value.MaNhaCungCap})"));
+        }
     }
 
     public async Task<int> ImportNhaCungCapTuFileAsync(string filePath)
@@ -13891,6 +14019,13 @@ public sealed partial class DatabaseService
             }
             try { await connection.ExecuteAsync("UPDATE nguoi_dung SET phan_quyen_rieng = 1 WHERE id = @UserId", new { UserId = userId }, tx); } catch { }
             await tx.CommitAsync();
+
+            _ = LogSubAccountActivityAsync(
+                "Phân quyền tài khoản",
+                "NGUOI_DUNG",
+                userId,
+                null,
+                $"Cập nhật phân quyền riêng cho tài khoản ID {userId}: {permissionIds.Distinct().Count()} quyền được cấp");
         }
         catch
         {
@@ -13913,6 +14048,13 @@ public sealed partial class DatabaseService
                 await connection.ExecuteAsync("INSERT IGNORE INTO vai_tro_quyen (vai_tro_id, quyen_id, nguoi_cap_nhat_id) VALUES (@RoleId, @QuyenId, @ActorId)", new { RoleId = roleId, QuyenId = pid, ActorId = safeActorId }, tx);
             }
             await tx.CommitAsync();
+
+            _ = LogSubAccountActivityAsync(
+                "Phân quyền vai trò",
+                "VAI_TRO",
+                roleId,
+                null,
+                $"Cập nhật phân quyền cho vai trò ID {roleId}: {permissionIds.Distinct().Count()} quyền được cấp");
         }
         catch
         {
@@ -13956,6 +14098,15 @@ public sealed partial class DatabaseService
             }
             try { await connection.ExecuteAsync("UPDATE nguoi_dung SET phan_quyen_rieng = 1 WHERE id = @UserId", new { UserId = userId }, tx); } catch { }
             await tx.CommitAsync();
+
+            // Ghi nhật ký hoạt động quản trị (không bao giờ ghi mật khẩu).
+            _ = LogSubAccountActivityAsync(
+                "Tạo tài khoản",
+                "NGUOI_DUNG",
+                userId,
+                dto.TenDangNhap,
+                $"Tạo tài khoản mới '{dto.TenDangNhap}' ({dto.HoTen})");
+
             return userId;
         }
         catch
@@ -14025,6 +14176,15 @@ public sealed partial class DatabaseService
             await tx.RollbackAsync();
             throw;
         }
+
+        // Ghi nhật ký hoạt động quản trị (không bao giờ ghi mật khẩu).
+        _ = LogSubAccountActivityAsync(
+            "Sửa tài khoản",
+            "NGUOI_DUNG",
+            dto.Id,
+            dto.TenDangNhap,
+            $"Sửa tài khoản '{dto.TenDangNhap}': họ tên '{dto.HoTen}', trạng thái {(dto.TrangThai ? "hoạt động" : "khóa")}" +
+                (string.IsNullOrWhiteSpace(dto.MatKhau) ? "" : ", đã đặt lại mật khẩu mới"));
     }
 
     private async Task<string?> GetRoleCodeAsync(uint roleId)
@@ -14062,19 +14222,51 @@ public sealed partial class DatabaseService
         }
     }
 
+    /// <summary>Đọc tên đăng nhập + họ tên của một tài khoản để ghi nhật ký.</summary>
+    private static async Task<(string TenDangNhap, string HoTen)?> LayTenTaiKhoanAsync(
+        MySqlConnection connection,
+        uint userId)
+    {
+        return await connection.QueryFirstOrDefaultAsync<(string TenDangNhap, string HoTen)?>(
+            "SELECT ten_dang_nhap, ho_ten FROM nguoi_dung WHERE id = @Id LIMIT 1;",
+            new { Id = userId });
+    }
+
     public async Task LockUserAsync(uint userId, uint? actorId = null)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersLock, "Bạn không có quyền khóa tài khoản.");
         await BaoVeQuanTriAsync(userId, "khóa");
         await using var connection = await OpenAsync();
+        var taiKhoan = await LayTenTaiKhoanAsync(connection, userId);
         await connection.ExecuteAsync("UPDATE nguoi_dung SET trang_thai = 0, ngay_cap_nhat = NOW() WHERE id = @Id", new { Id = userId });
+
+        if (taiKhoan is not null)
+        {
+            _ = LogSubAccountActivityAsync(
+                "Khóa tài khoản",
+                "NGUOI_DUNG",
+                userId,
+                taiKhoan.Value.TenDangNhap,
+                $"Khóa tài khoản '{taiKhoan.Value.TenDangNhap}' ({taiKhoan.Value.HoTen})");
+        }
     }
 
     public async Task UnlockUserAsync(uint userId, uint? actorId = null)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersUnlock, "Bạn không có quyền mở khóa tài khoản.");
         await using var connection = await OpenAsync();
+        var taiKhoan = await LayTenTaiKhoanAsync(connection, userId);
         await connection.ExecuteAsync("UPDATE nguoi_dung SET trang_thai = 1, ngay_cap_nhat = NOW() WHERE id = @Id", new { Id = userId });
+
+        if (taiKhoan is not null)
+        {
+            _ = LogSubAccountActivityAsync(
+                "Mở khóa tài khoản",
+                "NGUOI_DUNG",
+                userId,
+                taiKhoan.Value.TenDangNhap,
+                $"Mở khóa tài khoản '{taiKhoan.Value.TenDangNhap}' ({taiKhoan.Value.HoTen})");
+        }
     }
 
     public async Task DeleteUserAsync(uint userId, uint? actorId = null)
@@ -14084,9 +14276,20 @@ public sealed partial class DatabaseService
         // Không xóa admin (id=1 thường) - phòng ngừa
         if (userId == 1) throw new InvalidOperationException("Không thể xóa tài khoản Admin mặc định.");
         await BaoVeQuanTriAsync(userId, "xóa");
+        var taiKhoan = await LayTenTaiKhoanAsync(connection, userId);
         await connection.ExecuteAsync("DELETE FROM nguoi_dung_vai_tro WHERE nguoi_dung_id = @UserId", new { UserId = userId });
         await connection.ExecuteAsync("DELETE FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId", new { UserId = userId });
         await connection.ExecuteAsync("DELETE FROM nguoi_dung WHERE id = @Id", new { Id = userId });
+
+        if (taiKhoan is not null)
+        {
+            _ = LogSubAccountActivityAsync(
+                "Xóa tài khoản",
+                "NGUOI_DUNG",
+                userId,
+                taiKhoan.Value.TenDangNhap,
+                $"Xóa tài khoản '{taiKhoan.Value.TenDangNhap}' ({taiKhoan.Value.HoTen})");
+        }
     }
 
     public async Task ResetPasswordAsync(uint userId, string newPassword, uint? actorId = null)
@@ -14094,8 +14297,20 @@ public sealed partial class DatabaseService
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersResetPassword, "Bạn không có quyền đặt lại mật khẩu.");
         if (string.IsNullOrWhiteSpace(newPassword)) throw new ArgumentException("Mật khẩu không được để trống");
         await using var connection = await OpenAsync();
+        var taiKhoan = await LayTenTaiKhoanAsync(connection, userId);
         var hashed = BCrypt.Net.BCrypt.HashPassword(newPassword);
         await connection.ExecuteAsync("UPDATE nguoi_dung SET mat_khau = @MatKhau, ngay_cap_nhat = NOW() WHERE id = @Id", new { Id = userId, MatKhau = hashed });
+
+        // Ghi nhật ký nhưng KHÔNG bao giờ ghi nội dung mật khẩu.
+        if (taiKhoan is not null)
+        {
+            _ = LogSubAccountActivityAsync(
+                "Đặt lại mật khẩu",
+                "NGUOI_DUNG",
+                userId,
+                taiKhoan.Value.TenDangNhap,
+                $"Đặt lại mật khẩu cho tài khoản '{taiKhoan.Value.TenDangNhap}'");
+        }
     }
 
     private async Task<string> GenerateMaNguoiDungAsync(MySqlConnector.MySqlConnection conn, MySqlConnector.MySqlTransaction? tx = null)

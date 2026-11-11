@@ -782,6 +782,15 @@ public sealed partial class DatabaseService
                 transaction);
 
             await transaction.CommitAsync();
+
+            // Ghi vào nhật ký hoạt động chung (hiển thị cả cho admin sau khi bỏ loại trừ).
+            _ = LogSubAccountActivityAsync(
+                "Hủy phiếu nhập",
+                "PHIEU_NHAP",
+                yeuCau.PhieuNhapId,
+                phieu.MaPhieuNhap,
+                $"Hủy phiếu nhập {phieu.MaPhieuNhap} (NCC: {phieu.TenNhaCungCap ?? "không rõ"}): tổng tiền {phieu.TongTienNhap:N0} đ, đã thanh toán {phieu.DaThanhToan:N0} đ, còn nợ {phieu.ConNo:N0} đ ➔ 0 đ. Lý do: {yeuCau.LyDoHuy.Trim()}",
+                phieu.TongTienNhap);
         }
         catch (Exception ex)
         {
@@ -1273,6 +1282,15 @@ public sealed partial class DatabaseService
                 transaction);
 
             await transaction.CommitAsync();
+
+            // Ghi vào nhật ký hoạt động chung (hiển thị cả cho admin sau khi bỏ loại trừ).
+            _ = LogSubAccountActivityAsync(
+                "Khôi phục phiếu nhập",
+                "PHIEU_NHAP",
+                yeuCau.PhieuNhapId,
+                maPhieuNhap,
+                $"Khôi phục phiếu nhập {maPhieuNhap} đã hủy (NCC: {phieu.TenNhaCungCap ?? "không rõ"}): tổng tiền {tongTienNhap:N0} đ, đã thanh toán {daThanhToan:N0} đ, còn nợ {conNo:N0} đ. Lý do: {yeuCau.LyDoKhoiPhuc.Trim()}",
+                tongTienNhap);
         }
         catch
         {

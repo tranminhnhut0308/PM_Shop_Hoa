@@ -15,6 +15,8 @@ internal class Program
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         if (args.Contains("--verify-money-input", StringComparer.OrdinalIgnoreCase))
             return MoneyInputVerifier.Run();
+        if (args.Contains("--verify-ngay-nhap", StringComparer.OrdinalIgnoreCase))
+            return NgayNhapInputVerifier.Run();
         if (args.Contains("--verify-issue-87", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue87_ComboBoxNhaCungCap();
         if (args.Contains("--verify-issue-88", StringComparer.OrdinalIgnoreCase))
@@ -52,6 +54,22 @@ internal class Program
                 CharacterSet = "utf8mb4"
             };
             return await KiemTraIssue104_HuyPhieuThanhToanCongNoAsync(csb.ConnectionString);
+        }
+        if (args.Contains("--verify-issue-106", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue106_LocNgayQuanLyHoaDonAsync(csb.ConnectionString);
         }
 
         Console.WriteLine("==========================================================================================");
@@ -267,13 +285,198 @@ internal class Program
         return 0;
     }
 
+    /// <summary>
+    /// ISSUE #106: kiểm thử bộ lọc ngày trang Quản lý hóa đơn.
+    /// Gọi thẳng DatabaseService.GetHoaDonPagedAsync (đúng code path của màn hình)
+    /// và đối chiếu số lượng, doanh thu, công nợ với SQL trực tiếp theo khoảng nửa mở.
+    /// </summary>
+    private static async Task<int> KiemTraIssue106_LocNgayQuanLyHoaDonAsync(string connectionString)
+    {
+        Console.WriteLine("==========================================================================================");
+        Console.WriteLine("  KIỂM THỬ ISSUE #106: BỘ LỌC NGÀY TRANG QUẢN LÝ HÓA ĐƠN                                   ");
+        Console.WriteLine("==========================================================================================");
+
+        // A. Luồng chuyển ngày sau khi sửa binding: CalendarDatePicker (DateTime?) <-> draft (DateTime?)
+        //    -> FromDateTime -> DateTimeOffset(+07) -> ToDatabaseWallClockDate (Unspecified).
+        var draftTuNgay = new DateTime(2026, 11, 1);
+        var draftDenNgay = new DateTime(2026, 11, 10);
+        var filterStart = VietnameseCalendar.FromDateTime(draftTuNgay);
+        var filterEnd = VietnameseCalendar.FromDateTime(draftDenNgay);
+        KiemTra(filterStart.Offset == TimeSpan.FromHours(7) && filterStart.Date == draftTuNgay,
+            "Ngày bắt đầu từ draft DateTime? phải quy đổi nguyên vẹn sang ngày Việt Nam +07 (issue #106).");
+        KiemTra(filterEnd.Offset == TimeSpan.FromHours(7) && filterEnd.Date == draftDenNgay,
+            "Ngày kết thúc từ draft DateTime? phải quy đổi nguyên vẹn sang ngày Việt Nam +07 (issue #106).");
+        KiemTra(((DateTimeOffset?)filterStart)?.Date == draftTuNgay && ((DateTimeOffset?)null)?.Date is null,
+            "Chuyển filter DateTimeOffset? về draft DateTime? bằng ?.Date không được lệch ngày (issue #106).");
+        Console.WriteLine("A. Chuyển đổi DateTime? <-> DateTimeOffset (+07) của bộ lọc ngày: ĐẠT");
+
+        var service = new DatabaseService();
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync();
+
+        var vnToday = VietnameseCalendar.Today().Date;
+        var ranges = new (string Ten, DateTime Tu, DateTime Den)[]
+        {
+            ("Hôm nay", vnToday, vnToday),
+            ("Hôm qua", vnToday.AddDays(-1), vnToday.AddDays(-1)),
+            ("7 ngày gần nhất", vnToday.AddDays(-6), vnToday),
+            ("Tháng này", new DateTime(vnToday.Year, vnToday.Month, 1),
+                new DateTime(vnToday.Year, vnToday.Month, 1).AddMonths(1).AddDays(-1)),
+            ("Tháng trước", new DateTime(vnToday.Year, vnToday.Month, 1).AddMonths(-1),
+                new DateTime(vnToday.Year, vnToday.Month, 1).AddDays(-1)),
+            ("Tùy chỉnh 01/11/2026 - 10/11/2026", new DateTime(2026, 11, 1), new DateTime(2026, 11, 10)),
+            ("Tùy chỉnh 10/11/2026 - 10/11/2026 (cùng ngày)", new DateTime(2026, 11, 10), new DateTime(2026, 11, 10))
+        };
+
+        foreach (var (ten, tu, den) in ranges)
+        {
+            var tuNgayDb = VietnameseCalendar.ToDatabaseWallClockDate(VietnameseCalendar.FromDateTime(tu));
+            var denNgayDb = VietnameseCalendar.ToDatabaseWallClockDate(VietnameseCalendar.FromDateTime(den));
+
+            var result = await service.GetHoaDonPagedAsync(
+                search: null, tuNgay: tuNgayDb, denNgay: denNgayDb, page: 1, pageSize: 20);
+
+            var expected = await connection.QuerySingleAsync<(long Count, decimal DoanhThu, decimal ConNo)>(
+                """
+                SELECT COUNT(*),
+                       COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY','HUY','LUU_TAM')
+                           THEN hd.khach_can_tra ELSE 0 END), 0),
+                       COALESCE(SUM(CASE WHEN hd.trang_thai_hoa_don NOT IN ('DA_HUY','HUY','LUU_TAM')
+                           THEN hd.con_no ELSE 0 END), 0)
+                FROM hoa_don_ban_hang hd
+                WHERE hd.thoi_gian_ban >= @Tu AND hd.thoi_gian_ban < @Den
+                """,
+                new { Tu = tuNgayDb, Den = denNgayDb.AddDays(1) });
+
+            KiemTra(result.TongSoLuong == expected.Count,
+                $"Số lượng hóa đơn khi lọc '{ten}' phải khớp SQL trực tiếp (issue #106).");
+            KiemTra(result.TongDoanhThu == expected.DoanhThu,
+                $"Tổng doanh thu khi lọc '{ten}' phải khớp SQL trực tiếp (issue #106).");
+            KiemTra(result.TongConNo == expected.ConNo,
+                $"Tổng công nợ khi lọc '{ten}' phải khớp SQL trực tiếp (issue #106).");
+            KiemTra(result.Items.Count == Math.Min(20, expected.Count),
+                $"Số dòng trang 1 khi lọc '{ten}' phải khớp phân trang (issue #106).");
+            KiemTra(result.Items.All(h => h.ThoiGianBan >= tuNgayDb && h.ThoiGianBan < denNgayDb.AddDays(1)),
+                $"Hóa đơn trả về phải nằm trọn khoảng '{ten}', bao gồm cả hết ngày kết thúc (issue #106).");
+            Console.WriteLine(
+                $"  OK {ten}: {result.TongSoLuong:N0} hóa đơn, doanh thu {result.TongDoanhThu:N0} đ, còn nợ {result.TongConNo:N0} đ");
+        }
+
+        // B. Hóa đơn vào cuối ngày không bị bỏ sót (lấy hóa đơn có timestamp lớn nhất của khoảng).
+        var hoaDonCuoiNhat = await connection.QuerySingleOrDefaultAsync<(DateTime ThoiGianBan, string? MaHoaDon)>(
+            """
+            SELECT thoi_gian_ban, ma_hoa_don
+            FROM hoa_don_ban_hang
+            WHERE thoi_gian_ban >= @Tu AND thoi_gian_ban < @Den
+            ORDER BY thoi_gian_ban DESC
+            LIMIT 1
+            """,
+            new { Tu = new DateTime(2026, 11, 1), Den = new DateTime(2026, 11, 11) });
+        if (hoaDonCuoiNhat.MaHoaDon is not null)
+        {
+            var ngay = hoaDonCuoiNhat.ThoiGianBan.Date;
+            var tuNgayDb = VietnameseCalendar.ToDatabaseWallClockDate(VietnameseCalendar.FromDateTime(ngay));
+            var r = await service.GetHoaDonPagedAsync(
+                tuNgay: tuNgayDb, denNgay: tuNgayDb, page: 1, pageSize: 100);
+            KiemTra(r.Items.Any(h => h.MaHoaDon == hoaDonCuoiNhat.MaHoaDon),
+                "Hóa đơn vào cuối ngày (gần 23:59:59) phải xuất hiện khi lọc đúng ngày đó (issue #106).");
+            Console.WriteLine(
+                $"  OK Hóa đơn cuối ngày {ngay:dd/MM/yyyy} ({hoaDonCuoiNhat.MaHoaDon} lúc {hoaDonCuoiNhat.ThoiGianBan:HH:mm:ss}) có trong kết quả lọc");
+        }
+        else
+        {
+            Console.WriteLine("  (Không có hóa đơn 01-10/11 để kiểm tra hóa đơn cuối ngày)");
+        }
+
+        // C. Lọc ngày kết hợp trạng thái hóa đơn (Đã hủy), trạng thái thanh toán (Còn công nợ), tìm kiếm.
+        var tuTuyChon = new DateTime(2026, 11, 1);
+        var denTuyChon = new DateTime(2026, 11, 10);
+        var tuDb = VietnameseCalendar.ToDatabaseWallClockDate(VietnameseCalendar.FromDateTime(tuTuyChon));
+        var denDb = VietnameseCalendar.ToDatabaseWallClockDate(VietnameseCalendar.FromDateTime(denTuyChon));
+
+        var daHuy = await service.GetHoaDonPagedAsync(tuNgay: tuDb, denNgay: denDb, trangThaiHoaDon: "DA_HUY", page: 1, pageSize: 20);
+        var daHuySql = await connection.ExecuteScalarAsync<long>(
+            """
+            SELECT COUNT(*) FROM hoa_don_ban_hang hd
+            WHERE hd.thoi_gian_ban >= @Tu AND hd.thoi_gian_ban < @Den
+              AND hd.trang_thai_hoa_don IN ('DA_HUY','HUY')
+            """,
+            new { Tu = tuDb, Den = denDb.AddDays(1) });
+        KiemTra(daHuy.TongSoLuong == daHuySql,
+            "Lọc ngày + trạng thái hóa đơn 'Đã hủy' phải khớp SQL trực tiếp (issue #106).");
+        Console.WriteLine($"  OK Ngày + trạng thái 'Đã hủy': {daHuy.TongSoLuong:N0} hóa đơn");
+
+        var conNo = await service.GetHoaDonPagedAsync(tuNgay: tuDb, denNgay: denDb, trangThaiThanhToan: "CON_NO", page: 1, pageSize: 20);
+        var conNoSql = await connection.ExecuteScalarAsync<long>(
+            """
+            SELECT COUNT(*) FROM hoa_don_ban_hang hd
+            WHERE hd.thoi_gian_ban >= @Tu AND hd.thoi_gian_ban < @Den
+              AND COALESCE(hd.con_no, 0) > 0
+            """,
+            new { Tu = tuDb, Den = denDb.AddDays(1) });
+        KiemTra(conNo.TongSoLuong == conNoSql,
+            "Lọc ngày + trạng thái thanh toán 'Còn công nợ' phải khớp SQL trực tiếp (issue #106).");
+        KiemTra(conNo.TongConNo > 0 || conNoSql == 0,
+            "Tổng công nợ của tập 'Còn công nợ' phải dương khi còn dữ liệu nợ (issue #106).");
+        Console.WriteLine($"  OK Ngày + trạng thái 'Còn công nợ': {conNo.TongSoLuong:N0} hóa đơn, còn nợ {conNo.TongConNo:N0} đ");
+
+        var maTrung = await connection.QuerySingleOrDefaultAsync<string>(
+            """
+            SELECT ma_hoa_don FROM hoa_don_ban_hang
+            WHERE thoi_gian_ban >= @Tu AND thoi_gian_ban < @Den
+            ORDER BY thoi_gian_ban DESC LIMIT 1
+            """,
+            new { Tu = tuDb, Den = denDb.AddDays(1) });
+        if (maTrung is not null)
+        {
+            var timKiem = await service.GetHoaDonPagedAsync(
+                search: maTrung, tuNgay: tuDb, denNgay: denDb, page: 1, pageSize: 20);
+            var timKiemSql = await connection.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*) FROM hoa_don_ban_hang hd
+                WHERE hd.thoi_gian_ban >= @Tu AND hd.thoi_gian_ban < @Den
+                  AND hd.ma_hoa_don LIKE CONCAT('%', @Ma, '%')
+                """,
+                new { Tu = tuDb, Den = denDb.AddDays(1), Ma = maTrung });
+            KiemTra(timKiem.TongSoLuong == timKiemSql && timKiem.TongSoLuong >= 1,
+                "Lọc ngày + tìm kiếm mã hóa đơn phải khớp SQL trực tiếp (issue #106).");
+            KiemTra(timKiem.Items.All(h => h.ThoiGianBan >= tuDb && h.ThoiGianBan < denDb.AddDays(1)),
+                "Lọc ngày kết hợp tìm kiếm không được trả hóa đơn ngoài khoảng (issue #106).");
+            Console.WriteLine($"  OK Ngày + tìm kiếm '{maTrung}': {timKiem.TongSoLuong:N0} hóa đơn");
+        }
+        else
+        {
+            Console.WriteLine("  (Không có hóa đơn 01-10/11 để kiểm tra lọc kết hợp tìm kiếm)");
+        }
+
+        // D. Ngày bắt đầu lớn hơn ngày kết thúc: SQL khoảng nửa mở không trả dòng nào
+        //    (ViewModel đã chặn trước bằng thông báo, không tự đổi ngày người dùng đã chọn).
+        var daoNguoc = await service.GetHoaDonPagedAsync(
+            tuNgay: VietnameseCalendar.ToDatabaseWallClockDate(VietnameseCalendar.FromDateTime(new DateTime(2026, 11, 10))),
+            denNgay: VietnameseCalendar.ToDatabaseWallClockDate(VietnameseCalendar.FromDateTime(new DateTime(2026, 11, 1))),
+            page: 1, pageSize: 20);
+        KiemTra(daoNguoc.TongSoLuong == 0,
+            "Khoảng ngày đảo ngược (bắt đầu > kết thúc) không được trả hóa đơn nào (issue #106).");
+        Console.WriteLine("  OK Ngày bắt đầu > ngày kết thúc: không trả kết quả sai");
+
+        // E. 'Làm mới' trả về danh sách mặc định: không có điều kiện ngày.
+        var tatCa = await service.GetHoaDonPagedAsync(page: 1, pageSize: 20);
+        var tatCaSql = await connection.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM hoa_don_ban_hang");
+        KiemTra(tatCa.TongSoLuong == tatCaSql,
+            "Danh sách mặc định sau 'Làm mới' phải khớp tổng số hóa đơn trong database (issue #106).");
+        Console.WriteLine($"  OK 'Mọi ngày' / Làm mới: {tatCa.TongSoLuong:N0} hóa đơn");
+
+        Console.WriteLine("\n>>> ISSUE #106: TOÀN BỘ KIỂM THỬ BỘ LỌC NGÀY QUẢN LÝ HÓA ĐƠN ĐÃ VƯỢT QUA! <<<");
+        return 0;
+    }
+
     private static void KiemTraChuyenNgayVietNam()
     {
         var dateOnly = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Unspecified);
         var dateOnlyResult = VietnameseCalendar.FromDateTime(dateOnly);
         KiemTra(dateOnlyResult.Date == dateOnly && dateOnlyResult.Offset == TimeSpan.FromHours(7),
             "Unspecified calendar date must remain the same Vietnam date.");
-
         var utc = new DateTime(2026, 11, 1, 17, 0, 0, DateTimeKind.Utc);
         var utcResult = VietnameseCalendar.FromDateTime(utc);
         KiemTra(utcResult.Date == new DateTime(2026, 11, 2)

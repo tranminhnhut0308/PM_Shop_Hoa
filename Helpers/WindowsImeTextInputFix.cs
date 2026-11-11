@@ -16,7 +16,9 @@ namespace ShopHoa.Helpers;
 /// 1) Khi đổi ô nhập, Imm32InputMethod.Reset() bật cờ _ignoreWmChar nên ký tự
 ///    WM_CHAR kế tiếp bị bỏ (issue #12446). Ta xóa cờ này ngay trước khi
 ///    Avalonia xử lý WM_CHAR khi con trỏ đang ở ô nhập, trừ khi ký tự đó là kết
-///    quả vừa được IME chèn qua composition (tránh nhân đôi).
+///    quả vừa được IME chèn qua composition hoặc phím đang được IME xử lý
+///    (ImeProcessed) - nếu xóa cờ trong hai trường hợp này sẽ bị nhân đôi chữ
+///    (issue #12280, điển hình là khi nhấn dấu cách để chốt từ).
 /// 2) Khi đổi ô nhập trong cùng cửa sổ, Avalonia gọi Reset() để hủy composition
 ///    đang gõ nên từ vừa gõ bị mất (PR #15907 chỉ xử lý khi cửa sổ mất focus).
 ///    Ta chèn nốt phần composition còn dang dở vào ô vừa mất focus trước khi
@@ -25,11 +27,14 @@ namespace ShopHoa.Helpers;
 public class WindowsImeTextInputFix
 {
     private const uint WmKeyDown = 0x0100;
+    private const uint WmKeyUp = 0x0101;
     private const uint WmChar = 0x0102;
     private const uint WmSysKeyDown = 0x0104;
+    private const uint WmSysKeyUp = 0x0105;
     private const uint WmImeEndComposition = 0x010E;
     private const uint WmImeComposition = 0x010F;
     private const long GcsResultStr = 0x0800;
+    private const long VkProcessKey = 0xE5;
     private const string IgnoreWmCharFieldName = "_ignoreWmChar";
     private const string CompositionPropertyName = "Composition";
     private const string IsComposingPropertyName = "IsComposing";
@@ -89,7 +94,13 @@ public class WindowsImeTextInputFix
                 {
                     case WmKeyDown:
                     case WmSysKeyDown:
+                        state.ImeProcessedKeyDown = wParam.ToInt64() == VkProcessKey;
                         state.CompositionResultPending = false;
+                        break;
+
+                    case WmKeyUp:
+                    case WmSysKeyUp:
+                        state.ImeProcessedKeyDown = false;
                         break;
 
                     case WmImeComposition:
@@ -105,10 +116,11 @@ public class WindowsImeTextInputFix
                         if (wParam.ToInt64() >= 32
                             && topLevel.FocusManager?.GetFocusedElement() is TextBox)
                         {
-                            if (!state.CompositionResultPending)
+                            if (!state.CompositionResultPending && !state.ImeProcessedKeyDown)
                                 ClearIgnoreWmChar(topLevel);
 
                             state.CompositionResultPending = false;
+                            state.ImeProcessedKeyDown = false;
                         }
                         break;
                 }
@@ -238,5 +250,6 @@ public class WindowsImeTextInputFix
     private sealed class HookState
     {
         public bool CompositionResultPending;
+        public bool ImeProcessedKeyDown;
     }
 }

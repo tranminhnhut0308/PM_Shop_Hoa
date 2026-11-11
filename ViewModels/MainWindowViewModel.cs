@@ -342,12 +342,14 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnSelectedSaleCustomerChanged(KhachHang? value)
     {
         OnPropertyChanged(nameof(LaKhachLe));
-        if (!_isUserManualTienKhachDua)
-        {
-            _isUpdatingTienKhachDuaInternally = true;
-            TienKhachDua = SaleTotal;
-            _isUpdatingTienKhachDuaInternally = false;
-        }
+
+        // Đổi khách hàng phải đặt lại tiền khách đưa theo mặc định của loại khách mới,
+        // không giữ số tiền của khách trước để tránh sai công nợ (Issue #102).
+        _isUserManualTienKhachDua = false;
+        _isUpdatingTienKhachDuaInternally = true;
+        TienKhachDua = LaKhachLe ? SaleTotal : 0;
+        _isUpdatingTienKhachDuaInternally = false;
+
         RecalculatePayment();
     }
 
@@ -439,12 +441,23 @@ public partial class MainWindowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CustomerFilterButtonText))]
     private string? customerCongNoFilter = CongNoTatCa;
 
+    public const string TrangThaiDangHoatDong = "danghoatdong";
+    public const string TrangThaiNgungHoatDong = "ngunghoatdong";
+    public const string TrangThaiTatCaFilter = "tatca";
+
+    /// <summary>Lọc theo trạng thái hoạt động: danghoatdong / ngunghoatdong / tatca</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CustomerHasFilter))]
+    [NotifyPropertyChangedFor(nameof(CustomerFilterButtonText))]
+    private string? customerTrangThaiFilter = TrangThaiDangHoatDong;
+
     [ObservableProperty] private bool isCustomerFilterPanelOpen;
 
     /// <summary>Bộ lọc đang có điều kiện khác mặc định (để hiện nút "Xóa").</summary>
     public bool CustomerHasFilter =>
         SelectedCustomerNhom is { Id: > 0 }
-        || (!string.IsNullOrWhiteSpace(CustomerCongNoFilter) && CustomerCongNoFilter != CongNoTatCa);
+        || (!string.IsNullOrWhiteSpace(CustomerCongNoFilter) && CustomerCongNoFilter != CongNoTatCa)
+        || (!string.IsNullOrWhiteSpace(CustomerTrangThaiFilter) && CustomerTrangThaiFilter != TrangThaiDangHoatDong);
 
     /// <summary>
     /// Nhãn nút bộ lọc, ghi rõ điều kiện đang áp dụng:
@@ -466,6 +479,16 @@ public partial class MainWindowViewModel : ObservableObject
                     break;
                 case CongNoKhongConNo:
                     dieuKien.Add("Không còn nợ");
+                    break;
+            }
+
+            switch (CustomerTrangThaiFilter)
+            {
+                case TrangThaiNgungHoatDong:
+                    dieuKien.Add("Ngừng hoạt động");
+                    break;
+                case TrangThaiTatCaFilter:
+                    dieuKien.Add("Tất cả trạng thái");
                     break;
             }
 
@@ -511,6 +534,7 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task ClearCustomerFilterAsync()
     {
         CustomerCongNoFilter = CongNoTatCa;
+        CustomerTrangThaiFilter = TrangThaiDangHoatDong;
         SelectedCustomerNhom = null;
         CustomerPage = 1;
 
@@ -1170,13 +1194,21 @@ public partial class MainWindowViewModel : ObservableObject
         {
             StatusMessage = "Đang xuất danh sách khách hàng...";
 
+            var trangThaiKhachHang = CustomerTrangThaiFilter switch
+            {
+                TrangThaiNgungHoatDong => 0,
+                TrangThaiTatCaFilter => -1,
+                _ => 1
+            };
+
             var (danhSach, _) = await _db.GetKhachHangPagedAsync(
                 CustomerSearch,
                 1,
                 int.MaxValue,
                 false,
                 SelectedCustomerNhom?.Id ?? 0,
-                CustomerCongNoFilter);
+                CustomerCongNoFilter,
+                trangThaiKhachHang);
 
             if (danhSach.Count == 0)
             {
@@ -1344,34 +1376,87 @@ public partial class MainWindowViewModel : ObservableObject
     /// Nút "Xóa" ở cuối vùng chi tiết: xác nhận trước, xóa xong cập nhật
     /// danh sách ngay mà không tải lại toàn bộ ứng dụng.
     /// </summary>
+    /// <summary>
+    /// ISSUE #95: Xóa hoặc chuyển khách hàng sang ngừng hoạt động theo hướng an toàn dữ liệu.
+    /// Chỉ tài khoản Admin mới có quyền thực hiện.
+    /// </summary>
     [RelayCommand]
     private async Task XoaKhachHangAsync(KhachHangRowViewModel? row)
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.CustomersDelete, "Bạn không có quyền xóa khách hàng."))
+        if (!Quyen.IsAdmin(Session.CurrentUser))
         {
+            await ShowMessageAsync("Quyền truy cập", "Chỉ tài khoản Quản trị (Admin) mới có quyền thực hiện thao tác xóa hoặc ngừng hoạt động khách hàng.");
             return;
         }
+
         if (row is null)
             return;
 
-        var customer = row.Customer;
-
-        var confirmed = await ShowConfirmationAsync(
-            "Xóa khách hàng",
-            $"Bạn có chắc muốn xóa khách hàng \"{row.TenKhachHang}\" không? Khách hàng sẽ không còn hiển thị trong danh sách.");
-
-        if (!confirmed)
-            return;
-
         var customerId = row.CustomerId;
+        var tenKhachHang = row.TenKhachHang;
 
         try
         {
-            await _db.XoaKhachHangAsync(customerId);
+            var kiemTra = await _db.KiemTraXoaKhachHangAsync(customerId);
+
+            if (kiemTra.CongNoHienTai > 0 || kiemTra.SoDuTraTruoc > 0)
+            {
+                var thongBaoCongNo = kiemTra.CongNoHienTai > 0
+                    ? $"hiện đang còn công nợ {kiemTra.CongNoHienTai:N0} đ"
+                    : $"hiện đang còn số dư trả trước {kiemTra.SoDuTraTruoc:N0} đ";
+
+                var confirmed = await ShowConfirmationAsync(
+                    "Không thể xóa vĩnh viễn (Còn công nợ)",
+                    $"Khách hàng \"{tenKhachHang}\" {thongBaoCongNo}.\n\n" +
+                    "Hệ thống KHÔNG CHO PHÉP XÓA VĨNH VIỄN để bảo toàn dữ liệu thu hồi công nợ.\n\n" +
+                    "Bạn có muốn chuyển khách hàng này sang trạng thái \"NGỪNG HOẠT ĐỘNG\" không?\n" +
+                    "(Khách hàng sẽ không hiển thị khi bán hàng mới nhưng vẫn giữ nguyên toàn bộ lịch sử để tiếp tục theo dõi và thu nợ).");
+
+                if (!confirmed)
+                    return;
+
+                await _db.XoaKhachHangSafeAsync(customerId, xacNhanNgungHoatDong: true);
+                StatusMessage = $"Đã chuyển khách hàng \"{tenKhachHang}\" sang trạng thái ngừng hoạt động.";
+            }
+            else if (kiemTra.CoDuLieuGiaoDich)
+            {
+                var confirmed = await ShowConfirmationAsync(
+                    "Không thể xóa vĩnh viễn (Đã có giao dịch)",
+                    $"Khách hàng \"{tenKhachHang}\" đã phát sinh {kiemTra.SoHoaDonHoacPhieuNhap} hóa đơn và {kiemTra.SoGiaoDichLienQuan} giao dịch liên quan.\n\n" +
+                    "Để bảo toàn tính toàn vẹn của sổ sách kế toán và chứng từ lịch sử, hệ thống KHÔNG XÓA VĨNH VIỄN bản ghi này.\n\n" +
+                    "Bạn có muốn chuyển khách hàng sang trạng thái \"NGỪNG HOẠT ĐỘNG\" không?\n" +
+                    "(Khách hàng sẽ ẩn khỏi danh sách bán hàng nhưng vẫn xem được trong báo cáo và lịch sử cũ).");
+
+                if (!confirmed)
+                    return;
+
+                await _db.XoaKhachHangSafeAsync(customerId, xacNhanNgungHoatDong: true);
+                StatusMessage = $"Đã chuyển khách hàng \"{tenKhachHang}\" sang trạng thái ngừng hoạt động.";
+            }
+            else
+            {
+                var confirmed = await ShowConfirmationAsync(
+                    "Xác nhận xóa vĩnh viễn khách hàng",
+                    $"Khách hàng \"{tenKhachHang}\" chưa phát sinh bất kỳ giao dịch nào trong hệ thống.\n\n" +
+                    "Bạn có chắc chắn muốn XÓA VĨNH VIỄN khách hàng này khỏi cơ sở dữ liệu không?\n" +
+                    "(Thao tác này sẽ xóa hoàn toàn và không thể hoàn tác).");
+
+                if (!confirmed)
+                    return;
+
+                var ketQua = await _db.XoaKhachHangSafeAsync(customerId, xacNhanNgungHoatDong: false);
+                if (ketQua == KetQuaXoaDoiTac.DaXoaVinhVien)
+                {
+                    StatusMessage = $"Đã xóa vĩnh viễn khách hàng \"{tenKhachHang}\" khỏi hệ thống.";
+                }
+                else
+                {
+                    StatusMessage = $"Đã chuyển khách hàng \"{tenKhachHang}\" sang trạng thái ngừng hoạt động.";
+                }
+            }
 
             var suggestion = SaleCustomerSuggestions
                 .FirstOrDefault(item => item.Id == customerId);
-
             if (suggestion is not null)
                 SaleCustomerSuggestions.Remove(suggestion);
 
@@ -1388,21 +1473,50 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(CustomerRangeText));
             OnPropertyChanged(nameof(CanCustomerTrangSau));
 
-            // Trang cuối vừa bị rỗng -> lùi về trang trước để không bị trang trắng
             if (CustomerRows.Count == 0 && CustomerPage > 1)
                 CustomerPage--;
 
-            // Bốn thẻ thống kê phải đọc lại từ database thay vì tự trừ tay:
-            // "Khách hàng mới" chỉ giảm khi khách vừa xóa nằm trong khoảng ngày
-            // đang đếm, còn "Nợ hiện tại"/"Tổng bán" còn phụ thuộc hóa đơn, sổ cái
-            // công nợ và phiếu trả hàng nên không thể suy ra từ thao tác xóa.
             await LoadCustomersAsync();
-
-            StatusMessage = $"Đã xóa khách hàng {customer.TenKhachHang}";
         }
         catch (Exception ex)
         {
-            StatusMessage = "Không thể xóa khách hàng: " + ex.Message;
+            StatusMessage = "Không thể xóa hoặc ngừng hoạt động khách hàng: " + ex.Message;
+            await ShowMessageAsync("Lỗi", StatusMessage);
+        }
+    }
+
+    /// <summary>
+    /// ISSUE #95: Kích hoạt lại khách hàng đã bị ngừng hoạt động. Chỉ Admin mới được thực hiện.
+    /// </summary>
+    [RelayCommand]
+    private async Task KichHoatLaiKhachHangAsync(KhachHangRowViewModel? row)
+    {
+        if (!Quyen.IsAdmin(Session.CurrentUser))
+        {
+            await ShowMessageAsync("Quyền truy cập", "Chỉ tài khoản Quản trị (Admin) mới có quyền kích hoạt lại khách hàng.");
+            return;
+        }
+
+        if (row is null)
+            return;
+
+        var confirmed = await ShowConfirmationAsync(
+            "Kích hoạt lại khách hàng",
+            $"Bạn có muốn kích hoạt lại khách hàng \"{row.TenKhachHang}\" để tiếp tục hoạt động và giao dịch không?");
+
+        if (!confirmed)
+            return;
+
+        try
+        {
+            await _db.KichHoatLaiKhachHangAsync(row.CustomerId);
+            StatusMessage = $"Đã kích hoạt lại khách hàng \"{row.TenKhachHang}\".";
+            await LoadCustomersAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể kích hoạt lại khách hàng: " + ex.Message;
+            await ShowMessageAsync("Lỗi", StatusMessage);
         }
     }
 
@@ -1748,13 +1862,21 @@ public partial class MainWindowViewModel : ObservableObject
                     return;
             }
 
+            var trangThaiKhachHang = CustomerTrangThaiFilter switch
+            {
+                TrangThaiNgungHoatDong => 0,
+                TrangThaiTatCaFilter => -1,
+                _ => 1
+            };
+
             var (items, tongSoBanGhi) = await _db.GetKhachHangPagedAsync(
                 CustomerSearch,
                 page,
                 CustomerPageSize,
                 false,
                 SelectedCustomerNhom?.Id ?? 0,
-                CustomerCongNoFilter);
+                CustomerCongNoFilter,
+                trangThaiKhachHang);
 
             if (version != _customerLoadVersion)
                 return;
@@ -3413,48 +3535,130 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// ISSUE #95: Xóa hoặc chuyển nhà cung cấp sang ngừng hoạt động theo hướng an toàn dữ liệu.
+    /// Chỉ tài khoản Admin mới có quyền thực hiện.
+    /// </summary>
     [RelayCommand]
     private async Task XoaNhaCungCapAsync(NhaCungCap? supplier)
     {
-        if (!await KiemTraQuyenAsync(PermissionKeys.SuppliersDelete, "Bạn không có quyền xóa nhà cung cấp."))
+        if (!Quyen.IsAdmin(Session.CurrentUser))
         {
+            await ShowMessageAsync("Quyền truy cập", "Chỉ tài khoản Quản trị (Admin) mới có quyền thực hiện thao tác xóa hoặc ngừng hoạt động nhà cung cấp.");
             return;
         }
-        if (supplier is null)
-            return;
 
-        if (supplier.Id == 0)
+        if (supplier is null || supplier.Id == 0)
         {
-            StatusMessage =
-                "Nhà cung cấp này chưa có ID trong database.";
-
+            StatusMessage = "Nhà cung cấp không hợp lệ.";
             return;
         }
+
+        var supplierId = supplier.Id;
+        var tenNcc = supplier.TenNhaCungCap;
+
+        try
+        {
+            var kiemTra = await _db.KiemTraXoaNhaCungCapAsync(supplierId);
+
+            if (kiemTra.CongNoHienTai > 0 || kiemTra.SoDuTraTruoc > 0)
+            {
+                var thongBaoCongNo = kiemTra.CongNoHienTai > 0
+                    ? $"hiện đang còn công nợ phải trả {kiemTra.CongNoHienTai:N0} đ"
+                    : $"hiện đang còn số dư trả trước/tạm ứng {kiemTra.SoDuTraTruoc:N0} đ";
+
+                var confirmed = await ShowConfirmationAsync(
+                    "Không thể xóa vĩnh viễn (Còn công nợ)",
+                    $"Nhà cung cấp \"{tenNcc}\" {thongBaoCongNo}.\n\n" +
+                    "Hệ thống KHÔNG CHO PHÉP XÓA VĨNH VIỄN để bảo toàn dữ liệu công nợ và thanh toán.\n\n" +
+                    "Bạn có muốn chuyển nhà cung cấp này sang trạng thái \"NGỪNG HOẠT ĐỘNG\" không?\n" +
+                    "(Nhà cung cấp sẽ không hiển thị khi tạo phiếu nhập mới nhưng vẫn giữ nguyên toàn bộ lịch sử để tiếp tục theo dõi và thanh toán nợ).");
+
+                if (!confirmed)
+                    return;
+
+                await _db.XoaNhaCungCapSafeAsync(supplierId, xacNhanNgungHoatDong: true);
+                StatusMessage = $"Đã chuyển nhà cung cấp \"{tenNcc}\" sang trạng thái ngừng hoạt động.";
+            }
+            else if (kiemTra.CoDuLieuGiaoDich)
+            {
+                var confirmed = await ShowConfirmationAsync(
+                    "Không thể xóa vĩnh viễn (Đã có giao dịch)",
+                    $"Nhà cung cấp \"{tenNcc}\" đã phát sinh {kiemTra.SoHoaDonHoacPhieuNhap} phiếu nhập và {kiemTra.SoGiaoDichLienQuan} giao dịch liên quan.\n\n" +
+                    "Để bảo toàn tính toàn vẹn của sổ sách và chứng từ lịch sử, hệ thống KHÔNG XÓA VĨNH VIỄN bản ghi này.\n\n" +
+                    "Bạn có muốn chuyển nhà cung cấp sang trạng thái \"NGỪNG HOẠT ĐỘNG\" không?\n" +
+                    "(Nhà cung cấp sẽ ẩn khỏi danh sách nhập hàng nhưng vẫn xem được trong báo cáo và lịch sử cũ).");
+
+                if (!confirmed)
+                    return;
+
+                await _db.XoaNhaCungCapSafeAsync(supplierId, xacNhanNgungHoatDong: true);
+                StatusMessage = $"Đã chuyển nhà cung cấp \"{tenNcc}\" sang trạng thái ngừng hoạt động.";
+            }
+            else
+            {
+                var confirmed = await ShowConfirmationAsync(
+                    "Xác nhận xóa vĩnh viễn nhà cung cấp",
+                    $"Nhà cung cấp \"{tenNcc}\" chưa phát sinh bất kỳ giao dịch nào trong hệ thống.\n\n" +
+                    "Bạn có chắc chắn muốn XÓA VĨNH VIỄN nhà cung cấp này khỏi cơ sở dữ liệu không?\n" +
+                    "(Thao tác này sẽ xóa hoàn toàn và không thể hoàn tác).");
+
+                if (!confirmed)
+                    return;
+
+                var ketQua = await _db.XoaNhaCungCapSafeAsync(supplierId, xacNhanNgungHoatDong: false);
+                if (ketQua == KetQuaXoaDoiTac.DaXoaVinhVien)
+                {
+                    StatusMessage = $"Đã xóa vĩnh viễn nhà cung cấp \"{tenNcc}\" khỏi hệ thống.";
+                }
+                else
+                {
+                    StatusMessage = $"Đã chuyển nhà cung cấp \"{tenNcc}\" sang trạng thái ngừng hoạt động.";
+                }
+            }
+
+            SelectedNhaCungCap = null;
+            await LoadSupplierPageAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Không thể xóa hoặc ngừng hoạt động nhà cung cấp: " + ex.Message;
+            await ShowMessageAsync("Lỗi", StatusMessage);
+        }
+    }
+
+    /// <summary>
+    /// ISSUE #95: Kích hoạt lại nhà cung cấp đã bị ngừng hoạt động. Chỉ Admin mới được thực hiện.
+    /// </summary>
+    [RelayCommand]
+    private async Task KichHoatLaiNhaCungCapAsync(NhaCungCap? supplier)
+    {
+        if (!Quyen.IsAdmin(Session.CurrentUser))
+        {
+            await ShowMessageAsync("Quyền truy cập", "Chỉ tài khoản Quản trị (Admin) mới có quyền kích hoạt lại nhà cung cấp.");
+            return;
+        }
+
+        if (supplier is null || supplier.Id == 0)
+            return;
 
         var confirmed = await ShowConfirmationAsync(
-            "Xóa nhà cung cấp",
-            $"Bạn có chắc muốn xóa nhà cung cấp " +
-            $"\"{supplier.TenNhaCungCap}\" không?");
+            "Kích hoạt lại nhà cung cấp",
+            $"Bạn có muốn kích hoạt lại nhà cung cấp \"{supplier.TenNhaCungCap}\" để tiếp tục hoạt động và nhập hàng không?");
 
         if (!confirmed)
             return;
 
         try
         {
-            await _db.XoaNhaCungCapAsync(supplier.Id);
-
-            SelectedNhaCungCap = null;
-
-            StatusMessage =
-                $"Đã xóa nhà cung cấp {supplier.TenNhaCungCap}";
-
-            // Tải lại trang để số trang, tổng và thống kê khớp với database.
+            await _db.KichHoatLaiNhaCungCapAsync(supplier.Id);
+            StatusMessage = $"Đã kích hoạt lại nhà cung cấp \"{supplier.TenNhaCungCap}\".";
             await LoadSupplierPageAsync();
         }
         catch (Exception ex)
         {
-            StatusMessage =
-                "Không thể xóa nhà cung cấp: " + ex.Message;
+            StatusMessage = "Không thể kích hoạt lại nhà cung cấp: " + ex.Message;
+            await ShowMessageAsync("Lỗi", StatusMessage);
         }
     }
 
@@ -3973,8 +4177,10 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (!_isUserManualTienKhachDua)
         {
+            // Khách lẻ giữ mặc định thanh toán đủ; khách hàng đã lưu mặc định 0 để
+            // phần chưa trả được ghi nhận vào công nợ (Issue #102).
             _isUpdatingTienKhachDuaInternally = true;
-            TienKhachDua = SaleTotal;
+            TienKhachDua = LaKhachLe ? SaleTotal : 0;
             _isUpdatingTienKhachDuaInternally = false;
         }
 
@@ -5460,7 +5666,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// nhờ vậy không bị tự đổi giá trị khi người dùng đang gõ dở.
     /// </summary>
     private string _phieuNhapNgayNhapText =
-        DateTime.Now.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+        DateTime.Now.ToString(NgayNhapInput.DinhDangHienThi, CultureInfo.InvariantCulture);
 
     public string PhieuNhapNgayNhapText
     {
@@ -5468,25 +5674,11 @@ public partial class MainWindowViewModel : ObservableObject
         set => SetProperty(ref _phieuNhapNgayNhapText, value);
     }
 
-    private static readonly string[] DinhDangNgayNhap =
-    [
-        "dd/MM/yyyy HH:mm",
-        "dd/MM/yyyy H:mm",
-        "dd/MM/yyyy H:m",
-        "d/M/yyyy HH:mm",
-        "d/M/yyyy H:mm",
-        "d/M/yyyy H:m",
-        "dd/MM/yyyy HH:mm:ss",
-        "dd/MM/yyyy H:m:s",
-        "d/M/yyyy H:mm:ss",
-        "d/M/yyyy H:m:s",
-        "dd/MM/yyyy",
-        "d/M/yyyy",
-        "dd-MM-yyyy HH:mm",
-        "dd-MM-yyyy",
-        "yyyy-MM-dd HH:mm",
-        "yyyy-MM-dd"
-    ];
+    /// <summary>
+    /// True khi ngày nhập đang được cập nhật từ chính nội dung người dùng gõ.
+    /// Lúc đó không định dạng lại ô nhập để con trỏ không bị nhảy.
+    /// </summary>
+    private bool _dangCapNhatNgayNhapTuText;
 
     /// <summary>
     /// Đọc chuỗi người dùng gõ trong ô Ngày nhập và cập nhật giá trị thật.
@@ -5503,33 +5695,33 @@ public partial class MainWindowViewModel : ObservableObject
             return true;
         }
 
-        if (!DateTime.TryParseExact(
-                text,
-                DinhDangNgayNhap,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out var ngayGio))
+        if (!NgayNhapInput.TryParse(text, PhieuNhapNgayNhap, out var ngayGio))
         {
             StatusMessage = "Ngày nhập không hợp lệ. Vui lòng nhập theo định dạng dd/MM/yyyy HH:mm.";
             return false;
         }
 
-        // Chỉ nhập ngày: giữ nguyên phần giờ đang có thay vì tự đổi về 00:00.
-        if (!text.Contains(':') && PhieuNhapNgayNhap.HasValue)
-            ngayGio = ngayGio.Date + PhieuNhapNgayNhap.Value.TimeOfDay;
-
+        // Giữ nguyên nội dung ô người dùng vừa gõ (kể cả khi chỉ nhập ngày)
+        // để vị trí con trỏ không bị nhảy sau khi nhấn Enter / rời ô.
         if (PhieuNhapNgayNhap != ngayGio)
-            PhieuNhapNgayNhap = ngayGio;
-        else
-            CapNhatTextPhieuNhapNgayNhap();
+        {
+            _dangCapNhatNgayNhapTuText = true;
+            try
+            {
+                PhieuNhapNgayNhap = ngayGio;
+            }
+            finally
+            {
+                _dangCapNhatNgayNhapTuText = false;
+            }
+        }
 
         return true;
     }
 
     private void CapNhatTextPhieuNhapNgayNhap()
     {
-        var text = PhieuNhapNgayNhap?.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
-                   ?? string.Empty;
+        var text = NgayNhapInput.Format(PhieuNhapNgayNhap);
 
         if (_phieuNhapNgayNhapText != text)
         {
@@ -5685,9 +5877,14 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnPhieuNhapNgayNhapChanged(DateTime? value)
     {
+        // Người dùng đang gõ trực tiếp: không định dạng lại ô nhập và không đóng
+        // lịch (nếu vừa bấm nút lịch, LostFocus sẽ không làm lịch bị đóng ngay).
+        if (_dangCapNhatNgayNhapTuText)
+            return;
+
         CapNhatTextPhieuNhapNgayNhap();
 
-        // Chọn xong ngày (hoặc nhập xong) thì đóng lịch luôn
+        // Chọn xong ngày trên lịch thì đóng lịch luôn
         IsPhieuNhapCalendarOpen = false;
     }
 
@@ -6844,15 +7041,14 @@ public partial class MainWindowViewModel : ObservableObject
         }
         else
         {
-            // Trường hợp 2: Khách hàng có thông tin và thanh toán đủ
-            // Mặc định số tiền khách đưa bằng tổng tiền hóa đơn nếu chưa điều chỉnh thủ công
+            // Trường hợp 2: Khách hàng đã lưu - mặc định tiền khách đưa = 0.
+            // Nếu nhân viên không nhập gì, toàn bộ tiền hàng được ghi vào công nợ.
             if (!_isUserManualTienKhachDua)
             {
                 _isUpdatingTienKhachDuaInternally = true;
-                TienKhachDua = Math.Max(0m, SaleTotal);
-                TienThoi = 0;
-                TienCongNo = 0;
+                TienKhachDua = 0m;
                 _isUpdatingTienKhachDuaInternally = false;
+                RecalculatePayment();
             }
         }
 
@@ -7969,7 +8165,7 @@ public partial class MainWindowViewModel : ObservableObject
     // Khách hàng
     public bool CanCreateCustomer => CoQuyen(PermissionKeys.CustomersCreate);
     public bool CanEditCustomer => CoQuyen(PermissionKeys.CustomersEdit);
-    public bool CanDeleteCustomer => CoQuyen(PermissionKeys.CustomersDelete);
+    public bool CanDeleteCustomer => CoQuyen(PermissionKeys.CustomersDelete) && Quyen.IsAdmin(Session.CurrentUser);
     public bool CanImportCustomer => CoQuyen(PermissionKeys.CustomersImport);
     public bool CanExportCustomer => CoQuyen(PermissionKeys.CustomersExport);
     public bool CanViewCustomerDetail => CoQuyen(PermissionKeys.CustomersDetail);
@@ -7979,7 +8175,7 @@ public partial class MainWindowViewModel : ObservableObject
     // Nhà cung cấp
     public bool CanCreateSupplier => CoQuyen(PermissionKeys.SuppliersCreate);
     public bool CanEditSupplier => CoQuyen(PermissionKeys.SuppliersEdit);
-    public bool CanDeleteSupplier => CoQuyen(PermissionKeys.SuppliersDelete);
+    public bool CanDeleteSupplier => CoQuyen(PermissionKeys.SuppliersDelete) && Quyen.IsAdmin(Session.CurrentUser);
     public bool CanImportSupplier => CoQuyen(PermissionKeys.SuppliersImport);
     public bool CanExportSupplier => CoQuyen(PermissionKeys.SuppliersExport);
     public bool CanViewSupplierDetail => CoQuyen(PermissionKeys.SuppliersDetail);

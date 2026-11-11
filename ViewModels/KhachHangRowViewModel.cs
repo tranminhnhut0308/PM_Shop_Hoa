@@ -56,7 +56,24 @@ public sealed partial class KhachHangRowViewModel : ObservableObject
     private void Xoa()
         => _chuSo?.XoaKhachHangCommand.Execute(this);
 
+    /// <summary>Kích hoạt lại khách hàng đã ngừng hoạt động (chỉ Admin).</summary>
+    [RelayCommand]
+    private void KichHoatLai()
+        => _chuSo?.KichHoatLaiKhachHangCommand.Execute(this);
+
     public uint CustomerId => Customer.Id;
+
+    public bool TrangThai => Customer.TrangThai;
+
+    public bool IsNgungHoatDong => !Customer.TrangThai;
+
+    public string TrangThaiHienThi => Customer.TrangThai ? "Đang hoạt động" : "Ngừng hoạt động";
+
+    /// <summary>Chỉ Admin mới có quyền xóa hoặc chuyển trạng thái khi khách hàng đang hoạt động.</summary>
+    public bool CoTheXoa => (_chuSo?.CanDeleteCustomer == true) && !IsNgungHoatDong;
+
+    /// <summary>Chỉ Admin mới có quyền kích hoạt lại khi khách hàng đang ngừng hoạt động.</summary>
+    public bool CoTheKichHoatLai => (_chuSo?.CanDeleteCustomer == true) && IsNgungHoatDong;
 
     public string MaKhachHang => HienThi(Customer.MaKhachHang);
 
@@ -145,6 +162,11 @@ public sealed partial class KhachHangRowViewModel : ObservableObject
         OnPropertyChanged(nameof(NoHienTaiText));
         OnPropertyChanged(nameof(TongBanText));
         OnPropertyChanged(nameof(TongBanTruTraHangText));
+        OnPropertyChanged(nameof(TrangThai));
+        OnPropertyChanged(nameof(IsNgungHoatDong));
+        OnPropertyChanged(nameof(TrangThaiHienThi));
+        OnPropertyChanged(nameof(CoTheXoa));
+        OnPropertyChanged(nameof(CoTheKichHoatLai));
     }
 
     private static string HienThi(string? value)

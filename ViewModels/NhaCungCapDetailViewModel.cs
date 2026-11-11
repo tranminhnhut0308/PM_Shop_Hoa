@@ -38,6 +38,7 @@ public sealed partial class NhaCungCapDetailViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(GhiChu))]
     [NotifyPropertyChangedFor(nameof(NgayTaoText))]
     [NotifyPropertyChangedFor(nameof(TrangThaiHienThi))]
+    [NotifyPropertyChangedFor(nameof(IsNgungHoatDong))]
     [NotifyPropertyChangedFor(nameof(ChuCaiDau))]
     private NhaCungCap? supplier;
 
@@ -124,7 +125,9 @@ public sealed partial class NhaCungCapDetailViewModel : ObservableObject
 
     public string NgayTaoText => Supplier?.NgayTao?.ToString("dd/MM/yyyy HH:mm") ?? ChuaCo;
 
-    public string TrangThaiHienThi => Supplier?.TrangThai == false
+    public bool IsNgungHoatDong => (Supplier?.TrangThai ?? true) == false;
+
+    public string TrangThaiHienThi => IsNgungHoatDong
         ? "Ngừng hoạt động"
         : "Đang hoạt động";
 

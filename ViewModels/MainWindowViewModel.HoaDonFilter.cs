@@ -22,8 +22,8 @@ public sealed partial class MainWindowViewModel
 
     private DateTimeOffset? _invoiceFilterStartDate;
     private DateTimeOffset? _invoiceFilterEndDate;
-    private DateTimeOffset? _invoiceCustomStartDateDraft;
-    private DateTimeOffset? _invoiceCustomEndDateDraft;
+    private DateTime? _invoiceCustomStartDateDraft;
+    private DateTime? _invoiceCustomEndDateDraft;
     private string _selectedInvoiceDatePreset = "Mọi ngày";
     private string _invoiceDatePresetBeforeCustom = "Mọi ngày";
     private bool _dangCapNhatPresetNgay;
@@ -79,8 +79,8 @@ public sealed partial class MainWindowViewModel
                 {
                     _invoiceDatePresetBeforeCustom = previousPreset;
                     var homNay = NgayVietNamHomNay();
-                    InvoiceCustomStartDateDraft = InvoiceFilterStartDate ?? InvoiceFilterEndDate ?? homNay;
-                    InvoiceCustomEndDateDraft = InvoiceFilterEndDate ?? InvoiceFilterStartDate ?? homNay;
+                    InvoiceCustomStartDateDraft = (InvoiceFilterStartDate ?? InvoiceFilterEndDate ?? homNay).Date;
+                    InvoiceCustomEndDateDraft = (InvoiceFilterEndDate ?? InvoiceFilterStartDate ?? homNay).Date;
                     IsInvoiceCustomDatePickerOpen = true;
                 }
                 else if (!_dangCapNhatPresetNgay && !_dangHuyChonNgayTuyChon
@@ -98,20 +98,22 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-    public DateTimeOffset? InvoiceCustomStartDateDraft
+    // Kiểu DateTime? khớp chính xác CalendarDatePicker.SelectedDate (Avalonia 11)
+    // để binding hai chiều không phải ép kiểu DateTime <-> DateTimeOffset (issue #106).
+    public DateTime? InvoiceCustomStartDateDraft
     {
         get => _invoiceCustomStartDateDraft;
         set => SetProperty(
             ref _invoiceCustomStartDateDraft,
-            value.HasValue ? VietnameseCalendar.FromCalendarDate(value.Value) : null);
+            value.HasValue ? value.Value.Date : null);
     }
 
-    public DateTimeOffset? InvoiceCustomEndDateDraft
+    public DateTime? InvoiceCustomEndDateDraft
     {
         get => _invoiceCustomEndDateDraft;
         set => SetProperty(
             ref _invoiceCustomEndDateDraft,
-            value.HasValue ? VietnameseCalendar.FromCalendarDate(value.Value) : null);
+            value.HasValue ? value.Value.Date : null);
     }
 
     public DateTimeOffset? InvoiceFilterStartDate
@@ -226,8 +228,8 @@ public sealed partial class MainWindowViewModel
         }
 
         _dangCapNhatPresetNgay = true;
-        InvoiceFilterStartDate = VietnameseCalendar.FromCalendarDate(InvoiceCustomStartDateDraft.Value);
-        InvoiceFilterEndDate = VietnameseCalendar.FromCalendarDate(InvoiceCustomEndDateDraft.Value);
+        InvoiceFilterStartDate = VietnameseCalendar.FromDateTime(InvoiceCustomStartDateDraft.Value);
+        InvoiceFilterEndDate = VietnameseCalendar.FromDateTime(InvoiceCustomEndDateDraft.Value);
         _selectedInvoiceDatePreset = "Tùy chỉnh";
         _dangCapNhatPresetNgay = false;
         OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
@@ -284,8 +286,8 @@ public sealed partial class MainWindowViewModel
         if (!IsInvoiceCustomDatePreset)
             return;
 
-        InvoiceCustomStartDateDraft = InvoiceFilterStartDate;
-        InvoiceCustomEndDateDraft = InvoiceFilterEndDate;
+        InvoiceCustomStartDateDraft = InvoiceFilterStartDate?.Date;
+        InvoiceCustomEndDateDraft = InvoiceFilterEndDate?.Date;
         _dangSuaKhoangNgayTuyChon = true;
         IsInvoiceCustomDatePickerOpen = true;
     }
@@ -1016,8 +1018,12 @@ public sealed partial class MainWindowViewModel
             _dangCapNhatPresetNgay = true;
             try
             {
-                InvoiceFilterStartDate = InvoiceCustomStartDateDraft;
-                InvoiceFilterEndDate = InvoiceCustomEndDateDraft;
+                InvoiceFilterStartDate = InvoiceCustomStartDateDraft.HasValue
+                    ? VietnameseCalendar.FromDateTime(InvoiceCustomStartDateDraft.Value)
+                    : null;
+                InvoiceFilterEndDate = InvoiceCustomEndDateDraft.HasValue
+                    ? VietnameseCalendar.FromDateTime(InvoiceCustomEndDateDraft.Value)
+                    : null;
             }
             finally
             {

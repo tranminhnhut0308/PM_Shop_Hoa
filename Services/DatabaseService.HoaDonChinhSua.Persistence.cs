@@ -442,6 +442,10 @@ public sealed partial class DatabaseService
         HoaDonEditState state)
     {
         var user = Session.CurrentUser;
+
+        // Chi tiết từng dòng hàng trước ➔ sau để hiển thị ngay trong nhật ký hoạt động.
+        var chiTietThayDoi = BuildHoaDonEditSummary(state);
+
         await connection.ExecuteAsync(
             """
             INSERT INTO nhat_ky_hoat_dong
@@ -465,7 +469,10 @@ public sealed partial class DatabaseService
                 MaHoaDon = state.Header.MaHoaDon,
                 NoiDung = $"Chỉnh sửa hóa đơn {state.Header.MaHoaDon}: " +
                           $"{state.Header.KhachCanTra:N0} đ ➔ {state.AmountDue:N0} đ. " +
-                          $"Lý do: {state.Request.LyDoSua}",
+                          $"Lý do: {state.Request.LyDoSua}" +
+                          (string.IsNullOrWhiteSpace(chiTietThayDoi)
+                              ? ""
+                              : Environment.NewLine + chiTietThayDoi),
                 GiaTri = state.AmountDue,
                 ThoiGian = state.Now
             },
