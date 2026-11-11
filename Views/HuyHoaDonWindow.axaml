@@ -238,10 +238,10 @@
                 FontWeight="Bold"
                 FontSize="13"
                 Foreground="#163F38" />
-              <TextBlock Text="(*)"
-                FontWeight="Bold"
-                FontSize="13"
-                Foreground="#DC2626" />
+              <TextBlock Text="(không bắt buộc)"
+                FontSize="12"
+                Foreground="#64748B"
+                VerticalAlignment="Center" />
             </StackPanel>
 
             <TextBox x:Name="TxtLyDoHuy"

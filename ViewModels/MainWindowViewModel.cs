@@ -223,7 +223,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     public string SanPhamEmptyHint =>
         string.IsNullOrWhiteSpace(ProductSearch)
-            ? "Bấm “＋ Nhập hàng” hoặc “⇩ Import file” để thêm hàng hóa."
+            ? "Bấm “＋ Nhập hàng” hoặc “⇩ Nhập file” để thêm hàng hóa."
             : "Thử từ khóa khác hoặc xóa nội dung ô tìm kiếm.";
 
     /// <summary>
@@ -4888,7 +4888,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             await ShowMessageAsync(
                 "Không import được phiếu nhập",
-                "Không thể đọc hoặc import file. " + ex.Message);
+                "Không thể đọc hoặc nhập file. " + ex.Message);
         }
         finally
         {

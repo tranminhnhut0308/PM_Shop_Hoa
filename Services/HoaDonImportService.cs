@@ -2107,7 +2107,7 @@ public sealed class HoaDonImportService
             result.SoCapNhat = 0;
             result.SoHoaDonTongHopDaGhi = 0;
             _db.GhiLog(
-                $"LỖI HỆ THỐNG import file {result.TenFile}, giai đoạn: {giaiDoan}; "
+                $"LỖI HỆ THỐNG nhập file {result.TenFile}, giai đoạn: {giaiDoan}; "
                 + $"đã yêu cầu rollback transaction.{Environment.NewLine}{SafeLog.Redact(ex.ToString())}",
                 "nhap-hoa-don");
             result.DanhSachLoi.Add(new HoaDonImportError(

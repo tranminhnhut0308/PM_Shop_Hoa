@@ -211,7 +211,7 @@
 
         <Button Grid.Column="2"
                 Classes="primary"
-                Content="Xuất Excel"
+                Content="Xuất File"
                 Width="140"
                 Command="{Binding XacNhanCommand}" />
       </Grid>

@@ -71,14 +71,11 @@ public partial class HuyPhieuQuyWindow : Window
 
     private void OnXacNhanHuyClick(object? sender, RoutedEventArgs e)
     {
-        var lyDo = TxtLyDoHuy.Text?.Trim();
-
-        if (string.IsNullOrWhiteSpace(lyDo) || lyDo.Length < 5)
+        var lyDo = (TxtLyDoHuy.Text ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(lyDo))
         {
-            TxtLoiValidate.Text = "Vui lòng nhập lý do hủy chi tiết (tối thiểu 5 ký tự).";
-            TxtLoiValidate.IsVisible = true;
-            TxtLyDoHuy.Focus();
-            return;
+            // Lý do mặc định khi người dùng không nhập
+            lyDo = "Hủy phiếu thu/chi do thao tác sai của nhân viên!!";
         }
 
         TxtLoiValidate.IsVisible = false;

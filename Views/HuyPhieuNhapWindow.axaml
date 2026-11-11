@@ -193,14 +193,14 @@
           <!-- 4. LÝ DO HỦY (BẮT BUỘC) -->
           <StackPanel Spacing="6">
             <StackPanel Orientation="Horizontal" Spacing="4">
-              <TextBlock Text="3. Lý do hủy phiếu nhập"
+              <TextBlock Text="3. Lý do hủy hóa đơn"
                 FontWeight="Bold"
                 FontSize="13"
                 Foreground="#163F38" />
-              <TextBlock Text="(*)"
-                FontWeight="Bold"
-                FontSize="13"
-                Foreground="#DC2626" />
+              <TextBlock Text="(không bắt buộc)"
+                FontSize="12"
+                Foreground="#64748B"
+                VerticalAlignment="Center" />
             </StackPanel>
 
             <TextBox x:Name="TxtLyDoHuy"

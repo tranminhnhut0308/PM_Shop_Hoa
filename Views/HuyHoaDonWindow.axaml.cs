@@ -161,11 +161,10 @@ public partial class HuyHoaDonWindow : Window
         BannerLoi.IsVisible = false;
 
         var lyDo = (TxtLyDoHuy.Text ?? "").Trim();
-        if (lyDo.Length == 0)
+        if (string.IsNullOrWhiteSpace(lyDo))
         {
-            HienLoi("Vui lòng nhập lý do hủy hóa đơn (bắt buộc).");
-            TxtLyDoHuy.Focus();
-            return;
+            // Lý do mặc định khi người dùng không nhập
+            lyDo = "Hủy hóa đơn do thao tác sai của nhân viên!!";
         }
 
         var trangThaiGiaoHang = RbDaGiaoDaNhanLai.IsChecked == true

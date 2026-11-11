@@ -128,7 +128,6 @@
           <StackPanel Spacing="6">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <TextBlock Text="Lý do hủy phiếu" FontSize="13" FontWeight="Bold" Foreground="#374151" />
-              <TextBlock Text="(*)" FontSize="13" FontWeight="Bold" Foreground="#DC2626" />
             </StackPanel>
             <TextBox x:Name="TxtLyDoHuy"
                      Watermark="Nhập lý do hủy phiếu thanh toán (bắt buộc)..."

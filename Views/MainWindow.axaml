@@ -2944,11 +2944,11 @@
               <Button Grid.Column="2" Classes="toolbar-action" Content="Tìm kiếm"
                 Command="{Binding TimKiemKhachHangCommand}"
                 Margin="0,0,10,0" />
-              <Button Grid.Column="3" Classes="toolbar-action" Content="📁 Nhập file"
+              <Button Grid.Column="3" Classes="toolbar-action" Content="⇩  Nhập file"
                 Margin="0,0,10,0"
                 Command="{Binding ThemKhachHangTuFileCommand}"
                 IsVisible="{Binding CanImportCustomer}" />
-              <Button Grid.Column="4" Classes="toolbar-action" Content="📤 Xuất file"
+              <Button Grid.Column="4" Classes="toolbar-action" Content="⇩  Xuất file"
                 Margin="0,0,10,0"
                 Command="{Binding XuatFileKhachHangCommand}"
                 ToolTip.Tip="Xuất toàn bộ danh sách khách hàng đang xem ra file Excel"
@@ -3600,12 +3600,12 @@
                 Orientation="Horizontal"
                 Spacing="8">
                 <Button Classes="toolbar-action"
-                  Content="⇩ Nhập từ file"
+                  Content="⇩  Nhập file"
                   Command="{Binding NhapHoaDonTuFileCommand}"
                   IsVisible="{Binding CanImportInvoice}" />
 
                 <Button Classes="toolbar-action"
-                  Content="📤 Xuất file"
+                  Content="⇩  Xuất file"
                   Command="{Binding XuatFileHoaDonCommand}"
                   ToolTip.Tip="Xuất danh sách hóa đơn đang xem ra file Excel"
                   IsVisible="{Binding CanExportInvoice}" />
@@ -4341,10 +4341,10 @@
               <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
                 <Button Classes="toolbar-action" Content="↻ Làm mới" Margin="0"
                   Command="{Binding RefreshSuppliersCommand}" />
-                <Button Classes="toolbar-action" Content="📁 Nhập file" Margin="0"
+                <Button Classes="toolbar-action" Content="⇩  Nhập file" Margin="0"
                   Command="{Binding ThemNhaCungCapTuFileCommand}"
                   IsVisible="{Binding CanImportSupplier}" />
-                <Button Classes="toolbar-action" Content="📤 Xuất file" Margin="0"
+                <Button Classes="toolbar-action" Content="⇩  Xuất file" Margin="0"
                   Command="{Binding XuatFileNhaCungCapCommand}"
                   ToolTip.Tip="Xuất toàn bộ danh sách nhà cung cấp đang xem ra file Excel"
                   IsVisible="{Binding CanExportSupplier}" />
@@ -7194,7 +7194,7 @@
 
           <Button Grid.Column="2"
             Classes="toolbar-action"
-            Content="📥  Import file"
+            Content="⇩  Nhập file"
             Command="{Binding ImportBaoCaoPhieuNhapCommand}"
             VerticalAlignment="Center"
             Margin="0"
@@ -7202,7 +7202,7 @@
 
           <Button Grid.Column="3"
             Classes="toolbar-action"
-            Content="📤  Xuất Excel"
+            Content="⇩  Xuất file"
             Command="{Binding XuatExcelBaoCaoPhieuNhapCommand}"
             VerticalAlignment="Center"
             Margin="0"

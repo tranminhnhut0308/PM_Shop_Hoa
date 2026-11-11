@@ -385,7 +385,7 @@
                 VerticalAlignment="Center">
                 <Button Classes="bcBtn" Content="Làm mới"
                   Command="{Binding TaiLaiCommand}" />
-                <Button Classes="bcPrimary" Content="Xuất Excel"
+                <Button Classes="bcPrimary" Content="⇩  Xuất file"
                   Command="{Binding XuatExcelCommand}" />
               </StackPanel>
             </Grid>

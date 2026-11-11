@@ -113,12 +113,11 @@ public partial class HuyPhieuNhapWindow : Window
     {
         AnLoi();
 
-        var lyDo = TxtLyDoHuy.Text?.Trim();
+       var lyDo = (TxtLyDoHuy.Text ?? "").Trim();
         if (string.IsNullOrWhiteSpace(lyDo))
         {
-            HienThiLoi("Vui lòng nhập rõ lý do hủy phiếu nhập hàng (bắt buộc).");
-            TxtLyDoHuy.Focus();
-            return;
+            // Lý do mặc định khi người dùng không nhập
+            lyDo = "Hủy phiếu nhập do thao tác sai của nhân viên!!";
         }
 
         if (!_tonKhoHopLe)

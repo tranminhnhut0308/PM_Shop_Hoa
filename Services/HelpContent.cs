@@ -129,8 +129,8 @@ public static class HelpContent
                     "Bấm Thêm hàng hóa hoặc nhấn Ctrl + N. Nhập mã, tên, nhóm hàng, đơn vị tính và giá bán."),
                 new(3, "Chỉnh sửa",
                     "Bấm vào dòng hàng hóa để xem chi tiết hoặc dùng nút sửa. Kiểm tra kỹ giá bán trước khi lưu."),
-                new(4, "Nhập hoặc xuất Excel",
-                    "Dùng nút Nhập Excel / Xuất Excel khi cần cập nhật danh mục hàng loạt."),
+                new(4, "Nhập hoặc xuất file",
+                    "Dùng nút Nhập file / Xuất file khi cần cập nhật danh mục hàng loạt."),
             ],
             "Tồn kho thay đổi khi hoàn tất phiếu nhập hoặc hóa đơn bán hàng. "
             + "Không sửa trực tiếp tồn kho nếu chưa kiểm tra nghiệp vụ."),
@@ -215,8 +215,8 @@ public static class HelpContent
                     "Dùng các nút Hôm nay, Tuần này, Tháng này hoặc chọn khoảng ngày tùy chỉnh."),
                 new(3, "Xem và lọc dữ liệu",
                     "Nhấn F5 để làm mới báo cáo đang xem. Một số báo cáo có ô tìm kiếm riêng."),
-                new(4, "Xuất Excel",
-                    "Dùng nút Xuất Excel khi cần lưu lại hoặc gửi báo cáo cho người khác."),
+                new(4, "Xuất file",
+                    "Dùng nút Xuất file khi cần lưu lại hoặc gửi báo cáo cho người khác."),
             ],
             "Số liệu báo cáo phụ thuộc vào hóa đơn, phiếu nhập và phiếu thu/chi đã hoàn tất."),
     ];

@@ -157,7 +157,7 @@
                 Command="{Binding VềNgayQuaCommand}" />
               <Button Classes="toolbar-action" Content="Làm mới"
                 Command="{Binding TaiLaiCommand}" />
-              <Button Content="Xuất Excel"
+              <Button Content="⇩  Xuất file"
                 Command="{Binding XuatExcelCommand}"
                 Background="#087F6E" Foreground="White"
                 Padding="14,7" CornerRadius="8" FontWeight="SemiBold"
