@@ -91,6 +91,7 @@ public sealed partial class MainWindowViewModel
                 OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
                 ThongBaoPresetNgayHoaDon();
                 OnPropertyChanged(nameof(InvoiceDateFilterText));
+                OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
                 OnPropertyChanged(nameof(InvoiceDateCompactText));
                 OnPropertyChanged(nameof(HasInvoiceDateFilter));
@@ -127,6 +128,7 @@ public sealed partial class MainWindowViewModel
             {
                 OnPropertyChanged(nameof(InvoiceFilterStartDateText));
                 OnPropertyChanged(nameof(InvoiceDateFilterText));
+                OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
                 OnPropertyChanged(nameof(InvoiceDateCompactText));
                 OnPropertyChanged(nameof(HasInvoiceDateFilter));
@@ -135,6 +137,7 @@ public sealed partial class MainWindowViewModel
                     _selectedInvoiceDatePreset = "Tùy chỉnh";
                     OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
                     OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
+                    OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
                     if (InvoiceFilterStartDate.HasValue && InvoiceFilterEndDate.HasValue)
                     {
                         InvoicePage = 1;
@@ -156,6 +159,7 @@ public sealed partial class MainWindowViewModel
             {
                 OnPropertyChanged(nameof(InvoiceFilterEndDateText));
                 OnPropertyChanged(nameof(InvoiceDateFilterText));
+                OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
                 OnPropertyChanged(nameof(InvoiceDateCompactText));
                 OnPropertyChanged(nameof(HasInvoiceDateFilter));
@@ -164,6 +168,7 @@ public sealed partial class MainWindowViewModel
                     _selectedInvoiceDatePreset = "Tùy chỉnh";
                     OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
                     OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
+                    OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
                     if (InvoiceFilterStartDate.HasValue && InvoiceFilterEndDate.HasValue)
                     {
                         InvoicePage = 1;
@@ -234,6 +239,7 @@ public sealed partial class MainWindowViewModel
         _dangCapNhatPresetNgay = false;
         OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
         OnPropertyChanged(nameof(InvoiceDateFilterText));
+        OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
         OnPropertyChanged(nameof(InvoiceDateCompactText));
 
         _dangSuaKhoangNgayTuyChon = false;
@@ -257,6 +263,7 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
         ThongBaoPresetNgayHoaDon();
         OnPropertyChanged(nameof(InvoiceDateFilterText));
+        OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
         OnPropertyChanged(nameof(InvoiceDateCompactText));
 
         _dangSuaKhoangNgayTuyChon = false;
@@ -306,6 +313,28 @@ public sealed partial class MainWindowViewModel
             var start = InvoiceFilterStartDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "không giới hạn";
             var end = InvoiceFilterEndDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "không giới hạn";
             return $"Khoảng thời gian đang lọc: {start} – {end}";
+        }
+    }
+
+    public string InvoiceDateFilterDisplayText
+    {
+        get
+        {
+            var today = NgayVietNamHomNay().Date;
+            return SelectedInvoiceDatePreset switch
+            {
+                "Hôm nay" => $"Hôm nay ({today:dd/MM/yyyy})",
+                "Hôm qua" => $"Hôm qua ({today.AddDays(-1):dd/MM/yyyy})",
+                "7 ngày qua" or "7 ngày gần nhất" => $"7 ngày gần nhất ({today.AddDays(-6):dd/MM} – {today:dd/MM/yyyy})",
+                "Tháng này" => $"Tháng này ({today:MM/yyyy})",
+                "Tháng trước" => $"Tháng trước ({today.AddMonths(-1):MM/yyyy})",
+                "Tùy chỉnh" or "Tùy chọn" when InvoiceFilterStartDate.HasValue && InvoiceFilterEndDate.HasValue =>
+                    InvoiceFilterStartDate.Value.Date == InvoiceFilterEndDate.Value.Date
+                        ? $"{InvoiceFilterStartDate.Value:dd/MM/yyyy}"
+                        : $"{InvoiceFilterStartDate.Value:dd/MM/yyyy} – {InvoiceFilterEndDate.Value:dd/MM/yyyy}",
+                "Mọi ngày" => "Tất cả thời gian",
+                _ => SelectedInvoiceDatePreset
+            };
         }
     }
 
@@ -398,11 +427,126 @@ public sealed partial class MainWindowViewModel
         {
             if (SetProperty(ref _selectedInvoiceCustomer, value))
             {
+                OnPropertyChanged(nameof(HasSelectedInvoiceCustomer));
+                OnPropertyChanged(nameof(SelectedInvoiceCustomerDisplayText));
+                OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
                 OnPropertyChanged(nameof(InvoiceActiveFiltersText));
                 CapNhatInvoiceCustomerFilterOptions();
                 CapNhatInvoiceActiveFilterChips();
             }
         }
+    }
+
+    private int _invoiceCustomerSelectedIndex = -1;
+    public int InvoiceCustomerSelectedIndex
+    {
+        get => _invoiceCustomerSelectedIndex;
+        set
+        {
+            if (SetProperty(ref _invoiceCustomerSelectedIndex, value))
+            {
+                OnPropertyChanged(nameof(SelectedInvoiceCustomerInList));
+            }
+        }
+    }
+
+    public KhachHangFilterOption? SelectedInvoiceCustomerInList =>
+        InvoiceCustomerSelectedIndex >= 0 && InvoiceCustomerSelectedIndex < InvoiceCustomerFilterOptions.Count
+            ? InvoiceCustomerFilterOptions[InvoiceCustomerSelectedIndex]
+            : null;
+
+    private bool _isInvoiceCustomerSuggestionsClosed;
+    public bool IsInvoiceCustomerSuggestionsClosed
+    {
+        get => _isInvoiceCustomerSuggestionsClosed;
+        set
+        {
+            if (SetProperty(ref _isInvoiceCustomerSuggestionsClosed, value))
+            {
+                OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
+            }
+        }
+    }
+
+    private bool _isInvoiceCustomerSearchFocused;
+    public bool IsInvoiceCustomerSearchFocused
+    {
+        get => _isInvoiceCustomerSearchFocused;
+        set
+        {
+            if (SetProperty(ref _isInvoiceCustomerSearchFocused, value))
+            {
+                OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
+            }
+        }
+    }
+
+    public bool HasSelectedInvoiceCustomer =>
+        SelectedInvoiceCustomer != null && (SelectedInvoiceCustomer.Id != null || SelectedInvoiceCustomer.IsWalkIn);
+
+    public string SelectedInvoiceCustomerDisplayText
+    {
+        get
+        {
+            if (SelectedInvoiceCustomer is null)
+                return "";
+            if (SelectedInvoiceCustomer.IsWalkIn)
+                return "Khách lẻ";
+            return SelectedInvoiceCustomer.DisplayText;
+        }
+    }
+
+    public bool HienThiGoiYKhachHangLoc =>
+        !HasSelectedInvoiceCustomer
+        && !IsInvoiceCustomerSuggestionsClosed
+        && (!string.IsNullOrWhiteSpace(InvoiceCustomerSearch) || _isInvoiceCustomerSearchFocused)
+        && InvoiceCustomerFilterOptions.Count > 0;
+
+    [RelayCommand]
+    public void ChonKhachHangHoaDon(KhachHangFilterOption? option)
+    {
+        if (option is null) return;
+        SelectedInvoiceCustomer = option;
+        InvoiceCustomerSearch = "";
+        IsInvoiceCustomerSuggestionsClosed = true;
+        InvoiceCustomerSelectedIndex = -1;
+        OnPropertyChanged(nameof(HasSelectedInvoiceCustomer));
+        OnPropertyChanged(nameof(SelectedInvoiceCustomerDisplayText));
+        OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
+    }
+
+    [RelayCommand]
+    public void BoChonKhachHangHoaDon()
+    {
+        SelectedInvoiceCustomer = InvoiceCustomerOptions.FirstOrDefault();
+        InvoiceCustomerSearch = "";
+        IsInvoiceCustomerSuggestionsClosed = true;
+        InvoiceCustomerSelectedIndex = -1;
+        CapNhatInvoiceCustomerFilterOptions();
+        OnPropertyChanged(nameof(HasSelectedInvoiceCustomer));
+        OnPropertyChanged(nameof(SelectedInvoiceCustomerDisplayText));
+        OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
+    }
+
+    public void DiChuyenChonKhachHang(int delta)
+    {
+        if (InvoiceCustomerFilterOptions.Count == 0)
+            return;
+
+        var current = InvoiceCustomerSelectedIndex;
+        if (current < 0)
+            current = delta > 0 ? -1 : InvoiceCustomerFilterOptions.Count;
+
+        InvoiceCustomerSelectedIndex = Math.Clamp(current + delta, 0, InvoiceCustomerFilterOptions.Count - 1);
+        IsInvoiceCustomerSuggestionsClosed = false;
+        OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
+    }
+
+    public void DongGoiYKhachHangHoaDon()
+    {
+        IsInvoiceCustomerSuggestionsClosed = true;
+        InvoiceCustomerSelectedIndex = -1;
+        OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
     }
 
     public ObservableCollection<HoaDonNhanVienFilterOption> InvoiceEmployeeOptions { get; } = [];
@@ -657,8 +801,11 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-    partial void OnInvoiceCustomerSearchChanged(string value) =>
+    partial void OnInvoiceCustomerSearchChanged(string value)
+    {
+        IsInvoiceCustomerSuggestionsClosed = false;
         CapNhatInvoiceCustomerFilterOptions();
+    }
 
     public async Task TaiDanhSachKhachHangLocHoaDonAsync()
     {
@@ -675,6 +822,7 @@ public sealed partial class MainWindowViewModel
             {
                 Id = null,
                 IsWalkIn = true,
+                TenKhachHang = "Khách lẻ",
                 DisplayText = "Khách lẻ"
             });
 
@@ -685,12 +833,17 @@ public sealed partial class MainWindowViewModel
                 InvoiceCustomerOptions.Add(new KhachHangFilterOption
                 {
                     Id = kh.Id,
+                    TenKhachHang = kh.TenKhachHang ?? "",
+                    MaKhachHang = kh.MaKhachHang ?? "",
+                    SoDienThoai = kh.SoDienThoai ?? "",
                     DisplayText = $"{code}{kh.TenKhachHang}{phone}"
                 });
             }
 
             _selectedInvoiceCustomer = InvoiceCustomerOptions.FirstOrDefault();
             OnPropertyChanged(nameof(SelectedInvoiceCustomer));
+            OnPropertyChanged(nameof(HasSelectedInvoiceCustomer));
+            OnPropertyChanged(nameof(SelectedInvoiceCustomerDisplayText));
             CapNhatInvoiceCustomerFilterOptions();
             await TaiDanhSachNhanVienLocHoaDonAsync();
         }
@@ -700,7 +853,7 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-    private void CapNhatInvoiceCustomerFilterOptions()
+    public void CapNhatInvoiceCustomerFilterOptions()
     {
         var query = ProductSearchHelper.ChuanHoa(InvoiceCustomerSearch);
         InvoiceCustomerFilterOptions.Clear();
@@ -708,13 +861,17 @@ public sealed partial class MainWindowViewModel
         foreach (var option in InvoiceCustomerOptions)
         {
             var matches = string.IsNullOrWhiteSpace(query)
-                || ProductSearchHelper.ChuanHoa(option.DisplayText).Contains(query, StringComparison.Ordinal);
-            var isSelected = option.Id == SelectedInvoiceCustomer?.Id
-                && option.IsWalkIn == SelectedInvoiceCustomer?.IsWalkIn;
+                || ProductSearchHelper.ChuanHoa(option.DisplayText).Contains(query, StringComparison.Ordinal)
+                || ProductSearchHelper.ChuanHoa(option.TenKhachHang).Contains(query, StringComparison.Ordinal)
+                || ProductSearchHelper.ChuanHoa(option.MaKhachHang).Contains(query, StringComparison.Ordinal)
+                || ProductSearchHelper.ChuanHoa(option.SoDienThoai).Contains(query, StringComparison.Ordinal);
 
-            if (matches || option.Id is null || isSelected)
+            if (matches || option.Id is null)
                 InvoiceCustomerFilterOptions.Add(option);
         }
+
+        InvoiceCustomerSelectedIndex = InvoiceCustomerFilterOptions.Count > 0 ? 0 : -1;
+        OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
     }
 
     private async Task TaiDanhSachNhanVienLocHoaDonAsync()
@@ -962,6 +1119,7 @@ public sealed partial class MainWindowViewModel
 
         OnPropertyChanged(nameof(InvoiceActiveFiltersText));
         OnPropertyChanged(nameof(InvoiceDateFilterText));
+        OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
     }
 
     [RelayCommand]
@@ -1175,16 +1333,110 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-    private bool TryGetInvoiceTotalRange(out decimal? minimum, out decimal? maximum)
+    public static bool TryParseMoney(string? input, out decimal result)
+    {
+        result = 0m;
+        if (string.IsNullOrWhiteSpace(input))
+            return false;
+
+        var clean = input.Trim()
+            .Replace("đ", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("VND", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("VNĐ", "", StringComparison.OrdinalIgnoreCase)
+            .Replace(" ", "");
+
+        if (clean.Length == 0)
+            return false;
+
+        if (clean.Contains('-'))
+            return false;
+
+        if (clean.All(char.IsDigit))
+        {
+            if (decimal.TryParse(clean, NumberStyles.None, CultureInfo.InvariantCulture, out var plainVal))
+            {
+                result = plainVal;
+                return true;
+            }
+            return false;
+        }
+
+        if (clean.Any(c => !char.IsDigit(c) && c != '.' && c != ','))
+            return false;
+
+        if (clean.Contains('.') && !clean.Contains(','))
+        {
+            var parts = clean.Split('.');
+            if (parts.Length > 1 && parts.Skip(1).All(p => p.Length == 3))
+            {
+                var noDots = clean.Replace(".", "");
+                if (decimal.TryParse(noDots, NumberStyles.None, CultureInfo.InvariantCulture, out var v))
+                {
+                    result = v;
+                    return true;
+                }
+            }
+
+            if (decimal.TryParse(clean, NumberStyles.Number, CultureInfo.InvariantCulture, out var vInv))
+            {
+                result = vInv;
+                return true;
+            }
+        }
+
+        if (clean.Contains(',') && !clean.Contains('.'))
+        {
+            var parts = clean.Split(',');
+            if (parts.Length > 1 && parts.Skip(1).All(p => p.Length == 3))
+            {
+                var noCommas = clean.Replace(",", "");
+                if (decimal.TryParse(noCommas, NumberStyles.None, CultureInfo.InvariantCulture, out var v))
+                {
+                    result = v;
+                    return true;
+                }
+            }
+
+            var vi = CultureInfo.GetCultureInfo("vi-VN");
+            if (decimal.TryParse(clean, NumberStyles.Number, vi, out var vVi))
+            {
+                result = vVi;
+                return true;
+            }
+        }
+
+        var lastDot = clean.LastIndexOf('.');
+        var lastComma = clean.LastIndexOf(',');
+        if (lastDot > lastComma)
+        {
+            var normalized = clean.Replace(",", "");
+            if (decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out var v))
+            {
+                result = v;
+                return true;
+            }
+        }
+        else
+        {
+            var normalized = clean.Replace(".", "").Replace(",", ".");
+            if (decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out var v))
+            {
+                result = v;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public bool TryGetInvoiceTotalRange(out decimal? minimum, out decimal? maximum)
     {
         minimum = null;
         maximum = null;
-        var vi = CultureInfo.GetCultureInfo("vi-VN");
 
         if (!string.IsNullOrWhiteSpace(InvoiceFilterMinTotal))
         {
-            if (!decimal.TryParse(InvoiceFilterMinTotal, NumberStyles.Number, vi, out var value)
-                && !decimal.TryParse(InvoiceFilterMinTotal, NumberStyles.Number, CultureInfo.InvariantCulture, out value))
+            if (!TryParseMoney(InvoiceFilterMinTotal, out var value))
             {
                 StatusMessage = "Giá trị “Từ tiền” không hợp lệ.";
                 return false;
@@ -1199,8 +1451,7 @@ public sealed partial class MainWindowViewModel
 
         if (!string.IsNullOrWhiteSpace(InvoiceFilterMaxTotal))
         {
-            if (!decimal.TryParse(InvoiceFilterMaxTotal, NumberStyles.Number, vi, out var value)
-                && !decimal.TryParse(InvoiceFilterMaxTotal, NumberStyles.Number, CultureInfo.InvariantCulture, out value))
+            if (!TryParseMoney(InvoiceFilterMaxTotal, out var value))
             {
                 StatusMessage = "Giá trị “Đến tiền” không hợp lệ.";
                 return false;
@@ -1240,6 +1491,7 @@ public sealed partial class MainWindowViewModel
         _dangCapNhatPresetNgay = false;
         OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
         OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
+        OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
         ThongBaoPresetNgayHoaDon();
         InvoiceFilterMinTotal = "";
         InvoiceFilterMaxTotal = "";
@@ -1253,7 +1505,11 @@ public sealed partial class MainWindowViewModel
 
         _selectedInvoiceCustomer = InvoiceCustomerOptions.FirstOrDefault();
         OnPropertyChanged(nameof(SelectedInvoiceCustomer));
+        OnPropertyChanged(nameof(HasSelectedInvoiceCustomer));
+        OnPropertyChanged(nameof(SelectedInvoiceCustomerDisplayText));
         InvoiceCustomerSearch = "";
+        IsInvoiceCustomerSuggestionsClosed = true;
+        InvoiceCustomerSelectedIndex = -1;
         CapNhatInvoiceCustomerFilterOptions();
 
         _selectedInvoiceEmployee = InvoiceEmployeeOptions.FirstOrDefault();

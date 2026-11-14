@@ -41,6 +41,22 @@ internal class Program
             };
             return await KiemTraIssue91_ToiUuThanhToanHoaDonAsync(csb.ConnectionString);
         }
+        if (args.Contains("--verify-issue-92", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue92_BoLocHoaDonNangCaoAsync(csb.ConnectionString);
+        }
         if (args.Contains("--verify-issue-104", StringComparer.OrdinalIgnoreCase))
         {
             var configService = new DatabaseConfigService();
@@ -221,6 +237,9 @@ internal class Program
             };
             return await KiemTraIssue103_NhatKyHoatDongVaTruyVetAsync(csb.ConnectionString);
         }
+
+        if (args.Contains("--verify-issue-90", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue90_SuaLoiMatNoiDungTiengViet();
 
         Console.WriteLine("==========================================================================================");
         Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG SHOP HOA: ĐỐI SOÁT TOÀN DIỆN THỐNG KÊ TRANG TỔNG QUAN (#69)  ");
@@ -5328,5 +5347,765 @@ internal class Program
         }
 
         return string.Join(", ", heights);
+    }
+
+    private static async Task<int> KiemTraIssue92_BoLocHoaDonNangCaoAsync(string connectionString)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #92: THIẾT KẾ LẠI BỘ LỌC NÂNG CAO TRANG QUẢN LÝ HÓA ĐƠN          ");
+        Console.WriteLine("==========================================================================================");
+
+        var db = new DatabaseService();
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "tester",
+            HoTen = "Kiem Thu Vien #92",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        });
+
+        // 1. KIỂM THỬ HELPER PARSE TIỀN TỆ VIỆT NAM (TryParseMoney)
+        Console.WriteLine("\n--- [1] Kiểm thử TryParseMoney & định dạng tiền Việt Nam ---");
+        KiemTra(MainWindowViewModel.TryParseMoney("100.000", out var v1) && v1 == 100000m, "Parse 100.000 thất bại.");
+        KiemTra(MainWindowViewModel.TryParseMoney("100,000", out var v2) && v2 == 100000m, "Parse 100,000 thất bại.");
+        KiemTra(MainWindowViewModel.TryParseMoney("1.500.000 đ", out var v3) && v3 == 1500000m, "Parse 1.500.000 đ thất bại.");
+        KiemTra(MainWindowViewModel.TryParseMoney(" 2,500,000 VND ", out var v4) && v4 == 2500000m, "Parse 2,500,000 VND thất bại.");
+        KiemTra(MainWindowViewModel.TryParseMoney("0", out var v5) && v5 == 0m, "Parse 0 thất bại.");
+        KiemTra(MainWindowViewModel.TryParseMoney("0 đ", out var v6) && v6 == 0m, "Parse 0 đ thất bại.");
+        KiemTra(!MainWindowViewModel.TryParseMoney("", out _), "Parse rỗng phải trả về false.");
+        KiemTra(!MainWindowViewModel.TryParseMoney("   ", out _), "Parse khoảng trắng phải trả về false.");
+        KiemTra(!MainWindowViewModel.TryParseMoney(null, out _), "Parse null phải trả về false.");
+        KiemTra(!MainWindowViewModel.TryParseMoney("abc", out _), "Parse chữ cái phải trả về false.");
+        Console.WriteLine("  -> TryParseMoney hỗ trợ định dạng tiền VN (dấu chấm, dấu phẩy, đ, VND, 0 đ): ĐẠT");
+
+        var vm = new MainWindowViewModel();
+
+        // 2. KIỂM THỬ GIÁ TRỊ MẶC ĐỊNH
+        Console.WriteLine("\n--- [2] Kiểm thử trạng thái bộ lọc mặc định ---");
+        KiemTra(vm.SelectedInvoiceDatePreset == "Mọi ngày", "Mặc định preset thời gian phải là 'Mọi ngày'.");
+        KiemTra(vm.InvoiceDateFilterDisplayText == "Tất cả thời gian", "Mặc định badge thời gian phải là 'Tất cả thời gian'.");
+        KiemTra(vm.SelectedInvoiceStatus == "Tất cả", "Mặc định trạng thái hóa đơn phải là 'Tất cả'.");
+        KiemTra(vm.SelectedInvoicePaymentStatus == "Tất cả", "Mặc định trạng thái thanh toán phải là 'Tất cả'.");
+        KiemTra(vm.SelectedInvoiceEmployee == null, "Mặc định nhân viên phải là null (tất cả).");
+        KiemTra(vm.SelectedInvoiceCustomer == null, "Mặc định khách hàng phải là null (tất cả).");
+        KiemTra(string.IsNullOrEmpty(vm.InvoiceFilterMinTotal), "Mặc định Từ tiền phải rỗng.");
+        KiemTra(string.IsNullOrEmpty(vm.InvoiceFilterMaxTotal), "Mặc định Đến tiền phải rỗng.");
+        KiemTra(!vm.HasInvoiceAdvancedFilters, "Mặc định không có bộ lọc nâng cao nào hoạt động.");
+        KiemTra(vm.InvoiceAdvancedFilterCount == 0, "Mặc định đếm bộ lọc nâng cao phải bằng 0.");
+        Console.WriteLine("  -> Trạng thái khởi tạo bộ lọc: ĐẠT");
+
+        // 3. KIỂM THỬ LỌC THỜI GIAN VÀ BADGE HIỂN THỊ
+        Console.WriteLine("\n--- [3] Kiểm thử các preset lọc thời gian & badge 'Đang xem: ...' ---");
+        vm.ChonPresetNgayHoaDonCommand.Execute("Hôm nay");
+        KiemTra(vm.SelectedInvoiceDatePreset == "Hôm nay", "Preset phải là 'Hôm nay'.");
+        KiemTra(vm.InvoiceDateFilterDisplayText.StartsWith("Hôm nay"), $"Badge hôm nay sai: '{vm.InvoiceDateFilterDisplayText}'.");
+
+        vm.ChonPresetNgayHoaDonCommand.Execute("Hôm qua");
+        KiemTra(vm.SelectedInvoiceDatePreset == "Hôm qua", "Preset phải là 'Hôm qua'.");
+        KiemTra(vm.InvoiceDateFilterDisplayText.StartsWith("Hôm qua"), $"Badge hôm qua sai: '{vm.InvoiceDateFilterDisplayText}'.");
+
+        vm.ChonPresetNgayHoaDonCommand.Execute("7 ngày qua");
+        KiemTra(vm.SelectedInvoiceDatePreset == "7 ngày qua", "Preset phải là '7 ngày qua'.");
+        KiemTra(vm.InvoiceDateFilterDisplayText.StartsWith("7 ngày gần nhất"), $"Badge 7 ngày sai: '{vm.InvoiceDateFilterDisplayText}'.");
+
+        vm.ChonPresetNgayHoaDonCommand.Execute("Tháng này");
+        KiemTra(vm.SelectedInvoiceDatePreset == "Tháng này", "Preset phải là 'Tháng này'.");
+        KiemTra(vm.InvoiceDateFilterDisplayText.StartsWith("Tháng này"), $"Badge tháng này sai: '{vm.InvoiceDateFilterDisplayText}'.");
+
+        vm.ChonPresetNgayHoaDonCommand.Execute("Tháng trước");
+        KiemTra(vm.SelectedInvoiceDatePreset == "Tháng trước", "Preset phải là 'Tháng trước'.");
+        KiemTra(vm.InvoiceDateFilterDisplayText.StartsWith("Tháng trước"), $"Badge tháng trước sai: '{vm.InvoiceDateFilterDisplayText}'.");
+
+        vm.ChonPresetNgayHoaDonCommand.Execute("Tùy chỉnh");
+        KiemTra(vm.SelectedInvoiceDatePreset == "Tùy chỉnh", "Preset phải là 'Tùy chỉnh'.");
+        KiemTra(vm.IsInvoiceCustomDatePreset, "Phải mở ô chọn ngày tùy chọn khi chọn 'Tùy chỉnh'.");
+
+        vm.InvoiceCustomStartDateDraft = new DateTime(2026, 11, 1);
+        vm.InvoiceCustomEndDateDraft = new DateTime(2026, 11, 10);
+        await vm.ApDungKhoangNgayHoaDonCommand.ExecuteAsync(null);
+        KiemTra(vm.InvoiceDateFilterDisplayText == "01/11/2026 – 10/11/2026", $"Badge tùy chọn sai: '{vm.InvoiceDateFilterDisplayText}'.");
+
+        vm.ChonPresetNgayHoaDonCommand.Execute("Mọi ngày");
+        KiemTra(vm.SelectedInvoiceDatePreset == "Mọi ngày", "Preset phải là 'Mọi ngày'.");
+        KiemTra(vm.InvoiceDateFilterDisplayText == "Tất cả thời gian", "Badge tất cả phải là 'Tất cả thời gian'.");
+        Console.WriteLine("  -> 7 preset thời gian và huy hiệu 'Đang xem: ...': ĐẠT");
+
+        // 4. KIỂM THỬ CHIPS TRẠNG THÁI HÓA ĐƠN
+        Console.WriteLine("\n--- [4] Kiểm thử Chips trạng thái hóa đơn ---");
+        await vm.LocTrangThaiHoaDonCommand.ExecuteAsync("Hoàn thành");
+        KiemTra(vm.SelectedInvoiceStatus == "Hoàn thành" && vm.IsInvoiceFilterStatusCompleted, "Chọn Hoàn thành thất bại.");
+        KiemTra(!vm.IsInvoiceFilterStatusAll && !vm.IsInvoiceFilterStatusUnpaid && !vm.IsInvoiceFilterStatusCanceled, "Chỉ được chọn 1 trạng thái tại 1 thời điểm.");
+
+        await vm.LocTrangThaiHoaDonCommand.ExecuteAsync("Chưa thanh toán");
+        KiemTra(vm.SelectedInvoiceStatus == "Chưa thanh toán" && vm.IsInvoiceFilterStatusUnpaid, "Chọn Chưa thanh toán thất bại.");
+
+        await vm.LocTrangThaiHoaDonCommand.ExecuteAsync("Đã hủy");
+        KiemTra(vm.SelectedInvoiceStatus == "Đã hủy" && vm.IsInvoiceFilterStatusCanceled, "Chọn Đã hủy thất bại.");
+
+        await vm.LocTrangThaiHoaDonCommand.ExecuteAsync("Tất cả");
+        KiemTra(vm.SelectedInvoiceStatus == "Tất cả" && vm.IsInvoiceFilterStatusAll, "Chọn Tất cả thất bại.");
+        Console.WriteLine("  -> Chips trạng thái hóa đơn (Tất cả, Hoàn thành, Chưa thanh toán, Đã hủy): ĐẠT");
+
+        // 5. KIỂM THỬ CHIPS TRẠNG THÁI THANH TOÁN
+        Console.WriteLine("\n--- [5] Kiểm thử Chips trạng thái thanh toán ---");
+        await vm.LocThanhToanHoaDonCommand.ExecuteAsync("Đã thanh toán");
+        KiemTra(vm.SelectedInvoicePaymentStatus == "Đã thanh toán" && vm.IsInvoicePaymentPaid, "Chọn Đã thanh toán thất bại.");
+
+        await vm.LocThanhToanHoaDonCommand.ExecuteAsync("Còn công nợ");
+        KiemTra(vm.SelectedInvoicePaymentStatus == "Còn công nợ" && vm.IsInvoicePaymentUnpaid, "Chọn Còn công nợ thất bại.");
+
+        await vm.LocThanhToanHoaDonCommand.ExecuteAsync("Thanh toán một phần");
+        KiemTra(vm.SelectedInvoicePaymentStatus == "Thanh toán một phần" && vm.IsInvoicePaymentPartial, "Chọn Thanh toán một phần thất bại.");
+
+        await vm.LocThanhToanHoaDonCommand.ExecuteAsync("Tất cả");
+        KiemTra(vm.SelectedInvoicePaymentStatus == "Tất cả" && vm.IsInvoicePaymentAll, "Chọn Tất cả thanh toán thất bại.");
+        Console.WriteLine("  -> Chips trạng thái thanh toán (Tất cả, Đã thanh toán, Còn công nợ, Thanh toán một phần): ĐẠT");
+
+        // 6. KIỂM THỬ TÌM KIẾM VÀ CHỌN KHÁCH HÀNG (Dropdown gắn liền, bàn phím, chuột, unselect)
+        Console.WriteLine("\n--- [6] Kiểm thử bộ lọc Khách hàng (gợi ý gắn liền, bàn phím, chọn chuột, bỏ chọn) ---");
+        await vm.TaiDanhSachKhachHangLocHoaDonAsync();
+        KiemTra(vm.InvoiceCustomerOptions.Count > 0, "Danh sách khách hàng lọc rỗng.");
+
+        // Giả lập gõ tìm kiếm
+        var firstCustomer = vm.InvoiceCustomerOptions.FirstOrDefault(c => c.Id > 0 && !string.IsNullOrWhiteSpace(c.TenKhachHang));
+        if (firstCustomer != null)
+        {
+            var searchKeyword = firstCustomer.TenKhachHang.Length >= 3 ? firstCustomer.TenKhachHang.Substring(0, 3) : firstCustomer.TenKhachHang;
+            vm.InvoiceCustomerSearch = searchKeyword;
+            vm.CapNhatInvoiceCustomerFilterOptions();
+            KiemTra(vm.InvoiceCustomerFilterOptions.Count > 0, "Không tìm thấy khách hàng theo từ khóa.");
+            KiemTra(vm.InvoiceCustomerFilterOptions.Any(c => c.Id == firstCustomer.Id), "Khách hàng mẫu phải nằm trong danh sách gợi ý.");
+
+            // Điều hướng bàn phím (Phím mũi tên xuống / lên)
+            vm.InvoiceCustomerSelectedIndex = 0;
+            vm.DiChuyenChonKhachHang(1);
+            KiemTra(vm.InvoiceCustomerSelectedIndex == Math.Min(1, vm.InvoiceCustomerFilterOptions.Count - 1), "Di chuyển mũi tên xuống sai index.");
+            vm.DiChuyenChonKhachHang(-1);
+            KiemTra(vm.InvoiceCustomerSelectedIndex == 0, "Di chuyển mũi tên lên sai index.");
+
+            // Chọn khách hàng bằng chuột / lệnh ChonKhachHangHoaDon
+            vm.ChonKhachHangHoaDonCommand.Execute(firstCustomer);
+            KiemTra(vm.SelectedInvoiceCustomer?.Id == firstCustomer.Id, "Chọn khách hàng thất bại.");
+            KiemTra(vm.HasSelectedInvoiceCustomer, "Cờ HasSelectedInvoiceCustomer phải là true.");
+            KiemTra(!string.IsNullOrEmpty(vm.SelectedInvoiceCustomerDisplayText), "SelectedInvoiceCustomerDisplayText không được rỗng.");
+            KiemTra(vm.IsInvoiceCustomerSuggestionsClosed, "Sau khi chọn phải đóng gợi ý.");
+            KiemTra(string.IsNullOrEmpty(vm.InvoiceCustomerSearch), "Sau khi chọn phải xóa search text.");
+
+            // Bỏ chọn khách hàng qua nút x
+            vm.BoChonKhachHangHoaDonCommand.Execute(null);
+            KiemTra(vm.SelectedInvoiceCustomer == vm.InvoiceCustomerOptions.FirstOrDefault(), "Bỏ chọn khách hàng thất bại.");
+            KiemTra(!vm.HasSelectedInvoiceCustomer, "Cờ HasSelectedInvoiceCustomer phải là false sau khi bỏ chọn.");
+        }
+        Console.WriteLine("  -> Tìm kiếm, gợi ý gắn liền, phím mũi tên, Enter, click và bỏ chọn khách hàng: ĐẠT");
+
+        // 7. KIỂM THỬ KHOẢNG TIỀN (Từ tiền, Đến tiền) VÀ RÀNG BUỘC TỪ <= ĐẾN
+        Console.WriteLine("\n--- [7] Kiểm thử khoảng tiền (Từ tiền - Đến tiền) ---");
+        vm.InvoiceFilterMinTotal = "100.000";
+        vm.InvoiceFilterMaxTotal = "500.000";
+        var parseOk = vm.TryGetInvoiceTotalRange(out var minVal, out var maxVal);
+        KiemTra(parseOk && minVal == 100000m && maxVal == 500000m, "Parse khoảng tiền 100k - 500k thất bại.");
+
+        // Test Từ tiền > Đến tiền
+        vm.InvoiceFilterMinTotal = "600.000";
+        vm.InvoiceFilterMaxTotal = "500.000";
+        var parseInvalid = vm.TryGetInvoiceTotalRange(out _, out _);
+        KiemTra(!parseInvalid, "Từ tiền > Đến tiền phải trả về false.");
+        KiemTra(!string.IsNullOrEmpty(vm.StatusMessage), "Phải có thông báo lỗi khi Từ tiền > Đến tiền.");
+
+        // Reset lại hợp lệ
+        vm.InvoiceFilterMinTotal = "";
+        vm.InvoiceFilterMaxTotal = "";
+        vm.StatusMessage = "";
+        Console.WriteLine("  -> Khoảng tiền và kiểm tra ràng buộc Từ <= Đến: ĐẠT");
+
+        // 8. KIỂM THỬ ĐÓNG/MỞ BỘ LỌC NÂNG CAO (Bảo toàn điều kiện)
+        Console.WriteLine("\n--- [8] Kiểm thử đóng/mở bộ lọc nâng cao (bảo toàn điều kiện) ---");
+        vm.InvoiceFilterMinTotal = "200.000";
+        vm.DongBoLocHoaDonCommand.Execute(null);
+        KiemTra(!vm.IsInvoiceAdvancedFiltersExpanded, "Đóng bộ lọc nâng cao thất bại.");
+        KiemTra(vm.InvoiceFilterMinTotal == "200.000", "Đóng bộ lọc không được làm mất điều kiện đã nhập.");
+
+        vm.ToggleBoLocHoaDonCommand.Execute(null);
+        KiemTra(vm.IsInvoiceAdvancedFiltersExpanded, "Mở lại bộ lọc nâng cao thất bại.");
+        KiemTra(vm.InvoiceFilterMinTotal == "200.000", "Điều kiện vẫn phải được bảo toàn khi mở lại.");
+        Console.WriteLine("  -> Đóng/mở bộ lọc nâng cao bảo toàn đầy đủ các tiêu chí: ĐẠT");
+
+        // 9. KIỂM THỬ XÓA BỘ LỌC (ClearInvoiceSearchAsync)
+        Console.WriteLine("\n--- [9] Kiểm thử nút Xóa bộ lọc (ClearInvoiceSearchAsync) ---");
+        vm.InvoiceSearch = "HD123";
+        vm.SelectedInvoiceDatePreset = "7 ngày qua";
+        vm.SelectedInvoiceStatus = "Hoàn thành";
+        vm.SelectedInvoicePaymentStatus = "Còn công nợ";
+        vm.InvoiceFilterMinTotal = "100.000";
+        vm.InvoiceFilterMaxTotal = "500.000";
+
+        await vm.ClearInvoiceSearchAsync();
+        KiemTra(string.IsNullOrEmpty(vm.InvoiceSearch), "Xóa bộ lọc phải xóa search text.");
+        KiemTra(vm.SelectedInvoiceDatePreset == "Mọi ngày", "Xóa bộ lọc phải đưa date preset về Mọi ngày.");
+        KiemTra(vm.InvoiceDateFilterDisplayText == "Tất cả thời gian", "Xóa bộ lọc phải đưa badge date về 'Tất cả thời gian'.");
+        KiemTra(vm.SelectedInvoiceStatus == "Tất cả", "Xóa bộ lọc phải đưa status về Tất cả.");
+        KiemTra(vm.SelectedInvoicePaymentStatus == "Tất cả", "Xóa bộ lọc phải đưa payment status về Tất cả.");
+        KiemTra(!vm.HasSelectedInvoiceCustomer, "Xóa bộ lọc phải xóa khách hàng.");
+        KiemTra(vm.SelectedInvoiceEmployee == vm.InvoiceEmployeeOptions.FirstOrDefault(), "Xóa bộ lọc phải xóa nhân viên.");
+        KiemTra(string.IsNullOrEmpty(vm.InvoiceFilterMinTotal), "Xóa bộ lọc phải xóa Từ tiền.");
+        KiemTra(string.IsNullOrEmpty(vm.InvoiceFilterMaxTotal), "Xóa bộ lọc phải xóa Đến tiền.");
+        KiemTra(!vm.HasInvoiceAdvancedFilters, "Xóa bộ lọc xong không được còn active advanced filters.");
+        Console.WriteLine("  -> Xóa bộ lọc đưa toàn bộ điều kiện về trạng thái mặc định: ĐẠT");
+
+        // 10. KIỂM THỬ TRUY VẤN VỚI TỪNG TIÊU CHÍ TRÊN DỮ LIỆU THỰC
+        Console.WriteLine("\n--- [10] Kiểm thử truy vấn DB theo từng tiêu chí lọc ---");
+        var resAll = await db.GetHoaDonPagedAsync(page: 1, pageSize: 10);
+        KiemTra(resAll.TongSoLuong > 0, "DB phải có dữ liệu hóa đơn mẫu.");
+        Console.WriteLine($"  - Tổng số hóa đơn toàn hệ thống: {resAll.TongSoLuong:N0} (Doanh thu: {resAll.TongDoanhThu:N0} đ, Còn nợ: {resAll.TongConNo:N0} đ)");
+
+        // Lọc trạng thái Hoàn thành
+        var resHoanThanh = await db.GetHoaDonPagedAsync(trangThaiHoaDon: "HOAN_THANH", page: 1, pageSize: 10);
+        KiemTra(resHoanThanh.TongSoLuong > 0, "Phải có hóa đơn trạng thái Hoàn thành.");
+        Console.WriteLine($"  - Lọc 'HOAN_THANH': {resHoanThanh.TongSoLuong:N0} hóa đơn (Doanh thu: {resHoanThanh.TongDoanhThu:N0} đ)");
+
+        // Lọc trạng thái thanh toán Còn công nợ
+        var resConNo = await db.GetHoaDonPagedAsync(trangThaiThanhToan: "CON_CONG_NO", page: 1, pageSize: 10);
+        Console.WriteLine($"  - Lọc 'CON_CONG_NO': {resConNo.TongSoLuong:N0} hóa đơn (Còn nợ: {resConNo.TongConNo:N0} đ)");
+
+        // Lọc trạng thái thanh toán Đã thanh toán
+        var resDaThanhToan = await db.GetHoaDonPagedAsync(trangThaiThanhToan: "DA_THANH_TOAN", page: 1, pageSize: 10);
+        Console.WriteLine($"  - Lọc 'DA_THANH_TOAN': {resDaThanhToan.TongSoLuong:N0} hóa đơn (Doanh thu: {resDaThanhToan.TongDoanhThu:N0} đ)");
+
+        // Lọc theo khoảng tiền
+        var resKhoangTien = await db.GetHoaDonPagedAsync(tongTienTu: 100000m, tongTienDen: 500000m, page: 1, pageSize: 10);
+        Console.WriteLine($"  - Lọc khoảng tiền 100k - 500k: {resKhoangTien.TongSoLuong:N0} hóa đơn");
+
+        // 11. KIỂM THỬ LOẠI TRỪ HÓA ĐƠN ĐÃ HỦY KHỎI DOANH THU & CÔNG NỢ
+        Console.WriteLine("\n--- [11] Kiểm thử loại trừ hóa đơn đã hủy và hiển thị tổng hợp ---");
+        var resHuy = await db.GetHoaDonPagedAsync(trangThaiHoaDon: "DA_HUY", page: 1, pageSize: 10);
+        KiemTra(resHuy.TongDoanhThu == 0m, $"Doanh thu của bộ lọc Đã hủy phải bằng 0 đ, thực tế: {resHuy.TongDoanhThu}");
+        KiemTra(resHuy.TongDaThanhToan == 0m, $"Đã thanh toán của bộ lọc Đã hủy phải bằng 0 đ, thực tế: {resHuy.TongDaThanhToan}");
+        KiemTra(resHuy.TongConNo == 0m, $"Công nợ của bộ lọc Đã hủy phải bằng 0 đ, thực tế: {resHuy.TongConNo}");
+        Console.WriteLine($"  - Số lượng hóa đơn hủy: {resHuy.TongSoLuong:N0}, TongDaHuy tracked = {resHuy.TongDaHuy:N0}. Doanh thu = {resHuy.TongDoanhThu:N0} đ, Công nợ = {resHuy.TongConNo:N0} đ.");
+        Console.WriteLine("  -> Loại trừ hóa đơn hủy khỏi doanh thu và công nợ: ĐẠT");
+
+        // 12. KIỂM THỬ KẾT HỢP ĐỒNG THỜI NHIỀU ĐIỀU KIỆN
+        Console.WriteLine("\n--- [12] Kiểm thử kết hợp đồng thời nhiều điều kiện lọc ---");
+        var resCombined = await db.GetHoaDonPagedAsync(
+            trangThaiHoaDon: "HOAN_THANH",
+            trangThaiThanhToan: "CON_CONG_NO",
+            tongTienTu: 50000m,
+            page: 1,
+            pageSize: 10
+        );
+        Console.WriteLine($"  - Kết hợp (HOAN_THANH + CON_CONG_NO + Min=50k): {resCombined.TongSoLuong:N0} hóa đơn.");
+        KiemTra(resCombined.Items.All(h => h.TrangThaiHoaDon == "HOAN_THANH" && h.ConNo > 0 && h.KhachCanTra >= 50000m),
+            "Tất cả kết quả kết hợp phải thỏa mãn đồng thời các điều kiện.");
+        Console.WriteLine("  -> Kết hợp đồng thời nhiều tiêu chí lọc chính xác: ĐẠT");
+
+        Console.WriteLine("\n>>> ISSUE #92: TOÀN BỘ KIỂM THỬ BỘ LỌC NÂNG CAO TRANG QUẢN LÝ HÓA ĐƠN ĐÃ VƯỢT QUA! <<<");
+        return 0;
+    }
+
+    // ==========================================================================================
+    // KIỂM THỬ ISSUE #90: SỬA LỖI MẤT NỘI DUNG KHI NHẬP TIẾNG VIỆT (IME / SPACE / REALTIME SEARCH)
+    // ==========================================================================================
+    private static int KiemTraIssue90_SuaLoiMatNoiDungTiengViet()
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  KIỂM THỬ ISSUE #90: NHẬP TIẾNG VIỆT CÓ DẤU & PHÍM SPACE TRONG SHOPHOA");
+        Console.WriteLine("==========================================================================================");
+
+        return ChayTrenStaThread(() =>
+        {
+            if (global::Avalonia.Application.Current is null)
+                global::ShopHoa.Program.BuildAvaloniaApp().SetupWithoutStarting();
+
+            const uint WmKeyDown = 0x0100;
+            const uint WmKeyUp = 0x0101;
+            const uint WmChar = 0x0102;
+            const uint WmImeStartComposition = 0x010D;
+            const uint WmImeEndComposition = 0x010E;
+            const uint WmImeComposition = 0x010F;
+            const uint WmImeChar = 0x0286;
+
+            const int GcsCompStr = 0x0008;
+            const int GcsResultStr = 0x0800;
+            const int VkBack = 0x08;
+            const int VkSpace = 0x20;
+            const int VkProcessKey = 0xE5;
+            const int VkPacket = 0xE7;
+
+            static void FlushUi()
+                => global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            static void AssertText(global::Avalonia.Controls.TextBox tb, string expected, string context)
+            {
+                KiemTra(
+                    string.Equals(tb.Text, expected, StringComparison.Ordinal),
+                    $"[{context}] Kỳ vọng \"{expected}\", thực tế \"{tb.Text}\".");
+            }
+
+            string? currentComp = null;
+            string? currentResult = null;
+            WindowsImeTextInputFix.TestCompositionStringReader = (_, flag) =>
+                flag == GcsCompStr ? currentComp : (flag == GcsResultStr ? currentResult : null);
+
+            var tbPrimary = new global::Avalonia.Controls.TextBox();
+            var tbSecondary = new global::Avalonia.Controls.TextBox();
+            var rootPanel = new global::Avalonia.Controls.StackPanel
+            {
+                Children = { tbPrimary, tbSecondary }
+            };
+
+            var hostWindow = new global::Avalonia.Controls.Window
+            {
+                Width = 420,
+                Height = 220,
+                Position = new global::Avalonia.PixelPoint(-32000, -32000),
+                ShowInTaskbar = false,
+                SystemDecorations = global::Avalonia.Controls.SystemDecorations.None,
+                Opacity = 0,
+                Content = rootPanel
+            };
+
+            try
+            {
+                WindowsImeTextInputFix.SetEnabled(hostWindow, true);
+                hostWindow.Show();
+                FlushUi();
+
+                var platformImpl = hostWindow.PlatformImpl;
+                KiemTra(platformImpl != null, "PlatformImpl không được null.");
+                var hwnd = hostWindow.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+                KiemTra(hwnd != IntPtr.Zero, "HWND phải hợp lệ sau hostWindow.Show().");
+
+                var wndProcMethod = platformImpl!.GetType().GetMethod(
+                    "WndProcMessageHandler",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                KiemTra(wndProcMethod != null, "Không tìm thấy WindowImpl.WndProcMessageHandler.");
+
+                var immAsm = wndProcMethod!.DeclaringType!.Assembly;
+                var immType = immAsm.GetType("Avalonia.Win32.Input.Imm32InputMethod");
+                KiemTra(immType != null, "Không tìm thấy Avalonia.Win32.Input.Imm32InputMethod.");
+
+                var immInstance = (hostWindow as global::Avalonia.Input.TextInput.ITextInputMethodRoot)?.InputMethod;
+                var ignoreWmCharField = platformImpl.GetType().GetField(
+                    "_ignoreWmChar",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                var isComposingProp = immType!.GetProperty("IsComposing", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                var ignoreCompField = immType.GetField("_ignoreComposition", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                var compositionProp = immType.GetProperty("Composition", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                var resetMethod = immType.GetMethod("Reset", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                var presenterField = typeof(global::Avalonia.Controls.TextBox).GetField("_presenter", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+                void SendWndProc(uint msg, long wParam, long lParam)
+                {
+                    wndProcMethod!.Invoke(platformImpl, new object[] { hwnd, msg, new IntPtr(wParam), new IntPtr(lParam) });
+                    FlushUi();
+                }
+
+                void SendBackSpace()
+                {
+                    SendWndProc(WmKeyDown, VkBack, 0x000E0001);
+                    SendWndProc(WmKeyUp, VkBack, unchecked((long)0xC00E0001));
+                }
+
+                void FocusBox(global::Avalonia.Controls.TextBox box)
+                {
+                    box.Focus();
+                    FlushUi();
+                    var kb = typeof(global::Avalonia.Input.KeyboardDevice)
+                        .GetProperty("Instance", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
+                        ?.GetValue(null);
+                    kb?.GetType().GetMethod(
+                            "SetFocusedElement",
+                            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)
+                        ?.Invoke(
+                            kb,
+                            new object?[]
+                            {
+                                box,
+                                global::Avalonia.Input.NavigationMethod.Unspecified,
+                                global::Avalonia.Input.KeyModifiers.None
+                            });
+                    FlushUi();
+                    KiemTra(hostWindow.FocusManager?.GetFocusedElement() == box, $"Không focus được vào TextBox ({box.Name ?? "unnamed"}).");
+                }
+
+                void TypeMicrosoftImeSentence(global::Avalonia.Controls.TextBox box, string sentence, bool commitLastWithSpace = true)
+                {
+                    var words = sentence.Split(' ');
+                    for (int i = 0; i < words.Length; i++)
+                    {
+                        var word = words[i];
+                        bool isLast = i == words.Length - 1;
+
+                        SendWndProc(WmKeyDown, VkProcessKey, 0x001E0001);
+                        SendWndProc(WmImeStartComposition, 0, 0);
+
+                        for (int len = 1; len <= word.Length; len++)
+                        {
+                            currentComp = word.Substring(0, len);
+                            currentResult = null;
+                            SendWndProc(WmImeComposition, 0, GcsCompStr);
+                        }
+
+                        if (!isLast || commitLastWithSpace)
+                        {
+                            // Nhấn phím Space để chốt từ qua GCS_RESULTSTR + WM_IME_ENDCOMPOSITION + WM_CHAR(' ')
+                            SendWndProc(WmKeyDown, VkProcessKey, 0x00390001);
+                            currentComp = string.Empty;
+                            currentResult = word;
+                            SendWndProc(WmImeComposition, 0, GcsResultStr);
+                            SendWndProc(WmImeEndComposition, 0, 0);
+                            SendWndProc(WmChar, ' ', 0x00390001);
+                            SendWndProc(WmKeyUp, VkSpace, unchecked((long)0xC0390001));
+                        }
+                        else
+                        {
+                            // Kết thúc từ cuối cùng (Enter hoặc chốt GCS_RESULTSTR)
+                            SendWndProc(WmKeyDown, VkProcessKey, 0x001C0001);
+                            currentComp = string.Empty;
+                            currentResult = word;
+                            SendWndProc(WmImeComposition, 0, GcsResultStr);
+                            SendWndProc(WmImeEndComposition, 0, 0);
+                        }
+                    }
+                }
+
+                // ------------------------------------------------------------------
+                // BƯỚC 1: 7 CỤM TỪ TIẾNG VIỆT BẮT BUỘC VỚI MICROSOFT IME + SPACE
+                // ------------------------------------------------------------------
+                Console.Write("[Issue #90 - Bước 1/5] Kiểm thử 7 cụm từ tiếng Việt chuẩn với Microsoft IME + Space... ");
+                FocusBox(tbPrimary);
+                var requiredPhrases = new[]
+                {
+                    "Hoa tươi",
+                    "Hoa hồng đỏ",
+                    "Cửa hàng hoa",
+                    "Nguyễn Thị Hồng",
+                    "Nhà cung cấp mới",
+                    "Khách hàng mua hoa",
+                    "Phiếu nhập hàng tháng này"
+                };
+
+                foreach (var phrase in requiredPhrases)
+                {
+                    tbPrimary.Text = string.Empty;
+                    tbPrimary.CaretIndex = 0;
+                    FlushUi();
+                    TypeMicrosoftImeSentence(tbPrimary, phrase, commitLastWithSpace: false);
+                    AssertText(tbPrimary, phrase, $"Phrase '{phrase}'");
+                }
+
+                // Kiểm tra gõ 1 từ + Space giữ nguyên dấu cách
+                tbPrimary.Text = string.Empty;
+                tbPrimary.CaretIndex = 0;
+                FlushUi();
+                TypeMicrosoftImeSentence(tbPrimary, "Hoa", commitLastWithSpace: true);
+                AssertText(tbPrimary, "Hoa ", "1 từ + Space");
+
+                // Kiểm tra nhấn nhiều phím Space liên tiếp và tiếp tục gõ
+                SendWndProc(WmKeyDown, VkProcessKey, 0x00390001);
+                SendWndProc(WmChar, ' ', 0x00390001);
+                SendWndProc(WmKeyDown, VkProcessKey, 0x00390001);
+                SendWndProc(WmChar, ' ', 0x00390001);
+                TypeMicrosoftImeSentence(tbPrimary, "tươi", commitLastWithSpace: false);
+                AssertText(tbPrimary, "Hoa   tươi", "Nhiều dấu cách liên tiếp + gõ tiếp");
+                Console.WriteLine("PASSED");
+
+                // ------------------------------------------------------------------
+                // BƯỚC 2: CÁC EDGE CASE IME / SPACE / ISSUE #107 / UNIKEY / LOSTFOCUS
+                // ------------------------------------------------------------------
+                Console.Write("[Issue #90 - Bước 2/5] Kiểm thử edge cases IME (lParam=0, Reset async, Issue #107, UniKey, LostFocus)... ");
+
+                // 2A: WM_CHAR(' ') đến TRƯỚC WM_IME_ENDCOMPOSITION
+                tbPrimary.Text = string.Empty;
+                tbPrimary.CaretIndex = 0;
+                FlushUi();
+                SendWndProc(WmKeyDown, VkProcessKey, 0x001E0001);
+                SendWndProc(WmImeStartComposition, 0, 0);
+                currentComp = "Hoa";
+                currentResult = null;
+                SendWndProc(WmImeComposition, 0, GcsCompStr);
+                SendWndProc(WmKeyDown, VkProcessKey, 0x00390001);
+                currentComp = null;
+                currentResult = "Hoa";
+                SendWndProc(WmImeComposition, 0, GcsResultStr);
+                SendWndProc(WmChar, ' ', 0x00390001);
+                SendWndProc(WmImeEndComposition, 0, 0);
+                AssertText(tbPrimary, "Hoa ", "2A: WM_CHAR(' ') trước WM_IME_ENDCOMPOSITION");
+
+                // 2B: GCS_RESULTSTR có sẵn dấu cách cuối ("Hoa ") + WM_CHAR(' ') trùng cùng nhịp -> KHÔNG double space
+                tbPrimary.Text = string.Empty;
+                tbPrimary.CaretIndex = 0;
+                FlushUi();
+                SendWndProc(WmKeyDown, VkProcessKey, 0x001E0001);
+                SendWndProc(WmImeStartComposition, 0, 0);
+                currentComp = "Hoa";
+                currentResult = null;
+                SendWndProc(WmImeComposition, 0, GcsCompStr);
+                SendWndProc(WmKeyDown, VkProcessKey, 0x00390001);
+                currentComp = null;
+                currentResult = "Hoa ";
+                SendWndProc(WmImeComposition, 0, GcsResultStr);
+                SendWndProc(WmImeEndComposition, 0, 0);
+                SendWndProc(WmChar, ' ', 0x00390001);
+                AssertText(tbPrimary, "Hoa ", "2B: Không nhân đôi Space khi GCS_RESULTSTR đã gồm ' '");
+
+                // 2C: TSF gửi WM_IME_COMPOSITION(lParam = 0) trước WM_IME_ENDCOMPOSITION khi nhấn Space -> không được mất chữ "Hoa"
+                tbPrimary.Text = string.Empty;
+                tbPrimary.CaretIndex = 0;
+                FlushUi();
+                SendWndProc(WmKeyDown, VkProcessKey, 0x001E0001);
+                SendWndProc(WmImeStartComposition, 0, 0);
+                currentComp = "Hoa";
+                currentResult = null;
+                SendWndProc(WmImeComposition, 0, GcsCompStr);
+                SendWndProc(WmKeyDown, VkProcessKey, 0x00390001);
+                currentComp = null;
+                currentResult = null;
+                SendWndProc(WmImeComposition, 0, 0);
+                SendWndProc(WmImeEndComposition, 0, 0);
+                SendWndProc(WmChar, ' ', 0x00390001);
+                AssertText(tbPrimary, "Hoa ", "2C: Phục hồi từ đang gõ khi TSF gửi lParam=0 trước EndComposition");
+
+                // 2D: Imm32InputMethod.Reset() lệch trạng thái (_ignoreWmChar=true, _ignoreComposition=true, IsComposing=false)
+                tbPrimary.Text = string.Empty;
+                tbPrimary.CaretIndex = 0;
+                FlushUi();
+                if (immInstance != null)
+                {
+                    resetMethod?.Invoke(immInstance, null);
+                    FlushUi();
+                    ignoreCompField?.SetValue(immInstance, true);
+                    isComposingProp?.SetValue(immInstance, false);
+                    ignoreWmCharField?.SetValue(platformImpl, true);
+                }
+                SendWndProc(WmKeyDown, VkProcessKey, 0x001E0001);
+                currentComp = "Cửa";
+                currentResult = null;
+                SendWndProc(WmImeComposition, 0, GcsCompStr);
+                SendWndProc(WmKeyDown, VkProcessKey, 0x00390001);
+                currentComp = string.Empty;
+                currentResult = "Cửa";
+                SendWndProc(WmImeComposition, 0, GcsResultStr);
+                SendWndProc(WmImeEndComposition, 0, 0);
+                SendWndProc(WmChar, ' ', 0x00390001);
+                AssertText(tbPrimary, "Cửa ", "2D: Không mất chữ khi Imm32InputMethod.Reset() làm lệch cờ");
+
+                // 2E: Không tái phát Issue #107 (GCS_RESULTSTR | GCS_COMPSTR giống nhau + WM_IME_CHAR / WM_CHAR trùng 'đ')
+                tbPrimary.Text = string.Empty;
+                tbPrimary.CaretIndex = 0;
+                FlushUi();
+                SendWndProc(WmKeyDown, VkProcessKey, 0x00200001);
+                SendWndProc(WmImeStartComposition, 0, 0);
+                currentComp = "đ";
+                currentResult = "đ";
+                SendWndProc(WmImeComposition, 0, GcsResultStr | GcsCompStr);
+                SendWndProc(WmImeChar, 'đ', 0x0001);
+                SendWndProc(WmChar, 'đ', 0x0001);
+                SendWndProc(WmImeEndComposition, 0, 0);
+                SendWndProc(WmKeyDown, VkProcessKey, 0x00390001);
+                SendWndProc(WmChar, ' ', 0x00390001);
+                AssertText(tbPrimary, "đ ", "2E: Tương thích Issue #107 không nhân đôi ký tự và giữ nguyên Space");
+
+                // 2F: UniKey / EVKey (VK_BACK + VK_PACKET Unicode WM_CHAR + Space)
+                tbPrimary.Text = "Hoa tu";
+                tbPrimary.CaretIndex = tbPrimary.Text.Length;
+                FlushUi();
+                SendBackSpace();
+                SendBackSpace();
+                foreach (char uCh in "tươi")
+                {
+                    SendWndProc(WmKeyDown, VkPacket, 0x0001);
+                    SendWndProc(WmChar, uCh, 0x0001);
+                    SendWndProc(WmKeyUp, VkPacket, unchecked((long)0xC0000001));
+                }
+                SendWndProc(WmKeyDown, VkProcessKey, 0x00390001);
+                SendWndProc(WmChar, ' ', 0x00390001);
+                AssertText(tbPrimary, "Hoa tươi ", "2F: UniKey/EVKey VK_BACK + VK_PACKET + Space");
+
+                // 2G: Chốt từ cuối còn trong preedit khi mất focus (bấm Lưu hoặc chuyển TextBox)
+                tbPrimary.Text = "Hoa ";
+                tbPrimary.CaretIndex = 4;
+                FlushUi();
+                SendWndProc(WmKeyDown, VkProcessKey, 0x00140001);
+                SendWndProc(WmImeStartComposition, 0, 0);
+                currentComp = "tươi";
+                currentResult = null;
+                SendWndProc(WmImeComposition, 0, GcsCompStr);
+                FocusBox(tbSecondary); // chuyển focus khi chưa nhấn Space
+                AssertText(tbPrimary, "Hoa tươi", "2G: LostFocus chốt phần preedit chưa commit");
+                var presenterAfterLost = presenterField?.GetValue(tbPrimary) as global::Avalonia.Controls.Presenters.TextPresenter;
+                KiemTra(string.IsNullOrEmpty(presenterAfterLost?.PreeditText), "PreeditText trên ô cũ phải được xóa sạch sau LostFocus.");
+                FocusBox(tbPrimary);
+                Console.WriteLine("PASSED");
+
+                // ------------------------------------------------------------------
+                // BƯỚC 3: XÓA BACKSPACE, CHÈN GIỮA CÂU, CHỌN TOÀN BỘ VÀ THAY THẾ
+                // ------------------------------------------------------------------
+                Console.Write("[Issue #90 - Bước 3/5] Kiểm thử Backspace, chèn giữa câu, giữ con trỏ, SelectAll & thay thế... ");
+
+                // 3A: Backspace rồi gõ lại tiếng Việt có dấu
+                tbPrimary.Text = "Hoa hồng ";
+                tbPrimary.CaretIndex = tbPrimary.Text.Length;
+                FlushUi();
+                TypeMicrosoftImeSentence(tbPrimary, "xanh", commitLastWithSpace: false);
+                AssertText(tbPrimary, "Hoa hồng xanh", "3A: trước Backspace");
+                for (int b = 0; b < 4; b++)
+                    SendBackSpace();
+                TypeMicrosoftImeSentence(tbPrimary, "đỏ", commitLastWithSpace: false);
+                AssertText(tbPrimary, "Hoa hồng đỏ", "3A: Backspace + gõ lại");
+
+                // 3B: Chèn tiếng Việt + Space vào giữa câu và kiểm tra CaretIndex không nhảy về đầu/cuối
+                tbPrimary.Text = "Hoa đỏ";
+                tbPrimary.CaretIndex = 4; // Sau "Hoa "
+                tbPrimary.SelectionStart = 4;
+                tbPrimary.SelectionEnd = 4;
+                FlushUi();
+                TypeMicrosoftImeSentence(tbPrimary, "hồng", commitLastWithSpace: true);
+                AssertText(tbPrimary, "Hoa hồng đỏ", "3B: Chèn giữa câu");
+                KiemTra(tbPrimary.CaretIndex == 9, $"[3B] CaretIndex phải ở vị trí 9 (sau 'Hoa hồng '), thực tế: {tbPrimary.CaretIndex}.");
+
+                // 3C: SelectAll và thay thế bằng cụm từ tiếng Việt
+                tbPrimary.SelectAll();
+                FlushUi();
+                TypeMicrosoftImeSentence(tbPrimary, "Cửa hàng hoa", commitLastWithSpace: false);
+                AssertText(tbPrimary, "Cửa hàng hoa", "3C: SelectAll và thay thế");
+                Console.WriteLine("PASSED");
+
+                // ------------------------------------------------------------------
+                // BƯỚC 4: KIỂM TRA PHẠM VI TOÀN BỘ CÁC MÀN HÌNH NHẬP LIỆU & FLYOUT/POPUP
+                // ------------------------------------------------------------------
+                Console.Write("[Issue #90 - Bước 4/5] Kiểm thử các form Hàng hóa, Khách hàng, Nhà cung cấp, PopupRoot... ");
+                static global::Avalonia.Controls.TextBox MustFindTextBox(global::Avalonia.Controls.Control root, string name)
+                {
+                    var found = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(root)
+                        .OfType<global::Avalonia.Controls.TextBox>()
+                        .FirstOrDefault(c => c.Name == name);
+                    KiemTra(found != null, $"Không tìm thấy TextBox '{name}' trong {root.GetType().Name}.");
+                    return found!;
+                }
+
+                var productWin = new global::ShopHoa.Views.ProductEditorWindow();
+                var customerWin = new global::ShopHoa.Views.KhachHangEditorWindow(null, null, false);
+                var supplierWin = new global::ShopHoa.Views.NhaCungCapEditorWindow(null);
+                try
+                {
+                    KiemTra(WindowsImeTextInputFix.GetEnabled(productWin), "ProductEditorWindow phải được bật WindowsImeTextInputFix.");
+                    KiemTra(WindowsImeTextInputFix.GetEnabled(customerWin), "KhachHangEditorWindow phải được bật WindowsImeTextInputFix.");
+                    KiemTra(WindowsImeTextInputFix.GetEnabled(supplierWin), "NhaCungCapEditorWindow phải được bật WindowsImeTextInputFix.");
+
+                    var tenSpBox = MustFindTextBox(productWin, "TenSanPhamTextBox");
+                    var viTriBox = MustFindTextBox(productWin, "ViTriKhoTextBox");
+                    tenSpBox.Text = "Hoa hồng đỏ";
+                    viTriBox.Text = "Kệ cửa hàng hoa";
+                    AssertText(tenSpBox, "Hoa hồng đỏ", "ProductEditorWindow.TenSanPhamTextBox");
+                    AssertText(viTriBox, "Kệ cửa hàng hoa", "ProductEditorWindow.ViTriKhoTextBox");
+
+                    var tenKhBox = MustFindTextBox(customerWin, "TenKhachHangBox");
+                    var ghiChuKhBox = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(customerWin)
+                        .OfType<global::Avalonia.Controls.TextBox>()
+                        .FirstOrDefault(c => c.Watermark == "Ghi chú về khách hàng");
+                    KiemTra(ghiChuKhBox != null, "Không tìm thấy ô Ghi chú trong KhachHangEditorWindow.");
+                    tenKhBox.Text = "Nguyễn Thị Hồng";
+                    ghiChuKhBox!.Text = "Khách hàng mua hoa";
+                    AssertText(tenKhBox, "Nguyễn Thị Hồng", "KhachHangEditorWindow.TenKhachHangBox");
+                    AssertText(ghiChuKhBox, "Khách hàng mua hoa", "KhachHangEditorWindow.GhiChu");
+                    KiemTra(customerWin.Customer.TenKhachHang == "Nguyễn Thị Hồng", "Binding Customer.TenKhachHang thất bại.");
+
+                    var tenNccBox = MustFindTextBox(supplierWin, "TenNhaCungCapBox");
+                    var ghiChuNccBox = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(supplierWin)
+                        .OfType<global::Avalonia.Controls.TextBox>()
+                        .FirstOrDefault(c => c.Watermark != null && c.Watermark.StartsWith("Ghi chú về nhà cung cấp"));
+                    KiemTra(ghiChuNccBox != null, "Không tìm thấy ô Ghi chú trong NhaCungCapEditorWindow.");
+                    tenNccBox.Text = "Nhà cung cấp mới";
+                    ghiChuNccBox!.Text = "Phiếu nhập hàng tháng này";
+                    AssertText(tenNccBox, "Nhà cung cấp mới", "NhaCungCapEditorWindow.TenNhaCungCapBox");
+                    AssertText(ghiChuNccBox, "Phiếu nhập hàng tháng này", "NhaCungCapEditorWindow.GhiChu");
+                    KiemTra(supplierWin.Supplier.TenNhaCungCap == "Nhà cung cấp mới", "Binding Supplier.TenNhaCungCap thất bại.");
+                }
+                finally
+                {
+                    productWin.Close();
+                    customerWin.Close();
+                    supplierWin.Close();
+                }
+
+                // Kiểm tra Auto-Attach cho TopLevel mới (ví dụ PopupRoot / Window chưa gắn style)
+                var extraWin = new global::Avalonia.Controls.Window
+                {
+                    Width = 200,
+                    Height = 100,
+                    Position = new global::Avalonia.PixelPoint(-32000, -32000),
+                    ShowInTaskbar = false,
+                    Opacity = 0,
+                    Content = new global::Avalonia.Controls.TextBox { Name = "ExtraBox" }
+                };
+                try
+                {
+                    extraWin.Show();
+                    FlushUi();
+                    var extraBox = (global::Avalonia.Controls.TextBox)extraWin.Content!;
+                    extraBox.Focus();
+                    FlushUi();
+                    KiemTra(WindowsImeTextInputFix.GetEnabled(extraWin), "TopLevel mới có TextBox focus phải tự động bật WindowsImeTextInputFix.");
+                }
+                finally
+                {
+                    extraWin.Close();
+                }
+                Console.WriteLine("PASSED");
+
+                // ------------------------------------------------------------------
+                // BƯỚC 5: TÌM KIẾM REALTIME & GHI CHÚ TRONG MAINWINDOWVIEWMODEL
+                // ------------------------------------------------------------------
+                Console.Write("[Issue #90 - Bước 5/5] Kiểm thử gõ tiếng Việt liên tục vào ô tìm kiếm realtime & ghi chú Bán hàng/Nhập hàng... ");
+                var vm = new MainWindowViewModel();
+                var realtimeSearchBox = new global::Avalonia.Controls.TextBox
+                {
+                    DataContext = vm
+                };
+                realtimeSearchBox.Bind(
+                    global::Avalonia.Controls.TextBox.TextProperty,
+                    new global::Avalonia.Data.Binding(nameof(MainWindowViewModel.SaleSearchText))
+                    {
+                        Mode = global::Avalonia.Data.BindingMode.TwoWay
+                    });
+
+                rootPanel.Children.Add(realtimeSearchBox);
+                FocusBox(realtimeSearchBox);
+                TypeMicrosoftImeSentence(realtimeSearchBox, "Hoa hồng đỏ", commitLastWithSpace: false);
+                FlushUi();
+                AssertText(realtimeSearchBox, "Hoa hồng đỏ", "Realtime SaleSearchText TextBox");
+                KiemTra(vm.SaleSearchText == "Hoa hồng đỏ", $"MainWindowViewModel.SaleSearchText bị mất/sai: '{vm.SaleSearchText}'.");
+
+                vm.SaleCustomerName = "Khách hàng mua hoa";
+                vm.SaleGhiChu = "Giao hoa tươi trước 10 giờ";
+                vm.ImportProductSearch = "Hoa tươi";
+                vm.ImportSupplierSearch = "Nhà cung cấp mới";
+                vm.PhieuNhapGhiChu = "Phiếu nhập hàng tháng này";
+                vm.CustomerSearch = "Nguyễn Thị Hồng";
+                vm.SupplierSearch = "Nhà cung cấp mới";
+                vm.ProductSearch = "Hoa hồng đỏ";
+
+                KiemTra(vm.SaleCustomerName == "Khách hàng mua hoa", "SaleCustomerName bị thay đổi.");
+                KiemTra(vm.SaleGhiChu == "Giao hoa tươi trước 10 giờ", "SaleGhiChu bị thay đổi.");
+                KiemTra(vm.ImportProductSearch == "Hoa tươi", "ImportProductSearch bị thay đổi.");
+                KiemTra(vm.ImportSupplierSearch == "Nhà cung cấp mới", "ImportSupplierSearch bị thay đổi.");
+                KiemTra(vm.PhieuNhapGhiChu == "Phiếu nhập hàng tháng này", "PhieuNhapGhiChu bị thay đổi.");
+                Console.WriteLine("PASSED");
+
+                Console.WriteLine("\n>>> ISSUE #90: TOÀN BỘ KIỂM THỬ NHẬP TIẾNG VIỆT CÓ DẤU & SPACE ĐÃ ĐẠT 100%! <<<");
+                return 0;
+            }
+            finally
+            {
+                WindowsImeTextInputFix.TestCompositionStringReader = null;
+                hostWindow.Close();
+                FlushUi();
+            }
+        });
     }
 }

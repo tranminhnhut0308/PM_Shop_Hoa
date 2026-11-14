@@ -166,13 +166,12 @@ public partial class MainWindow : Window
             return;
 
         var text = (sender as TextBox)?.Text ?? string.Empty;
-        viewModel.SaleSearchText = text;
         viewModel.MoLaiKetQuaTimKiemBanHang();
 
-        if (viewModel.TimKiemHoaBanCommand.CanExecute(text))
-        {
-            _ = viewModel.TimKiemHoaBanCommand.ExecuteAsync(text);
-        }
+        // TwoWay binding hoặc gán SaleSearchText sẽ tự kích hoạt OnSaleSearchTextChanged -> TimKiemHoaBanAsync(value).
+        // Không gọi TimKiemHoaBanCommand lần 2 để tránh nhân đôi tìm kiếm realtime trên mỗi phím gõ.
+        if (!string.Equals(viewModel.SaleSearchText, text, StringComparison.Ordinal))
+            viewModel.SaleSearchText = text;
     }
 
     private void OnSaleCustomerSearchTextChanged(
@@ -187,7 +186,8 @@ public partial class MainWindow : Window
 
         var text = textBox.Text ?? string.Empty;
 
-        viewModel.SaleCustomerName = text;
+        if (!string.Equals(viewModel.SaleCustomerName, text, StringComparison.Ordinal))
+            viewModel.SaleCustomerName = text;
 
         if (text.Equals(
                 "Khách lẻ",
@@ -219,12 +219,15 @@ public partial class MainWindow : Window
         if (sender is not TextBox textBox)
             return;
 
-        viewModel.ImportProductSearch = textBox.Text ?? string.Empty;
+        var text = textBox.Text ?? string.Empty;
+        if (!string.Equals(viewModel.ImportProductSearch, text, StringComparison.Ordinal))
+            viewModel.ImportProductSearch = text;
+
         viewModel.MoLaiGoiYPhieuNhap();
 
-        if (viewModel.TimKiemSanPhamNhapCommand.CanExecute(null))
+        if (viewModel.TimKiemSanPhamNhapCommand.CanExecute(text))
         {
-            _ = viewModel.TimKiemSanPhamNhapCommand.ExecuteAsync(textBox.Text);
+            _ = viewModel.TimKiemSanPhamNhapCommand.ExecuteAsync(text);
         }
     }
 
@@ -238,11 +241,13 @@ public partial class MainWindow : Window
         if (sender is not TextBox textBox)
             return;
 
-        viewModel.ImportSupplierSearch = textBox.Text ?? string.Empty;
+        var text = textBox.Text ?? string.Empty;
+        if (!string.Equals(viewModel.ImportSupplierSearch, text, StringComparison.Ordinal))
+            viewModel.ImportSupplierSearch = text;
 
         // Luôn gọi lần tìm mới: lần trước sẽ tự bị huỷ,
         // tránh trường hợp gõ nhanh mà danh sách vẫn là kết quả của ký tự cũ.
-        _ = viewModel.TimKiemNhaCungCapNhapCommand.ExecuteAsync(textBox.Text);
+        _ = viewModel.TimKiemNhaCungCapNhapCommand.ExecuteAsync(text);
     }
 
     private void OnBaoCaoPhieuNhapSearchTextChanged(
@@ -255,7 +260,9 @@ public partial class MainWindow : Window
         if (sender is not TextBox textBox)
             return;
 
-        viewModel.BaoCaoPhieuNhapSearch = textBox.Text ?? string.Empty;
+        var text = textBox.Text ?? string.Empty;
+        if (!string.Equals(viewModel.BaoCaoPhieuNhapSearch, text, StringComparison.Ordinal))
+            viewModel.BaoCaoPhieuNhapSearch = text;
 
         viewModel.TimKiemBaoCaoPhieuNhapTuDong();
     }
@@ -315,7 +322,8 @@ public partial class MainWindow : Window
             return;
 
         var text = (sender as TextBox)?.Text ?? string.Empty;
-        viewModel.CustomerSearch = text;
+        if (!string.Equals(viewModel.CustomerSearch, text, StringComparison.Ordinal))
+            viewModel.CustomerSearch = text;
 
         // Tìm kiếm realtime: ViewModel tự debounce 350ms
         // để không gọi database liên tục khi người dùng gõ.
@@ -402,7 +410,9 @@ public partial class MainWindow : Window
         if (DataContext is not MainWindowViewModel viewModel)
             return;
 
-        viewModel.SupplierSearch = (sender as TextBox)?.Text ?? string.Empty;
+        var text = (sender as TextBox)?.Text ?? string.Empty;
+        if (!string.Equals(viewModel.SupplierSearch, text, StringComparison.Ordinal))
+            viewModel.SupplierSearch = text;
 
         viewModel.TimKiemNhaCungCapTuDong();
     }
@@ -1400,6 +1410,75 @@ public partial class MainWindow : Window
                 _ = viewModel.SearchInvoicesCommand.ExecuteAsync(null);
             e.Handled = true;
         }
+    }
+
+    private void OnInvoiceCustomerFilterSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.Down:
+                if (viewModel.HienThiGoiYKhachHangLoc)
+                {
+                    viewModel.DiChuyenChonKhachHang(1);
+                    e.Handled = true;
+                }
+                else if (viewModel.InvoiceCustomerFilterOptions.Count > 0)
+                {
+                    viewModel.IsInvoiceCustomerSuggestionsClosed = false;
+                    viewModel.DiChuyenChonKhachHang(1);
+                    e.Handled = true;
+                }
+                return;
+
+            case Key.Up:
+                if (viewModel.HienThiGoiYKhachHangLoc)
+                {
+                    viewModel.DiChuyenChonKhachHang(-1);
+                    e.Handled = true;
+                }
+                else if (viewModel.InvoiceCustomerFilterOptions.Count > 0)
+                {
+                    viewModel.IsInvoiceCustomerSuggestionsClosed = false;
+                    viewModel.DiChuyenChonKhachHang(-1);
+                    e.Handled = true;
+                }
+                return;
+
+            case Key.Escape:
+                if (viewModel.HienThiGoiYKhachHangLoc)
+                {
+                    viewModel.DongGoiYKhachHangHoaDon();
+                    e.Handled = true;
+                }
+                return;
+
+            case Key.Enter:
+                if (viewModel.HienThiGoiYKhachHangLoc && viewModel.SelectedInvoiceCustomerInList is not null)
+                {
+                    viewModel.ChonKhachHangHoaDon(viewModel.SelectedInvoiceCustomerInList);
+                    e.Handled = true;
+                }
+                return;
+        }
+    }
+
+    private void OnInvoiceCustomerFilterItemTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (sender is Visual visual && visual.DataContext is KhachHangFilterOption option && DataContext is MainWindowViewModel vm)
+        {
+            vm.ChonKhachHangHoaDon(option);
+        }
+    }
+
+    private void OnInvoiceCustomerFilterSearchResultSelectionChanged(
+        object? sender,
+        SelectionChangedEventArgs e)
+    {
+        if (sender is ListBox listBox && listBox.SelectedItem is not null)
+            listBox.ScrollIntoView(listBox.SelectedItem);
     }
 
     private void OnSaleCustomerSearchKeyDown(object? sender, KeyEventArgs e)

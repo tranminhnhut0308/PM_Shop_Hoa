@@ -5580,7 +5580,7 @@ public sealed partial class DatabaseService
             dieuKien.Add(
                 "COALESCE(hd.khach_da_thanh_toan, 0) <= 0 AND COALESCE(hd.khach_can_tra, 0) > 0");
         }
-        else if (ttTt is "CON_NO")
+        else if (ttTt is "CON_NO" or "CON_CONG_NO")
         {
             dieuKien.Add("COALESCE(hd.con_no, 0) > 0");
         }

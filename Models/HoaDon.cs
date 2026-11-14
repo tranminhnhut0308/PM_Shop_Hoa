@@ -152,7 +152,22 @@ public sealed class KhachHangFilterOption
 {
     public uint? Id { get; set; }
     public bool IsWalkIn { get; set; }
+    public string TenKhachHang { get; set; } = "";
+    public string MaKhachHang { get; set; } = "";
+    public string SoDienThoai { get; set; } = "";
     public string DisplayText { get; set; } = "";
+    public bool HasSubInfo => !string.IsNullOrEmpty(MaKhachHang) || !string.IsNullOrEmpty(SoDienThoai);
+    public string SubInfoText
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(MaKhachHang) && !string.IsNullOrEmpty(SoDienThoai))
+                return $"Mã: {MaKhachHang}  •  {SoDienThoai}";
+            if (!string.IsNullOrEmpty(MaKhachHang))
+                return $"Mã: {MaKhachHang}";
+            return SoDienThoai;
+        }
+    }
     public override string ToString() => DisplayText;
 }
 
