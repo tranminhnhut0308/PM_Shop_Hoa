@@ -442,29 +442,110 @@ public sealed partial class DatabaseService
         HoaDonEditState state)
     {
         var user = Session.CurrentUser;
+        if (user is null || user.Id == 0 || string.IsNullOrWhiteSpace(user.TenDangNhap))
+        {
+            return;
+        }
 
         // Chi tiết từng dòng hàng trước ➔ sau để hiển thị ngay trong nhật ký hoạt động.
         var chiTietThayDoi = BuildHoaDonEditSummary(state);
+        var truongList = new List<string>();
+        var truocList = new List<string>();
+        var sauList = new List<string>();
+
+        var oldByProduct = state.OldItems.GroupBy(item => item.SanPhamId)
+            .ToDictionary(group => group.Key, group => group.First());
+        var newByProduct = state.Request.Items.ToDictionary(item => item.SanPhamId);
+
+        foreach (var productId in state.OldQuantities.Keys.Union(state.NewQuantities.Keys).OrderBy(id => id))
+        {
+            oldByProduct.TryGetValue(productId, out var oldItem);
+            newByProduct.TryGetValue(productId, out var newItem);
+            if (oldItem is null && newItem is not null)
+            {
+                var tenSp = state.Products[productId].TenSanPham;
+                truongList.Add($"Thêm SP ({tenSp})");
+                truocList.Add($"{tenSp}: Chưa có trong hóa đơn");
+                sauList.Add($"{tenSp}: SL {newItem.SoLuong:N3}, Giá {newItem.DonGia:N0} đ");
+            }
+            else if (oldItem is not null && newItem is null)
+            {
+                truongList.Add($"Bỏ SP ({oldItem.TenSanPham})");
+                truocList.Add($"{oldItem.TenSanPham}: SL {oldItem.SoLuong:N3}, Giá {oldItem.DonGia:N0} đ");
+                sauList.Add($"{oldItem.TenSanPham}: Đã bỏ khỏi hóa đơn");
+            }
+            else if (oldItem is not null && newItem is not null)
+            {
+                var oldParts = new List<string>();
+                var newParts = new List<string>();
+                if (oldItem.SoLuong != newItem.SoLuong)
+                {
+                    oldParts.Add($"SL {oldItem.SoLuong:N3}");
+                    newParts.Add($"SL {newItem.SoLuong:N3}");
+                }
+                if (oldItem.DonGia != newItem.DonGia)
+                {
+                    oldParts.Add($"Giá {oldItem.DonGia:N0} đ");
+                    newParts.Add($"Giá {newItem.DonGia:N0} đ");
+                }
+                if (oldItem.GiamGia != newItem.GiamGia)
+                {
+                    oldParts.Add($"Giảm {oldItem.GiamGia:N0} đ");
+                    newParts.Add($"Giảm {newItem.GiamGia:N0} đ");
+                }
+                if (oldParts.Count > 0)
+                {
+                    truongList.Add(oldItem.TenSanPham);
+                    truocList.Add($"{oldItem.TenSanPham}: {string.Join(", ", oldParts)}");
+                    sauList.Add($"{oldItem.TenSanPham}: {string.Join(", ", newParts)}");
+                }
+            }
+        }
+
+        if (state.Header.GiamGia != state.InvoiceDiscount)
+        {
+            truongList.Add("Giảm giá hóa đơn");
+            truocList.Add($"Giảm giá: {state.Header.GiamGia:N0} đ");
+            sauList.Add($"Giảm giá: {state.InvoiceDiscount:N0} đ");
+        }
+        if (state.Header.KhachCanTra != state.AmountDue)
+        {
+            truongList.Add("Khách cần trả");
+            truocList.Add($"Khách cần trả: {state.Header.KhachCanTra:N0} đ");
+            sauList.Add($"Khách cần trả: {state.AmountDue:N0} đ");
+        }
+        if (state.Header.ConNo != state.NewDebt)
+        {
+            truongList.Add("Công nợ");
+            truocList.Add($"Công nợ: {state.Header.ConNo:N0} đ");
+            sauList.Add($"Công nợ: {state.NewDebt:N0} đ");
+        }
+
+        var roleText = !string.IsNullOrWhiteSpace(user.VaiTro)
+            ? user.VaiTro.Trim()
+            : (user.MaVaiTro ?? "").Trim();
 
         await connection.ExecuteAsync(
             """
             INSERT INTO nhat_ky_hoat_dong
             (
                 nguoi_dung_id, ten_dang_nhap, ho_ten, vai_tro, hanh_dong,
-                doi_tuong, doi_tuong_id, ma_chung_tu, noi_dung, gia_tri, thoi_gian
+                doi_tuong, doi_tuong_id, ma_chung_tu, noi_dung, gia_tri,
+                truong_thay_doi, gia_tri_truoc, gia_tri_sau, thoi_gian
             )
             VALUES
             (
                 @NguoiDungId, @TenDangNhap, @HoTen, @VaiTro, 'Sửa hóa đơn',
-                'HOA_DON', @HoaDonId, @MaHoaDon, @NoiDung, @GiaTri, @ThoiGian
+                'HOA_DON', @HoaDonId, @MaHoaDon, @NoiDung, @GiaTri,
+                @TruongThayDoi, @GiaTriTruoc, @GiaTriSau, @ThoiGian
             );
             """,
             new
             {
-                NguoiDungId = user?.Id,
-                TenDangNhap = user?.TenDangNhap,
-                HoTen = user?.HoTen,
-                VaiTro = user?.VaiTro ?? user?.MaVaiTro ?? "",
+                NguoiDungId = user.Id,
+                TenDangNhap = user.TenDangNhap.Trim(),
+                HoTen = string.IsNullOrWhiteSpace(user.HoTen) ? user.TenDangNhap.Trim() : user.HoTen.Trim(),
+                VaiTro = roleText,
                 HoaDonId = state.Header.Id,
                 MaHoaDon = state.Header.MaHoaDon,
                 NoiDung = $"Chỉnh sửa hóa đơn {state.Header.MaHoaDon}: " +
@@ -474,6 +555,9 @@ public sealed partial class DatabaseService
                               ? ""
                               : Environment.NewLine + chiTietThayDoi),
                 GiaTri = state.AmountDue,
+                TruongThayDoi = truongList.Count > 0 ? string.Join(", ", truongList) : "Thông tin hóa đơn",
+                GiaTriTruoc = truocList.Count > 0 ? string.Join("\n", truocList) : $"{state.Header.KhachCanTra:N0} đ",
+                GiaTriSau = sauList.Count > 0 ? string.Join("\n", sauList) : $"{state.AmountDue:N0} đ",
                 ThoiGian = state.Now
             },
             transaction);

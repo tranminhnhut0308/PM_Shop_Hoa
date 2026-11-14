@@ -1,6 +1,9 @@
 ﻿using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
+using ShopHoa.Models;
+using ShopHoa.ViewModels;
 
 namespace ShopHoa.Views;
 
@@ -351,6 +354,33 @@ public partial class TongQuanDashboardView : UserControl
             SetGridCell(ActivityActionCombo, 2, 0);
             SetGridCell(ActivityResetButton, 3, 0);
             ActivityResetButton.HorizontalAlignment = HorizontalAlignment.Left;
+        }
+    }
+
+    private void OnMenuMoChungTuClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is DashboardViewModel vm
+            && (sender as Control)?.DataContext is TongQuanHoatDongTaiKhoanCon item)
+        {
+            vm.MoChungTuHoatDongSubCommand.Execute(item);
+        }
+    }
+
+    private void OnMenuSaoChepMaClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is DashboardViewModel vm
+            && (sender as Control)?.DataContext is TongQuanHoatDongTaiKhoanCon item)
+        {
+            vm.SaoChepMaChungTuCommand.Execute(item);
+        }
+    }
+
+    private void OnMenuSaoChepChiTietClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is DashboardViewModel vm
+            && (sender as Control)?.DataContext is TongQuanHoatDongTaiKhoanCon item)
+        {
+            vm.SaoChepChiTietHoatDongCommand.Execute(item);
         }
     }
 

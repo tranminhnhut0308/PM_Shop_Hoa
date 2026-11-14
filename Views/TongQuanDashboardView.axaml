@@ -907,7 +907,7 @@
       <!-- NHẬT KÝ HOẠT ĐỘNG NHÂN VIÊN (CHỈ DÀNH CHO ADMIN)          -->
       <!-- ========================================================= -->
       <Border Classes="tqCard" Padding="18" Margin="0,4,0,0" IsVisible="{Binding IsAdmin}">
-        <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="12">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" RowSpacing="10">
           <!-- HÀNG 1: TIÊU ĐỀ VÀ THÔNG TIN QUYỀN -->
           <Grid x:Name="ActivityHeaderGrid" ColumnDefinitions="*,Auto" ColumnSpacing="12" RowSpacing="8">
             <StackPanel Spacing="4">
@@ -917,13 +917,13 @@
                   <TextBlock Text="DÀNH CHO QUẢN TRỊ VIÊN" FontSize="10" FontWeight="Bold" Foreground="#B45309" />
                 </Border>
               </WrapPanel>
-              <TextBlock Text="Theo dõi chi tiết các thao tác bán hàng, xuất nhập kho, thu chi và cập nhật từ đội ngũ nhân sự"
+              <TextBlock Text="Theo dõi đầy đủ mọi thao tác của Admin và nhân viên, nhấn vào mã phiếu để mở trực tiếp chứng từ"
                          Classes="tqSectionSub" TextWrapping="Wrap" />
             </StackPanel>
 
-            <!-- Tổng số hoạt động gần nhất -->
+            <!-- Tổng số hoạt động theo bộ lọc -->
             <Border x:Name="ActivityHeaderCountBadge" Grid.Column="1" Classes="tqFilter" Padding="10,6" VerticalAlignment="Center" HorizontalAlignment="Right">
-              <TextBlock Text="{Binding SoLuongHoatDongTaiKhoanCon, StringFormat='{}{0} hoạt động gần nhất'}"
+              <TextBlock Text="{Binding ThongTinPhanTrangHoatDongSub}"
                          FontSize="12" FontWeight="SemiBold" Foreground="#163F38" />
             </Border>
           </Grid>
@@ -933,7 +933,7 @@
             <!-- Ô tìm kiếm -->
             <TextBox x:Name="ActivitySearchBox"
                      Text="{Binding TimKiemHoatDongSub}"
-                     Watermark="🔍 Tìm nhân viên, mã đơn, chứng từ, ghi chú..."
+                     Watermark="🔍 Tìm mã phiếu, nhân viên, nội dung, giá trị cũ/mới..."
                      CornerRadius="8" Padding="10,7" FontSize="12" MinHeight="36"
                      VerticalContentAlignment="Center"
                      BorderBrush="#D8E5E0" BorderThickness="1" Background="#FFFFFF" />
@@ -984,13 +984,61 @@
             </Button>
           </Grid>
 
+          <!-- HÀNG 2B: LỌC KHOẢNG THỜI GIAN & THÔNG BÁO SAO CHÉP -->
+          <WrapPanel Grid.Row="2" Orientation="Horizontal" ItemSpacing="8" LineSpacing="6" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <TextBlock Text="Từ ngày:" FontSize="12" FontWeight="SemiBold" Foreground="#4B5D57" VerticalAlignment="Center" />
+              <CalendarDatePicker Width="132"
+                                  SelectedDate="{Binding TuNgayHoatDongSub, Mode=TwoWay}"
+                                  SelectedDateFormat="Custom"
+                                  CustomDateFormatString="dd/MM/yyyy"
+                                  FirstDayOfWeek="Monday"
+                                  Watermark="DD/MM/YYYY" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <TextBlock Text="Đến ngày:" FontSize="12" FontWeight="SemiBold" Foreground="#4B5D57" VerticalAlignment="Center" />
+              <CalendarDatePicker Width="132"
+                                  SelectedDate="{Binding DenNgayHoatDongSub, Mode=TwoWay}"
+                                  SelectedDateFormat="Custom"
+                                  CustomDateFormatString="dd/MM/yyyy"
+                                  FirstDayOfWeek="Monday"
+                                  Watermark="DD/MM/YYYY" />
+            </StackPanel>
+
+            <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" VerticalAlignment="Center">
+              <Button Classes="toolbar-action" Content="Hôm nay" Padding="8,4" FontSize="11.5"
+                      Command="{Binding ChonKhoangNgayHoatDongSubCommand}" CommandParameter="HOM_NAY" />
+              <Button Classes="toolbar-action" Content="7 ngày" Padding="8,4" FontSize="11.5"
+                      Command="{Binding ChonKhoangNgayHoatDongSubCommand}" CommandParameter="7_NGAY" />
+              <Button Classes="toolbar-action" Content="Tháng này" Padding="8,4" FontSize="11.5"
+                      Command="{Binding ChonKhoangNgayHoatDongSubCommand}" CommandParameter="THANG_NAY" />
+              <Button Classes="toolbar-action" Content="Tất cả ngày" Padding="8,4" FontSize="11.5"
+                      Command="{Binding ChonKhoangNgayHoatDongSubCommand}" CommandParameter="TAT_CA" />
+            </WrapPanel>
+
+            <Border Background="#ECFDF5"
+                    BorderBrush="#A7F3D0"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="8,4"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding CoThongBaoSaoChepHoatDong}">
+              <TextBlock Text="{Binding ThongBaoSaoChepHoatDong}"
+                         FontSize="11.5"
+                         FontWeight="SemiBold"
+                         Foreground="#047857"
+                         TextWrapping="Wrap" />
+            </Border>
+          </WrapPanel>
+
           <!-- Đường kẻ phân cách -->
-          <Border Grid.Row="2" Height="1" Background="#EEF4F2" />
+          <Border Grid.Row="3" Height="1" Background="#EEF4F2" />
 
           <!-- HÀNG 3: DANH SÁCH HOẠT ĐỘNG -->
-          <Grid Grid.Row="3">
-            <ScrollViewer MaxHeight="460" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,6,0">
-              <ItemsControl ItemsSource="{Binding HoatDongTaiKhoanCon}">
+          <Grid Grid.Row="4">
+            <ScrollViewer MaxHeight="540" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,6,0">
+              <ItemsControl x:Name="ActivityItemsControl" ItemsSource="{Binding HoatDongTaiKhoanCon}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="models:TongQuanHoatDongTaiKhoanCon">
                     <Border Background="#FBFDFC"
@@ -999,12 +1047,32 @@
                             CornerRadius="10"
                             Padding="14,11"
                             Margin="0,0,0,8">
+                      <Border.ContextMenu>
+                        <ContextMenu>
+                          <MenuItem Header="↗ Mở chứng từ / dữ liệu liên quan"
+                                    Click="OnMenuMoChungTuClick"
+                                    IsVisible="{Binding CoLienKetChungTu}" />
+                          <MenuItem Header="⧉ Sao chép mã chứng từ"
+                                    Click="OnMenuSaoChepMaClick"
+                                    IsVisible="{Binding CoMaChungTu}" />
+                          <MenuItem Header="📋 Sao chép đầy đủ nội dung thay đổi"
+                                    Click="OnMenuSaoChepChiTietClick" />
+                        </ContextMenu>
+                      </Border.ContextMenu>
+
                       <StackPanel Spacing="7">
-                        <!-- Dòng 1: Nhân viên | Loại hoạt động (+ Giá trị tiền) -->
+                        <!-- Dòng 1: Avatar + Nhân viên | Loại hoạt động + Số tiền -->
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                           <Grid Grid.Column="0" ColumnDefinitions="Auto,*" ColumnSpacing="8" VerticalAlignment="Center">
-                            <Border Width="26" Height="26" CornerRadius="13" Background="#EAF9F5" VerticalAlignment="Top">
-                              <TextBlock Text="👤" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Border Width="28" Height="28" CornerRadius="14"
+                                    Background="{Binding MauNenAvatar}"
+                                    VerticalAlignment="Top">
+                              <TextBlock Text="{Binding ChuCaiDaiDien}"
+                                         FontSize="12"
+                                         FontWeight="Bold"
+                                         Foreground="{Binding MauChuAvatar}"
+                                         HorizontalAlignment="Center"
+                                         VerticalAlignment="Center" />
                             </Border>
                             <TextBlock Grid.Column="1"
                                        Text="{Binding NguoiThucHienHienThi}"
@@ -1020,7 +1088,7 @@
                                      Orientation="Horizontal"
                                      ItemSpacing="6"
                                      LineSpacing="4"
-                                     MaxWidth="340"
+                                     MaxWidth="380"
                                      HorizontalAlignment="Right"
                                      VerticalAlignment="Top">
                             <Border Background="{Binding MauNenBadgeHanhDong}"
@@ -1029,11 +1097,15 @@
                                     CornerRadius="6"
                                     Padding="8,3"
                                     VerticalAlignment="Center">
-                              <TextBlock Text="{Binding HanhDong}"
-                                         FontWeight="Bold"
-                                         FontSize="11.5"
-                                         Foreground="{Binding MauBadgeHanhDong}"
-                                         TextWrapping="Wrap" />
+                              <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding BieuTuongHanhDong}" FontSize="11" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding HanhDong}"
+                                           FontWeight="Bold"
+                                           FontSize="11.5"
+                                           Foreground="{Binding MauBadgeHanhDong}"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                              </StackPanel>
                             </Border>
 
                             <Border Background="#ECFDF5"
@@ -1051,20 +1123,32 @@
                           </WrapPanel>
                         </Grid>
 
-                        <!-- Dòng 2: Vai trò nhân viên | Thời gian -->
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="34,0,0,0">
-                          <Border Grid.Column="0"
-                                  Background="{Binding MauNenBadgeVaiTro}"
-                                  CornerRadius="5"
-                                  Padding="7,2"
-                                  HorizontalAlignment="Left"
-                                  VerticalAlignment="Center">
-                            <TextBlock Text="{Binding VaiTroHienThi}"
-                                       FontSize="11"
-                                       FontWeight="SemiBold"
-                                       Foreground="{Binding MauBadgeVaiTro}"
-                                       TextWrapping="Wrap" />
-                          </Border>
+                        <!-- Dòng 2: Vai trò + Phân loại đối tượng | Thời gian -->
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="36,0,0,0">
+                          <WrapPanel Grid.Column="0" Orientation="Horizontal" ItemSpacing="6" LineSpacing="4" VerticalAlignment="Center">
+                            <Border Background="{Binding MauNenBadgeVaiTro}"
+                                    CornerRadius="5"
+                                    Padding="7,2"
+                                    VerticalAlignment="Center">
+                              <TextBlock Text="{Binding VaiTroHienThi}"
+                                         FontSize="11"
+                                         FontWeight="SemiBold"
+                                         Foreground="{Binding MauBadgeVaiTro}"
+                                         TextWrapping="Wrap" />
+                            </Border>
+
+                            <Border Background="#F1F5F9"
+                                    CornerRadius="5"
+                                    Padding="7,2"
+                                    VerticalAlignment="Center"
+                                    IsVisible="{Binding CoDoiTuongHienThi}">
+                              <TextBlock Text="{Binding DoiTuongHienThi}"
+                                         FontSize="11"
+                                         FontWeight="SemiBold"
+                                         Foreground="#475569"
+                                         TextWrapping="Wrap" />
+                            </Border>
+                          </WrapPanel>
 
                           <TextBlock Grid.Column="1"
                                      Text="{Binding ThoiGianHienThi}"
@@ -1074,35 +1158,154 @@
                                      HorizontalAlignment="Right" />
                         </Grid>
 
-                        <!-- Dòng 3: Mã phiếu & Nội dung mô tả hoạt động -->
-                        <Border Margin="34,0,0,0"
+                        <!-- Dòng 3: Mã chứng từ nhấn được + Nút sao chép + Nội dung + Chi tiết Trước/Sau -->
+                        <Border Margin="36,0,0,0"
                                 Background="#F3F7F5"
                                 BorderBrush="#E4EFEA"
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="10,8"
                                 IsVisible="{Binding CoChiTietMoTa}">
-                          <StackPanel Spacing="6">
-                            <Border Background="#FFFFFF"
-                                    BorderBrush="#CFE0DA"
-                                    BorderThickness="1"
-                                    CornerRadius="5"
-                                    Padding="8,3"
-                                    HorizontalAlignment="Left"
-                                    IsVisible="{Binding CoMaChungTu}">
-                              <TextBlock Text="{Binding MaChungTuHienThi}"
-                                         FontSize="11.5"
-                                         FontWeight="SemiBold"
-                                         Foreground="#163F38"
-                                         TextWrapping="Wrap" />
-                            </Border>
+                          <StackPanel Spacing="7">
+                            <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="4" VerticalAlignment="Center">
+                              <!-- Nút mở trực tiếp chứng từ -->
+                              <Button Command="{Binding $parent[ItemsControl].((vm:DashboardViewModel)DataContext).MoChungTuHoatDongSubCommand}"
+                                      CommandParameter="{Binding}"
+                                      IsEnabled="{Binding CoLienKetChungTu}"
+                                      IsVisible="{Binding CoLienKetChungTu}"
+                                      Background="#FFFFFF"
+                                      BorderBrush="#087F6E"
+                                      BorderThickness="1"
+                                      CornerRadius="5"
+                                      Padding="8,3"
+                                      Cursor="Hand"
+                                      ToolTip.Tip="{Binding TooltipMoChungTu}">
+                                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                  <TextBlock Text="↗"
+                                             FontSize="11.5"
+                                             FontWeight="Bold"
+                                             Foreground="#087F6E"
+                                             VerticalAlignment="Center" />
+                                  <TextBlock Text="{Binding NhanNutMoChungTu}"
+                                             FontSize="11.5"
+                                             FontWeight="Bold"
+                                             Foreground="#06695A"
+                                             TextWrapping="Wrap"
+                                             VerticalAlignment="Center" />
+                                </StackPanel>
+                              </Button>
 
-                            <TextBlock Text="{Binding NoiDung}"
-                                       Foreground="#263B35"
-                                       FontSize="12.5"
-                                       LineHeight="19"
-                                       TextWrapping="Wrap"
-                                       IsVisible="{Binding CoNoiDung}" />
+                              <!-- Nhãn mã nếu không có liên kết mở cửa sổ -->
+                              <Border Background="#FFFFFF"
+                                      BorderBrush="#CFE0DA"
+                                      BorderThickness="1"
+                                      CornerRadius="5"
+                                      Padding="8,3"
+                                      IsVisible="{Binding !CoLienKetChungTu}">
+                                <TextBlock Text="{Binding MaChungTuHienThi}"
+                                           FontSize="11.5"
+                                           FontWeight="SemiBold"
+                                           Foreground="#163F38"
+                                           TextWrapping="Wrap"
+                                           IsVisible="{Binding CoMaChungTu}" />
+                              </Border>
+
+                              <!-- Nút sao chép nhanh mã chứng từ -->
+                              <Button Command="{Binding $parent[ItemsControl].((vm:DashboardViewModel)DataContext).SaoChepMaChungTuCommand}"
+                                      CommandParameter="{Binding}"
+                                      IsVisible="{Binding CoMaChungTu}"
+                                      Background="#FFFFFF"
+                                      BorderBrush="#CFE0DA"
+                                      BorderThickness="1"
+                                      CornerRadius="5"
+                                      Padding="7,3"
+                                      Cursor="Hand"
+                                      ToolTip.Tip="Sao chép mã chứng từ">
+                                <TextBlock Text="⧉ Sao chép mã"
+                                           FontSize="11"
+                                           Foreground="#405A53" />
+                              </Button>
+
+                              <!-- Nút sao chép toàn bộ nội dung -->
+                              <Button Command="{Binding $parent[ItemsControl].((vm:DashboardViewModel)DataContext).SaoChepChiTietHoatDongCommand}"
+                                      CommandParameter="{Binding}"
+                                      Background="#FFFFFF"
+                                      BorderBrush="#CFE0DA"
+                                      BorderThickness="1"
+                                      CornerRadius="5"
+                                      Padding="7,3"
+                                      Cursor="Hand"
+                                      ToolTip.Tip="Sao chép toàn bộ nội dung thay đổi">
+                                <TextBlock Text="📋 Sao chép chi tiết"
+                                           FontSize="11"
+                                           Foreground="#405A53" />
+                              </Button>
+                            </WrapPanel>
+
+                            <!-- Nội dung có thể bôi đen sao chép + Chi tiết Trước / Sau -->
+                            <StackPanel Spacing="6">
+                              <SelectableTextBlock Text="{Binding NoiDung}"
+                                                   Foreground="#263B35"
+                                                   FontSize="12.5"
+                                                   LineHeight="19"
+                                                   TextWrapping="Wrap"
+                                                   IsVisible="{Binding CoNoiDung}" />
+
+                              <!-- Chi tiết Trước / Sau cho các thao tác chỉnh sửa / cập nhật -->
+                              <Border Background="#FFFFFF"
+                                      BorderBrush="#DCE8E3"
+                                      BorderThickness="1"
+                                      CornerRadius="7"
+                                      Padding="10,8"
+                                      IsVisible="{Binding CoThayDoiChiTiet}">
+                                <StackPanel Spacing="6">
+                                  <TextBlock Text="{Binding TruongThayDoi, StringFormat='Trường thay đổi: {0}'}"
+                                             FontSize="11.5"
+                                             FontWeight="Bold"
+                                             Foreground="#1E3A34"
+                                             TextWrapping="Wrap"
+                                             IsVisible="{Binding CoTruongThayDoi}" />
+
+                                  <Border Background="#FFF7ED"
+                                          BorderBrush="#FED7AA"
+                                          BorderThickness="1"
+                                          CornerRadius="5"
+                                          Padding="8,5"
+                                          IsVisible="{Binding CoGiaTriTruoc}">
+                                    <StackPanel Spacing="2">
+                                      <TextBlock Text="Trước khi thay đổi:"
+                                                 FontSize="10.5"
+                                                 FontWeight="Bold"
+                                                 Foreground="#C2410C" />
+                                      <SelectableTextBlock Text="{Binding GiaTriTruoc}"
+                                                           FontSize="11.5"
+                                                           LineHeight="17"
+                                                           Foreground="#7C2D12"
+                                                           TextWrapping="Wrap" />
+                                    </StackPanel>
+                                  </Border>
+
+                                  <Border Background="#ECFDF5"
+                                          BorderBrush="#A7F3D0"
+                                          BorderThickness="1"
+                                          CornerRadius="5"
+                                          Padding="8,5"
+                                          IsVisible="{Binding CoGiaTriSau}">
+                                    <StackPanel Spacing="2">
+                                      <TextBlock Text="Sau khi thay đổi:"
+                                                 FontSize="10.5"
+                                                 FontWeight="Bold"
+                                                 Foreground="#047857" />
+                                      <SelectableTextBlock Text="{Binding GiaTriSau}"
+                                                           FontSize="11.5"
+                                                           LineHeight="17"
+                                                           Foreground="#064E3B"
+                                                           TextWrapping="Wrap" />
+                                    </StackPanel>
+                                  </Border>
+                                </StackPanel>
+                              </Border>
+                            </StackPanel>
                           </StackPanel>
                         </Border>
                       </StackPanel>
@@ -1116,9 +1319,32 @@
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,30" Spacing="8"
                         IsVisible="{Binding !CoHoatDongTaiKhoanCon}">
               <TextBlock Text="📋" FontSize="26" HorizontalAlignment="Center" />
-              <TextBlock Text="Chưa có hoạt động nào được ghi nhận từ nhân viên."
-                         Classes="tqMuted" HorizontalAlignment="Center" />
+              <TextBlock Text="Không có hoạt động nào phù hợp với bộ lọc hiện tại."
+                         Classes="tqMuted" HorizontalAlignment="Center" TextWrapping="Wrap" />
             </StackPanel>
+          </Grid>
+
+          <!-- HÀNG 4: PHÂN TRANG NHẬT KÝ -->
+          <Grid Grid.Row="5" ColumnDefinitions="*,Auto" ColumnSpacing="10"
+                IsVisible="{Binding CoHoatDongTaiKhoanCon}">
+            <TextBlock Text="{Binding ThongTinPhanTrangHoatDongSub}"
+                       FontSize="12"
+                       Foreground="#52645F"
+                       VerticalAlignment="Center" />
+            <WrapPanel Grid.Column="1" Orientation="Horizontal" ItemSpacing="6" VerticalAlignment="Center">
+              <Button Classes="toolbar-action" Content="⏮ Đầu" Padding="8,4" FontSize="11.5"
+                      IsEnabled="{Binding CoTheTrangTruocHoatDongSub}"
+                      Command="{Binding TrangDauHoatDongSubCommand}" />
+              <Button Classes="toolbar-action" Content="◀ Trước" Padding="8,4" FontSize="11.5"
+                      IsEnabled="{Binding CoTheTrangTruocHoatDongSub}"
+                      Command="{Binding TrangTruocHoatDongSubCommand}" />
+              <Button Classes="toolbar-action" Content="Sau ▶" Padding="8,4" FontSize="11.5"
+                      IsEnabled="{Binding CoTheTrangSauHoatDongSub}"
+                      Command="{Binding TrangSauHoatDongSubCommand}" />
+              <Button Classes="toolbar-action" Content="Cuối ⏭" Padding="8,4" FontSize="11.5"
+                      IsEnabled="{Binding CoTheTrangSauHoatDongSub}"
+                      Command="{Binding TrangCuoiHoatDongSubCommand}" />
+            </WrapPanel>
           </Grid>
         </Grid>
       </Border>

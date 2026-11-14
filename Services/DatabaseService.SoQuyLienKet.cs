@@ -537,6 +537,7 @@ public sealed partial class DatabaseService
         await EnsurePhieuQuyCancelColumnsAsync();
         await EnsurePhieuQuyHoaDonColumnsAsync();
         await EnsurePhieuQuyPhieuNhapColumnsAsync();
+        await EnsureAuditTableAsync();
 
         await _khoaHuyPhieuQuy.WaitAsync();
         try
@@ -1080,15 +1081,20 @@ public sealed partial class DatabaseService
                     },
                     transaction);
 
-                await transaction.CommitAsync();
-
-                _ = LogSubAccountActivityAsync(
+                await LogSubAccountActivityAsync(
                     "Hủy sổ quỹ",
                     "SO_QUY",
                     phieu.Id,
                     phieu.MaPhieuChi,
                     $"Hủy phiếu {phieu.MaPhieuChi} ({soTienPhieu:N0} đ). Lý do: {lyDoHuy.Trim()}",
-                    soTienPhieu);
+                    soTienPhieu,
+                    truongThayDoi: "Trạng thái phiếu quỹ",
+                    giaTriTruoc: $"HOÀN THÀNH ({soTienPhieu:N0} đ)",
+                    giaTriSau: "ĐÃ HỦY (0 đ)",
+                    connection: connection,
+                    transaction: transaction);
+
+                await transaction.CommitAsync();
 
                 return affected;
             }

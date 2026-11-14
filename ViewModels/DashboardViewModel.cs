@@ -398,6 +398,14 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     public bool IsAdmin => Session.CurrentUser != null && Quyen.IsAdmin(Session.CurrentUser);
 
+    public bool IsAdminViewer => IsAdmin;
+
+    /// <summary>Callback để MainWindowViewModel mở trực tiếp chứng từ khi click mã phiếu trên nhật ký.</summary>
+    public Func<TongQuanHoatDongTaiKhoanCon, Task>? MoChungTuCallback { get; set; }
+
+    /// <summary>Hook tùy chọn cho kiểm thử tự động khi không có TopLevel Clipboard.</summary>
+    public Func<string, Task>? CopyTextOverrideForTest { get; set; }
+
     private List<TongQuanHoatDongTaiKhoanCon> _tatCaHoatDongTaiKhoanCon = [];
 
     public ObservableCollection<TongQuanHoatDongTaiKhoanCon> HoatDongTaiKhoanCon { get; } = new();
@@ -411,6 +419,7 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     partial void OnTimKiemHoatDongSubChanged(string value)
     {
+        TrangHienTaiHoatDongSub = 1;
         ApDungBoLocHoatDongSub();
     }
 
@@ -419,6 +428,7 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     partial void OnLocTaiKhoanSubChanged(string value)
     {
+        TrangHienTaiHoatDongSub = 1;
         ApDungBoLocHoatDongSub();
     }
 
@@ -427,14 +437,78 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     partial void OnLocHanhDongSubChanged(string value)
     {
+        TrangHienTaiHoatDongSub = 1;
         ApDungBoLocHoatDongSub();
     }
+
+    [ObservableProperty]
+    private DateTime? tuNgayHoatDongSub;
+
+    partial void OnTuNgayHoatDongSubChanged(DateTime? value)
+    {
+        TrangHienTaiHoatDongSub = 1;
+        ApDungBoLocHoatDongSub();
+    }
+
+    [ObservableProperty]
+    private DateTime? denNgayHoatDongSub;
+
+    partial void OnDenNgayHoatDongSubChanged(DateTime? value)
+    {
+        TrangHienTaiHoatDongSub = 1;
+        ApDungBoLocHoatDongSub();
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CoThongBaoSaoChepHoatDong))]
+    private string thongBaoSaoChepHoatDong = "";
+
+    public bool CoThongBaoSaoChepHoatDong => !string.IsNullOrWhiteSpace(ThongBaoSaoChepHoatDong);
+
+    public int KichThuocTrangHoatDongSub { get; set; } = 15;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ThongTinPhanTrangHoatDongSub))]
+    [NotifyPropertyChangedFor(nameof(CoTheTrangTruocHoatDongSub))]
+    [NotifyPropertyChangedFor(nameof(CoTheTrangSauHoatDongSub))]
+    private int trangHienTaiHoatDongSub = 1;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ThongTinPhanTrangHoatDongSub))]
+    private int tongSoBanGhiLocHoatDongSub;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ThongTinPhanTrangHoatDongSub))]
+    [NotifyPropertyChangedFor(nameof(CoTheTrangTruocHoatDongSub))]
+    [NotifyPropertyChangedFor(nameof(CoTheTrangSauHoatDongSub))]
+    [NotifyPropertyChangedFor(nameof(CoNhieuTrangHoatDongSub))]
+    private int tongSoTrangHoatDongSub = 1;
+
+    public string ThongTinPhanTrangHoatDongSub =>
+        TongSoBanGhiLocHoatDongSub == 0
+            ? "0 / 0 hoạt động"
+            : $"Trang {TrangHienTaiHoatDongSub}/{TongSoTrangHoatDongSub} • {TongSoBanGhiLocHoatDongSub:N0} hoạt động";
+
+    public bool CoTheTrangTruocHoatDongSub => TrangHienTaiHoatDongSub > 1;
+    public bool CoTheTrangSauHoatDongSub => TrangHienTaiHoatDongSub < TongSoTrangHoatDongSub;
+    public bool CoNhieuTrangHoatDongSub => TongSoTrangHoatDongSub > 1;
 
     public ObservableCollection<string> DanhSachTaiKhoanCon { get; } = new();
     public ObservableCollection<string> DanhSachHanhDongCon { get; } = new();
 
     private void ApDungBoLocHoatDongSub()
     {
+        if (!IsAdmin)
+        {
+            HoatDongTaiKhoanCon.Clear();
+            TongSoBanGhiLocHoatDongSub = 0;
+            TongSoTrangHoatDongSub = 1;
+            TrangHienTaiHoatDongSub = 1;
+            OnPropertyChanged(nameof(SoLuongHoatDongTaiKhoanCon));
+            OnPropertyChanged(nameof(CoHoatDongTaiKhoanCon));
+            return;
+        }
+
         var ketQua = _tatCaHoatDongTaiKhoanCon.AsEnumerable();
 
         if (!string.IsNullOrWhiteSpace(TimKiemHoatDongSub))
@@ -446,7 +520,11 @@ public sealed partial class DashboardViewModel : ObservableObject
                 (h.VaiTro?.ToLowerInvariant().Contains(kw) ?? false) ||
                 (h.HanhDong?.ToLowerInvariant().Contains(kw) ?? false) ||
                 (h.MaChungTu?.ToLowerInvariant().Contains(kw) ?? false) ||
-                (h.NoiDung?.ToLowerInvariant().Contains(kw) ?? false));
+                (h.NoiDung?.ToLowerInvariant().Contains(kw) ?? false) ||
+                (h.TruongThayDoi?.ToLowerInvariant().Contains(kw) ?? false) ||
+                (h.GiaTriTruoc?.ToLowerInvariant().Contains(kw) ?? false) ||
+                (h.GiaTriSau?.ToLowerInvariant().Contains(kw) ?? false) ||
+                (h.DoiTuongHienThi?.ToLowerInvariant().Contains(kw) ?? false));
         }
 
         if (!string.IsNullOrWhiteSpace(LocTaiKhoanSub) && LocTaiKhoanSub != "Tất cả nhân viên" && LocTaiKhoanSub != "Tất cả")
@@ -461,9 +539,65 @@ public sealed partial class DashboardViewModel : ObservableObject
             ketQua = ketQua.Where(h => string.Equals(h.HanhDong, LocHanhDongSub, StringComparison.OrdinalIgnoreCase));
         }
 
-        DoDanhSachMoi(HoatDongTaiKhoanCon, ketQua);
+        if (TuNgayHoatDongSub.HasValue)
+        {
+            var tuNgay = TuNgayHoatDongSub.Value.Date;
+            ketQua = ketQua.Where(h => h.ThoiGian.Date >= tuNgay);
+        }
+
+        if (DenNgayHoatDongSub.HasValue)
+        {
+            var denNgay = DenNgayHoatDongSub.Value.Date;
+            ketQua = ketQua.Where(h => h.ThoiGian.Date <= denNgay);
+        }
+
+        var daLoc = ketQua.ToList();
+        var kichThuoc = KichThuocTrangHoatDongSub > 0 ? KichThuocTrangHoatDongSub : 15;
+        TongSoBanGhiLocHoatDongSub = daLoc.Count;
+        TongSoTrangHoatDongSub = Math.Max(1, (int)Math.Ceiling(daLoc.Count / (double)kichThuoc));
+
+        if (TrangHienTaiHoatDongSub < 1)
+            TrangHienTaiHoatDongSub = 1;
+        else if (TrangHienTaiHoatDongSub > TongSoTrangHoatDongSub)
+            TrangHienTaiHoatDongSub = TongSoTrangHoatDongSub;
+
+        var trangHienTai = daLoc
+            .Skip((TrangHienTaiHoatDongSub - 1) * kichThuoc)
+            .Take(kichThuoc)
+            .ToList();
+
+        DoDanhSachMoi(HoatDongTaiKhoanCon, trangHienTai);
         OnPropertyChanged(nameof(SoLuongHoatDongTaiKhoanCon));
         OnPropertyChanged(nameof(CoHoatDongTaiKhoanCon));
+        OnPropertyChanged(nameof(ThongTinPhanTrangHoatDongSub));
+        OnPropertyChanged(nameof(CoTheTrangTruocHoatDongSub));
+        OnPropertyChanged(nameof(CoTheTrangSauHoatDongSub));
+        OnPropertyChanged(nameof(CoNhieuTrangHoatDongSub));
+    }
+
+    [RelayCommand]
+    private void ChonKhoangNgayHoatDongSub(string? preset)
+    {
+        var today = DateTime.Now.Date;
+        switch (preset)
+        {
+            case "HOM_NAY":
+                TuNgayHoatDongSub = today;
+                DenNgayHoatDongSub = today;
+                break;
+            case "7_NGAY":
+                TuNgayHoatDongSub = today.AddDays(-6);
+                DenNgayHoatDongSub = today;
+                break;
+            case "THANG_NAY":
+                TuNgayHoatDongSub = new DateTime(today.Year, today.Month, 1);
+                DenNgayHoatDongSub = today;
+                break;
+            default:
+                TuNgayHoatDongSub = null;
+                DenNgayHoatDongSub = null;
+                break;
+        }
     }
 
     [RelayCommand]
@@ -472,6 +606,101 @@ public sealed partial class DashboardViewModel : ObservableObject
         TimKiemHoatDongSub = "";
         LocTaiKhoanSub = "Tất cả nhân viên";
         LocHanhDongSub = "Tất cả nghiệp vụ";
+        TuNgayHoatDongSub = null;
+        DenNgayHoatDongSub = null;
+        TrangHienTaiHoatDongSub = 1;
+        ApDungBoLocHoatDongSub();
+    }
+
+    [RelayCommand]
+    private void TrangDauHoatDongSub()
+    {
+        if (TrangHienTaiHoatDongSub > 1)
+        {
+            TrangHienTaiHoatDongSub = 1;
+            ApDungBoLocHoatDongSub();
+        }
+    }
+
+    [RelayCommand]
+    private void TrangTruocHoatDongSub()
+    {
+        if (TrangHienTaiHoatDongSub > 1)
+        {
+            TrangHienTaiHoatDongSub--;
+            ApDungBoLocHoatDongSub();
+        }
+    }
+
+    [RelayCommand]
+    private void TrangSauHoatDongSub()
+    {
+        if (TrangHienTaiHoatDongSub < TongSoTrangHoatDongSub)
+        {
+            TrangHienTaiHoatDongSub++;
+            ApDungBoLocHoatDongSub();
+        }
+    }
+
+    [RelayCommand]
+    private void TrangCuoiHoatDongSub()
+    {
+        if (TrangHienTaiHoatDongSub < TongSoTrangHoatDongSub)
+        {
+            TrangHienTaiHoatDongSub = TongSoTrangHoatDongSub;
+            ApDungBoLocHoatDongSub();
+        }
+    }
+
+    [RelayCommand]
+    private async Task MoChungTuHoatDongSubAsync(TongQuanHoatDongTaiKhoanCon? item)
+    {
+        if (item is null || MoChungTuCallback is null)
+            return;
+
+        await MoChungTuCallback.Invoke(item);
+    }
+
+    [RelayCommand]
+    private async Task SaoChepMaChungTuAsync(TongQuanHoatDongTaiKhoanCon? item)
+    {
+        var ma = item?.MaChungTuSach;
+        if (string.IsNullOrWhiteSpace(ma))
+        {
+            ThongBaoSaoChepHoatDong = "Hoạt động này không có mã chứng từ để sao chép.";
+            return;
+        }
+
+        await CopyTextAsync(ma);
+        ThongBaoSaoChepHoatDong = $"Đã sao chép mã: {ma}";
+    }
+
+    [RelayCommand]
+    private async Task SaoChepChiTietHoatDongAsync(TongQuanHoatDongTaiKhoanCon? item)
+    {
+        if (item is null)
+            return;
+
+        await CopyTextAsync(item.NoiDungSaoChepDayDu);
+        ThongBaoSaoChepHoatDong = string.IsNullOrWhiteSpace(item.MaChungTuSach)
+            ? "Đã sao chép đầy đủ nội dung nhật ký."
+            : $"Đã sao chép chi tiết nhật ký {item.MaChungTuSach}.";
+    }
+
+    private async Task CopyTextAsync(string text)
+    {
+        if (CopyTextOverrideForTest is not null)
+        {
+            await CopyTextOverrideForTest(text);
+            return;
+        }
+
+        var topLevel = OwnerWindow ?? (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop ? desktop.MainWindow : null);
+        var clipboard = topLevel?.Clipboard;
+        if (clipboard is not null)
+        {
+            await clipboard.SetTextAsync(text);
+        }
     }
 
     // ============================================================
@@ -635,7 +864,7 @@ public sealed partial class DashboardViewModel : ObservableObject
         OnPropertyChanged(nameof(CoTheXemNgayGanNhat));
         OnPropertyChanged(nameof(NhanNutNgayGanNhatGoiY));
 
-        _tatCaHoatDongTaiKhoanCon = duLieu.HoatDongTaiKhoanCon;
+        _tatCaHoatDongTaiKhoanCon = IsAdmin ? duLieu.HoatDongTaiKhoanCon : [];
 
         var dsTaiKhoan = new List<string> { "Tất cả nhân viên" };
         dsTaiKhoan.AddRange(_tatCaHoatDongTaiKhoanCon
@@ -662,6 +891,7 @@ public sealed partial class DashboardViewModel : ObservableObject
         ApDungBoLocHoatDongSub();
 
         OnPropertyChanged(nameof(IsAdmin));
+        OnPropertyChanged(nameof(IsAdminViewer));
         OnPropertyChanged(nameof(CoHangBanChay));
         OnPropertyChanged(nameof(CoKhachHang));
 

@@ -258,6 +258,7 @@ public sealed partial class DatabaseService
             throw new InvalidOperationException("Không thể chuẩn bị bảng lịch sử chỉnh sửa phiếu nhập.");
         var hasPhieuQuyExtraColumns = await EnsurePhieuQuyExtraColumnsAsync();
         var hasPhieuQuyPhieuNhapColumns = await EnsurePhieuQuyPhieuNhapColumnsAsync();
+        await EnsureAuditTableAsync();
 
         var userId = yeuCau.NguoiHuyId ?? Session.CurrentUser?.Id;
         var userName = !string.IsNullOrWhiteSpace(yeuCau.TenNguoiHuy)
@@ -781,16 +782,20 @@ public sealed partial class DatabaseService
                 },
                 transaction);
 
-            await transaction.CommitAsync();
-
-            // Ghi vào nhật ký hoạt động chung (hiển thị cả cho admin sau khi bỏ loại trừ).
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Hủy phiếu nhập",
                 "PHIEU_NHAP",
                 yeuCau.PhieuNhapId,
                 phieu.MaPhieuNhap,
                 $"Hủy phiếu nhập {phieu.MaPhieuNhap} (NCC: {phieu.TenNhaCungCap ?? "không rõ"}): tổng tiền {phieu.TongTienNhap:N0} đ, đã thanh toán {phieu.DaThanhToan:N0} đ, còn nợ {phieu.ConNo:N0} đ ➔ 0 đ. Lý do: {yeuCau.LyDoHuy.Trim()}",
-                phieu.TongTienNhap);
+                phieu.TongTienNhap,
+                truongThayDoi: "Trạng thái phiếu nhập, Tồn kho, Công nợ NCC",
+                giaTriTruoc: $"{phieu.TrangThai} | Tổng: {phieu.TongTienNhap:N0} đ | Còn nợ: {phieu.ConNo:N0} đ",
+                giaTriSau: $"ĐÃ HỦY | Tổng: 0 đ | Còn nợ: 0 đ | Hoàn tiền: {soTienHoan:N0} đ",
+                connection: connection,
+                transaction: transaction);
+
+            await transaction.CommitAsync();
         }
         catch (Exception ex)
         {
@@ -837,6 +842,7 @@ public sealed partial class DatabaseService
             throw new InvalidOperationException("Không thể chuẩn bị bảng lịch sử chỉnh sửa phiếu nhập.");
         var hasPhieuQuyExtraColumns = await EnsurePhieuQuyExtraColumnsAsync();
         var hasPhieuQuyPhieuNhapColumns = await EnsurePhieuQuyPhieuNhapColumnsAsync();
+        await EnsureAuditTableAsync();
 
         var userId = yeuCau.NguoiKhoiPhucId ?? Session.CurrentUser?.Id;
         var userName = !string.IsNullOrWhiteSpace(yeuCau.TenNguoiKhoiPhuc)
@@ -1281,16 +1287,20 @@ public sealed partial class DatabaseService
                 },
                 transaction);
 
-            await transaction.CommitAsync();
-
-            // Ghi vào nhật ký hoạt động chung (hiển thị cả cho admin sau khi bỏ loại trừ).
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Khôi phục phiếu nhập",
                 "PHIEU_NHAP",
                 yeuCau.PhieuNhapId,
                 maPhieuNhap,
                 $"Khôi phục phiếu nhập {maPhieuNhap} đã hủy (NCC: {phieu.TenNhaCungCap ?? "không rõ"}): tổng tiền {tongTienNhap:N0} đ, đã thanh toán {daThanhToan:N0} đ, còn nợ {conNo:N0} đ. Lý do: {yeuCau.LyDoKhoiPhuc.Trim()}",
-                tongTienNhap);
+                tongTienNhap,
+                truongThayDoi: "Trạng thái phiếu nhập, Tồn kho, Công nợ NCC",
+                giaTriTruoc: "ĐÃ HỦY | Tổng: 0 đ | Còn nợ: 0 đ",
+                giaTriSau: $"{trangThaiMoi} | Tổng: {tongTienNhap:N0} đ | Còn nợ: {conNo:N0} đ",
+                connection: connection,
+                transaction: transaction);
+
+            await transaction.CommitAsync();
         }
         catch
         {

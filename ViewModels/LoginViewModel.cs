@@ -136,15 +136,13 @@ public partial class LoginViewModel : ObservableObject
             Session.SetCurrentUser(user, perms);
             _ = _db.CapNhatLanDangNhapCuoiAsync(user.Id);
 
-            if (!Quyen.IsAdmin(user))
-            {
-                _ = _db.LogSubAccountActivityAsync(
-                    "Đăng nhập",
-                    "HE_THONG",
-                    user.Id,
-                    user.TenDangNhap,
-                    $"Tài khoản {user.TenDangNhap} ({user.HoTen}) đăng nhập hệ thống");
-            }
+            await _db.LogSubAccountActivityAsync(
+                "Đăng nhập",
+                "HE_THONG",
+                user.Id,
+                user.TenDangNhap,
+                $"Tài khoản {user.TenDangNhap} ({user.HoTen}) đăng nhập hệ thống",
+                actingUser: user);
 
             ThongBao = "";
             TrangThaiKetNoi = "Đăng nhập thành công.";
@@ -242,15 +240,13 @@ public partial class LoginViewModel : ObservableObject
             Session.SetCurrentUser(user, perms);
             _ = _db.CapNhatLanDangNhapCuoiAsync(user.Id);
 
-            if (!Quyen.IsAdmin(user))
-            {
-                _ = _db.LogSubAccountActivityAsync(
-                    "Đăng nhập",
-                    "HE_THONG",
-                    user.Id,
-                    user.TenDangNhap,
-                    $"Tài khoản {user.TenDangNhap} ({user.HoTen}) đăng nhập hệ thống");
-            }
+            await _db.LogSubAccountActivityAsync(
+                "Đăng nhập",
+                "HE_THONG",
+                user.Id,
+                user.TenDangNhap,
+                $"Tài khoản {user.TenDangNhap} ({user.HoTen}) đăng nhập hệ thống",
+                actingUser: user);
 
             // Ghi nhớ hoặc xoá thông tin đăng nhập
             CapNhatGhiNhoDangNhap(tenDangNhap, MatKhau);

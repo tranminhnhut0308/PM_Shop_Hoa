@@ -51,6 +51,7 @@ public sealed partial class DatabaseService
         await EnsureBangLichSuThanhToanNhaCungCapAsync();
         await EnsurePhieuQuyCancelColumnsAsync();
         await EnsurePhieuNhapTrackingColumnsAsync();
+        await EnsureAuditTableAsync();
 
         await _khoaHuyThanhToanCongNoNcc.WaitAsync();
         try
@@ -432,16 +433,21 @@ public sealed partial class DatabaseService
                     },
                     transaction);
 
-                await transaction.CommitAsync();
-                daCommit = true;
-
-                _ = LogSubAccountActivityAsync(
+                await LogSubAccountActivityAsync(
                     "Hủy thanh toán NCC",
                     "NHA_CUNG_CAP",
                     record.NhaCungCapId,
                     record.MaGiaoDich,
                     $"Hủy phiếu chi thanh toán công nợ {record.MaGiaoDich} của NCC {tenNhaCungCap}: {record.SoTien:N0} đ. Lý do: {lyDoHuy.Trim()}",
-                    record.SoTien);
+                    record.SoTien,
+                    truongThayDoi: "Trạng thái phiếu thanh toán NCC, Công nợ NCC",
+                    giaTriTruoc: $"HOÀN THÀNH | Công nợ NCC: {Math.Max(0m, congNoTruocKhiHuy):N0} đ",
+                    giaTriSau: $"ĐÃ HỦY | Công nợ NCC: {Math.Max(0m, congNoSauKhiHuy):N0} đ",
+                    connection: connection,
+                    transaction: transaction);
+
+                await transaction.CommitAsync();
+                daCommit = true;
 
                 return new HuyThanhToanCongNoNhaCungCapKetQua
                 {

@@ -89,6 +89,22 @@ internal class Program
             };
             return await KiemTraIssue108_LoaiBoBatBuocLyDoHuyAsync(csb.ConnectionString);
         }
+        if (args.Contains("--verify-issue-99", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue99_NhapNgayVaChonNhaCungCapAsync(csb.ConnectionString);
+        }
         if (args.Contains("--verify-issue-109", StringComparer.OrdinalIgnoreCase))
         {
             var configService = new DatabaseConfigService();
@@ -187,6 +203,23 @@ internal class Program
                 CharacterSet = "utf8mb4"
             };
             return await KiemTraIssue116_GiaoDienTrangTongQuanAsync(csb.ConnectionString);
+        }
+
+        if (args.Contains("--verify-issue-103", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue103_NhatKyHoatDongVaTruyVetAsync(csb.ConnectionString);
         }
 
         Console.WriteLine("==========================================================================================");
@@ -4359,5 +4392,941 @@ internal class Program
 
         Console.WriteLine("\n>>> TOÀN BỘ 11 TIÊU CHÍ KIỂM THỬ THỰC TẾ ISSUE #109 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
         return 0;
+    }
+
+    private static async Task<int> KiemTraIssue99_NhapNgayVaChonNhaCungCapAsync(string connectionString)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ TOÀN DIỆN ISSUE #99: CẢI TIẾN NHẬP NGÀY VÀ CHỌN NCC BẰNG BÀN PHÍM     ");
+        Console.WriteLine("==========================================================================================");
+
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "tester",
+            HoTen = "Kiem Thu Vien #99",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        });
+
+        // ----------------------------------------------------------------------------------------
+        // PHẦN 1: KIỂM THỬ TRƯỜNG NGÀY NHẬP BẰNG BÀN PHÍM (dd/MM/yyyy HH:mm)
+        // ----------------------------------------------------------------------------------------
+        Console.WriteLine("\n--- PHẦN 1: KIỂM THỬ NHẬP TRỰC TIẾP NGÀY GIỜ BẰNG BÀN PHÍM ---");
+
+        // 1.1 Khởi tạo giá trị ban đầu: 09/11/2026 09:55
+        Console.Write("1.1 Khởi tạo DateTimeBox ban đầu 09/11/2026 09:55: ");
+        var dtBox = new DateTimeBox();
+        dtBox.Value = new DateTime(2026, 11, 9, 9, 55, 0);
+        if (dtBox.Text != "09/11/2026 09:55")
+            throw new Exception($"Định dạng ban đầu sai: {dtBox.Text}");
+        Console.WriteLine("PASSED ✓ (" + dtBox.Text + ")");
+
+        // 1.2 Nhập trực tiếp bàn phím đổi thành 10/11/2026 14:30 mà không cần mở lịch
+        Console.Write("1.2 Nhập bàn phím đổi trực tiếp thành 10/11/2026 14:30: ");
+        // Sửa ngày thành 10
+        dtBox.SelectSegment(0);
+        dtBox.ProcessDigit('1');
+        dtBox.ProcessDigit('0');
+        // Sửa giờ thành 14
+        dtBox.SelectSegment(3);
+        dtBox.ProcessDigit('1');
+        dtBox.ProcessDigit('4');
+        // Sửa phút thành 30
+        dtBox.SelectSegment(4);
+        dtBox.ProcessDigit('3');
+        dtBox.ProcessDigit('0');
+
+        if (dtBox.Text != "10/11/2026 14:30" || dtBox.Value != new DateTime(2026, 11, 10, 14, 30, 0))
+            throw new Exception($"Sửa trực tiếp ngày giờ thất bại: Text={dtBox.Text}, Value={dtBox.Value}");
+        Console.WriteLine("PASSED ✓ (" + dtBox.Text + ")");
+
+        // 1.3 Độc lập giữa các thành phần: sửa riêng từng thành phần không đổi các thành phần còn lại
+        Console.Write("1.3 Kiểm tra tính độc lập giữa các thành phần (ngày, tháng, năm, giờ, phút): ");
+        // Sửa ngày thành 15: tháng, năm, giờ, phút giữ nguyên
+        dtBox.SelectSegment(0);
+        dtBox.ProcessDigit('1');
+        dtBox.ProcessDigit('5');
+        if (dtBox.Text != "15/11/2026 14:30") throw new Exception($"Sửa ngày làm hỏng thành phần khác: {dtBox.Text}");
+
+        // Sửa tháng thành 08: ngày, năm, giờ, phút giữ nguyên
+        dtBox.SelectSegment(1);
+        dtBox.ProcessDigit('0');
+        dtBox.ProcessDigit('8');
+        if (dtBox.Text != "15/08/2026 14:30") throw new Exception($"Sửa tháng làm hỏng thành phần khác: {dtBox.Text}");
+
+        // Sửa năm thành 2027: ngày, tháng, giờ, phút giữ nguyên
+        dtBox.SelectSegment(2);
+        dtBox.ProcessDigit('2');
+        dtBox.ProcessDigit('0');
+        dtBox.ProcessDigit('2');
+        dtBox.ProcessDigit('7');
+        if (dtBox.Text != "15/08/2027 14:30") throw new Exception($"Sửa năm làm hỏng thành phần khác: {dtBox.Text}");
+
+        // Sửa giờ thành 23: ngày, tháng, năm, phút giữ nguyên
+        dtBox.SelectSegment(3);
+        dtBox.ProcessDigit('2');
+        dtBox.ProcessDigit('3');
+        if (dtBox.Text != "15/08/2027 23:30") throw new Exception($"Sửa giờ làm hỏng thành phần khác: {dtBox.Text}");
+
+        // Sửa phút thành 45: ngày, tháng, năm, giờ giữ nguyên
+        dtBox.SelectSegment(4);
+        dtBox.ProcessDigit('4');
+        dtBox.ProcessDigit('5');
+        if (dtBox.Text != "15/08/2027 23:45") throw new Exception($"Sửa phút làm hỏng thành phần khác: {dtBox.Text}");
+        Console.WriteLine("PASSED ✓");
+
+        // 1.4 Chọn ngày từ lịch 📅 phải bảo toàn giờ và phút
+        Console.Write("1.4 Chọn ngày bằng lịch 📅 bảo toàn giờ và phút hiện tại: ");
+        var vm = new MainWindowViewModel();
+        vm.PhieuNhapNgayNhap = new DateTime(2026, 11, 10, 14, 30, 0);
+        // Khi chọn ngày trên lịch Calendar, SelectedDate chỉ có Date (ví dụ 2026-11-20 00:00:00)
+        vm.PhieuNhapNgayNhapDateOnly = new DateTime(2026, 11, 20);
+        if (vm.PhieuNhapNgayNhap != new DateTime(2026, 11, 20, 14, 30, 0))
+            throw new Exception($"Chọn ngày từ lịch làm mất giờ phút: {vm.PhieuNhapNgayNhap:yyyy-MM-dd HH:mm:ss}");
+        Console.WriteLine("PASSED ✓ (" + vm.PhieuNhapNgayNhap.Value.ToString("dd/MM/yyyy HH:mm") + ")");
+
+        // 1.5 Kiểm tra tính hợp lệ và năm nhuận
+        Console.Write("1.5 Kiểm tra tính hợp lệ ngày giờ và năm nhuận: ");
+        // Năm nhuận 2024 có 29/02
+        dtBox.SyncFromValue(new DateTime(2024, 2, 29, 8, 0, 0));
+        if (dtBox.Text != "29/02/2024 08:00") throw new Exception($"Năm nhuận 2024 ngày 29/02 không hợp lệ: {dtBox.Text}");
+        // Chuyển sang 2026 (không nhuận): ngày 29 tự điều chỉnh về 28
+        dtBox.SelectSegment(2);
+        dtBox.ProcessDigit('2');
+        dtBox.ProcessDigit('0');
+        dtBox.ProcessDigit('2');
+        dtBox.ProcessDigit('6');
+        if (dtBox.Text != "28/02/2026 08:00") throw new Exception($"Năm 2026 không nhuận không tự điều chỉnh về 28: {dtBox.Text}");
+        // Tháng 4 có 30 ngày: ngày 31 tự điều chỉnh về 30
+        dtBox.SyncFromValue(new DateTime(2026, 1, 31, 8, 0, 0));
+        dtBox.SelectSegment(1);
+        dtBox.ProcessDigit('0');
+        dtBox.ProcessDigit('4');
+        if (dtBox.Text != "30/04/2026 08:00") throw new Exception($"Tháng 4 có 30 ngày không tự điều chỉnh về 30: {dtBox.Text}");
+        Console.WriteLine("PASSED ✓");
+
+        // ----------------------------------------------------------------------------------------
+        // PHẦN 2: KIỂM THỬ CHỌN NHÀ CUNG CẤP BẰNG BÀN PHÍM
+        // ----------------------------------------------------------------------------------------
+        Console.WriteLine("\n--- PHẦN 2: KIỂM THỬ CHỌN NHÀ CUNG CẤP BẰNG BÀN PHÍM ---");
+
+        uint ncc1Id = 0, ncc2Id = 0, ncc3Id = 0;
+        uint pnTestId = 0;
+        var testCodePrefix = "T99_" + DateTime.Now.Ticks.ToString()[^6..];
+
+        try
+        {
+            // Tạo 2 NCC trùng tên nhưng khác mã và SĐT để kiểm thử phân biệt trùng tên
+            var sqlInsertNcc = """
+                INSERT INTO nha_cung_cap (ma_nha_cung_cap, ten_nha_cung_cap, so_dien_thoai, dia_chi, trang_thai, so_du_tra_truoc, ngay_tao, ngay_cap_nhat)
+                VALUES (@Ma, @Ten, @Sdt, @DiaChi, 1, 0, NOW(), NOW());
+                SELECT LAST_INSERT_ID();
+                """;
+
+            ncc1Id = await conn.ExecuteScalarAsync<uint>(sqlInsertNcc, new
+            {
+                Ma = $"{testCodePrefix}_NCC1",
+                Ten = "Hoa Tươi Đà Lạt Test",
+                Sdt = "0901111999",
+                DiaChi = "123 Hoàng Văn Thụ, Đà Lạt"
+            });
+
+            ncc2Id = await conn.ExecuteScalarAsync<uint>(sqlInsertNcc, new
+            {
+                Ma = $"{testCodePrefix}_NCC2",
+                Ten = "Hoa Tươi Đà Lạt Test",
+                Sdt = "0902222999",
+                DiaChi = "456 Phan Đình Phùng, Đà Lạt"
+            });
+
+            ncc3Id = await conn.ExecuteScalarAsync<uint>(sqlInsertNcc, new
+            {
+                Ma = $"{testCodePrefix}_NCC3",
+                Ten = "Hoa Hồng Sa Đéc Test",
+                Sdt = "0903333999",
+                DiaChi = "789 Sa Đéc, Đồng Tháp"
+            });
+
+            // 2.1 Tìm kiếm và tự động chọn kết quả đầu tiên
+            Console.Write("2.1 Tìm kiếm NCC và tự động chọn kết quả đầu tiên (SelectedIndex = 0): ");
+            await vm.TimKiemNhaCungCapNhapNgayAsync("Hoa Tươi Đà Lạt Test");
+            if (vm.PhieuNhapSupplierSuggestions.Count < 2)
+                throw new Exception($"Không tải đủ danh sách gợi ý NCC: {vm.PhieuNhapSupplierSuggestions.Count}");
+            if (vm.PhieuNhapSupplierSelectedIndex != 0)
+                throw new Exception($"Kết quả đầu tiên không được tự động chọn! Index={vm.PhieuNhapSupplierSelectedIndex}");
+            if (vm.PhieuNhapSelectedSupplier?.MaNhaCungCap != $"{testCodePrefix}_NCC1")
+                throw new Exception($"NCC được chọn mặc định không phải kết quả đầu tiên: {vm.PhieuNhapSelectedSupplier?.MaNhaCungCap}");
+            Console.WriteLine($"PASSED ✓ (Index={vm.PhieuNhapSupplierSelectedIndex}, Ma={vm.PhieuNhapSelectedSupplier.MaNhaCungCap})");
+
+            // 2.2 Di chuyển phím mũi tên Xuống / Lên giữa các NCC
+            Console.Write("2.2 Phím mũi tên Xuống / Lên di chuyển mượt mà giữa các gợi ý: ");
+            // Nhấn phím Xuống -> chuyển sang NCC 2
+            vm.DiChuyenChonNhaCungCap(1);
+            if (vm.PhieuNhapSupplierSelectedIndex != 1)
+                throw new Exception($"Phím Xuống không chọn mục tiếp theo: Index={vm.PhieuNhapSupplierSelectedIndex}");
+            if (vm.PhieuNhapSelectedSupplier?.MaNhaCungCap != $"{testCodePrefix}_NCC2")
+                throw new Exception($"Phím Xuống chọn sai NCC: {vm.PhieuNhapSelectedSupplier?.MaNhaCungCap}");
+
+            // Nhấn tiếp phím Xuống quá số lượng -> clamp ở mục cuối cùng
+            vm.DiChuyenChonNhaCungCap(100);
+            if (vm.PhieuNhapSupplierSelectedIndex != vm.PhieuNhapSupplierSuggestions.Count - 1)
+                throw new Exception("Di chuyển xuống quá giới hạn không được clamp ở mục cuối.");
+
+            // Nhấn phím Lên -> quay lại mục trước
+            vm.DiChuyenChonNhaCungCap(-1);
+            if (vm.PhieuNhapSupplierSelectedIndex != vm.PhieuNhapSupplierSuggestions.Count - 2)
+                throw new Exception("Di chuyển lên không giảm đúng chỉ số.");
+
+            // Nhấn Lên quá 0 -> clamp ở 0
+            vm.DiChuyenChonNhaCungCap(-100);
+            if (vm.PhieuNhapSupplierSelectedIndex != 0)
+                throw new Exception("Di chuyển lên quá giới hạn không được clamp ở 0.");
+
+            Console.WriteLine("PASSED ✓");
+
+            // 2.3 Phím Enter xác nhận NCC đang chọn, đóng gợi ý, lưu đúng ID
+            Console.Write("2.3 Phím Enter xác nhận NCC đang chọn, điền tên vào ô tìm kiếm, lưu đúng ID, đóng gợi ý: ");
+            // Chọn lại NCC 2 bằng phím Xuống
+            vm.DiChuyenChonNhaCungCap(1);
+            var nccDangChon = vm.PhieuNhapSelectedSupplier;
+            if (nccDangChon?.MaNhaCungCap != $"{testCodePrefix}_NCC2")
+                throw new Exception($"Không đúng NCC 2 trước khi Enter: {nccDangChon?.MaNhaCungCap}");
+
+            // Giả lập bấm Enter (gọi ChonNhaCungCapNhapCommand)
+            await vm.ChonNhaCungCapNhapCommand.ExecuteAsync(nccDangChon);
+
+            if (vm.SelectedPhieuNhapNcc?.Id != ncc2Id)
+                throw new Exception($"Lưu sai ID nhà cung cấp: ID={vm.SelectedPhieuNhapNcc?.Id}, Kỳ vọng={ncc2Id}");
+            if (vm.SelectedPhieuNhapNcc?.MaNhaCungCap != $"{testCodePrefix}_NCC2")
+                throw new Exception($"Lưu sai Mã NCC: {vm.SelectedPhieuNhapNcc?.MaNhaCungCap}");
+            if (vm.ImportSupplierSearch != "Hoa Tươi Đà Lạt Test")
+                throw new Exception($"Tên NCC không được điền vào ô tìm kiếm: '{vm.ImportSupplierSearch}'");
+            if (vm.HienThiGoiYNhaCungCap)
+                throw new Exception("Danh sách gợi ý không được đóng sau khi Enter!");
+            Console.WriteLine($"PASSED ✓ (Đã chọn {vm.SelectedPhieuNhapNcc.TenNhaCungCap} [{vm.SelectedPhieuNhapNcc.MaNhaCungCap}], Id={vm.SelectedPhieuNhapNcc.Id})");
+
+            // 2.4 Phím Escape đóng gợi ý và khôi phục NCC đã xác nhận trước đó
+            Console.Write("2.4 Phím Escape đóng gợi ý và giữ nguyên NCC đã xác nhận trước đó: ");
+            // Gõ tìm kiếm NCC khác (Sa Đéc) làm mở danh sách gợi ý
+            await vm.TimKiemNhaCungCapNhapNgayAsync("Sa Đéc Test");
+            if (vm.PhieuNhapSupplierSuggestions.Count == 0)
+                throw new Exception("Không tìm thấy Sa Đéc Test");
+
+            // Người dùng đổi ý, nhấn Escape
+            vm.DongGoiYNhaCungCap();
+
+            if (vm.HienThiGoiYNhaCungCap)
+                throw new Exception("Danh sách gợi ý không đóng sau khi nhấn Escape!");
+            if (vm.SelectedPhieuNhapNcc?.Id != ncc2Id)
+                throw new Exception($"Escape làm mất NCC đã xác nhận trước đó: ID={vm.SelectedPhieuNhapNcc?.Id}");
+            if (vm.ImportSupplierSearch != "Hoa Tươi Đà Lạt Test")
+                throw new Exception($"Escape không phục hồi đúng tên NCC trước đó: '{vm.ImportSupplierSearch}'");
+            Console.WriteLine("PASSED ✓");
+
+            // 2.5 Phím Escape khi chưa có NCC nào xác nhận trước đó
+            Console.Write("2.5 Phím Escape khi chưa có NCC nào xác nhận trước đó (giữ trạng thái chưa chọn): ");
+            var freshVm = new MainWindowViewModel();
+            await freshVm.TimKiemNhaCungCapNhapNgayAsync("Hoa Tươi");
+            if (freshVm.PhieuNhapSupplierSuggestions.Count == 0)
+                throw new Exception("Tìm kiếm gợi ý thất bại trên form mới.");
+            freshVm.DongGoiYNhaCungCap();
+            if (freshVm.HienThiGoiYNhaCungCap)
+                throw new Exception("Danh sách gợi ý không đóng sau Escape.");
+            if (freshVm.SelectedPhieuNhapNcc != null || !string.IsNullOrEmpty(freshVm.ImportSupplierSearch))
+                throw new Exception($"Chưa chọn NCC trước đó nhưng Escape không giữ trạng thái rỗng: '{freshVm.ImportSupplierSearch}'");
+            Console.WriteLine("PASSED ✓");
+
+            // 2.6 Chọn bằng chuột (Tapped / Click)
+            Console.Write("2.6 Chọn nhà cung cấp bằng chuột vẫn hoạt động chính xác: ");
+            await vm.TimKiemNhaCungCapNhapNgayAsync("Sa Đéc Test");
+            var ncc3Item = vm.PhieuNhapSupplierSuggestions.FirstOrDefault(n => n.Id == ncc3Id);
+            if (ncc3Item is null)
+                throw new Exception("Không tìm thấy NCC 3 trong gợi ý");
+            await vm.ChonNhaCungCapNhapCommand.ExecuteAsync(ncc3Item);
+            if (vm.SelectedPhieuNhapNcc?.Id != ncc3Id || vm.HienThiGoiYNhaCungCap)
+                throw new Exception("Chọn bằng chuột thất bại.");
+            Console.WriteLine("PASSED ✓");
+
+            // ----------------------------------------------------------------------------------------
+            // PHẦN 3: BẢO TOÀN NGHIỆP VỤ & LƯU VÀO DATABASE
+            // ----------------------------------------------------------------------------------------
+            Console.WriteLine("\n--- PHẦN 3: BẢO TOÀN NGHIỆP VỤ & LƯU CƠ SỞ DỮ LIỆU ---");
+            Console.Write("3.1 Lưu phiếu nhập với ngày giờ và nhà cung cấp đã chọn vào CSDL: ");
+
+            // Chuẩn bị ngày giờ nhập và NCC 2
+            var ngayGioNhapChuan = new DateTime(2026, 11, 10, 14, 30, 0);
+            var maPhieuTest = $"PN_{testCodePrefix}";
+
+            var sqlInsertPn = """
+                INSERT INTO phieu_nhap_hang (ma_phieu_nhap, nha_cung_cap_id, chi_nhanh_id, nguoi_nhap_id,
+                    thoi_gian_nhap, tong_tien_hang, giam_gia, chi_phi_khac, tong_tien_nhap, da_thanh_toan, con_no,
+                    phuong_thuc_thanh_toan, trang_thai, ghi_chu, ngay_tao, ngay_cap_nhat)
+                VALUES (@Ma, @NccId, 1, 1,
+                    @NgayNhap, 500000, 0, 0, 500000, 500000, 0,
+                    'TIEN_MAT', 'HOAN_THANH', 'Test Issue #99', NOW(), NOW());
+                SELECT LAST_INSERT_ID();
+                """;
+
+            pnTestId = await conn.ExecuteScalarAsync<uint>(sqlInsertPn, new
+            {
+                Ma = maPhieuTest,
+                NccId = ncc2Id,
+                NgayNhap = ngayGioNhapChuan
+            });
+
+            // 3.2 Đọc lại từ DB kiểm tra tính toàn vẹn
+            Console.Write("PASSED ✓\n3.2 Kiểm tra dữ liệu lưu trong DB: ");
+            var pnRow = await conn.QueryFirstOrDefaultAsync(
+                "SELECT nha_cung_cap_id, thoi_gian_nhap, tong_tien_nhap FROM phieu_nhap_hang WHERE id = @Id;",
+                new { Id = pnTestId });
+
+            if (pnRow is null)
+                throw new Exception("Không tìm thấy phiếu nhập vừa lưu!");
+
+            if ((uint)pnRow.nha_cung_cap_id != ncc2Id)
+                throw new Exception($"Mã NCC trong DB sai: {(uint)pnRow.nha_cung_cap_id} != {ncc2Id}");
+
+            if ((DateTime)pnRow.thoi_gian_nhap != ngayGioNhapChuan)
+                throw new Exception($"Thời gian nhập trong DB sai: {(DateTime)pnRow.thoi_gian_nhap:yyyy-MM-dd HH:mm:ss} != {ngayGioNhapChuan:yyyy-MM-dd HH:mm:ss}");
+
+            if ((decimal)pnRow.tong_tien_nhap != 500000m)
+                throw new Exception($"Tổng tiền nhập trong DB sai: {(decimal)pnRow.tong_tien_nhap}");
+
+            Console.WriteLine($"PASSED ✓ (NCC ID={pnRow.nha_cung_cap_id}, Thời gian={((DateTime)pnRow.thoi_gian_nhap):dd/MM/yyyy HH:mm}, Tiền={((decimal)pnRow.tong_tien_nhap):N0}đ)");
+
+            // 3.3 Đọc lại phiếu nhập lên DateTimeBox để xác nhận hiển thị chính xác
+            Console.Write("3.3 Đọc lại phiếu nhập lên DateTimeBox: ");
+            var reloadedBox = new DateTimeBox();
+            reloadedBox.Value = (DateTime)pnRow.thoi_gian_nhap;
+            if (reloadedBox.Text != "10/11/2026 14:30")
+                throw new Exception($"Hiển thị lại ngày giờ trên DateTimeBox sai: {reloadedBox.Text}");
+            Console.WriteLine($"PASSED ✓ ({reloadedBox.Text})");
+        }
+        finally
+        {
+            try
+            {
+                if (pnTestId > 0)
+                    await conn.ExecuteAsync("DELETE FROM phieu_nhap_hang WHERE id = @Id;", new { Id = pnTestId });
+                if (ncc1Id > 0 || ncc2Id > 0 || ncc3Id > 0)
+                    await conn.ExecuteAsync("DELETE FROM nha_cung_cap WHERE id IN (@Id1, @Id2, @Id3);",
+                        new { Id1 = ncc1Id, Id2 = ncc2Id, Id3 = ncc3Id });
+            }
+            catch { }
+        }
+
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine(">>> TOÀN BỘ CÁC TIÊU CHÍ KIỂM THỬ THỰC TẾ ISSUE #99 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+        Console.WriteLine("==========================================================================================");
+        return 0;
+    }
+
+    private static async Task<int> KiemTraIssue103_NhatKyHoatDongVaTruyVetAsync(string connStr)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("BẮT ĐẦU KIỂM THỬ FEATURE #103: NÂNG CẤP NHẬT KÝ HOẠT ĐỘNG & TRUY VẾT THAY ĐỔI DỮ LIỆU");
+        Console.WriteLine("==========================================================================================");
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var previousUser = Session.CurrentUser;
+        var previousPermissions = Session.PermissionList.ToList();
+        var tag = "T103_" + DateTime.Now.ToString("yyMMddHHmmss");
+        var secretPassword1 = "MatKhauBiMat_103_A!";
+        var secretPassword2 = "MatKhauBiMat_103_B!";
+
+        await using var conn = new MySqlConnection(connStr);
+        await conn.OpenAsync();
+
+        var db = new DatabaseService();
+        await db.EnsureAuditTableAsync();
+        await db.EnsurePermissionCatalogAsync();
+
+        var existingAdmin = await conn.QueryFirstOrDefaultAsync<(uint Id, string TenDangNhap, string HoTen, uint? ChiNhanhId)>(
+            """
+            SELECT nd.id AS Id, nd.ten_dang_nhap AS TenDangNhap, COALESCE(nd.ho_ten, nd.ten_dang_nhap) AS HoTen, nd.chi_nhanh_id AS ChiNhanhId
+            FROM nguoi_dung nd
+            LEFT JOIN nguoi_dung_vai_tro ndvt ON ndvt.nguoi_dung_id = nd.id
+            LEFT JOIN vai_tro vt ON vt.id = ndvt.vai_tro_id
+            WHERE UPPER(COALESCE(vt.ma_vai_tro, '')) = 'QUAN_TRI'
+               OR LOWER(nd.ten_dang_nhap) = 'admin'
+            ORDER BY nd.id
+            LIMIT 1;
+            """);
+        KiemTra(existingAdmin.Id > 0, "Không tìm thấy tài khoản Admin gốc trong DB để chạy kiểm thử #103.");
+
+        var adminUser = new NguoiDung
+        {
+            Id = existingAdmin.Id,
+            TenDangNhap = existingAdmin.TenDangNhap,
+            HoTen = existingAdmin.HoTen,
+            VaiTro = "Quản trị viên",
+            MaVaiTro = Quyen.QuanTri,
+            ChiNhanhId = existingAdmin.ChiNhanhId ?? 1
+        };
+
+        var roleRows = (await conn.QueryAsync<(uint Id, string MaVaiTro)>(
+            "SELECT id AS Id, ma_vai_tro AS MaVaiTro FROM vai_tro ORDER BY id;")).ToList();
+        var staffRoleId = roleRows.FirstOrDefault(r => !string.Equals(r.MaVaiTro, Quyen.QuanTri, StringComparison.OrdinalIgnoreCase)).Id;
+        if (staffRoleId == 0 && roleRows.Count > 0)
+            staffRoleId = roleRows[0].Id;
+
+        uint createdStaffUserId = 0;
+        uint createdSupplierId = 0;
+        uint createdCustomerId = 0;
+        uint createdProductId = 0;
+        uint createdPoId = 0;
+        uint createdInvoiceId = 0;
+        string createdPoMa = "";
+        string createdInvoiceMa = "";
+        string createdReceiptMa = $"{tag}_PT01";
+        string createdProductMa = $"{tag}_SP01";
+        string createdCustomerMa = $"{tag}_KH01";
+        string createdSupplierMa = $"{tag}_NCC01";
+        string createdStaffUserName = $"{tag}_nv";
+        var extraBatchCodes = new List<string>();
+
+        static async Task SafeDeleteAsync(MySqlConnection c, string sql, object? param = null)
+        {
+            try { await c.ExecuteAsync(sql, param); } catch { }
+        }
+
+        try
+        {
+            Session.SetCurrentUser(adminUser);
+
+            // Bước 1: Kiểm tra schema bảng nhat_ky_hoat_dong (có các cột trước/sau & index)
+            Console.Write("[Issue #103 - Bước 1/10] Kiểm tra schema & index bảng nhat_ky_hoat_dong... ");
+            var cols = (await conn.QueryAsync<string>(
+                """
+                SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nhat_ky_hoat_dong';
+                """)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var reqCol in new[] { "doi_tuong_id", "ma_chung_tu", "truong_thay_doi", "gia_tri_truoc", "gia_tri_sau" })
+                KiemTra(cols.Contains(reqCol), $"Thiếu cột '{reqCol}' trong bảng nhat_ky_hoat_dong.");
+            Console.WriteLine("PASSED ✓");
+
+            // Bước 2: Guard null user + Transaction Rollback atomicity
+            Console.Write("[Issue #103 - Bước 2/10] Kiểm tra không dùng user giả khi Session null & rollback transaction không để lại nhật ký... ");
+            Session.Clear();
+            await db.LogSubAccountActivityAsync("Đăng nhập", "HE_THONG", 1, $"{tag}_NULL_USER", "Không được phép ghi khi Session null");
+            var nullUserCount = await conn.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM nhat_ky_hoat_dong WHERE ma_chung_tu = @Ma;",
+                new { Ma = $"{tag}_NULL_USER" });
+            KiemTra(nullUserCount == 0, "Khi Session.CurrentUser == null và actingUser == null thì tuyệt đối không được ghi nhật ký giả.");
+
+            Session.SetCurrentUser(adminUser);
+            await using (var txConn = new MySqlConnection(connStr))
+            {
+                await txConn.OpenAsync();
+                await using var tx = await txConn.BeginTransactionAsync();
+                await db.LogSubAccountActivityAsync(
+                    "Sửa hóa đơn",
+                    "HOA_DON",
+                    999999,
+                    $"{tag}_ROLLBACK",
+                    "Thử rollback",
+                    100_000m,
+                    actingUser: adminUser,
+                    truongThayDoi: "Tổng tiền",
+                    giaTriTruoc: "100.000 đ",
+                    giaTriSau: "200.000 đ",
+                    connection: txConn,
+                    transaction: tx);
+                await tx.RollbackAsync();
+            }
+            var rollbackCount = await conn.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM nhat_ky_hoat_dong WHERE ma_chung_tu = @Ma;",
+                new { Ma = $"{tag}_ROLLBACK" });
+            KiemTra(rollbackCount == 0, "Giao dịch DB đã Rollback nhưng vẫn còn nhật ký hoạt động là vi phạm toàn vẹn.");
+            Console.WriteLine("PASSED ✓");
+
+            // Bước 3: Admin Login/Logout & User/Permission CRUD + không rò rỉ mật khẩu
+            Console.Write("[Issue #103 - Bước 3/10] Ghi nhận Admin (đăng nhập/đăng xuất/tạo-sửa-khóa user) & bảo mật mật khẩu... ");
+            await db.LogSubAccountActivityAsync("Đăng nhập", "HE_THONG", adminUser.Id, $"{tag}_ADMIN_IN", $"Tài khoản {adminUser.TenDangNhap} ({tag}) đăng nhập hệ thống", actingUser: adminUser);
+            await db.LogSubAccountActivityAsync("Đăng xuất", "HE_THONG", adminUser.Id, $"{tag}_ADMIN_OUT", $"Tài khoản {adminUser.TenDangNhap} ({tag}) đăng xuất hệ thống", actingUser: adminUser);
+
+            var createUserDto = new UserCreateDto
+            {
+                TenDangNhap = createdStaffUserName,
+                HoTen = $"Nhân viên Test {tag}",
+                MatKhau = secretPassword1,
+                TrangThai = true,
+                RoleIds = staffRoleId > 0 ? [staffRoleId] : []
+            };
+            createdStaffUserId = await db.CreateUserAsync(createUserDto, adminUser.Id);
+            KiemTra(createdStaffUserId > 0, "CreateUserAsync trả về ID không hợp lệ.");
+
+            await db.ResetPasswordAsync(createdStaffUserId, secretPassword2, adminUser.Id);
+            await db.UpdateUserAsync(new UserEditDto
+            {
+                Id = createdStaffUserId,
+                TenDangNhap = createdStaffUserName,
+                HoTen = $"Nhân viên Updated {tag}",
+                TrangThai = true,
+                RoleIds = staffRoleId > 0 ? [staffRoleId] : []
+            }, adminUser.Id);
+            await db.LockUserAsync(createdStaffUserId, adminUser.Id);
+            await db.UnlockUserAsync(createdStaffUserId, adminUser.Id);
+
+            var leakedSecretRows = await conn.ExecuteScalarAsync<int>(
+                """
+                SELECT COUNT(*) FROM nhat_ky_hoat_dong
+                WHERE (noi_dung LIKE CONCAT('%', @P1, '%')
+                    OR noi_dung LIKE CONCAT('%', @P2, '%')
+                    OR COALESCE(gia_tri_truoc, '') LIKE CONCAT('%', @P1, '%')
+                    OR COALESCE(gia_tri_truoc, '') LIKE CONCAT('%', @P2, '%')
+                    OR COALESCE(gia_tri_sau, '') LIKE CONCAT('%', @P1, '%')
+                    OR COALESCE(gia_tri_sau, '') LIKE CONCAT('%', @P2, '%'));
+                """,
+                new { P1 = secretPassword1, P2 = secretPassword2 });
+            KiemTra(leakedSecretRows == 0, "Không bao giờ được lưu mật khẩu dạng rõ vào nhật ký hoạt động!");
+
+            var dashSvc = new DashboardService(async () =>
+            {
+                var c = new MySqlConnection(connStr);
+                await c.OpenAsync();
+                return c;
+            });
+            var loadedInitial = await dashSvc.TaiHoatDongTaiKhoanConAsync(CancellationToken.None, limit: 500);
+            KiemTra(loadedInitial.Any(x => x.MaChungTu == $"{tag}_ADMIN_IN" && x.HanhDong == "Đăng nhập" && x.TenDangNhap == adminUser.TenDangNhap),
+                "Hoạt động đăng nhập của Admin chưa được nạp lên DashboardService.");
+            KiemTra(loadedInitial.Any(x => x.MaChungTu == $"{tag}_ADMIN_OUT" && x.HanhDong == "Đăng xuất"),
+                "Hoạt động đăng xuất của Admin chưa được nạp lên DashboardService.");
+            var userUpdateLog = loadedInitial.FirstOrDefault(x => x.DoiTuong == "NGUOI_DUNG" && x.MaChungTu == createdStaffUserName && x.HanhDong.StartsWith("Sửa", StringComparison.OrdinalIgnoreCase));
+            KiemTra(userUpdateLog != null && userUpdateLog.CoThayDoiChiTiet &&
+                    userUpdateLog.GiaTriSau!.Contains($"Nhân viên Updated {tag}", StringComparison.Ordinal),
+                "Sửa tài khoản phải ghi nhận trường Trước/Sau rõ ràng.");
+            Console.WriteLine("PASSED ✓");
+
+            // Bước 4: Nghiệp vụ Sản phẩm, Giá bán, Tồn kho, Khách hàng, Nhà cung cấp với Before/After
+            Console.Write("[Issue #103 - Bước 4/10] Ghi nhận Sản phẩm, Giá bán, Tồn kho, Khách hàng, NCC (Trước/Sau)... ");
+            createdSupplierId = await db.ThemNhaCungCapAsync(new NhaCungCap
+            {
+                MaNhaCungCap = createdSupplierMa,
+                TenNhaCungCap = $"NCC Ban Đầu {tag}",
+                SoDienThoai = "0901112221",
+                DiaChi = "Q1"
+            });
+            await db.CapNhatNhaCungCapAsync(new NhaCungCap
+            {
+                Id = createdSupplierId,
+                MaNhaCungCap = createdSupplierMa,
+                TenNhaCungCap = $"NCC Đã Sửa {tag}",
+                SoDienThoai = "0909998887",
+                DiaChi = "Q3"
+            });
+
+            createdCustomerId = await db.ThemKhachHangAsync(new KhachHang
+            {
+                MaKhachHang = createdCustomerMa,
+                TenKhachHang = $"Khách Ban Đầu {tag}",
+                SoDienThoai = "0912345601",
+                DiaChi = "Q5"
+            });
+            await db.CapNhatKhachHangAsync(new KhachHang
+            {
+                Id = createdCustomerId,
+                MaKhachHang = createdCustomerMa,
+                TenKhachHang = $"Khách Đã Sửa {tag}",
+                SoDienThoai = "0912345699",
+                DiaChi = "Q7"
+            });
+
+            createdProductId = await db.ThemSanPhamAsync(new SanPham
+            {
+                MaSanPham = createdProductMa,
+                TenSanPham = $"Hoa Test {tag}",
+                GiaBan = 120_000m,
+                GiaVon = 80_000m,
+                TonKho = 10m,
+                DangKinhDoanh = true
+            });
+            await db.CapNhatGiaBanSanPhamAsync(createdProductId, 145_000m);
+            await db.CapNhatTonKhoSanPhamAsync(createdProductId, 25m, adminUser.ChiNhanhId);
+
+            var afterMaster = await dashSvc.TaiHoatDongTaiKhoanConAsync(CancellationToken.None, limit: 500);
+            var nccEditLog = afterMaster.FirstOrDefault(x => x.DoiTuong == "NHA_CUNG_CAP" && x.DoiTuongId == createdSupplierId && (x.HanhDong.Contains("Cập nhật", StringComparison.OrdinalIgnoreCase) || x.HanhDong.Contains("Sửa", StringComparison.OrdinalIgnoreCase)));
+            var khEditLog = afterMaster.FirstOrDefault(x => x.DoiTuong == "KHACH_HANG" && x.DoiTuongId == createdCustomerId && (x.HanhDong.Contains("Cập nhật", StringComparison.OrdinalIgnoreCase) || x.HanhDong.Contains("Sửa", StringComparison.OrdinalIgnoreCase)));
+            var priceEditLog = afterMaster.FirstOrDefault(x => x.DoiTuong == "SAN_PHAM" && x.DoiTuongId == createdProductId && x.HanhDong == "Sửa giá bán");
+            var stockEditLog = afterMaster.FirstOrDefault(x => x.DoiTuong == "SAN_PHAM" && x.DoiTuongId == createdProductId && x.HanhDong == "Thay đổi tồn kho");
+            KiemTra(nccEditLog != null && nccEditLog.CoGiaTriTruoc && nccEditLog.CoGiaTriSau && nccEditLog.GiaTriSau!.Contains($"NCC Đã Sửa {tag}"), "Thiếu chi tiết Trước/Sau khi sửa NCC.");
+            KiemTra(khEditLog != null && khEditLog.CoGiaTriTruoc && khEditLog.CoGiaTriSau && khEditLog.GiaTriSau!.Contains($"Khách Đã Sửa {tag}"), "Thiếu chi tiết Trước/Sau khi sửa Khách hàng.");
+            KiemTra(priceEditLog != null && priceEditLog.GiaTriTruoc!.Contains("120") && priceEditLog.GiaTriSau!.Contains("145"), "Thiếu chi tiết Trước/Sau khi sửa giá bán.");
+            KiemTra(stockEditLog != null && stockEditLog.CoGiaTriTruoc && stockEditLog.GiaTriSau!.Contains("25"), "Thiếu chi tiết Trước/Sau khi điều chỉnh tồn kho.");
+            Console.WriteLine("PASSED ✓");
+
+            // Bước 5: Nhập hàng -> Sửa phiếu nhập (đổi cả SL và Đơn giá cùng SP!) -> Nhân viên kho hủy phiếu -> Hạch toán sổ quỹ
+            Console.Write("[Issue #103 - Bước 5/10] Ghi nhận Phiếu nhập (tạo/sửa SL+giá cùng SP/nhân viên hủy) & Sổ quỹ... ");
+            var phieu = new PhieuNhapHang
+            {
+                NhaCungCapId = createdSupplierId,
+                ThoiGianNhap = DateTime.Now,
+                DaThanhToan = 100_000m,
+                ChiPhiKhac = 0m,
+                PhuongThucThanhToan = "TIEN_MAT",
+                GhiChu = $"Test 103 PO {tag}"
+            };
+            var poItems = new List<ChiTietPhieuNhapHang>
+            {
+                new() { SanPham = new SanPham { Id = createdProductId, MaSanPham = createdProductMa, TenSanPham = $"Hoa Test {tag}" }, SoLuong = 10m, DonGiaNhap = 50_000m }
+            };
+            createdPoId = await db.LuuPhieuNhapHangAsync(phieu, poItems);
+            createdPoMa = phieu.MaPhieuNhap;
+            var poDetailBeforeEdit = await db.GetPhieuNhapHangDetailAsync(createdPoId);
+            KiemTra(poDetailBeforeEdit != null && poDetailBeforeEdit.Items.Count == 1, "Không đọc được chi tiết phiếu nhập vừa tạo.");
+            var poItemOld = poDetailBeforeEdit!.Items[0];
+            var poItemId = await conn.ExecuteScalarAsync<uint>(
+                "SELECT id FROM chi_tiet_phieu_nhap_hang WHERE phieu_nhap_id = @Id LIMIT 1;",
+                new { Id = createdPoId });
+
+            await db.CapNhatPhieuNhapHangAsync(new PhieuNhapEditRequest
+            {
+                PhieuNhapId = createdPoId,
+                MaPhieuNhap = createdPoMa,
+                ChiNhanhId = adminUser.ChiNhanhId ?? 1,
+                ThoiGianNhap = poDetailBeforeEdit.ThoiGianNhap,
+                NhaCungCapId = createdSupplierId,
+                DaThanhToan = 100_000m,
+                PhuongThucThanhToan = "TIEN_MAT",
+                LyDoChinhSua = $"Test 103 đổi cả SL và giá nhập {tag}",
+                Items =
+                [
+                    new PhieuNhapItemEditModel
+                    {
+                        Id = poItemId,
+                        SanPhamId = createdProductId,
+                        MaSanPham = createdProductMa,
+                        TenSanPham = $"Hoa Test {tag}",
+                        SoLuong = 15m,
+                        DonGiaNhap = 65_000m,
+                        SoLuongBanDau = poItemOld.SoLuong,
+                        DonGiaNhapBanDau = poItemOld.DonGiaNhap,
+                        GiamGiaBanDau = poItemOld.GiamGia
+                    }
+                ]
+            });
+
+            // Nhân viên con thực hiện hủy phiếu nhập (phải ghi đúng tài khoản nhân viên, không phải Admin)
+            var staffUser = new NguoiDung
+            {
+                Id = createdStaffUserId,
+                TenDangNhap = createdStaffUserName,
+                HoTen = $"Nhân viên Updated {tag}",
+                VaiTro = "Nhân viên",
+                MaVaiTro = "NHAN_VIEN",
+                ChiNhanhId = adminUser.ChiNhanhId ?? 1
+            };
+            Session.SetCurrentUser(staffUser, [PermissionKeys.PurchasesView, PermissionKeys.PurchasesDelete]);
+            await db.HuyPhieuNhapHangAsync(new HuyPhieuNhapYeuCau
+            {
+                PhieuNhapId = createdPoId,
+                MaPhieuNhap = createdPoMa,
+                LyDoHuy = $"Nhân viên kiểm thử hủy {tag}",
+                PhuongAnTien = "TREO_CONG_NO",
+                NguoiHuyId = staffUser.Id,
+                TenNguoiHuy = staffUser.HoTen
+            });
+
+            // Admin tạo hóa đơn & sửa hóa đơn & thu/sửa sổ quỹ
+            Session.SetCurrentUser(adminUser);
+            var cart = new List<SaleCartItem>
+            {
+                new() { SanPham = new SanPham { Id = createdProductId, MaSanPham = createdProductMa, TenSanPham = $"Hoa Test {tag}", GiaBan = 145_000m, TonKho = 25m }, SoLuong = 2m, DonGia = 145_000m }
+            };
+            var customerForInv = new KhachHang
+            {
+                Id = createdCustomerId,
+                MaKhachHang = createdCustomerMa,
+                TenKhachHang = $"Khách Đã Sửa {tag}"
+            };
+            var receipt = await db.TaoHoaDonBanHangAsync(cart, customer: customerForInv, discount: 0m, tienKhachDua: 290_000m, phuongThucThanhToan: "TIEN_MAT", ghiChu: $"HD {tag}");
+            createdInvoiceId = receipt.HoaDonId;
+            createdInvoiceMa = receipt.MaHoaDon;
+            var oldHdItem = await conn.QueryFirstOrDefaultAsync<(uint Id, decimal SoLuong, decimal DonGia)>(
+                "SELECT id AS Id, so_luong AS SoLuong, don_gia AS DonGia FROM chi_tiet_hoa_don_ban_hang WHERE hoa_don_id = @Id LIMIT 1;",
+                new { Id = createdInvoiceId });
+            await db.ChinhSuaHoaDonBanHangAsync(new HoaDonEditRequest
+            {
+                HoaDonId = createdInvoiceId,
+                MaHoaDon = createdInvoiceMa,
+                ThoiGianBan = receipt.ThoiGianBan,
+                KhachHangId = createdCustomerId,
+                LyDoChinhSua = $"Sửa đơn hàng {tag}",
+                Items =
+                [
+                    new HoaDonItemEditModel
+                    {
+                        Id = oldHdItem.Id,
+                        SanPhamId = createdProductId,
+                        MaSanPham = createdProductMa,
+                        TenSanPham = $"Hoa Test {tag}",
+                        SoLuong = 3m,
+                        DonGia = 150_000m,
+                        SoLuongBanDau = oldHdItem.SoLuong
+                    }
+                ]
+            });
+
+            await db.LuuPhieuQuyAsync(createdReceiptMa, 250_000m, DateTime.Now, null, "TIEN_MAT", adminUser.Id, "Khách", $"Lập phiếu {tag}", null);
+            await db.SuaPhieuQuyAsync(createdReceiptMa, 320_000m, DateTime.Now, null, "CHUYEN_KHOAN", "Khách", $"Sửa phiếu {tag}", null);
+
+            var afterOps = await dashSvc.TaiHoatDongTaiKhoanConAsync(CancellationToken.None, limit: 500);
+            var poEditLog = afterOps.FirstOrDefault(x => x.DoiTuong == "PHIEU_NHAP" && x.DoiTuongId == createdPoId && x.HanhDong == "Chỉnh sửa phiếu nhập");
+            KiemTra(poEditLog != null && poEditLog.GiaTriTruoc!.Contains("10") && poEditLog.GiaTriTruoc.Contains("50") &&
+                    poEditLog.GiaTriSau!.Contains("15") && poEditLog.GiaTriSau.Contains("65"),
+                "Sửa phiếu nhập phải ghi nhận ĐỒNG THỜI thay đổi Số lượng và Giá nhập cũ -> mới.");
+            var poCancelLog = afterOps.FirstOrDefault(x => x.DoiTuong == "PHIEU_NHAP" && x.DoiTuongId == createdPoId && x.HanhDong == "Hủy phiếu nhập");
+            KiemTra(poCancelLog != null && poCancelLog.TenDangNhap == createdStaffUserName && poCancelLog.NguoiDungId == createdStaffUserId,
+                "Hủy phiếu nhập do nhân viên thực hiện phải ghi đúng tài khoản nhân viên đó.");
+            var hdEditLog = afterOps.FirstOrDefault(x => x.DoiTuong == "HOA_DON" && x.DoiTuongId == createdInvoiceId && x.HanhDong.Contains("Sửa", StringComparison.OrdinalIgnoreCase));
+            KiemTra(hdEditLog != null && hdEditLog.CoThayDoiChiTiet, "Sửa hóa đơn phải ghi nhận chi tiết Trước/Sau.");
+            var sqEditLog = afterOps.FirstOrDefault(x => x.DoiTuong == "SO_QUY" && x.MaChungTu == createdReceiptMa && x.HanhDong == "Sửa sổ quỹ");
+            KiemTra(sqEditLog != null && sqEditLog.GiaTriTruoc!.Contains("250") && sqEditLog.GiaTriSau!.Contains("320"),
+                "Sửa phiếu sổ quỹ phải ghi nhận Trước/Sau.");
+            Console.WriteLine("PASSED ✓");
+
+            // Bước 6: Tìm kiếm & Tra cứu chứng từ trực tiếp (bao gồm phiếu đã hủy & không tồn tại)
+            Console.Write("[Issue #103 - Bước 6/10] Liên kết mở trực tiếp chứng từ (active, đã hủy & không tồn tại)... ");
+            KiemTra((await db.GetPhieuNhapHangDetailAsync(createdPoId))?.TrangThai == "DA_HUY", "Phiếu nhập đã hủy vẫn phải mở xem lại được lịch sử.");
+            KiemTra(await db.GetMaHoaDonTheoIdAsync(createdInvoiceId) == createdInvoiceMa, "GetMaHoaDonTheoIdAsync sai.");
+            KiemTra((await db.GetSanPhamTheoMaAsync(createdProductMa))?.Id == createdProductId, "GetSanPhamTheoMaAsync sai.");
+            KiemTra((await db.GetKhachHangTheoMaAsync(createdCustomerMa))?.Id == createdCustomerId, "GetKhachHangTheoMaAsync sai.");
+            KiemTra((await db.GetNhaCungCapTheoMaAsync(createdSupplierMa))?.Id == createdSupplierId, "GetNhaCungCapTheoMaAsync sai.");
+            KiemTra(await db.GetChiTietThanhToanKhachHangTheoMaAsync($"KHONG_TON_TAI_{tag}", 999999999) == null, "Lookup phiếu thu nợ không tồn tại phải trả null.");
+            KiemTra(await db.GetThongTinThanhToanNhaCungCapTheoMaAsync($"KHONG_TON_TAI_{tag}", 999999999) == null, "Lookup thanh toán NCC không tồn tại phải trả null.");
+
+            var mainVm = new MainWindowViewModel();
+            await mainVm.MoChungTuTuNhatKyAsync(poCancelLog);
+            KiemTra(mainVm.SelectedMenu == "Phiếu nhập hàng" && mainVm.BaoCaoPhieuNhapSearch == createdPoMa,
+                $"Điều hướng PN đã hủy sai: Menu='{mainVm.SelectedMenu}', Search='{mainVm.BaoCaoPhieuNhapSearch}'.");
+
+            await mainVm.MoChungTuTuNhatKyAsync(sqEditLog);
+            KiemTra(mainVm.SelectedMenu == "Sổ quỹ" && mainVm.IsSoQuyChiTietVisible && mainVm.SoQuyChiTietDangXem?.MaPhieu == createdReceiptMa,
+                "Điều hướng phiếu sổ quỹ không mở chi tiết phiếu tương ứng.");
+
+            await mainVm.MoChungTuTuNhatKyAsync(new TongQuanHoatDongTaiKhoanCon
+            {
+                DoiTuong = "PHIEU_NHAP",
+                DoiTuongId = 999999999,
+                MaChungTu = $"PN_DA_XOA_{tag}"
+            });
+            KiemTra(mainVm.StatusMessage.Contains("không còn tồn tại", StringComparison.OrdinalIgnoreCase),
+                $"Khi chứng từ không còn tồn tại phải thông báo rõ ràng, thực tế StatusMessage='{mainVm.StatusMessage}'.");
+            Console.WriteLine("PASSED ✓");
+
+            // Bước 7: Quyền xem nhật ký (Nhân viên bị chặn / Admin xem toàn bộ)
+            Console.Write("[Issue #103 - Bước 7/10] Kiểm soát quyền truy cập Nhật ký (Admin thấy đủ / Nhân viên bị ẩn)... ");
+            Session.SetCurrentUser(staffUser);
+            var staffDashVm = new DashboardViewModel(db);
+            await staffDashVm.TaiDuLieuAsync();
+            KiemTra(!staffDashVm.IsAdmin && !staffDashVm.IsAdminViewer && staffDashVm.HoatDongTaiKhoanCon.Count == 0,
+                "Tài khoản nhân viên thường không được xem danh sách nhật ký toàn hệ thống.");
+
+            Session.SetCurrentUser(adminUser);
+            Console.WriteLine("PASSED ✓");
+
+            // Bước 8: Bộ lọc thời gian, tìm kiếm Trước/Sau, phân trang & sao chép chi tiết
+            Console.Write("[Issue #103 - Bước 8/10] Bộ lọc ngày/từ khóa Trước-Sau, phân trang & sao chép mã/chi tiết... ");
+            for (int i = 1; i <= 18; i++)
+            {
+                var bCode = $"{tag}_PAGE_{i:00}";
+                extraBatchCodes.Add(bCode);
+                await db.LogSubAccountActivityAsync(
+                    i % 2 == 0 ? "Thu tiền" : "Chi tiền",
+                    "SO_QUY",
+                    (ulong)(80000 + i),
+                    bCode,
+                    $"Kiểm thử phân trang {tag} dòng {i}",
+                    10_000m * i,
+                    actingUser: adminUser,
+                    truongThayDoi: "Số tiền",
+                    giaTriTruoc: "0 đ",
+                    giaTriSau: $"{10_000m * i:N0} đ");
+            }
+
+            var adminDashVm = new DashboardViewModel(db);
+            await adminDashVm.TaiDuLieuAsync();
+            KiemTra(adminDashVm.IsAdmin && adminDashVm.IsAdminViewer, "Admin phải có quyền xem nhật ký.");
+
+            adminDashVm.TimKiemHoatDongSub = tag;
+            KiemTra(adminDashVm.TongSoBanGhiLocHoatDongSub >= 18 && adminDashVm.TongSoTrangHoatDongSub >= 2 && adminDashVm.HoatDongTaiKhoanCon.Count == 15,
+                $"Phân trang sai: Count={adminDashVm.HoatDongTaiKhoanCon.Count}, Loc={adminDashVm.TongSoBanGhiLocHoatDongSub}, Pages={adminDashVm.TongSoTrangHoatDongSub}");
+            adminDashVm.TrangSauHoatDongSubCommand.Execute(null);
+            KiemTra(adminDashVm.TrangHienTaiHoatDongSub == 2 && adminDashVm.HoatDongTaiKhoanCon.Count >= 3, "Chuyển sang trang 2 thất bại.");
+
+            // Tìm theo nội dung trường Sau khi thay đổi
+            adminDashVm.XoaBoLocHoatDongSubCommand.Execute(null);
+            adminDashVm.TimKiemHoatDongSub = $"NCC Đã Sửa {tag}";
+            KiemTra(adminDashVm.HoatDongTaiKhoanCon.Any(x => x.DoiTuongId == createdSupplierId),
+                "Tìm kiếm từ khóa nằm trong Giá trị sau (Before/After) không ra kết quả.");
+
+            // Lọc khoảng ngày ngoài dải -> 0 kết quả; chọn "HOM_NAY" -> có kết quả
+            adminDashVm.XoaBoLocHoatDongSubCommand.Execute(null);
+            adminDashVm.TuNgayHoatDongSub = DateTime.Today.AddYears(-5);
+            adminDashVm.DenNgayHoatDongSub = DateTime.Today.AddYears(-5);
+            KiemTra(adminDashVm.HoatDongTaiKhoanCon.Count == 0, "Lọc khoảng thời gian quá khứ phải trả 0 bản ghi.");
+            adminDashVm.ChonKhoangNgayHoatDongSubCommand.Execute("HOM_NAY");
+            KiemTra(adminDashVm.HoatDongTaiKhoanCon.Any(x => x.MaChungTu == extraBatchCodes[^1]), "Nút lọc nhanh 'HOM_NAY' phải hiển thị bản ghi mới nhất hôm nay.");
+            adminDashVm.TimKiemHoatDongSub = createdReceiptMa;
+            KiemTra(adminDashVm.HoatDongTaiKhoanCon.Any(x => x.MaChungTu == createdReceiptMa), "Kết hợp lọc 'HOM_NAY' và từ khóa phải tìm đúng bản ghi.");
+
+            // Sao chép mã chứng từ và sao chép chi tiết
+            string? copiedText = null;
+            adminDashVm.CopyTextOverrideForTest = s => { copiedText = s; return Task.CompletedTask; };
+            adminDashVm.SaoChepMaChungTuCommand.Execute(poEditLog);
+            KiemTra(copiedText == createdPoMa, $"Sao chép mã sai: '{copiedText}' != '{createdPoMa}'.");
+            adminDashVm.SaoChepChiTietHoatDongCommand.Execute(poEditLog);
+            KiemTra(copiedText != null && copiedText.Contains("Giá trị trước:") && copiedText.Contains("Giá trị sau:") && copiedText.Contains(createdPoMa) && !string.IsNullOrWhiteSpace(adminDashVm.ThongBaoSaoChepHoatDong),
+                "Sao chép chi tiết phải chứa đầy đủ mã, mô tả và giá trị Trước/Sau.");
+            Console.WriteLine("PASSED ✓");
+
+            // Bước 9: 6 nhóm màu phân biệt trên badge hành động
+            Console.Write("[Issue #103 - Bước 9/10] Kiểm tra 6 nhóm màu sắc phân biệt & nhãn/biểu tượng... ");
+            var gAdd = new TongQuanHoatDongTaiKhoanCon { HanhDong = "Thêm sản phẩm" };
+            var gEdit = new TongQuanHoatDongTaiKhoanCon { HanhDong = "Sửa phiếu nhập" };
+            var gDel = new TongQuanHoatDongTaiKhoanCon { HanhDong = "Xóa khách hàng" };
+            var gCancel = new TongQuanHoatDongTaiKhoanCon { HanhDong = "Hủy phiếu nhập" };
+            var gPay = new TongQuanHoatDongTaiKhoanCon { HanhDong = "Thanh toán nhà cung cấp" };
+            var gLogin = new TongQuanHoatDongTaiKhoanCon { HanhDong = "Đăng nhập" };
+            var colorSet = new HashSet<string>
+            {
+                gAdd.MauBadgeHanhDong, gEdit.MauBadgeHanhDong, gDel.MauBadgeHanhDong,
+                gCancel.MauBadgeHanhDong, gPay.MauBadgeHanhDong, gLogin.MauBadgeHanhDong
+            };
+            KiemTra(colorSet.Count == 6, $"6 nhóm hành động phải có 6 màu khác biệt hoàn toàn (chỉ có {colorSet.Count}).");
+            Console.WriteLine("PASSED ✓");
+
+            // Bước 10: Headless Avalonia render & kiểm tra chiều cao + không chồng lấn với panel Trước/Sau @ 480px & 1280px
+            Console.Write("[Issue #103 - Bước 10/10] Kiểm tra UI Avalonia thẻ Trước/Sau (480px & 1280px không cắt chữ / không chồng lấn)... ");
+            var uiSummary = ChayTrenStaThread(() => KiemTraAvaloniaGiaoDienIssue103([poEditLog!, gLogin]));
+            Console.WriteLine($"PASSED ({uiSummary}) ✓");
+
+            stopwatch.Stop();
+            Console.WriteLine("==========================================================================================");
+            Console.WriteLine($">>> TOÀN BỘ 10 BƯỚC KIỂM THỬ FEATURE #103 ĐÃ ĐẠT 100% THÀNH CÔNG ({stopwatch.ElapsedMilliseconds} ms)! <<<");
+            Console.WriteLine("==========================================================================================");
+            return 0;
+        }
+        finally
+        {
+            await SafeDeleteAsync(conn, "DELETE FROM nhat_ky_hoat_dong WHERE ma_chung_tu LIKE CONCAT(@Tag, '%') OR ten_dang_nhap LIKE CONCAT(@Tag, '%') OR noi_dung LIKE CONCAT('%', @Tag, '%');", new { Tag = tag });
+            if (!string.IsNullOrEmpty(createdPoMa))
+                await SafeDeleteAsync(conn, "DELETE FROM nhat_ky_hoat_dong WHERE ma_chung_tu = @Ma;", new { Ma = createdPoMa });
+            if (!string.IsNullOrEmpty(createdInvoiceMa))
+                await SafeDeleteAsync(conn, "DELETE FROM nhat_ky_hoat_dong WHERE ma_chung_tu = @Ma;", new { Ma = createdInvoiceMa });
+            if (extraBatchCodes.Count > 0)
+                await SafeDeleteAsync(conn, "DELETE FROM nhat_ky_hoat_dong WHERE ma_chung_tu IN @Codes;", new { Codes = extraBatchCodes });
+
+            if (createdInvoiceId > 0)
+            {
+                await SafeDeleteAsync(conn, "DELETE FROM phieu_chi WHERE hoa_don_ban_hang_id = @Id OR ma_hoa_don = @Ma;", new { Id = createdInvoiceId, Ma = createdInvoiceMa });
+                await SafeDeleteAsync(conn, "DELETE FROM lich_su_sua_hoa_don WHERE hoa_don_id = @Id;", new { Id = createdInvoiceId });
+                await SafeDeleteAsync(conn, "DELETE FROM chi_tiet_hoa_don_ban_hang WHERE hoa_don_id = @Id;", new { Id = createdInvoiceId });
+                await SafeDeleteAsync(conn, "DELETE FROM lich_su_nhap_xuat_kho WHERE ma_chung_tu = @Ma;", new { Ma = createdInvoiceMa });
+                await SafeDeleteAsync(conn, "DELETE FROM hoa_don_ban_hang WHERE id = @Id;", new { Id = createdInvoiceId });
+            }
+
+            if (createdPoId > 0)
+            {
+                await SafeDeleteAsync(conn, "DELETE FROM lich_su_chinh_sua_phieu_nhap WHERE phieu_nhap_id = @Id;", new { Id = createdPoId });
+                await SafeDeleteAsync(conn, "DELETE FROM lich_su_huy_phieu_nhap WHERE phieu_nhap_id = @Id;", new { Id = createdPoId });
+                await SafeDeleteAsync(conn, "DELETE FROM chi_tiet_phieu_nhap_hang WHERE phieu_nhap_id = @Id;", new { Id = createdPoId });
+                await SafeDeleteAsync(conn, "DELETE FROM thanh_toan_nha_cung_cap WHERE phieu_nhap_id = @Id;", new { Id = createdPoId });
+                await SafeDeleteAsync(conn, "DELETE FROM phieu_chi WHERE phieu_nhap_hang_id = @Id OR ma_phieu_nhap = @Ma;", new { Id = createdPoId, Ma = createdPoMa });
+                await SafeDeleteAsync(conn, "DELETE FROM lich_su_nhap_xuat_kho WHERE ma_chung_tu = @Ma;", new { Ma = createdPoMa });
+                await SafeDeleteAsync(conn, "DELETE FROM phieu_nhap_hang WHERE id = @Id;", new { Id = createdPoId });
+            }
+
+            await SafeDeleteAsync(conn, "DELETE FROM phieu_chi WHERE ma_phieu_chi = @Ma;", new { Ma = createdReceiptMa });
+
+            if (createdSupplierId > 0)
+            {
+                await SafeDeleteAsync(conn, "DELETE FROM lich_su_tra_truoc_ncc WHERE nha_cung_cap_id = @Id;", new { Id = createdSupplierId });
+                await SafeDeleteAsync(conn, "DELETE FROM lich_su_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = createdSupplierId });
+                await SafeDeleteAsync(conn, "DELETE FROM lich_su_thanh_toan_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = createdSupplierId });
+                await SafeDeleteAsync(conn, "DELETE FROM nha_cung_cap WHERE id = @Id;", new { Id = createdSupplierId });
+            }
+
+            if (createdCustomerId > 0)
+            {
+                await SafeDeleteAsync(conn, "DELETE FROM lich_su_cong_no_khach_hang WHERE khach_hang_id = @Id;", new { Id = createdCustomerId });
+                await SafeDeleteAsync(conn, "DELETE FROM lich_su_thanh_toan_cong_no_khach_hang WHERE khach_hang_id = @Id;", new { Id = createdCustomerId });
+                await SafeDeleteAsync(conn, "DELETE FROM khach_hang WHERE id = @Id;", new { Id = createdCustomerId });
+            }
+
+            if (createdProductId > 0)
+            {
+                await SafeDeleteAsync(conn, "DELETE FROM ton_kho WHERE san_pham_id = @Id;", new { Id = createdProductId });
+                await SafeDeleteAsync(conn, "DELETE FROM san_pham WHERE id = @Id;", new { Id = createdProductId });
+            }
+
+            if (createdStaffUserId > 0)
+            {
+                await SafeDeleteAsync(conn, "DELETE FROM nguoi_dung_quyen WHERE nguoi_dung_id = @Id;", new { Id = createdStaffUserId });
+                await SafeDeleteAsync(conn, "DELETE FROM nguoi_dung_vai_tro WHERE nguoi_dung_id = @Id;", new { Id = createdStaffUserId });
+                await SafeDeleteAsync(conn, "DELETE FROM nguoi_dung WHERE id = @Id;", new { Id = createdStaffUserId });
+            }
+
+            if (previousUser != null)
+                Session.SetCurrentUser(previousUser, previousPermissions);
+            else
+                Session.Clear();
+        }
+    }
+
+    private static string KiemTraAvaloniaGiaoDienIssue103(List<TongQuanHoatDongTaiKhoanCon> sampleItems)
+    {
+        if (global::Avalonia.Application.Current is null)
+            global::ShopHoa.Program.BuildAvaloniaApp().SetupWithoutStarting();
+
+        var view = new global::ShopHoa.Views.TongQuanDashboardView();
+        var vm = new global::ShopHoa.ViewModels.DashboardViewModel(new DatabaseService());
+        foreach (var item in sampleItems)
+            vm.HoatDongTaiKhoanCon.Add(item);
+        view.DataContext = vm;
+
+        var activityItems = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(view)
+            .OfType<global::Avalonia.Controls.ItemsControl>()
+            .FirstOrDefault(ic => ic.Name == "ActivityItemsControl");
+        KiemTra(activityItems?.ItemTemplate != null, "Không tìm thấy ActivityItemsControl trên TongQuanDashboardView.");
+
+        var diffItem = sampleItems[0];
+        var plainItem = sampleItems[1];
+        var heights = new List<string>();
+
+        foreach (var width in new[] { 480d, 1280d })
+        {
+            var stack = new global::Avalonia.Controls.StackPanel { Spacing = 0 };
+            var c1 = activityItems!.ItemTemplate!.Build(diffItem)!;
+            c1.DataContext = diffItem;
+            var c2 = activityItems.ItemTemplate.Build(plainItem)!;
+            c2.DataContext = plainItem;
+            stack.Children.Add(c1);
+            stack.Children.Add(c2);
+
+            var win = new global::Avalonia.Controls.Window { Width = width, Height = 2000, Content = stack };
+            try
+            {
+                stack.ApplyStyling();
+                stack.Measure(new global::Avalonia.Size(width, double.PositiveInfinity));
+                stack.Arrange(new global::Avalonia.Rect(0, 0, width, stack.DesiredSize.Height));
+
+                KiemTra(c1.Bounds.Width <= width + 0.5 && c2.Bounds.Width <= width + 0.5, $"Thẻ tràn ngang ở độ rộng {width}px.");
+                KiemTra(c1.Bounds.Bottom <= c2.Bounds.Top - 7.5, $"Hai thẻ đè lên nhau ở độ rộng {width}px.");
+                KiemTra(c1.Bounds.Height > c2.Bounds.Height + 30, $"Thẻ có Trước/Sau phải cao hơn thẻ thường @ {width}px ({c1.Bounds.Height:F1} vs {c2.Bounds.Height:F1}).");
+                heights.Add($"@{width:F0}px={c1.Bounds.Height:F0}/{c2.Bounds.Height:F0}");
+            }
+            finally
+            {
+                win.Content = null;
+            }
+        }
+
+        return string.Join(", ", heights);
     }
 }

@@ -588,33 +588,73 @@ public sealed class DashboardService
     /// Kết hợp bảng nhat_ky_hoat_dong với các giao dịch bán hàng, nhập kho, thu chi
     /// của mọi người dùng (nhân viên, thu ngân, quản lý, admin).
     /// </summary>
-    public async Task<List<TongQuanHoatDongTaiKhoanCon>> TaiHoatDongTaiKhoanConAsync(CancellationToken token)
+    private static bool _daDamBaoSchemaNhatKyDashboard;
+
+    public async Task<List<TongQuanHoatDongTaiKhoanCon>> TaiHoatDongTaiKhoanConAsync(
+        CancellationToken token,
+        DateTime? tuNgay = null,
+        DateTime? denNgay = null,
+        int limit = 500)
     {
         try
         {
             await using var connection = await _taoKetNoi();
 
-            // Đảm bảo bảng nhat_ky_hoat_dong luôn tồn tại trước khi truy vấn
-            await connection.ExecuteAsync("""
-            CREATE TABLE IF NOT EXISTS `nhat_ky_hoat_dong` (
-              `id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-              `nguoi_dung_id` INT(10) UNSIGNED DEFAULT NULL,
-              `ten_dang_nhap` VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-              `ho_ten` VARCHAR(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-              `vai_tro` VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-              `hanh_dong` VARCHAR(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-              `doi_tuong` VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-              `doi_tuong_id` INT(10) UNSIGNED DEFAULT NULL,
-              `ma_chung_tu` VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-              `noi_dung` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-              `gia_tri` DECIMAL(15,2) DEFAULT NULL,
-              `dia_chi_ip` VARCHAR(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-              `thoi_gian` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              PRIMARY KEY (`id`),
-              KEY `idx_nhat_ky_nguoi_dung` (`nguoi_dung_id`),
-              KEY `idx_nhat_ky_thoi_gian` (`thoi_gian`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            """);
+            if (!_daDamBaoSchemaNhatKyDashboard)
+            {
+                await connection.ExecuteAsync("""
+                CREATE TABLE IF NOT EXISTS `nhat_ky_hoat_dong` (
+                  `id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+                  `nguoi_dung_id` INT(10) UNSIGNED DEFAULT NULL,
+                  `ten_dang_nhap` VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                  `ho_ten` VARCHAR(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                  `vai_tro` VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                  `hanh_dong` VARCHAR(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+                  `doi_tuong` VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                  `doi_tuong_id` INT(10) UNSIGNED DEFAULT NULL,
+                  `ma_chung_tu` VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                  `noi_dung` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                  `truong_thay_doi` VARCHAR(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                  `gia_tri_truoc` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                  `gia_tri_sau` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                  `gia_tri` DECIMAL(15,2) DEFAULT NULL,
+                  `dia_chi_ip` VARCHAR(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                  `thoi_gian` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  PRIMARY KEY (`id`),
+                  KEY `idx_nhat_ky_nguoi_dung` (`nguoi_dung_id`),
+                  KEY `idx_nhat_ky_thoi_gian` (`thoi_gian`),
+                  KEY `idx_nhat_ky_ma_chung_tu` (`ma_chung_tu`),
+                  KEY `idx_nhat_ky_hanh_dong` (`hanh_dong`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                """);
+
+                try
+                {
+                    var existingCols = (await connection.QueryAsync<string>(
+                        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nhat_ky_hoat_dong';"))
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    if (!existingCols.Contains("vai_tro"))
+                        await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN vai_tro VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER ho_ten;");
+                    if (!existingCols.Contains("ma_chung_tu"))
+                        await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN ma_chung_tu VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER doi_tuong_id;");
+                    if (!existingCols.Contains("truong_thay_doi"))
+                        await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN truong_thay_doi VARCHAR(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER noi_dung;");
+                    if (!existingCols.Contains("gia_tri_truoc"))
+                        await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN gia_tri_truoc TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER truong_thay_doi;");
+                    if (!existingCols.Contains("gia_tri_sau"))
+                        await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN gia_tri_sau TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER gia_tri_truoc;");
+                    if (!existingCols.Contains("gia_tri"))
+                        await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN gia_tri DECIMAL(15,2) DEFAULT NULL AFTER gia_tri_sau;");
+                }
+                catch { }
+
+                _daDamBaoSchemaNhatKyDashboard = true;
+            }
+
+            var safeLimit = Math.Clamp(limit, 1, 2000);
+            DateTime? tuNgayBound = tuNgay?.Date;
+            DateTime? denKeTiepBound = denNgay?.Date.AddDays(1);
 
             var sql = $"""
             SELECT * FROM (
@@ -627,8 +667,12 @@ public sealed class DashboardService
                     COALESCE(NULLIF(TRIM(nk.vai_tro), ''), (SELECT vt.ten_vai_tro FROM nguoi_dung_vai_tro ndvt JOIN vai_tro vt ON vt.id = ndvt.vai_tro_id WHERE ndvt.nguoi_dung_id = nk.nguoi_dung_id LIMIT 1), 'Nhân viên') AS VaiTro,
                     nk.hanh_dong AS HanhDong,
                     nk.doi_tuong AS DoiTuong,
+                    CAST(nk.doi_tuong_id AS UNSIGNED) AS DoiTuongId,
                     nk.ma_chung_tu AS MaChungTu,
                     nk.noi_dung AS NoiDung,
+                    nk.truong_thay_doi AS TruongThayDoi,
+                    nk.gia_tri_truoc AS GiaTriTruoc,
+                    nk.gia_tri_sau AS GiaTriSau,
                     nk.gia_tri AS GiaTri,
                     nk.thoi_gian AS ThoiGian
                 FROM nhat_ky_hoat_dong nk
@@ -636,7 +680,7 @@ public sealed class DashboardService
 
                 UNION ALL
 
-                -- 2. Hóa đơn bán hàng của mọi tài khoản (kể cả admin)
+                -- 2. Hóa đơn bán hàng lịch sử chưa có bản ghi tạo gốc trong nhat_ky_hoat_dong
                 SELECT
                     CAST(hd.id AS UNSIGNED) AS Id,
                     hd.nguoi_ban_id AS NguoiDungId,
@@ -645,22 +689,30 @@ public sealed class DashboardService
                     COALESCE((SELECT vt.ten_vai_tro FROM nguoi_dung_vai_tro ndvt JOIN vai_tro vt ON vt.id = ndvt.vai_tro_id WHERE ndvt.nguoi_dung_id = nd.id LIMIT 1), 'Thu ngân') AS VaiTro,
                     'Bán hàng' AS HanhDong,
                     'HOA_DON' AS DoiTuong,
+                    CAST(hd.id AS UNSIGNED) AS DoiTuongId,
                     hd.ma_hoa_don AS MaChungTu,
                     CASE
                         WHEN hd.trang_thai_hoa_don IN ('DA_HUY', 'HUY') THEN CONCAT('Hủy đơn bán ', hd.ma_hoa_don)
                         WHEN COALESCE(kh.ten_khach_hang, '') != '' THEN CONCAT('Bán hàng cho ', kh.ten_khach_hang)
                         ELSE 'Bán hàng cho khách lẻ'
                     END AS NoiDung,
+                    NULL AS TruongThayDoi,
+                    NULL AS GiaTriTruoc,
+                    NULL AS GiaTriSau,
                     hd.khach_can_tra AS GiaTri,
                     hd.thoi_gian_ban AS ThoiGian
                 FROM hoa_don_ban_hang hd
                 INNER JOIN nguoi_dung nd ON hd.nguoi_ban_id = nd.id
                 LEFT JOIN khach_hang kh ON hd.khach_hang_id = kh.id
-                WHERE hd.ma_hoa_don NOT IN (SELECT COALESCE(ma_chung_tu, '') FROM nhat_ky_hoat_dong WHERE ma_chung_tu IS NOT NULL)
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM nhat_ky_hoat_dong nk
+                    WHERE nk.ma_chung_tu = hd.ma_hoa_don
+                      AND nk.hanh_dong IN ('Bán hàng', 'Tạo hóa đơn', 'BAN_HANG')
+                )
 
                 UNION ALL
 
-                -- 3. Phiếu nhập hàng của mọi tài khoản (kể cả admin)
+                -- 3. Phiếu nhập hàng lịch sử chưa có bản ghi tạo gốc trong nhat_ky_hoat_dong
                 SELECT
                     CAST(pn.id AS UNSIGNED) AS Id,
                     pn.nguoi_nhap_id AS NguoiDungId,
@@ -669,49 +721,70 @@ public sealed class DashboardService
                     COALESCE((SELECT vt.ten_vai_tro FROM nguoi_dung_vai_tro ndvt JOIN vai_tro vt ON vt.id = ndvt.vai_tro_id WHERE ndvt.nguoi_dung_id = nd.id LIMIT 1), 'Kho') AS VaiTro,
                     'Nhập hàng' AS HanhDong,
                     'PHIEU_NHAP' AS DoiTuong,
+                    CAST(pn.id AS UNSIGNED) AS DoiTuongId,
                     pn.ma_phieu_nhap AS MaChungTu,
                     CASE
                         WHEN pn.trang_thai = 'HUY' THEN CONCAT('Hủy phiếu nhập ', pn.ma_phieu_nhap)
                         WHEN COALESCE(ncc.ten_nha_cung_cap, '') != '' THEN CONCAT('Nhập hàng từ ', ncc.ten_nha_cung_cap)
                         ELSE 'Nhập kho hàng hóa'
                     END AS NoiDung,
+                    NULL AS TruongThayDoi,
+                    NULL AS GiaTriTruoc,
+                    NULL AS GiaTriSau,
                     pn.tong_tien_nhap AS GiaTri,
                     pn.thoi_gian_nhap AS ThoiGian
                 FROM phieu_nhap_hang pn
                 INNER JOIN nguoi_dung nd ON pn.nguoi_nhap_id = nd.id
                 LEFT JOIN nha_cung_cap ncc ON pn.nha_cung_cap_id = ncc.id
-                WHERE pn.ma_phieu_nhap NOT IN (SELECT COALESCE(ma_chung_tu, '') FROM nhat_ky_hoat_dong WHERE ma_chung_tu IS NOT NULL)
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM nhat_ky_hoat_dong nk
+                    WHERE nk.ma_chung_tu = pn.ma_phieu_nhap
+                      AND nk.hanh_dong IN ('Nhập hàng', 'Tạo phiếu nhập', 'NHAP_HANG')
+                )
 
                 UNION ALL
 
-                -- 4. Phiếu sổ quỹ của mọi tài khoản (kể cả admin)
+                -- 4. Phiếu sổ quỹ lịch sử chưa có bản ghi tạo gốc trong nhat_ky_hoat_dong
                 SELECT
                     CAST(pc.id AS UNSIGNED) AS Id,
                     pc.nguoi_thuc_hien_id AS NguoiDungId,
                     nd.ten_dang_nhap AS TenDangNhap,
                     COALESCE(NULLIF(TRIM(nd.ho_ten), ''), nd.ten_dang_nhap) AS HoTen,
                     COALESCE((SELECT vt.ten_vai_tro FROM nguoi_dung_vai_tro ndvt JOIN vai_tro vt ON vt.id = ndvt.vai_tro_id WHERE ndvt.nguoi_dung_id = nd.id LIMIT 1), 'Nhân viên') AS VaiTro,
-                    CASE 
+                    CASE
                         WHEN pc.trang_thai = 'HUY' THEN 'Hủy sổ quỹ'
                         WHEN {PhieuQuySql.LaThu} THEN 'Thu tiền'
                         ELSE 'Chi tiền'
                     END AS HanhDong,
                     'SO_QUY' AS DoiTuong,
+                    CAST(pc.id AS UNSIGNED) AS DoiTuongId,
                     pc.ma_phieu_chi AS MaChungTu,
                     COALESCE(NULLIF(TRIM(pc.noi_dung), ''), 'Giao dịch thu chi sổ quỹ') AS NoiDung,
+                    NULL AS TruongThayDoi,
+                    NULL AS GiaTriTruoc,
+                    NULL AS GiaTriSau,
                     pc.so_tien AS GiaTri,
                     pc.thoi_gian_chi AS ThoiGian
                 FROM phieu_chi pc
                 INNER JOIN nguoi_dung nd ON pc.nguoi_thuc_hien_id = nd.id
-                WHERE pc.ma_phieu_chi NOT IN (SELECT COALESCE(ma_chung_tu, '') FROM nhat_ky_hoat_dong WHERE ma_chung_tu IS NOT NULL)
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM nhat_ky_hoat_dong nk
+                    WHERE nk.ma_chung_tu = pc.ma_phieu_chi
+                      AND nk.hanh_dong IN ('Thu tiền', 'Chi tiền', 'Sổ quỹ', 'SO_QUY', 'THU_TIEN', 'CHI_TIEN', 'Tạo phiếu thu', 'Tạo phiếu chi')
+                )
             ) AS hoat_dong_sub
-            ORDER BY ThoiGian DESC
-            LIMIT 100;
+            WHERE (@TuNgay IS NULL OR ThoiGian >= @TuNgay)
+              AND (@DenKeTiep IS NULL OR ThoiGian < @DenKeTiep)
+            ORDER BY ThoiGian DESC, Id DESC
+            LIMIT @Limit;
             """;
 
             return (
                 await connection.QueryAsync<TongQuanHoatDongTaiKhoanCon>(
-                    new CommandDefinition(sql, cancellationToken: token))
+                    new CommandDefinition(
+                        sql,
+                        new { TuNgay = tuNgayBound, DenKeTiep = denKeTiepBound, Limit = safeLimit },
+                        cancellationToken: token))
             ).AsList();
         }
         catch (Exception ex)

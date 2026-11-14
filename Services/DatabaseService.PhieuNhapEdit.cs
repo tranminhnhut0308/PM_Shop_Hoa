@@ -269,6 +269,7 @@ public sealed partial class DatabaseService
         var hasDvtExcel = await EnsureChiTietPhieuNhapDonViTinhExcelAsync();
         var hasPhieuQuyExtraColumns = await EnsurePhieuQuyExtraColumnsAsync();
         var hasPhieuQuyPhieuNhapColumns = await EnsurePhieuQuyPhieuNhapColumnsAsync();
+        await EnsureAuditTableAsync();
 
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -426,6 +427,10 @@ public sealed partial class DatabaseService
             );
             """;
 
+            var auditTruong = new List<string>();
+            var auditTruoc = new List<string>();
+            var auditSau = new List<string>();
+
             foreach (var spId in allProductIds)
             {
                 var oldQty = oldItemsMap.TryGetValue(spId, out var oItem) ? oItem.SoLuong : 0m;
@@ -503,14 +508,25 @@ public sealed partial class DatabaseService
                         transaction);
 
                     thayDoiLines.Add($"• {spName}: Số lượng {oldQty:0.###} → {newQty:0.###} ({(delta > 0 ? "+" : "")}{delta:0.###})");
+                    auditTruong.Add($"SL ({spName})");
+                    auditTruoc.Add($"Số lượng cũ ({spName}): {oldQty:0.###}");
+                    auditSau.Add($"Số lượng mới ({spName}): {newQty:0.###}");
                 }
-                else if (oItem != null && nItem != null && oItem.DonGiaNhap != nItem.DonGiaNhap)
+
+                if (oItem != null && nItem != null && oItem.DonGiaNhap != nItem.DonGiaNhap)
                 {
                     thayDoiLines.Add($"• {spName}: Đơn giá {oItem.DonGiaNhap:N0} đ → {nItem.DonGiaNhap:N0} đ");
+                    auditTruong.Add($"Giá nhập ({spName})");
+                    auditTruoc.Add($"Giá nhập cũ ({spName}): {oItem.DonGiaNhap:N0} đ");
+                    auditSau.Add($"Giá nhập mới ({spName}): {nItem.DonGiaNhap:N0} đ");
                 }
-                else if (oItem != null && nItem != null && oItem.GiamGia != nItem.GiamGia)
+
+                if (oItem != null && nItem != null && oItem.GiamGia != nItem.GiamGia)
                 {
                     thayDoiLines.Add($"• {spName}: Giảm giá {oItem.GiamGia:N0} đ → {nItem.GiamGia:N0} đ");
+                    auditTruong.Add($"Giảm giá SP ({spName})");
+                    auditTruoc.Add($"Giảm giá cũ ({spName}): {oItem.GiamGia:N0} đ");
+                    auditSau.Add($"Giảm giá mới ({spName}): {nItem.GiamGia:N0} đ");
                 }
             }
 
@@ -581,38 +597,65 @@ public sealed partial class DatabaseService
             if (oldPhieu.NhaCungCapId != request.NhaCungCapId)
             {
                 thayDoiLines.Add($"• Nhà cung cấp: {oldPhieu.TenNhaCungCap ?? "—"} → {request.TenNhaCungCap ?? "—"}");
+                auditTruong.Add("Nhà cung cấp");
+                auditTruoc.Add($"NCC cũ: {oldPhieu.TenNhaCungCap ?? "—"}");
+                auditSau.Add($"NCC mới: {request.TenNhaCungCap ?? "—"}");
             }
             if (oldPhieu.ThoiGianNhap.Date != request.ThoiGianNhap.Date)
             {
                 thayDoiLines.Add($"• Ngày nhập: {oldPhieu.ThoiGianNhap:dd/MM/yyyy} → {request.ThoiGianNhap:dd/MM/yyyy}");
+                auditTruong.Add("Ngày nhập");
+                auditTruoc.Add($"Ngày nhập cũ: {oldPhieu.ThoiGianNhap:dd/MM/yyyy}");
+                auditSau.Add($"Ngày nhập mới: {request.ThoiGianNhap:dd/MM/yyyy}");
             }
             if (oldPhieu.TongTienNhap != newTongTienNhap)
             {
                 thayDoiLines.Add($"• Tổng tiền nhập: {oldPhieu.TongTienNhap:N0} đ → {newTongTienNhap:N0} đ");
+                auditTruong.Add("Tổng tiền nhập");
+                auditTruoc.Add($"Tổng tiền cũ: {oldPhieu.TongTienNhap:N0} đ");
+                auditSau.Add($"Tổng tiền mới: {newTongTienNhap:N0} đ");
             }
             if (oldPhieu.ChiPhiKhac != newChiPhiKhac)
             {
                 thayDoiLines.Add($"• Chi phí khác: {oldPhieu.ChiPhiKhac:N0} đ → {newChiPhiKhac:N0} đ");
+                auditTruong.Add("Chi phí khác");
+                auditTruoc.Add($"Chi phí cũ: {oldPhieu.ChiPhiKhac:N0} đ");
+                auditSau.Add($"Chi phí mới: {newChiPhiKhac:N0} đ");
             }
             if (oldPhieu.GiamGia != newGiamGia)
             {
                 thayDoiLines.Add($"• Giảm giá: {oldPhieu.GiamGia:N0} đ → {newGiamGia:N0} đ");
+                auditTruong.Add("Giảm giá");
+                auditTruoc.Add($"Giảm giá cũ: {oldPhieu.GiamGia:N0} đ");
+                auditSau.Add($"Giảm giá mới: {newGiamGia:N0} đ");
             }
             if (oldPhieu.DaThanhToan != newDaThanhToan)
             {
                 thayDoiLines.Add($"• Đã thanh toán: {oldPhieu.DaThanhToan:N0} đ → {newDaThanhToan:N0} đ");
+                auditTruong.Add("Đã thanh toán");
+                auditTruoc.Add($"Đã trả cũ: {oldPhieu.DaThanhToan:N0} đ");
+                auditSau.Add($"Đã trả mới: {newDaThanhToan:N0} đ");
             }
             if (oldPhieu.ConNo != newConNo)
             {
                 thayDoiLines.Add($"• Còn nợ: {oldPhieu.ConNo:N0} đ → {newConNo:N0} đ");
+                auditTruong.Add("Còn nợ");
+                auditTruoc.Add($"Còn nợ cũ: {oldPhieu.ConNo:N0} đ");
+                auditSau.Add($"Còn nợ mới: {newConNo:N0} đ");
             }
             if (oldPhieu.PhuongThucThanhToan != request.PhuongThucThanhToan)
             {
                 thayDoiLines.Add($"• Phương thức thanh toán: {oldPhieu.PhuongThucThanhToan} → {request.PhuongThucThanhToan}");
+                auditTruong.Add("Phương thức thanh toán");
+                auditTruoc.Add($"Phương thức cũ: {oldPhieu.PhuongThucThanhToan ?? "—"}");
+                auditSau.Add($"Phương thức mới: {request.PhuongThucThanhToan ?? "—"}");
             }
             if ((oldPhieu.SoHoaDonDauVao ?? "") != (request.SoHoaDonDauVao ?? ""))
             {
                 thayDoiLines.Add($"• Số hóa đơn: '{oldPhieu.SoHoaDonDauVao ?? "—"}' → '{request.SoHoaDonDauVao ?? "—"}'");
+                auditTruong.Add("Số hóa đơn đầu vào");
+                auditTruoc.Add($"Số HĐ cũ: {oldPhieu.SoHoaDonDauVao ?? "—"}");
+                auditSau.Add($"Số HĐ mới: {request.SoHoaDonDauVao ?? "—"}");
             }
             if (oldPhieu.NgayHoaDonDauVao?.Date != request.NgayHoaDonDauVao?.Date)
             {
@@ -863,12 +906,7 @@ public sealed partial class DatabaseService
                 },
                 transaction);
 
-            await transaction.CommitAsync();
-
-            foreach (var tempFile in attachmentCleanup.TempFilesToDeleteOnCommit)
-                ChungTuStorageService.XoaFileTamNeuCo(tempFile);
-
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Chỉnh sửa phiếu nhập",
                 "PHIEU_NHAP",
                 request.PhieuNhapId,
@@ -877,7 +915,17 @@ public sealed partial class DatabaseService
                     (string.IsNullOrWhiteSpace(chiTietThayDoiText)
                         ? ""
                         : Environment.NewLine + chiTietThayDoiText),
-                newTongTienNhap);
+                newTongTienNhap,
+                truongThayDoi: auditTruong.Count > 0 ? string.Join(", ", auditTruong) : "Thông tin phiếu nhập",
+                giaTriTruoc: auditTruoc.Count > 0 ? string.Join("\n", auditTruoc) : $"Tổng: {oldPhieu.TongTienNhap:N0} đ",
+                giaTriSau: auditSau.Count > 0 ? string.Join("\n", auditSau) : $"Tổng: {newTongTienNhap:N0} đ",
+                connection: connection,
+                transaction: transaction);
+
+            await transaction.CommitAsync();
+
+            foreach (var tempFile in attachmentCleanup.TempFilesToDeleteOnCommit)
+                ChungTuStorageService.XoaFileTamNeuCo(tempFile);
         }
         catch
         {

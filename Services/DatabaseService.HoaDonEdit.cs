@@ -482,6 +482,7 @@ public sealed partial class DatabaseService
         var coCotExtraPhieuQuy = await EnsurePhieuQuyExtraColumnsAsync();
         await EnsureNhomChiPhiMacDinhAsync();
         await EnsureBangLichSuThanhToanKhachHangAsync();
+        await EnsureAuditTableAsync();
 
         await _khoaXuLyHuyHoaDon.WaitAsync();
         try
@@ -1097,22 +1098,27 @@ public sealed partial class DatabaseService
                     },
                     transaction);
 
-                await transaction.CommitAsync();
-                daCommit = true;
-
                 var moTaHuy = $"Hủy hóa đơn {header.MaHoaDon} ({header.TenKhachHang}, Tổng: {header.KhachCanTra:N0} đ). Lý do: {lyDo}";
                 if (!string.IsNullOrWhiteSpace(maPhieuChiHoan))
                     moTaHuy += $". Phiếu chi hoàn tiền: {maPhieuChiHoan} ({soTienHoanKhach:N0} đ)";
                 else if (soTienChuyenTraTruoc > 0)
                     moTaHuy += $". Chuyển khách trả trước: {soTienChuyenTraTruoc:N0} đ";
 
-                _ = LogSubAccountActivityAsync(
+                await LogSubAccountActivityAsync(
                     "Hủy hóa đơn",
                     "HOA_DON",
                     header.HoaDonId,
                     header.MaHoaDon,
                     moTaHuy,
-                    header.KhachCanTra);
+                    header.KhachCanTra,
+                    truongThayDoi: "Trạng thái hóa đơn, Công nợ",
+                    giaTriTruoc: $"Hiệu lực | Tổng: {header.KhachCanTra:N0} đ | Còn nợ: {header.ConNo:N0} đ",
+                    giaTriSau: $"ĐÃ HỦY | Hoàn tiền: {soTienHoanKhach:N0} đ" + (soTienChuyenTraTruoc > 0 ? $" | Trả trước: +{soTienChuyenTraTruoc:N0} đ" : ""),
+                    connection: connection,
+                    transaction: transaction);
+
+                await transaction.CommitAsync();
+                daCommit = true;
 
                 var receiptDaHuy = await GetHoaDonBanHangTheoMaAsync(header.MaHoaDon);
 

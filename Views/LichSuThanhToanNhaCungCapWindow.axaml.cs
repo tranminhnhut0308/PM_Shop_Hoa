@@ -49,14 +49,20 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
         DatabaseService database,
         uint? initialSupplierId,
         string supplierCode,
-        string supplierName)
+        string supplierName,
+        string initialKeyword = "")
     {
         _database = database;
         _initialSupplierId = initialSupplierId;
         _supplierCode = supplierCode;
         _supplierName = supplierName;
+        _appliedKeyword = initialKeyword?.Trim() ?? "";
 
         InitializeComponent();
+        if (!string.IsNullOrWhiteSpace(_appliedKeyword))
+        {
+            TimKiemBox.Text = _appliedKeyword;
+        }
         TxtNhaCungCap.Text = !initialSupplierId.HasValue && string.IsNullOrWhiteSpace(supplierCode)
             ? (string.IsNullOrWhiteSpace(supplierName) || supplierName == "Nhà cung cấp" ? "Tất cả nhà cung cấp" : supplierName)
             : (string.IsNullOrWhiteSpace(supplierCode)

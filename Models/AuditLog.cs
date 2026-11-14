@@ -9,9 +9,12 @@ public sealed class AuditLog
     public string? VaiTro { get; set; }
     public string HanhDong { get; set; } = string.Empty;
     public string? DoiTuong { get; set; }
-    public uint? DoiTuongId { get; set; }
+    public ulong? DoiTuongId { get; set; }
     public string? MaChungTu { get; set; }
     public string? NoiDung { get; set; }
+    public string? TruongThayDoi { get; set; }
+    public string? GiaTriTruoc { get; set; }
+    public string? GiaTriSau { get; set; }
     public decimal? GiaTri { get; set; }
     public string? DiaChiIp { get; set; }
     public DateTime ThoiGian { get; set; } = DateTime.Now;

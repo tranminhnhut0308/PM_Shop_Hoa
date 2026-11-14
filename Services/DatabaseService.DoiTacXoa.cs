@@ -81,7 +81,14 @@ public sealed partial class DatabaseService
         Quyen.RequireAdmin(Session.CurrentUser, "Chỉ tài khoản Quản trị (Admin) mới có quyền thực hiện thao tác xóa hoặc ngừng hoạt động khách hàng.");
 
         var kiemTra = await KiemTraXoaKhachHangAsync(customerId);
+        await EnsureAuditTableAsync();
         await using var connection = await OpenAsync();
+
+        var thongTinKh = await connection.QueryFirstOrDefaultAsync<(string? MaKhachHang, string TenKhachHang)?>(
+            "SELECT ma_khach_hang AS MaKhachHang, ten_khach_hang AS TenKhachHang FROM khach_hang WHERE id = @Id LIMIT 1;",
+            new { Id = customerId });
+        var maKh = thongTinKh?.MaKhachHang;
+        var tenKh = thongTinKh?.TenKhachHang ?? $"ID {customerId}";
 
         // 1. Còn công nợ hoặc còn số dư trả trước
         if (kiemTra.CongNoHienTai > 0 || kiemTra.SoDuTraTruoc > 0)
@@ -98,8 +105,15 @@ public sealed partial class DatabaseService
             if (affectedRows == 0)
                 throw new InvalidOperationException("Khách hàng không tồn tại hoặc đã ngừng hoạt động.");
 
-            _ = LogSubAccountActivityAsync("Ngừng hoạt động khách hàng", "KHACH_HANG", customerId, null,
-                $"Chuyển khách hàng sang ngừng hoạt động do còn nợ ({kiemTra.CongNoHienTai:N0} đ, id={customerId})");
+            await LogSubAccountActivityAsync(
+                "Ngừng hoạt động khách hàng",
+                "KHACH_HANG",
+                customerId,
+                maKh,
+                $"Chuyển khách hàng {tenKh} sang ngừng hoạt động do còn nợ ({kiemTra.CongNoHienTai:N0} đ)",
+                truongThayDoi: "Trạng thái khách hàng",
+                giaTriTruoc: "Đang hoạt động",
+                giaTriSau: $"Ngừng hoạt động (nợ {kiemTra.CongNoHienTai:N0} đ)");
 
             return KetQuaXoaDoiTac.DaChuyenNgungHoatDong;
         }
@@ -114,8 +128,15 @@ public sealed partial class DatabaseService
             if (affectedRows == 0)
                 throw new InvalidOperationException("Khách hàng không tồn tại hoặc đã ngừng hoạt động.");
 
-            _ = LogSubAccountActivityAsync("Ngừng hoạt động khách hàng", "KHACH_HANG", customerId, null,
-                $"Chuyển khách hàng sang ngừng hoạt động để bảo toàn {kiemTra.SoHoaDonHoacPhieuNhap} hóa đơn và {kiemTra.SoGiaoDichLienQuan} giao dịch liên quan (id={customerId})");
+            await LogSubAccountActivityAsync(
+                "Ngừng hoạt động khách hàng",
+                "KHACH_HANG",
+                customerId,
+                maKh,
+                $"Chuyển khách hàng {tenKh} sang ngừng hoạt động để bảo toàn {kiemTra.SoHoaDonHoacPhieuNhap} hóa đơn và {kiemTra.SoGiaoDichLienQuan} giao dịch liên quan",
+                truongThayDoi: "Trạng thái khách hàng",
+                giaTriTruoc: "Đang hoạt động",
+                giaTriSau: "Ngừng hoạt động (bảo toàn lịch sử)");
 
             return KetQuaXoaDoiTac.DaChuyenNgungHoatDong;
         }
@@ -135,10 +156,19 @@ public sealed partial class DatabaseService
             if (affected == 0)
                 throw new InvalidOperationException("Khách hàng không tồn tại.");
 
-            await tx.CommitAsync();
+            await LogSubAccountActivityAsync(
+                "Xóa khách hàng",
+                "KHACH_HANG",
+                customerId,
+                maKh,
+                $"Đã xóa vĩnh viễn khách hàng {tenKh} (chưa phát sinh giao dịch)",
+                truongThayDoi: "Trạng thái, Khách hàng",
+                giaTriTruoc: $"Đang hoạt động ({tenKh})",
+                giaTriSau: "Đã xóa vĩnh viễn",
+                connection: connection,
+                transaction: tx);
 
-            _ = LogSubAccountActivityAsync("Xóa khách hàng", "KHACH_HANG", customerId, null,
-                $"Đã xóa vĩnh viễn khách hàng chưa phát sinh giao dịch (id={customerId})");
+            await tx.CommitAsync();
 
             return KetQuaXoaDoiTac.DaXoaVinhVien;
         }
@@ -148,6 +178,16 @@ public sealed partial class DatabaseService
             await connection.ExecuteAsync(
                 "UPDATE khach_hang SET trang_thai = 0, ngay_cap_nhat = NOW() WHERE id = @Id;",
                 new { Id = customerId });
+
+            await LogSubAccountActivityAsync(
+                "Ngừng hoạt động khách hàng",
+                "KHACH_HANG",
+                customerId,
+                maKh,
+                $"Chuyển khách hàng {tenKh} sang ngừng hoạt động do ràng buộc dữ liệu lịch sử",
+                truongThayDoi: "Trạng thái khách hàng",
+                giaTriTruoc: "Đang hoạt động",
+                giaTriSau: "Ngừng hoạt động");
 
             return KetQuaXoaDoiTac.DaChuyenNgungHoatDong;
         }
@@ -161,6 +201,10 @@ public sealed partial class DatabaseService
         Quyen.RequireAdmin(Session.CurrentUser, "Chỉ tài khoản Quản trị (Admin) mới có quyền kích hoạt lại khách hàng.");
         await using var connection = await OpenAsync();
 
+        var thongTinKh = await connection.QueryFirstOrDefaultAsync<(string? MaKhachHang, string TenKhachHang)?>(
+            "SELECT ma_khach_hang AS MaKhachHang, ten_khach_hang AS TenKhachHang FROM khach_hang WHERE id = @Id LIMIT 1;",
+            new { Id = customerId });
+
         var affected = await connection.ExecuteAsync(
             "UPDATE khach_hang SET trang_thai = 1, ngay_cap_nhat = NOW() WHERE id = @Id;",
             new { Id = customerId });
@@ -168,8 +212,15 @@ public sealed partial class DatabaseService
         if (affected == 0)
             throw new InvalidOperationException("Khách hàng không tồn tại.");
 
-        _ = LogSubAccountActivityAsync("Kích hoạt lại khách hàng", "KHACH_HANG", customerId, null,
-            $"Kích hoạt lại trạng thái hoạt động cho khách hàng (id={customerId})");
+        await LogSubAccountActivityAsync(
+            "Kích hoạt lại khách hàng",
+            "KHACH_HANG",
+            customerId,
+            thongTinKh?.MaKhachHang,
+            $"Kích hoạt lại trạng thái hoạt động cho khách hàng {thongTinKh?.TenKhachHang ?? $"ID {customerId}"}",
+            truongThayDoi: "Trạng thái khách hàng",
+            giaTriTruoc: "Ngừng hoạt động",
+            giaTriSau: "Đang hoạt động");
     }
 
     /// <summary>
@@ -237,7 +288,14 @@ public sealed partial class DatabaseService
         Quyen.RequireAdmin(Session.CurrentUser, "Chỉ tài khoản Quản trị (Admin) mới có quyền thực hiện thao tác xóa hoặc ngừng hoạt động nhà cung cấp.");
 
         var kiemTra = await KiemTraXoaNhaCungCapAsync(supplierId);
+        await EnsureAuditTableAsync();
         await using var connection = await OpenAsync();
+
+        var thongTinNcc = await connection.QueryFirstOrDefaultAsync<(string? MaNhaCungCap, string TenNhaCungCap)?>(
+            "SELECT ma_nha_cung_cap AS MaNhaCungCap, ten_nha_cung_cap AS TenNhaCungCap FROM nha_cung_cap WHERE id = @Id LIMIT 1;",
+            new { Id = supplierId });
+        var maNcc = thongTinNcc?.MaNhaCungCap;
+        var tenNcc = thongTinNcc?.TenNhaCungCap ?? $"ID {supplierId}";
 
         // 1. Còn công nợ hoặc còn số dư trả trước
         if (kiemTra.CongNoHienTai > 0 || kiemTra.SoDuTraTruoc > 0)
@@ -254,8 +312,15 @@ public sealed partial class DatabaseService
             if (affectedRows == 0)
                 throw new InvalidOperationException("Nhà cung cấp không tồn tại hoặc đã ngừng hoạt động.");
 
-            _ = LogSubAccountActivityAsync("Ngừng hoạt động nhà cung cấp", "NHA_CUNG_CAP", supplierId, null,
-                $"Chuyển nhà cung cấp sang ngừng hoạt động do còn nợ ({kiemTra.CongNoHienTai:N0} đ, id={supplierId})");
+            await LogSubAccountActivityAsync(
+                "Ngừng hoạt động nhà cung cấp",
+                "NHA_CUNG_CAP",
+                supplierId,
+                maNcc,
+                $"Chuyển nhà cung cấp {tenNcc} sang ngừng hoạt động do còn nợ ({kiemTra.CongNoHienTai:N0} đ)",
+                truongThayDoi: "Trạng thái nhà cung cấp",
+                giaTriTruoc: "Đang hoạt động",
+                giaTriSau: $"Ngừng hoạt động (nợ {kiemTra.CongNoHienTai:N0} đ)");
 
             return KetQuaXoaDoiTac.DaChuyenNgungHoatDong;
         }
@@ -270,8 +335,15 @@ public sealed partial class DatabaseService
             if (affectedRows == 0)
                 throw new InvalidOperationException("Nhà cung cấp không tồn tại hoặc đã ngừng hoạt động.");
 
-            _ = LogSubAccountActivityAsync("Ngừng hoạt động nhà cung cấp", "NHA_CUNG_CAP", supplierId, null,
-                $"Chuyển nhà cung cấp sang ngừng hoạt động để bảo toàn {kiemTra.SoHoaDonHoacPhieuNhap} phiếu nhập và {kiemTra.SoGiaoDichLienQuan} giao dịch liên quan (id={supplierId})");
+            await LogSubAccountActivityAsync(
+                "Ngừng hoạt động nhà cung cấp",
+                "NHA_CUNG_CAP",
+                supplierId,
+                maNcc,
+                $"Chuyển nhà cung cấp {tenNcc} sang ngừng hoạt động để bảo toàn {kiemTra.SoHoaDonHoacPhieuNhap} phiếu nhập và {kiemTra.SoGiaoDichLienQuan} giao dịch liên quan",
+                truongThayDoi: "Trạng thái nhà cung cấp",
+                giaTriTruoc: "Đang hoạt động",
+                giaTriSau: "Ngừng hoạt động (bảo toàn lịch sử)");
 
             return KetQuaXoaDoiTac.DaChuyenNgungHoatDong;
         }
@@ -291,10 +363,19 @@ public sealed partial class DatabaseService
             if (affected == 0)
                 throw new InvalidOperationException("Nhà cung cấp không tồn tại.");
 
-            await tx.CommitAsync();
+            await LogSubAccountActivityAsync(
+                "Xóa nhà cung cấp",
+                "NHA_CUNG_CAP",
+                supplierId,
+                maNcc,
+                $"Đã xóa vĩnh viễn nhà cung cấp {tenNcc} (chưa phát sinh giao dịch)",
+                truongThayDoi: "Trạng thái, Nhà cung cấp",
+                giaTriTruoc: $"Đang hoạt động ({tenNcc})",
+                giaTriSau: "Đã xóa vĩnh viễn",
+                connection: connection,
+                transaction: tx);
 
-            _ = LogSubAccountActivityAsync("Xóa nhà cung cấp", "NHA_CUNG_CAP", supplierId, null,
-                $"Đã xóa vĩnh viễn nhà cung cấp chưa phát sinh giao dịch (id={supplierId})");
+            await tx.CommitAsync();
 
             return KetQuaXoaDoiTac.DaXoaVinhVien;
         }
@@ -304,6 +385,16 @@ public sealed partial class DatabaseService
             await connection.ExecuteAsync(
                 "UPDATE nha_cung_cap SET trang_thai = 0, ngay_cap_nhat = NOW() WHERE id = @Id;",
                 new { Id = supplierId });
+
+            await LogSubAccountActivityAsync(
+                "Ngừng hoạt động nhà cung cấp",
+                "NHA_CUNG_CAP",
+                supplierId,
+                maNcc,
+                $"Chuyển nhà cung cấp {tenNcc} sang ngừng hoạt động do ràng buộc dữ liệu lịch sử",
+                truongThayDoi: "Trạng thái nhà cung cấp",
+                giaTriTruoc: "Đang hoạt động",
+                giaTriSau: "Ngừng hoạt động");
 
             return KetQuaXoaDoiTac.DaChuyenNgungHoatDong;
         }
@@ -317,6 +408,10 @@ public sealed partial class DatabaseService
         Quyen.RequireAdmin(Session.CurrentUser, "Chỉ tài khoản Quản trị (Admin) mới có quyền kích hoạt lại nhà cung cấp.");
         await using var connection = await OpenAsync();
 
+        var thongTinNcc = await connection.QueryFirstOrDefaultAsync<(string? MaNhaCungCap, string TenNhaCungCap)?>(
+            "SELECT ma_nha_cung_cap AS MaNhaCungCap, ten_nha_cung_cap AS TenNhaCungCap FROM nha_cung_cap WHERE id = @Id LIMIT 1;",
+            new { Id = supplierId });
+
         var affected = await connection.ExecuteAsync(
             "UPDATE nha_cung_cap SET trang_thai = 1, ngay_cap_nhat = NOW() WHERE id = @Id;",
             new { Id = supplierId });
@@ -324,7 +419,14 @@ public sealed partial class DatabaseService
         if (affected == 0)
             throw new InvalidOperationException("Nhà cung cấp không tồn tại.");
 
-        _ = LogSubAccountActivityAsync("Kích hoạt lại nhà cung cấp", "NHA_CUNG_CAP", supplierId, null,
-            $"Kích hoạt lại trạng thái hoạt động cho nhà cung cấp (id={supplierId})");
+        await LogSubAccountActivityAsync(
+            "Kích hoạt lại nhà cung cấp",
+            "NHA_CUNG_CAP",
+            supplierId,
+            thongTinNcc?.MaNhaCungCap,
+            $"Kích hoạt lại trạng thái hoạt động cho nhà cung cấp {thongTinNcc?.TenNhaCungCap ?? $"ID {supplierId}"}",
+            truongThayDoi: "Trạng thái nhà cung cấp",
+            giaTriTruoc: "Ngừng hoạt động",
+            giaTriSau: "Đang hoạt động");
     }
 }

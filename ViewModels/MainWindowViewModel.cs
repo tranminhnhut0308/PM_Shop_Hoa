@@ -90,7 +90,10 @@ public partial class MainWindowViewModel : ObservableObject
 
     public MainWindowViewModel()
     {
-        Dashboard = new DashboardViewModel(_db);
+        Dashboard = new DashboardViewModel(_db)
+        {
+            MoChungTuCallback = MoChungTuTuNhatKyAsync
+        };
         _storeInfo = new StoreInfoService(_db.TaoKetNoiAsync);
         BaoCaoBanHang = new BaoCaoBanHangViewModel(_db);
         BaoCaoHangHoa = new BaoCaoHangHoaViewModel(_db);
@@ -1595,6 +1598,18 @@ public partial class MainWindowViewModel : ObservableObject
 
             if (!confirmed)
                 return;
+        }
+
+        var currentUser = Session.CurrentUser;
+        if (currentUser is not null)
+        {
+            await _db.LogSubAccountActivityAsync(
+                "Đăng xuất",
+                "HE_THONG",
+                currentUser.Id,
+                currentUser.TenDangNhap,
+                $"Tài khoản {currentUser.TenDangNhap} ({currentUser.HoTen}) đăng xuất khỏi hệ thống",
+                actingUser: currentUser);
         }
 
         Session.Logout();
@@ -5830,6 +5845,8 @@ public partial class MainWindowViewModel : ObservableObject
             ? PhieuNhapSupplierSuggestions[PhieuNhapSupplierSelectedIndex]
             : null;
 
+    private NhaCungCap? _lastConfirmedPhieuNhapNcc;
+
     public void DiChuyenChonNhaCungCap(int delta)
     {
         if (PhieuNhapSupplierSuggestions.Count == 0)
@@ -5842,6 +5859,7 @@ public partial class MainWindowViewModel : ObservableObject
         PhieuNhapSupplierSelectedIndex =
             Math.Clamp(current + delta, 0, PhieuNhapSupplierSuggestions.Count - 1);
         IsPhieuNhapSupplierSuggestionsClosed = false;
+        OnPropertyChanged(nameof(PhieuNhapSelectedSupplier));
     }
 
     public void DongGoiYNhaCungCap()
@@ -5849,6 +5867,23 @@ public partial class MainWindowViewModel : ObservableObject
         _phieuNhapSupplierSearchCts?.Cancel();
         IsPhieuNhapSupplierSuggestionsClosed = true;
         PhieuNhapSupplierSelectedIndex = -1;
+        if (_lastConfirmedPhieuNhapNcc is not null)
+        {
+            SelectedPhieuNhapNcc = _lastConfirmedPhieuNhapNcc;
+            ImportSupplierSearch = _lastConfirmedPhieuNhapNcc.TenNhaCungCap;
+        }
+        else
+        {
+            SelectedPhieuNhapNcc = null;
+            ImportSupplierSearch = string.Empty;
+        }
+        PhieuNhapSupplierSuggestions.Clear();
+        OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+        OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
+        OnPropertyChanged(nameof(HasSelectedPhieuNhapNcc));
+        OnPropertyChanged(nameof(SelectedPhieuNhapNccDiaChiHienThi));
+        OnPropertyChanged(nameof(SelectedPhieuNhapNccSdtHienThi));
+        OnPropertyChanged(nameof(SelectedPhieuNhapNccMstHienThi));
     }
 
     public bool IsNhapHangListVisible => !IsNhapHangFormVisible;
@@ -6026,6 +6061,7 @@ public partial class MainWindowViewModel : ObservableObject
         ImportProductSearch = "";
         ImportSupplierSearch = "";
         SelectedPhieuNhapNcc = null;
+        _lastConfirmedPhieuNhapNcc = null;
 
         PhieuNhapNhanVien = Session.CurrentUser?.HoTen ?? "Chưa đăng nhập";
         PhieuNhapNgayNhap = DateTime.Now;
@@ -6382,7 +6418,8 @@ public partial class MainWindowViewModel : ObservableObject
             foreach (var supplier in suppliers.Take(20))
                 PhieuNhapSupplierSuggestions.Add(supplier);
 
-            PhieuNhapSupplierSelectedIndex = -1;
+            PhieuNhapSupplierSelectedIndex = PhieuNhapSupplierSuggestions.Count > 0 ? 0 : -1;
+            OnPropertyChanged(nameof(PhieuNhapSelectedSupplier));
         }
         catch (OperationCanceledException)
         {
@@ -6417,6 +6454,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             SelectedPhieuNhapNcc = supplier;
         }
+        _lastConfirmedPhieuNhapNcc = SelectedPhieuNhapNcc;
         ImportSupplierSearch = supplier.TenNhaCungCap;
         _phieuNhapSupplierSearchCts?.Cancel();
         IsPhieuNhapSupplierSuggestionsClosed = true;
@@ -8554,6 +8592,333 @@ public partial class MainWindowViewModel : ObservableObject
             return "THIS_MONTH";
 
         return "CUSTOM";
+    }
+
+    /// <summary>
+    /// FEATURE #103 (Phần 3): Mở trực tiếp chứng từ hoặc màn hình quản lý tương ứng khi nhấn mã chứng từ trên Nhật ký hoạt động.
+    /// </summary>
+    public async Task MoChungTuTuNhatKyAsync(TongQuanHoatDongTaiKhoanCon? item)
+    {
+        if (item is null)
+            return;
+
+        var maClean = item.MaChungTuSach;
+        var id = item.DoiTuongId;
+        var doiTuong = item.DoiTuong?.Trim().ToUpperInvariant() ?? "";
+        var hanhDong = item.HanhDong?.Trim().ToLowerInvariant() ?? "";
+        var maUpper = maClean.ToUpperInvariant();
+
+        try
+        {
+            // 1. Phiếu nhập hàng (bao gồm phiếu đã hủy)
+            if (doiTuong == "PHIEU_NHAP" || maUpper.StartsWith("PN"))
+            {
+                if (CanViewPurchases)
+                {
+                    IsSalesPanelVisible = false;
+                    BaoCaoPhieuNhapSearch = maClean;
+                    BaoCaoPhieuNhapPage = 1;
+                    SelectedMenu = "Phiếu nhập hàng";
+                    _baoCaoPhieuNhapLoaded = true;
+                    _ = LoadBaoCaoPhieuNhapAsync();
+                }
+
+                PhieuNhapHangDetail? detail = null;
+                if (id is > 0 && id.Value <= uint.MaxValue)
+                    detail = await _db.GetPhieuNhapHangDetailAsync((uint)id.Value);
+                if (detail is null && !string.IsNullOrWhiteSpace(maClean))
+                    detail = await _db.GetPhieuNhapHangDetailTheoMaAsync(maClean);
+
+                if (detail is null)
+                {
+                    var label = string.IsNullOrWhiteSpace(maClean) ? $"ID {id}" : maClean;
+                    StatusMessage = $"Phiếu nhập {label} không còn tồn tại trong hệ thống.";
+                    if (OwnerWindow is not null)
+                        await ShowMessageAsync("Không tìm thấy chứng từ", $"Phiếu nhập {label} không còn tồn tại trong cơ sở dữ liệu (có thể đã bị xóa).");
+                    return;
+                }
+
+                await HienThiChiTietPhieuNhapAsync(detail.PhieuNhapId, detail.MaPhieuNhap);
+                return;
+            }
+
+            // 2. Hóa đơn bán hàng (bao gồm hóa đơn đã hủy)
+            if (doiTuong == "HOA_DON" || maUpper.StartsWith("HD"))
+            {
+                var maHoaDon = maClean;
+                if (string.IsNullOrWhiteSpace(maHoaDon) && id is > 0)
+                    maHoaDon = await _db.GetMaHoaDonTheoIdAsync(id.Value) ?? "";
+
+                if (CanViewInvoices)
+                {
+                    IsSalesPanelVisible = false;
+                    if (!string.IsNullOrWhiteSpace(maHoaDon))
+                        InvoiceSearch = maHoaDon;
+                    SelectedMenu = "Hóa đơn";
+                    await SearchInvoicesAsync(giuTrang: false);
+                }
+
+                var receipt = !string.IsNullOrWhiteSpace(maHoaDon)
+                    ? await _db.GetHoaDonBanHangTheoMaAsync(maHoaDon)
+                    : null;
+
+                if (receipt is null)
+                {
+                    var label = string.IsNullOrWhiteSpace(maHoaDon) ? $"ID {id}" : maHoaDon;
+                    StatusMessage = $"Hóa đơn {label} không còn tồn tại trong hệ thống.";
+                    if (OwnerWindow is not null)
+                        await ShowMessageAsync("Không tìm thấy chứng từ", $"Hóa đơn {label} không còn tồn tại trong cơ sở dữ liệu (có thể đã bị xóa).");
+                    return;
+                }
+
+                if (OwnerWindow is not null)
+                {
+                    receipt.ThongTinTiem = await LayThongTinTiemChoHoaDonAsync();
+                    var invoiceWindow = new InvoiceWindow(
+                        receipt,
+                        ThuCongNoTuChiTietHoaDonAsync,
+                        XuLySauKhiHuyHoaDonAsync,
+                        TaoLaiHoaDonTuMaHoaDonAsync);
+                    await invoiceWindow.ShowDialog(OwnerWindow);
+                }
+                return;
+            }
+
+            // 3. Phiếu thu nợ / hủy thu nợ khách hàng (bao gồm phiếu đã hủy)
+            var laThuNoKh = doiTuong == "CONG_NO_KH"
+                || (doiTuong == "KHACH_HANG" && (hanhDong.Contains("thu nợ") || maUpper.StartsWith("PT") || maUpper.StartsWith("TTCN")));
+            if (laThuNoKh)
+            {
+                var chiTiet = await _db.GetChiTietThanhToanKhachHangTheoMaAsync(maClean, id);
+                if (chiTiet is null)
+                {
+                    if (!string.IsNullOrWhiteSpace(maClean))
+                    {
+                        var sq = await _db.GetSoQuyChiTietAsync(maClean);
+                        if (sq is not null)
+                        {
+                            if (CanViewCashBook)
+                            {
+                                IsSalesPanelVisible = false;
+                                SoQuySearchText = maClean;
+                                SelectedMenu = "Sổ quỹ";
+                            }
+                            SoQuyChiTietDangXem = sq;
+                            IsSoQuyChiTietVisible = true;
+                            return;
+                        }
+                    }
+
+                    var label = string.IsNullOrWhiteSpace(maClean) ? $"ID {id}" : maClean;
+                    StatusMessage = $"Phiếu thu nợ {label} không còn tồn tại trong hệ thống.";
+                    if (OwnerWindow is not null)
+                        await ShowMessageAsync("Không tìm thấy chứng từ", $"Phiếu thu nợ {label} không còn tồn tại trong cơ sở dữ liệu.");
+                    return;
+                }
+
+                if (CanViewCustomers && !string.IsNullOrWhiteSpace(chiTiet.MaKhachHang))
+                {
+                    IsSalesPanelVisible = false;
+                    CustomerSearch = chiTiet.MaKhachHang;
+                    SelectedMenu = "Khách hàng";
+                }
+
+                if (OwnerWindow is not null)
+                {
+                    var dialog = new ChiTietThanhToanKhachHangWindow(_db, chiTiet);
+                    await dialog.ShowDialog(OwnerWindow);
+                }
+                return;
+            }
+
+            // 4. Phiếu thanh toán công nợ NCC / hủy thanh toán NCC (bao gồm phiếu đã hủy)
+            var laThanhToanNcc = doiTuong == "CONG_NO_NCC"
+                || (doiTuong == "NHA_CUNG_CAP" && (hanhDong.Contains("thanh toán") || maUpper.StartsWith("PC") || maUpper.StartsWith("TTNCC")));
+            if (laThanhToanNcc)
+            {
+                var info = await _db.GetThongTinThanhToanNhaCungCapTheoMaAsync(maClean, id);
+                if (info is null)
+                {
+                    if (!string.IsNullOrWhiteSpace(maClean))
+                    {
+                        var sq = await _db.GetSoQuyChiTietAsync(maClean);
+                        if (sq is not null)
+                        {
+                            if (CanViewCashBook)
+                            {
+                                IsSalesPanelVisible = false;
+                                SoQuySearchText = maClean;
+                                SelectedMenu = "Sổ quỹ";
+                            }
+                            SoQuyChiTietDangXem = sq;
+                            IsSoQuyChiTietVisible = true;
+                            return;
+                        }
+                    }
+
+                    var label = string.IsNullOrWhiteSpace(maClean) ? $"ID {id}" : maClean;
+                    StatusMessage = $"Phiếu thanh toán NCC {label} không còn tồn tại trong hệ thống.";
+                    if (OwnerWindow is not null)
+                        await ShowMessageAsync("Không tìm thấy chứng từ", $"Phiếu thanh toán nhà cung cấp {label} không còn tồn tại trong cơ sở dữ liệu.");
+                    return;
+                }
+
+                if (CanViewSuppliers)
+                {
+                    IsSalesPanelVisible = false;
+                    SupplierSearch = string.IsNullOrWhiteSpace(info.Value.MaNhaCungCap) ? info.Value.TenNhaCungCap : info.Value.MaNhaCungCap;
+                    SelectedMenu = "Nhà cung cấp";
+                }
+
+                if (OwnerWindow is not null)
+                {
+                    var win = new LichSuThanhToanNhaCungCapWindow(
+                        _db,
+                        info.Value.NhaCungCapId,
+                        info.Value.MaNhaCungCap ?? "",
+                        info.Value.TenNhaCungCap,
+                        info.Value.MaGiaoDich);
+                    await win.ShowDialog(OwnerWindow);
+                }
+                return;
+            }
+
+            // 5. Phiếu thu / chi Sổ quỹ (bao gồm phiếu đã hủy)
+            if (doiTuong == "SO_QUY" || maUpper.StartsWith("PT") || maUpper.StartsWith("PC") || maUpper.StartsWith("CTM"))
+            {
+                if (CanViewCashBook)
+                {
+                    IsSalesPanelVisible = false;
+                    if (!string.IsNullOrWhiteSpace(maClean))
+                        SoQuySearchText = maClean;
+                    SelectedMenu = "Sổ quỹ";
+                }
+
+                var chiTiet = !string.IsNullOrWhiteSpace(maClean)
+                    ? await _db.GetSoQuyChiTietAsync(maClean)
+                    : null;
+
+                if (chiTiet is null)
+                {
+                    var label = string.IsNullOrWhiteSpace(maClean) ? $"ID {id}" : maClean;
+                    StatusMessage = $"Phiếu sổ quỹ {label} không còn tồn tại trong hệ thống.";
+                    if (OwnerWindow is not null)
+                        await ShowMessageAsync("Không tìm thấy chứng từ", $"Phiếu sổ quỹ {label} không còn tồn tại trong cơ sở dữ liệu.");
+                    return;
+                }
+
+                SoQuyChiTietDangXem = chiTiet;
+                IsSoQuyChiTietVisible = true;
+                return;
+            }
+
+            // 6. Sản phẩm
+            if (doiTuong == "SAN_PHAM" || maUpper.StartsWith("SP"))
+            {
+                SanPham? sp = null;
+                if (id is > 0 && id.Value <= uint.MaxValue)
+                    sp = await _db.GetSanPhamByIdAsync((uint)id.Value);
+                if (sp is null && !string.IsNullOrWhiteSpace(maClean))
+                    sp = await _db.GetSanPhamTheoMaAsync(maClean);
+
+                if (CanViewProducts)
+                {
+                    IsSalesPanelVisible = false;
+                    ProductSearch = !string.IsNullOrWhiteSpace(maClean) ? maClean : (sp?.MaSanPham ?? "");
+                    SelectedMenu = "Hàng hóa";
+                    _ = RefreshProductsAsync();
+                }
+
+                if (sp is null)
+                {
+                    var label = string.IsNullOrWhiteSpace(maClean) ? $"ID {id}" : maClean;
+                    StatusMessage = $"Hàng hóa {label} không còn tồn tại trong hệ thống.";
+                    if (OwnerWindow is not null)
+                        await ShowMessageAsync("Không tìm thấy dữ liệu", $"Sản phẩm {label} không còn tồn tại trong cơ sở dữ liệu (có thể đã bị xóa).");
+                    return;
+                }
+
+                if (OwnerWindow is not null)
+                    await SuaSanPhamAsync(sp);
+                return;
+            }
+
+            // 7. Khách hàng
+            if (doiTuong == "KHACH_HANG" || maUpper.StartsWith("KH"))
+            {
+                KhachHang? kh = null;
+                if (id is > 0 && id.Value <= uint.MaxValue)
+                    kh = await _db.GetKhachHangByIdAsync((uint)id.Value);
+                if (kh is null && !string.IsNullOrWhiteSpace(maClean))
+                    kh = await _db.GetKhachHangTheoMaAsync(maClean);
+
+                if (kh is null)
+                {
+                    var label = string.IsNullOrWhiteSpace(maClean) ? $"ID {id}" : maClean;
+                    StatusMessage = $"Khách hàng {label} không còn tồn tại trong hệ thống.";
+                    if (OwnerWindow is not null)
+                        await ShowMessageAsync("Không tìm thấy dữ liệu", $"Khách hàng {label} không còn tồn tại trong cơ sở dữ liệu (có thể đã bị xóa).");
+                    return;
+                }
+
+                if (CanViewCustomers)
+                {
+                    IsSalesPanelVisible = false;
+                    CustomerSearch = !string.IsNullOrWhiteSpace(kh.MaKhachHang) ? kh.MaKhachHang : kh.TenKhachHang;
+                    SelectedMenu = "Khách hàng";
+                    await LoadCustomersAsync();
+                    var row = CustomerRows.FirstOrDefault(r => r.CustomerId == kh.Id);
+                    if (row is not null)
+                        await MoChiTietKhachHangAsync(row);
+                }
+                return;
+            }
+
+            // 8. Nhà cung cấp
+            if (doiTuong == "NHA_CUNG_CAP" || maUpper.StartsWith("NCC"))
+            {
+                NhaCungCap? ncc = null;
+                if (id is > 0 && id.Value <= uint.MaxValue)
+                    ncc = await _db.GetNhaCungCapByIdAsync((uint)id.Value);
+                if (ncc is null && !string.IsNullOrWhiteSpace(maClean))
+                    ncc = await _db.GetNhaCungCapTheoMaAsync(maClean);
+
+                if (ncc is null)
+                {
+                    var label = string.IsNullOrWhiteSpace(maClean) ? $"ID {id}" : maClean;
+                    StatusMessage = $"Nhà cung cấp {label} không còn tồn tại trong hệ thống.";
+                    if (OwnerWindow is not null)
+                        await ShowMessageAsync("Không tìm thấy dữ liệu", $"Nhà cung cấp {label} không còn tồn tại trong cơ sở dữ liệu (có thể đã bị xóa).");
+                    return;
+                }
+
+                if (CanViewSuppliers)
+                {
+                    IsSalesPanelVisible = false;
+                    SupplierSearch = !string.IsNullOrWhiteSpace(ncc.MaNhaCungCap) ? ncc.MaNhaCungCap : ncc.TenNhaCungCap;
+                    SelectedMenu = "Nhà cung cấp";
+                    await LoadSupplierPageAsync();
+                    var row = SupplierRows.FirstOrDefault(r => r.SupplierId == ncc.Id);
+                    if (row is not null)
+                        await ToggleSupplierDetailAsync(row);
+                }
+                return;
+            }
+
+            // 9. Tài khoản / Phân quyền
+            if ((doiTuong == "NGUOI_DUNG" || doiTuong == "VAI_TRO") && OwnerWindow is not null && CanManageUsers)
+            {
+                var usersWindow = new UsersWindow();
+                await usersWindow.ShowDialog(OwnerWindow);
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Không mở được chứng từ {maClean}: {ex.Message}";
+            SafeLog.WriteError($"Loi mo chung tu tu nhat ky ({maClean})", ex);
+            if (OwnerWindow is not null)
+                await ShowMessageAsync("Không mở được chứng từ", ex.Message);
+        }
     }
 
 }

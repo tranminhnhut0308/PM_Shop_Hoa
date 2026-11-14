@@ -1622,11 +1622,36 @@ public partial class MainWindow : Window
                     viewModel.DiChuyenChonNhaCungCap(1);
                     e.Handled = true;
                 }
+                else if (viewModel.PhieuNhapSupplierSuggestions.Count > 0)
+                {
+                    viewModel.IsPhieuNhapSupplierSuggestionsClosed = false;
+                    viewModel.DiChuyenChonNhaCungCap(1);
+                    e.Handled = true;
+                }
+                else
+                {
+                    var kw = (textBox.Text ?? string.Empty).Trim();
+                    if (!string.IsNullOrEmpty(kw))
+                    {
+                        await viewModel.TimKiemNhaCungCapNhapNgayAsync(kw);
+                        if (viewModel.PhieuNhapSupplierSuggestions.Count > 0)
+                        {
+                            viewModel.DiChuyenChonNhaCungCap(0);
+                            e.Handled = true;
+                        }
+                    }
+                }
                 return;
 
             case Key.Up:
                 if (viewModel.HienThiGoiYNhaCungCap)
                 {
+                    viewModel.DiChuyenChonNhaCungCap(-1);
+                    e.Handled = true;
+                }
+                else if (viewModel.PhieuNhapSupplierSuggestions.Count > 0)
+                {
+                    viewModel.IsPhieuNhapSupplierSuggestionsClosed = false;
                     viewModel.DiChuyenChonNhaCungCap(-1);
                     e.Handled = true;
                 }
@@ -1679,6 +1704,17 @@ public partial class MainWindow : Window
     {
         if (sender is ListBox listBox && listBox.SelectedItem is not null)
             listBox.ScrollIntoView(listBox.SelectedItem);
+    }
+
+    private void OnImportSupplierItemTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (sender is Visual visual && visual.DataContext is NhaCungCap ncc && DataContext is MainWindowViewModel vm)
+        {
+            if (vm.ChonNhaCungCapNhapCommand.CanExecute(ncc))
+            {
+                vm.ChonNhaCungCapNhapCommand.Execute(ncc);
+            }
+        }
     }
 
     private void InvoiceRow_OnDoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)

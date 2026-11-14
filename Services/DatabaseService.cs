@@ -907,6 +907,15 @@ public sealed partial class DatabaseService
             await connection.ExecuteAsync(
                 "UPDATE nhom_san_pham SET trang_thai = 1 WHERE id = @Id;",
                 new { Id = existing.Id });
+            await LogSubAccountActivityAsync(
+                "Thêm danh mục",
+                "DANH_MUC",
+                existing.Id,
+                $"DM{existing.Id}",
+                $"Kích hoạt lại nhóm sản phẩm: {existing.Name}",
+                truongThayDoi: "Danh mục",
+                giaTriTruoc: "Ngừng sử dụng",
+                giaTriSau: existing.Name);
             return new ProductOption { Id = existing.Id, Name = existing.Name };
         }
 
@@ -941,6 +950,15 @@ public sealed partial class DatabaseService
                 new { Ten = ten });
         }
 
+        await LogSubAccountActivityAsync(
+            "Thêm danh mục",
+            "DANH_MUC",
+            newId,
+            $"DM{newId}",
+            $"Thêm nhóm sản phẩm mới: {ten}",
+            truongThayDoi: "Tên danh mục",
+            giaTriSau: ten);
+
         return new ProductOption { Id = newId, Name = ten };
     }
 
@@ -961,6 +979,15 @@ public sealed partial class DatabaseService
             await connection.ExecuteAsync(
                 "UPDATE don_vi_tinh SET trang_thai = 1 WHERE id = @Id;",
                 new { Id = existing.Id });
+            await LogSubAccountActivityAsync(
+                "Thêm đơn vị tính",
+                "DON_VI_TINH",
+                existing.Id,
+                $"DVT{existing.Id}",
+                $"Kích hoạt lại đơn vị tính: {existing.Name}",
+                truongThayDoi: "Đơn vị tính",
+                giaTriTruoc: "Ngừng hoạt động",
+                giaTriSau: existing.Name);
             return new ProductOption { Id = existing.Id, Name = existing.Name };
         }
 
@@ -994,6 +1021,15 @@ public sealed partial class DatabaseService
                 "SELECT id FROM don_vi_tinh WHERE LOWER(TRIM(ten_don_vi)) = LOWER(@Ten) ORDER BY id DESC LIMIT 1;",
                 new { Ten = ten });
         }
+
+        await LogSubAccountActivityAsync(
+            "Thêm đơn vị tính",
+            "DON_VI_TINH",
+            newId,
+            $"DVT{newId}",
+            $"Thêm đơn vị tính mới: {ten}",
+            truongThayDoi: "Tên đơn vị tính",
+            giaTriSau: ten);
 
         return new ProductOption { Id = newId, Name = ten };
     }
@@ -1299,8 +1335,30 @@ public sealed partial class DatabaseService
             """;
 
         var newId = await connection.ExecuteScalarAsync<uint>(sql, product);
-        _ = LogSubAccountActivityAsync("Thêm hàng hóa", "SAN_PHAM", newId, product.MaSanPham, $"Thêm sản phẩm mới: {product.TenSanPham} ({product.MaSanPham})", product.GiaBan);
+        await LogSubAccountActivityAsync(
+            "Thêm sản phẩm",
+            "SAN_PHAM",
+            newId,
+            product.MaSanPham,
+            $"Thêm sản phẩm mới: {product.TenSanPham} ({product.MaSanPham}) — Giá bán: {product.GiaBan:N0} đ | Giá vốn: {product.GiaVon:N0} đ | Tồn kho: {product.TonKhoExcel:N0}",
+            product.GiaBan,
+            truongThayDoi: "Tạo mới sản phẩm",
+            giaTriSau: $"Mã: {product.MaSanPham}\nTên: {product.TenSanPham}\nGiá bán: {product.GiaBan:N0} đ\nGiá vốn: {product.GiaVon:N0} đ\nTồn kho: {product.TonKhoExcel:N0}");
         return newId;
+    }
+
+    private sealed class SanPhamAuditSnapshot
+    {
+        public string? MaSanPham { get; set; }
+        public string? TenSanPham { get; set; }
+        public decimal GiaBan { get; set; }
+        public decimal GiaVon { get; set; }
+        public decimal TonKhoExcel { get; set; }
+        public uint? NhomSanPhamId { get; set; }
+        public uint? DonViTinhId { get; set; }
+        public bool DangKinhDoanh { get; set; }
+        public string? TenNhom { get; set; }
+        public string? TenDonVi { get; set; }
     }
 
     public async Task CapNhatSanPhamAsync(SanPham product)
@@ -1332,6 +1390,27 @@ public sealed partial class DatabaseService
             }
         }
 
+        var spCu = await connection.QueryFirstOrDefaultAsync<SanPhamAuditSnapshot>(
+            """
+            SELECT
+                sp.ma_san_pham AS MaSanPham,
+                sp.ten_san_pham AS TenSanPham,
+                sp.gia_ban AS GiaBan,
+                sp.gia_von AS GiaVon,
+                sp.ton_kho_excel AS TonKhoExcel,
+                sp.nhom_san_pham_id AS NhomSanPhamId,
+                sp.don_vi_tinh_id AS DonViTinhId,
+                sp.trang_thai AS DangKinhDoanh,
+                COALESCE(nsp.ten_nhom, sp.nhom_hang_3_cap_excel, '') AS TenNhom,
+                COALESCE(dvt.ten_don_vi, '') AS TenDonVi
+            FROM san_pham sp
+            LEFT JOIN nhom_san_pham nsp ON sp.nhom_san_pham_id = nsp.id
+            LEFT JOIN don_vi_tinh dvt ON sp.don_vi_tinh_id = dvt.id
+            WHERE sp.id = @Id
+            LIMIT 1;
+            """,
+            new { product.Id });
+
         // Trường nào người dùng thiếu quyền chi tiết tương ứng thì bỏ hẳn khỏi
         // câu UPDATE (giá bán -> sua_gia_ban, giá vốn -> sua_gia_von, tồn kho ->
         // dieu_chinh_ton_kho). Nhờ vậy giá trị đang có trong database được giữ
@@ -1358,20 +1437,103 @@ public sealed partial class DatabaseService
             "ngay_cap_nhat = NOW()"
         };
 
-        if (Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsUpdatePrice))
+        var coQuyenSuaGiaBan = Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsUpdatePrice);
+        var coQuyenSuaGiaVon = Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsUpdateCost);
+        var coQuyenSuaTonKho = Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsAdjustStock);
+
+        if (coQuyenSuaGiaBan)
             danhSachCot.Add("gia_ban = @GiaBan");
 
-        if (Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsUpdateCost))
+        if (coQuyenSuaGiaVon)
             danhSachCot.Add("gia_von = @GiaVon");
 
-        if (Quyen.HasPermission(Session.CurrentUser, PermissionKeys.ProductsAdjustStock))
+        if (coQuyenSuaTonKho)
             danhSachCot.Add("ton_kho_excel = @TonKhoExcel");
 
         var sql = $"UPDATE san_pham SET {string.Join(", ", danhSachCot)} WHERE id = @Id;";
 
         await connection.ExecuteAsync(sql, product);
 
-        _ = LogSubAccountActivityAsync("Cập nhật hàng hóa", "SAN_PHAM", product.Id, product.MaSanPham, $"Cập nhật sản phẩm: {product.TenSanPham} ({product.MaSanPham})", product.GiaBan);
+        var truongThayDois = new List<string>();
+        var truocLines = new List<string>();
+        var sauLines = new List<string>();
+
+        if (spCu is not null)
+        {
+            if (!string.Equals(spCu.MaSanPham?.Trim() ?? "", product.MaSanPham?.Trim() ?? "", StringComparison.Ordinal))
+            {
+                truongThayDois.Add("Mã sản phẩm");
+                truocLines.Add($"- Mã SP cũ: {spCu.MaSanPham}");
+                sauLines.Add($"- Mã SP mới: {product.MaSanPham}");
+            }
+            if (!string.Equals(spCu.TenSanPham?.Trim() ?? "", product.TenSanPham?.Trim() ?? "", StringComparison.Ordinal))
+            {
+                truongThayDois.Add("Tên sản phẩm");
+                truocLines.Add($"- Tên cũ: {spCu.TenSanPham}");
+                sauLines.Add($"- Tên mới: {product.TenSanPham}");
+            }
+            if (coQuyenSuaGiaBan && spCu.GiaBan != product.GiaBan)
+            {
+                truongThayDois.Add("Giá bán");
+                truocLines.Add($"- Giá bán cũ: {spCu.GiaBan:N0} đ");
+                sauLines.Add($"- Giá bán mới: {product.GiaBan:N0} đ");
+            }
+            if (coQuyenSuaGiaVon && spCu.GiaVon != product.GiaVon)
+            {
+                truongThayDois.Add("Giá vốn");
+                truocLines.Add($"- Giá vốn cũ: {spCu.GiaVon:N0} đ");
+                sauLines.Add($"- Giá vốn mới: {product.GiaVon:N0} đ");
+            }
+            if (coQuyenSuaTonKho && spCu.TonKhoExcel != product.TonKhoExcel)
+            {
+                truongThayDois.Add("Tồn kho");
+                truocLines.Add($"- Tồn kho cũ: {spCu.TonKhoExcel:N0}");
+                sauLines.Add($"- Tồn kho mới: {product.TonKhoExcel:N0}");
+            }
+            if (spCu.NhomSanPhamId != product.NhomSanPhamId)
+            {
+                truongThayDois.Add("Danh mục");
+                truocLines.Add($"- Danh mục cũ: {(string.IsNullOrWhiteSpace(spCu.TenNhom) ? "Chưa phân nhóm" : spCu.TenNhom)}");
+                sauLines.Add($"- Danh mục mới: {(string.IsNullOrWhiteSpace(product.NhomSanPham) ? $"ID {product.NhomSanPhamId}" : product.NhomSanPham)}");
+            }
+            if (spCu.DonViTinhId != product.DonViTinhId)
+            {
+                truongThayDois.Add("Đơn vị tính");
+                truocLines.Add($"- ĐVT cũ: {(string.IsNullOrWhiteSpace(spCu.TenDonVi) ? "Không có" : spCu.TenDonVi)}");
+                sauLines.Add($"- ĐVT mới: {(string.IsNullOrWhiteSpace(product.DonViTinh) ? $"ID {product.DonViTinhId}" : product.DonViTinh)}");
+            }
+            if (spCu.DangKinhDoanh != product.DangKinhDoanh)
+            {
+                truongThayDois.Add("Trạng thái");
+                truocLines.Add($"- Trạng thái cũ: {(spCu.DangKinhDoanh ? "Đang kinh doanh" : "Ngừng kinh doanh")}");
+                sauLines.Add($"- Trạng thái mới: {(product.DangKinhDoanh ? "Đang kinh doanh" : "Ngừng kinh doanh")}");
+            }
+        }
+
+        var hanhDong = truongThayDois.Count == 1
+            ? truongThayDois[0] switch
+            {
+                "Giá bán" => "Sửa giá bán",
+                "Giá vốn" => "Sửa giá vốn",
+                "Tồn kho" => "Thay đổi tồn kho",
+                _ => "Sửa sản phẩm"
+            }
+            : "Sửa sản phẩm";
+
+        var noiDung = truongThayDois.Count > 0
+            ? $"Cập nhật sản phẩm {product.TenSanPham} ({product.MaSanPham}) — Thay đổi: {string.Join(", ", truongThayDois)}"
+            : $"Cập nhật thông tin sản phẩm: {product.TenSanPham} ({product.MaSanPham})";
+
+        await LogSubAccountActivityAsync(
+            hanhDong,
+            "SAN_PHAM",
+            product.Id,
+            product.MaSanPham,
+            noiDung,
+            product.GiaBan,
+            truongThayDoi: truongThayDois.Count > 0 ? string.Join(", ", truongThayDois) : "Thông tin sản phẩm",
+            giaTriTruoc: truocLines.Count > 0 ? string.Join("\n", truocLines) : null,
+            giaTriSau: sauLines.Count > 0 ? string.Join("\n", sauLines) : null);
     }
     /// <summary>
     /// Chỉ cập nhật đúng cột <c>san_pham.gia_ban</c> của một sản phẩm.
@@ -1438,13 +1600,16 @@ public sealed partial class DatabaseService
         // MySQL trả 0 dòng bị ảnh hưởng khi sản phẩm không tồn tại.
         if (affectedRows > 0 && hangCu.HasValue)
         {
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Sửa giá bán",
                 "SAN_PHAM",
                 productId,
                 hangCu.Value.MaSanPham,
                 $"Sửa giá bán '{hangCu.Value.TenSanPham}' ({hangCu.Value.MaSanPham}): {hangCu.Value.GiaBan:N0} đ ➔ {giaBanMoi:N0} đ",
-                giaBanMoi);
+                giaBanMoi,
+                truongThayDoi: "Giá bán",
+                giaTriTruoc: $"- Giá bán cũ: {hangCu.Value.GiaBan:N0} đ",
+                giaTriSau: $"- Giá bán mới: {giaBanMoi:N0} đ");
         }
 
         return affectedRows > 0;
@@ -1473,11 +1638,17 @@ public sealed partial class DatabaseService
         var branchId = chiNhanhId ?? Session.CurrentUser?.ChiNhanhId ?? 1;
         var userId = Session.CurrentUser?.Id;
 
+        await EnsureAuditTableAsync();
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
 
         try
         {
+            var thongTinSp = await connection.QueryFirstOrDefaultAsync<(string? MaSanPham, string? TenSanPham, decimal TonKhoExcel, decimal GiaVon)?>(
+                "SELECT ma_san_pham, ten_san_pham, COALESCE(ton_kho_excel, 0), COALESCE(gia_von, 0) FROM san_pham WHERE id = @Id LIMIT 1;",
+                new { Id = productId },
+                transaction);
+
             const string selectTonSql = """
             SELECT so_luong_ton, gia_von_binh_quan
             FROM ton_kho
@@ -1503,17 +1674,10 @@ public sealed partial class DatabaseService
                 tonTruoc = ToDecimal(row.TryGetValue("so_luong_ton", out var s) ? s : null);
                 giaVon = ToDecimal(row.TryGetValue("gia_von_binh_quan", out var g) ? g : null);
             }
-            else
+            else if (thongTinSp.HasValue)
             {
-                var spRow = await connection.QueryFirstOrDefaultAsync(
-                    "SELECT COALESCE(ton_kho_excel, 0) AS TonKho, COALESCE(gia_von, 0) AS GiaVon FROM san_pham WHERE id = @Id LIMIT 1;",
-                    new { Id = productId },
-                    transaction);
-                if (spRow != null)
-                {
-                    tonTruoc = ToDecimal(spRow.TonKho);
-                    giaVon = ToDecimal(spRow.GiaVon);
-                }
+                tonTruoc = thongTinSp.Value.TonKhoExcel;
+                giaVon = thongTinSp.Value.GiaVon;
             }
 
             const string upsertTonSql = """
@@ -1619,15 +1783,22 @@ public sealed partial class DatabaseService
                 SafeLog.WriteError("Ghi lich su ton kho nhanh", exLichSu);
             }
 
-            await transaction.CommitAsync();
-
-            _ = LogSubAccountActivityAsync(
-                "Chỉnh tồn kho nhanh",
+            var maSpAudit = thongTinSp?.MaSanPham;
+            var tenSpAudit = thongTinSp?.TenSanPham ?? $"ID {productId}";
+            await LogSubAccountActivityAsync(
+                "Thay đổi tồn kho",
                 "SAN_PHAM",
                 productId,
-                null,
-                $"Cập nhật tồn kho sản phẩm ID {productId} từ {tonTruoc:N0} thành {soLuongTonMoi:N0}",
-                soLuongTonMoi);
+                maSpAudit,
+                $"Điều chỉnh tồn kho nhanh '{tenSpAudit}' ({maSpAudit}): {tonTruoc:N0} ➔ {soLuongTonMoi:N0}",
+                soLuongTonMoi,
+                truongThayDoi: "Tồn kho",
+                giaTriTruoc: $"- Tồn kho cũ: {tonTruoc:N0}",
+                giaTriSau: $"- Tồn kho mới: {soLuongTonMoi:N0}",
+                connection: connection,
+                transaction: transaction);
+
+            await transaction.CommitAsync();
 
             return true;
         }
@@ -1649,13 +1820,35 @@ public sealed partial class DatabaseService
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsDelete, "Bạn không có quyền xóa hàng hóa.");
         await using var connection = await OpenAsync();
 
+        var spCu = await connection.QueryFirstOrDefaultAsync<SanPhamAuditSnapshot>(
+            """
+            SELECT ma_san_pham AS MaSanPham, ten_san_pham AS TenSanPham, gia_ban AS GiaBan, gia_von AS GiaVon, ton_kho_excel AS TonKhoExcel
+            FROM san_pham
+            WHERE id = @Id
+            LIMIT 1;
+            """,
+            new { Id = productId });
+
+        var giaTriCuText = spCu is null
+            ? $"ID {productId}"
+            : $"Mã: {spCu.MaSanPham} | Tên: {spCu.TenSanPham} | Giá bán: {spCu.GiaBan:N0} đ | Tồn: {spCu.TonKhoExcel:N0}";
+
         try
         {
             await connection.ExecuteAsync(
                 "DELETE FROM san_pham WHERE id = @Id;",
                 new { Id = productId });
 
-            _ = LogSubAccountActivityAsync("Xóa hàng hóa", "SAN_PHAM", productId, null, $"Đã xóa sản phẩm (id={productId})");
+            await LogSubAccountActivityAsync(
+                "Xóa sản phẩm",
+                "SAN_PHAM",
+                productId,
+                spCu?.MaSanPham,
+                $"Đã xóa sản phẩm: {spCu?.TenSanPham ?? $"ID {productId}"} ({spCu?.MaSanPham})",
+                spCu?.GiaBan,
+                truongThayDoi: "Trạng thái sản phẩm",
+                giaTriTruoc: giaTriCuText,
+                giaTriSau: "Đã xóa khỏi hệ thống");
 
             return KetQuaXoaSanPham.DaXoa;
         }
@@ -1666,7 +1859,16 @@ public sealed partial class DatabaseService
                 "UPDATE san_pham SET trang_thai = 0, ngay_cap_nhat = NOW() WHERE id = @Id;",
                 new { Id = productId });
 
-            _ = LogSubAccountActivityAsync("Ẩn hàng hóa", "SAN_PHAM", productId, null, $"Đã ẩn sản phẩm khỏi danh sách (id={productId})");
+            await LogSubAccountActivityAsync(
+                "Xóa sản phẩm",
+                "SAN_PHAM",
+                productId,
+                spCu?.MaSanPham,
+                $"Đã ẩn sản phẩm (đã phát sinh giao dịch): {spCu?.TenSanPham ?? $"ID {productId}"} ({spCu?.MaSanPham})",
+                spCu?.GiaBan,
+                truongThayDoi: "Trạng thái sản phẩm",
+                giaTriTruoc: giaTriCuText,
+                giaTriSau: "Ngừng kinh doanh (Đã ẩn khỏi danh sách)");
 
             return KetQuaXoaSanPham.DaAnKhoiDanhSach;
         }
@@ -2975,13 +3177,16 @@ public sealed partial class DatabaseService
 
         if (thongTinCu.HasValue)
         {
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Xóa khách hàng",
                 "KHACH_HANG",
                 customerId,
                 thongTinCu.Value.MaKhachHang,
                 $"Xóa khách hàng {thongTinCu.Value.TenKhachHang}" +
-                    (string.IsNullOrWhiteSpace(thongTinCu.Value.MaKhachHang) ? "" : $" ({thongTinCu.Value.MaKhachHang})"));
+                    (string.IsNullOrWhiteSpace(thongTinCu.Value.MaKhachHang) ? "" : $" ({thongTinCu.Value.MaKhachHang})"),
+                truongThayDoi: "Trạng thái, Tên khách hàng",
+                giaTriTruoc: $"Đang hoạt động ({thongTinCu.Value.TenKhachHang})",
+                giaTriSau: "Đã xóa");
         }
     }
 
@@ -3750,6 +3955,216 @@ public sealed partial class DatabaseService
         return records.AsList();
     }
 
+    public async Task<ChiTietThanhToanKhachHang?> GetChiTietThanhToanKhachHangTheoMaAsync(
+        string? maGiaoDich,
+        ulong? khachHangId = null)
+    {
+        var maClean = maGiaoDich?.Trim();
+        if (string.IsNullOrWhiteSpace(maClean) && (!khachHangId.HasValue || khachHangId.Value == 0))
+            return null;
+
+        await EnsureBangLichSuThanhToanKhachHangAsync();
+        await EnsurePhieuQuyCancelColumnsAsync();
+
+        await using var connection = await OpenAsync();
+
+        ThanhToanCongNoKhachHang? record = null;
+        if (!string.IsNullOrWhiteSpace(maClean))
+        {
+            const string byCodeSql = """
+            SELECT
+                ls.id AS Id,
+                kh.ma_khach_hang AS MaKhachHang,
+                ls.ma_giao_dich AS MaGiaoDich,
+                ls.thoi_gian AS ThoiGian,
+                ls.cong_no_truoc AS CongNoTruoc,
+                ls.so_tien AS SoTien,
+                ls.cong_no_sau AS CongNoSau,
+                ls.phuong_thuc AS PhuongThuc,
+                COALESCE(ls.ma_tham_chieu, '') AS MaThamChieu,
+                COALESCE(NULLIF(TRIM(nd.ho_ten), ''), nd.ten_dang_nhap, '') AS NguoiThucHien,
+                ls.ghi_chu AS GhiChu,
+                ls.trang_thai AS TrangThai,
+                ls.thoi_gian_huy AS ThoiGianHuy,
+                ls.ly_do_huy AS LyDoHuy,
+                COALESCE(nd_huy.ho_ten, nd_huy.ten_dang_nhap, '') AS NguoiHuy
+            FROM lich_su_thanh_toan_cong_no_khach_hang ls
+            INNER JOIN khach_hang kh ON kh.id = ls.khach_hang_id
+            LEFT JOIN nguoi_dung nd ON nd.id = ls.nguoi_thuc_hien_id
+            LEFT JOIN nguoi_dung nd_huy ON nd_huy.id = ls.nguoi_huy_id
+            WHERE ls.ma_giao_dich = @MaGiaoDich
+            ORDER BY ls.id DESC
+            LIMIT 1;
+            """;
+
+            record = await connection.QueryFirstOrDefaultAsync<ThanhToanCongNoKhachHang>(
+                byCodeSql,
+                new { MaGiaoDich = maClean });
+        }
+
+        if (record is null && khachHangId is > 0 && string.IsNullOrWhiteSpace(maClean))
+        {
+            const string byCustomerSql = """
+            SELECT
+                ls.id AS Id,
+                kh.ma_khach_hang AS MaKhachHang,
+                ls.ma_giao_dich AS MaGiaoDich,
+                ls.thoi_gian AS ThoiGian,
+                ls.cong_no_truoc AS CongNoTruoc,
+                ls.so_tien AS SoTien,
+                ls.cong_no_sau AS CongNoSau,
+                ls.phuong_thuc AS PhuongThuc,
+                COALESCE(ls.ma_tham_chieu, '') AS MaThamChieu,
+                COALESCE(NULLIF(TRIM(nd.ho_ten), ''), nd.ten_dang_nhap, '') AS NguoiThucHien,
+                ls.ghi_chu AS GhiChu,
+                ls.trang_thai AS TrangThai,
+                ls.thoi_gian_huy AS ThoiGianHuy,
+                ls.ly_do_huy AS LyDoHuy,
+                COALESCE(nd_huy.ho_ten, nd_huy.ten_dang_nhap, '') AS NguoiHuy
+            FROM lich_su_thanh_toan_cong_no_khach_hang ls
+            INNER JOIN khach_hang kh ON kh.id = ls.khach_hang_id
+            LEFT JOIN nguoi_dung nd ON nd.id = ls.nguoi_thuc_hien_id
+            LEFT JOIN nguoi_dung nd_huy ON nd_huy.id = ls.nguoi_huy_id
+            WHERE ls.khach_hang_id = @KhachHangId
+            ORDER BY ls.thoi_gian DESC, ls.id DESC
+            LIMIT 1;
+            """;
+
+            record = await connection.QueryFirstOrDefaultAsync<ThanhToanCongNoKhachHang>(
+                byCustomerSql,
+                new { KhachHangId = (uint)khachHangId.Value });
+        }
+
+        if (record is null)
+            return null;
+
+        var tenKhachHang = await connection.ExecuteScalarAsync<string?>(
+            """
+            SELECT kh.ten_khach_hang
+            FROM lich_su_thanh_toan_cong_no_khach_hang ls
+            INNER JOIN khach_hang kh ON kh.id = ls.khach_hang_id
+            WHERE ls.id = @Id
+            LIMIT 1;
+            """,
+            new { record.Id }) ?? "";
+
+        var allocations = await GetPhanBoThanhToanKhachHangAsync(record.MaGiaoDich);
+        return ChiTietThanhToanKhachHang.Tao(
+            record,
+            record.MaKhachHang,
+            tenKhachHang,
+            allocations,
+            record.MaThamChieu);
+    }
+
+    public async Task<(uint NhaCungCapId, string? MaNhaCungCap, string TenNhaCungCap, string MaGiaoDich)?> GetThongTinThanhToanNhaCungCapTheoMaAsync(
+        string? maGiaoDich,
+        ulong? nhaCungCapId = null)
+    {
+        var maClean = maGiaoDich?.Trim();
+        if (string.IsNullOrWhiteSpace(maClean) && (!nhaCungCapId.HasValue || nhaCungCapId.Value == 0))
+            return null;
+
+        await EnsureBangLichSuThanhToanNhaCungCapAsync();
+        await using var connection = await OpenAsync();
+
+        if (!string.IsNullOrWhiteSpace(maClean))
+        {
+            var found = await connection.QueryFirstOrDefaultAsync<(
+                uint NhaCungCapId,
+                string? MaNhaCungCap,
+                string TenNhaCungCap,
+                string MaGiaoDich)?>(
+                """
+                SELECT
+                    ls.nha_cung_cap_id AS NhaCungCapId,
+                    COALESCE(NULLIF(TRIM(ncc.ma_nha_cung_cap), ''), ls.ma_nha_cung_cap) AS MaNhaCungCap,
+                    COALESCE(NULLIF(TRIM(ncc.ten_nha_cung_cap), ''), ls.ten_nha_cung_cap, '') AS TenNhaCungCap,
+                    ls.ma_giao_dich AS MaGiaoDich
+                FROM lich_su_thanh_toan_cong_no_nha_cung_cap ls
+                LEFT JOIN nha_cung_cap ncc ON ncc.id = ls.nha_cung_cap_id
+                WHERE ls.ma_giao_dich = @MaGiaoDich
+                ORDER BY ls.id DESC
+                LIMIT 1;
+                """,
+                new { MaGiaoDich = maClean });
+
+            if (found.HasValue)
+                return found;
+        }
+
+        if (nhaCungCapId is > 0 && string.IsNullOrWhiteSpace(maClean))
+        {
+            return await connection.QueryFirstOrDefaultAsync<(
+                uint NhaCungCapId,
+                string? MaNhaCungCap,
+                string TenNhaCungCap,
+                string MaGiaoDich)?>(
+                """
+                SELECT
+                    ls.nha_cung_cap_id AS NhaCungCapId,
+                    COALESCE(NULLIF(TRIM(ncc.ma_nha_cung_cap), ''), ls.ma_nha_cung_cap) AS MaNhaCungCap,
+                    COALESCE(NULLIF(TRIM(ncc.ten_nha_cung_cap), ''), ls.ten_nha_cung_cap, '') AS TenNhaCungCap,
+                    ls.ma_giao_dich AS MaGiaoDich
+                FROM lich_su_thanh_toan_cong_no_nha_cung_cap ls
+                LEFT JOIN nha_cung_cap ncc ON ncc.id = ls.nha_cung_cap_id
+                WHERE ls.nha_cung_cap_id = @NhaCungCapId
+                ORDER BY ls.thoi_gian DESC, ls.id DESC
+                LIMIT 1;
+                """,
+                new { NhaCungCapId = (uint)nhaCungCapId.Value });
+        }
+
+        return null;
+    }
+
+    public async Task<string?> GetMaHoaDonTheoIdAsync(ulong hoaDonId)
+    {
+        if (hoaDonId == 0)
+            return null;
+
+        await using var connection = await OpenAsync();
+        return await connection.ExecuteScalarAsync<string?>(
+            "SELECT ma_hoa_don FROM hoa_don_ban_hang WHERE id = @Id LIMIT 1;",
+            new { Id = hoaDonId });
+    }
+
+    public async Task<SanPham?> GetSanPhamTheoMaAsync(string? maSanPham)
+    {
+        if (string.IsNullOrWhiteSpace(maSanPham))
+            return null;
+
+        await using var connection = await OpenAsync();
+        var id = await connection.ExecuteScalarAsync<uint?>(
+            "SELECT id FROM san_pham WHERE ma_san_pham = @Ma LIMIT 1;",
+            new { Ma = maSanPham.Trim() });
+        return id is > 0 ? await GetSanPhamByIdAsync(id.Value) : null;
+    }
+
+    public async Task<KhachHang?> GetKhachHangTheoMaAsync(string? maKhachHang)
+    {
+        if (string.IsNullOrWhiteSpace(maKhachHang))
+            return null;
+
+        await using var connection = await OpenAsync();
+        var id = await connection.ExecuteScalarAsync<uint?>(
+            "SELECT id FROM khach_hang WHERE ma_khach_hang = @Ma LIMIT 1;",
+            new { Ma = maKhachHang.Trim() });
+        return id is > 0 ? await GetKhachHangByIdAsync(id.Value) : null;
+    }
+
+    public async Task<NhaCungCap?> GetNhaCungCapTheoMaAsync(string? maNhaCungCap)
+    {
+        if (string.IsNullOrWhiteSpace(maNhaCungCap))
+            return null;
+
+        await using var connection = await OpenAsync();
+        var id = await connection.ExecuteScalarAsync<uint?>(
+            "SELECT id FROM nha_cung_cap WHERE ma_nha_cung_cap = @Ma LIMIT 1;",
+            new { Ma = maNhaCungCap.Trim() });
+        return id is > 0 ? await GetNhaCungCapByIdAsync(id.Value) : null;
+    }
+
     public async Task<ThanhToanCongNoLichSuThongKe> GetThongKeLichSuThanhToanCongNoKhachHangAsync(
         uint customerId,
         DateTime? tuNgay = null,
@@ -3958,7 +4373,15 @@ public sealed partial class DatabaseService
                 customer.GhiChu
             });
 
-        _ = LogSubAccountActivityAsync("Thêm khách hàng", "KHACH_HANG", id, customer.MaKhachHang, $"Thêm khách hàng: {customer.TenKhachHang} ({customer.SoDienThoai})");
+        await LogSubAccountActivityAsync(
+            "Thêm khách hàng",
+            "KHACH_HANG",
+            id,
+            customer.MaKhachHang,
+            $"Thêm khách hàng: {customer.TenKhachHang} ({customer.SoDienThoai})",
+            truongThayDoi: "Khách hàng mới",
+            giaTriTruoc: "Chưa tồn tại",
+            giaTriSau: $"{customer.TenKhachHang} - SĐT: {customer.SoDienThoai ?? "Trống"}");
 
         return id;
     }
@@ -3968,6 +4391,32 @@ public sealed partial class DatabaseService
         ChuanHoaSoDienThoaiKhachHang(customer);
         ChuanHoaDiaChiKhachHang(customer);
         await using var connection = await OpenAsync();
+
+        var khCu = await connection.QueryFirstOrDefaultAsync<(
+            string? MaKhachHang,
+            string? TenKhachHang,
+            string? LoaiKhachHang,
+            string? SoDienThoai,
+            string? Email,
+            string? DiaChi,
+            string? MaSoThue,
+            string? TenCongTy,
+            string? GhiChu)?>(
+            """
+            SELECT ma_khach_hang AS MaKhachHang,
+                   ten_khach_hang AS TenKhachHang,
+                   loai_khach_hang AS LoaiKhachHang,
+                   so_dien_thoai AS SoDienThoai,
+                   email AS Email,
+                   dia_chi AS DiaChi,
+                   ma_so_thue AS MaSoThue,
+                   ten_cong_ty AS TenCongTy,
+                   ghi_chu AS GhiChu
+            FROM khach_hang
+            WHERE id = @Id AND trang_thai = 1
+            LIMIT 1;
+            """,
+            new { Id = customer.Id });
 
         const string sql = """
         UPDATE khach_hang
@@ -3996,7 +4445,47 @@ public sealed partial class DatabaseService
         if (affectedRows == 0)
             throw new InvalidOperationException("Khách hàng không tồn tại hoặc đã bị xóa.");
 
-        _ = LogSubAccountActivityAsync("Cập nhật khách hàng", "KHACH_HANG", customer.Id, customer.MaKhachHang, $"Cập nhật khách hàng: {customer.TenKhachHang} ({customer.SoDienThoai})");
+        var truongList = new List<string>();
+        var truocList = new List<string>();
+        var sauList = new List<string>();
+        void GhiThayDoiKh(string tenTruong, string? cu, string? moi)
+        {
+            var c = string.IsNullOrWhiteSpace(cu) ? "Trống" : cu.Trim();
+            var m = string.IsNullOrWhiteSpace(moi) ? "Trống" : moi.Trim();
+            if (!string.Equals(c, m, StringComparison.Ordinal))
+            {
+                truongList.Add(tenTruong);
+                truocList.Add($"{tenTruong}: {c}");
+                sauList.Add($"{tenTruong}: {m}");
+            }
+        }
+
+        if (khCu.HasValue)
+        {
+            GhiThayDoiKh("Mã KH", khCu.Value.MaKhachHang, customer.MaKhachHang);
+            GhiThayDoiKh("Tên khách hàng", khCu.Value.TenKhachHang, customer.TenKhachHang);
+            GhiThayDoiKh("Loại KH", khCu.Value.LoaiKhachHang, customer.LoaiKhachHang);
+            GhiThayDoiKh("Số điện thoại", khCu.Value.SoDienThoai, customer.SoDienThoai);
+            GhiThayDoiKh("Email", khCu.Value.Email, customer.Email);
+            GhiThayDoiKh("Địa chỉ", khCu.Value.DiaChi, customer.DiaChi);
+            GhiThayDoiKh("Mã số thuế", khCu.Value.MaSoThue, customer.MaSoThue);
+            GhiThayDoiKh("Tên công ty", khCu.Value.TenCongTy, customer.TenCongTy);
+            GhiThayDoiKh("Ghi chú", khCu.Value.GhiChu, customer.GhiChu);
+        }
+
+        var noiDung = truocList.Count > 0
+            ? $"Sửa khách hàng {customer.TenKhachHang}: {string.Join("; ", truongList.Select((t, i) => $"{t} '{truocList[i].Substring(t.Length + 2)}' -> '{sauList[i].Substring(t.Length + 2)}'"))}"
+            : $"Cập nhật khách hàng: {customer.TenKhachHang} ({customer.SoDienThoai})";
+
+        await LogSubAccountActivityAsync(
+            "Cập nhật khách hàng",
+            "KHACH_HANG",
+            customer.Id,
+            customer.MaKhachHang,
+            noiDung,
+            truongThayDoi: truongList.Count > 0 ? string.Join(", ", truongList) : "Thông tin khách hàng",
+            giaTriTruoc: truocList.Count > 0 ? string.Join("\n", truocList) : null,
+            giaTriSau: sauList.Count > 0 ? string.Join("\n", sauList) : null);
     }
 
     private static void ChuanHoaSoDienThoaiKhachHang(KhachHang customer)
@@ -5624,6 +6113,7 @@ public sealed partial class DatabaseService
         var coCotContactHoaDon = await EnsureHoaDonContactColumnsAsync();
         var coLienKetHoaDonGoc = (hoaDonGocId is > 0 || !string.IsNullOrWhiteSpace(maHoaDonGoc))
                                  && await EnsureHuyHoaDonSchemaAsync();
+        await EnsureAuditTableAsync();
 
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -6029,20 +6519,25 @@ public sealed partial class DatabaseService
                 coCotPhieuThuLienKet,
                 ChuanHoaPhuongThuc(phuongThucThanhToan));
 
+            await LogSubAccountActivityAsync(
+                "Bán hàng",
+                "HOA_DON",
+                invoiceId,
+                invoiceCode,
+                $"Bán hóa đơn {invoiceCode} cho {(customer != null && !string.IsNullOrWhiteSpace(customer.TenKhachHang) ? customer.TenKhachHang : "Khách lẻ")} (Tổng thanh toán: {amountDue:N0} đ)",
+                amountDue,
+                truongThayDoi: "Hóa đơn mới, Doanh thu",
+                giaTriTruoc: "Chưa tồn tại",
+                giaTriSau: $"Tổng: {amountDue:N0} đ | Đã thu: {paidAmount:N0} đ | Còn nợ: {debtAmount:N0} đ",
+                connection: connection,
+                transaction: transaction);
+
             // ============================================================
             // 6. COMMIT
             // ============================================================
 
             await transaction.CommitAsync();
             daCommit = true;
-
-            _ = LogSubAccountActivityAsync(
-                "Bán hàng",
-                "HOA_DON",
-                invoiceId,
-                invoiceCode,
-                $"Bán hóa đơn {invoiceCode} cho {(customer != null && !string.IsNullOrWhiteSpace(customer.TenKhachHang) ? customer.TenKhachHang : "Khách lẻ")} (Tổng thanh toán: {amountDue:N0} đ)",
-                amountDue);
 
             // ============================================================
             // 7. ĐỌC LẠI HÓA ĐƠN ĐÃ LƯU ĐỂ HIỂN THỊ
@@ -6113,6 +6608,7 @@ public sealed partial class DatabaseService
         var userId = Session.CurrentUser?.Id;
 
         var coCotLienKet = await EnsurePhieuQuyHoaDonColumnsAsync();
+        await EnsureAuditTableAsync();
 
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -6176,16 +6672,21 @@ public sealed partial class DatabaseService
                 userId,
                 coCotLienKet);
 
-            await transaction.CommitAsync();
-            daCommit = true;
-
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Thu nợ",
                 "HOA_DON",
                 hoaDonId,
                 maCanTim,
                 $"Thu nợ hóa đơn {maCanTim}: {thu:N0} đ (còn nợ {conNoMoi:N0} đ)",
-                thu);
+                thu,
+                truongThayDoi: "Công nợ hóa đơn, Đã thanh toán",
+                giaTriTruoc: $"Đã trả: {daTraCu:N0} đ | Còn nợ: {conNoCu:N0} đ",
+                giaTriSau: $"Đã trả: {daTraCu + thu:N0} đ | Còn nợ: {conNoMoi:N0} đ",
+                connection: connection,
+                transaction: transaction);
+
+            await transaction.CommitAsync();
+            daCommit = true;
 
             var receipt = await GetHoaDonBanHangTheoMaAsync(maCanTim);
 
@@ -6444,6 +6945,7 @@ public sealed partial class DatabaseService
         await EnsurePhieuQuyCancelColumnsAsync();
         var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
         var coCotLienKet = await EnsurePhieuQuyHoaDonColumnsAsync();
+        await EnsureAuditTableAsync();
 
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -6687,16 +7189,21 @@ public sealed partial class DatabaseService
                 },
                 transaction);
 
-            await transaction.CommitAsync();
-            daCommit = true;
-
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Thu nợ",
                 "KHACH_HANG",
                 khachHangId,
                 maPhieuThu,
                 $"Thu nợ khách hàng {(tenKhach ?? khachHangId.ToString())}: {soTien:N0} đ",
-                soTien);
+                soTien,
+                truongThayDoi: "Công nợ khách hàng",
+                giaTriTruoc: $"Công nợ cũ: {conNoHienTai:N0} đ",
+                giaTriSau: $"Công nợ mới: {Math.Max(0m, conNoHienTai - soTien):N0} đ",
+                connection: connection,
+                transaction: transaction);
+
+            await transaction.CommitAsync();
+            daCommit = true;
 
             return new ThuNoKhachHangKetQua
             {
@@ -7146,6 +7653,7 @@ public sealed partial class DatabaseService
 
         var coCotNguoiNopNhanGhiChu = await EnsurePhieuQuyExtraColumnsAsync();
         var coCotPhieuNhap = await EnsurePhieuQuyPhieuNhapColumnsAsync();
+        await EnsureAuditTableAsync();
 
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -7345,16 +7853,21 @@ public sealed partial class DatabaseService
                 },
                 transaction);
 
-            await transaction.CommitAsync();
-            daCommit = true;
-
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Thanh toán NCC",
                 "PHIEU_NHAP",
                 phieu.Id,
                 maCanTim,
                 $"Thanh toán công nợ phiếu {maCanTim}: {soTien:N0} đ (còn nợ {conNoMoi:N0} đ)",
-                soTien);
+                soTien,
+                truongThayDoi: "Công nợ phiếu nhập, Đã thanh toán",
+                giaTriTruoc: $"Đã trả: {phieu.DaThanhToan:N0} đ | Còn nợ: {phieu.ConNo:N0} đ",
+                giaTriSau: $"Đã trả: {daTraMoi:N0} đ | Còn nợ: {conNoMoi:N0} đ",
+                connection: connection,
+                transaction: transaction);
+
+            await transaction.CommitAsync();
+            daCommit = true;
 
             return new ThanhToanPhieuNhapKetQua
             {
@@ -7417,6 +7930,7 @@ public sealed partial class DatabaseService
                 var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
                 var coCotNguoiNopNhanGhiChu = await EnsurePhieuQuyExtraColumnsAsync();
                 var coCotPhieuNhap = await EnsurePhieuQuyPhieuNhapColumnsAsync();
+                await EnsureAuditTableAsync();
 
                 await using var connection = await OpenAsync();
                 await using var transaction = await connection.BeginTransactionAsync();
@@ -7695,17 +8209,22 @@ public sealed partial class DatabaseService
                         },
                         transaction);
 
-                    await transaction.CommitAsync();
-                    daCommit = true;
-
-                    _ = LogSubAccountActivityAsync(
+                    await LogSubAccountActivityAsync(
                         "Thanh toán công nợ nhà cung cấp",
                         "NHA_CUNG_CAP",
                         nhaCungCapId,
                         maPhieuChi,
                         $"Thanh toán công nợ {supplier.TenNhaCungCap}: {soTien:N0} đ "
                         + $"(còn nợ {Math.Max(0m, debtBefore - soTien):N0} đ)",
-                        soTien);
+                        soTien,
+                        truongThayDoi: "Công nợ nhà cung cấp",
+                        giaTriTruoc: $"Công nợ cũ: {debtBefore:N0} đ",
+                        giaTriSau: $"Công nợ mới: {Math.Max(0m, debtBefore - soTien):N0} đ",
+                        connection: connection,
+                        transaction: transaction);
+
+                    await transaction.CommitAsync();
+                    daCommit = true;
 
                     return new ThanhToanCongNoNhaCungCapKetQua
                     {
@@ -9243,13 +9762,16 @@ public sealed partial class DatabaseService
                 ChiNhanhId = Session.CurrentUser?.ChiNhanhId
             });
 
-        _ = LogSubAccountActivityAsync(
+        await LogSubAccountActivityAsync(
             "Thêm nhà cung cấp",
             "NHA_CUNG_CAP",
             newSupplierId,
             supplier.MaNhaCungCap,
             $"Thêm nhà cung cấp mới: {supplier.TenNhaCungCap}" +
-                (string.IsNullOrWhiteSpace(supplier.MaNhaCungCap) ? "" : $" ({supplier.MaNhaCungCap})"));
+                (string.IsNullOrWhiteSpace(supplier.MaNhaCungCap) ? "" : $" ({supplier.MaNhaCungCap})"),
+            truongThayDoi: "Nhà cung cấp mới",
+            giaTriTruoc: "Chưa tồn tại",
+            giaTriSau: $"{supplier.TenNhaCungCap} - SĐT: {supplier.SoDienThoai ?? "Trống"}");
 
         return newSupplierId;
     }
@@ -9302,29 +9824,42 @@ public sealed partial class DatabaseService
         if (nccCu.HasValue)
         {
             var thayDoi = new List<string>();
-            if (!string.Equals(nccCu.Value.TenNhaCungCap, supplier.TenNhaCungCap, StringComparison.Ordinal))
-                thayDoi.Add($"tên '{nccCu.Value.TenNhaCungCap}' ➔ '{supplier.TenNhaCungCap}'");
-            if (!string.Equals(nccCu.Value.SoDienThoai, supplier.SoDienThoai, StringComparison.Ordinal))
-                thayDoi.Add($"SĐT '{nccCu.Value.SoDienThoai ?? ""}' ➔ '{supplier.SoDienThoai ?? ""}'");
-            if (!string.Equals(nccCu.Value.Email, supplier.Email, StringComparison.Ordinal))
-                thayDoi.Add($"email '{nccCu.Value.Email ?? ""}' ➔ '{supplier.Email ?? ""}'");
-            if (!string.Equals(nccCu.Value.DiaChi, supplier.DiaChi, StringComparison.Ordinal))
-                thayDoi.Add($"địa chỉ '{nccCu.Value.DiaChi ?? ""}' ➔ '{supplier.DiaChi ?? ""}'");
-            if (!string.Equals(nccCu.Value.MaSoThue, supplier.MaSoThue, StringComparison.Ordinal))
-                thayDoi.Add($"mã số thuế '{nccCu.Value.MaSoThue ?? ""}' ➔ '{supplier.MaSoThue ?? ""}'");
-            if (!string.Equals(nccCu.Value.NguoiLienHe, supplier.NguoiLienHe, StringComparison.Ordinal))
-                thayDoi.Add($"người liên hệ '{nccCu.Value.NguoiLienHe ?? ""}' ➔ '{supplier.NguoiLienHe ?? ""}'");
+            var truongList = new List<string>();
+            var truocList = new List<string>();
+            var sauList = new List<string>();
+            void GhiThayDoiNcc(string nhan, string? cu, string? moi)
+            {
+                if (!string.Equals(cu, moi, StringComparison.Ordinal))
+                {
+                    var c = string.IsNullOrWhiteSpace(cu) ? "Trống" : cu.Trim();
+                    var m = string.IsNullOrWhiteSpace(moi) ? "Trống" : moi.Trim();
+                    thayDoi.Add($"{nhan} '{cu ?? ""}' ➔ '{moi ?? ""}'");
+                    truongList.Add(nhan);
+                    truocList.Add($"{nhan}: {c}");
+                    sauList.Add($"{nhan}: {m}");
+                }
+            }
+
+            GhiThayDoiNcc("tên", nccCu.Value.TenNhaCungCap, supplier.TenNhaCungCap);
+            GhiThayDoiNcc("SĐT", nccCu.Value.SoDienThoai, supplier.SoDienThoai);
+            GhiThayDoiNcc("email", nccCu.Value.Email, supplier.Email);
+            GhiThayDoiNcc("địa chỉ", nccCu.Value.DiaChi, supplier.DiaChi);
+            GhiThayDoiNcc("mã số thuế", nccCu.Value.MaSoThue, supplier.MaSoThue);
+            GhiThayDoiNcc("người liên hệ", nccCu.Value.NguoiLienHe, supplier.NguoiLienHe);
 
             var chiTiet = thayDoi.Count > 0
                 ? string.Join("; ", thayDoi)
                 : "Cập nhật lại thông tin nhà cung cấp";
 
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Cập nhật nhà cung cấp",
                 "NHA_CUNG_CAP",
                 supplier.Id,
                 supplier.MaNhaCungCap,
-                $"Sửa nhà cung cấp {supplier.TenNhaCungCap}: {chiTiet}");
+                $"Sửa nhà cung cấp {supplier.TenNhaCungCap}: {chiTiet}",
+                truongThayDoi: truongList.Count > 0 ? string.Join(", ", truongList) : "Thông tin nhà cung cấp",
+                giaTriTruoc: truocList.Count > 0 ? string.Join("\n", truocList) : null,
+                giaTriSau: sauList.Count > 0 ? string.Join("\n", sauList) : null);
         }
     }
 
@@ -9389,13 +9924,16 @@ public sealed partial class DatabaseService
 
         if (thongTinCu.HasValue)
         {
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Xóa nhà cung cấp",
                 "NHA_CUNG_CAP",
                 supplierId,
                 thongTinCu.Value.MaNhaCungCap,
                 $"Xóa nhà cung cấp {thongTinCu.Value.TenNhaCungCap}" +
-                    (string.IsNullOrWhiteSpace(thongTinCu.Value.MaNhaCungCap) ? "" : $" ({thongTinCu.Value.MaNhaCungCap})"));
+                    (string.IsNullOrWhiteSpace(thongTinCu.Value.MaNhaCungCap) ? "" : $" ({thongTinCu.Value.MaNhaCungCap})"),
+                truongThayDoi: "Trạng thái, Nhà cung cấp",
+                giaTriTruoc: $"Đang hoạt động ({thongTinCu.Value.TenNhaCungCap})",
+                giaTriSau: "Đã xóa");
         }
     }
 
@@ -9852,16 +10390,40 @@ public sealed partial class DatabaseService
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền xóa nhóm hàng hóa.");
         await using var connection = await OpenAsync();
+        var tenCu = await connection.ExecuteScalarAsync<string?>(
+            "SELECT ten_nhom FROM nhom_san_pham WHERE id = @Id LIMIT 1;",
+            new { Id = id });
         const string sql = "UPDATE nhom_san_pham SET trang_thai = 0 WHERE id = @Id;";
         await connection.ExecuteAsync(sql, new { Id = id });
+        await LogSubAccountActivityAsync(
+            "Xóa danh mục",
+            "DANH_MUC",
+            id,
+            $"DM{id}",
+            $"Xóa nhóm sản phẩm: {tenCu ?? id.ToString()}",
+            truongThayDoi: "Trạng thái danh mục",
+            giaTriTruoc: tenCu ?? $"ID {id}",
+            giaTriSau: "Đã xóa / Ngừng sử dụng");
     }
 
     public async Task XoaDonViTinhAsync(uint id)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.SettingsEdit, "Bạn không có quyền xóa đơn vị tính.");
         await using var connection = await OpenAsync();
+        var tenCu = await connection.ExecuteScalarAsync<string?>(
+            "SELECT ten_don_vi FROM don_vi_tinh WHERE id = @Id LIMIT 1;",
+            new { Id = id });
         const string sql = "UPDATE don_vi_tinh SET trang_thai = 0 WHERE id = @Id;";
         await connection.ExecuteAsync(sql, new { Id = id });
+        await LogSubAccountActivityAsync(
+            "Xóa đơn vị tính",
+            "DON_VI_TINH",
+            id,
+            $"DVT{id}",
+            $"Xóa đơn vị tính: {tenCu ?? id.ToString()}",
+            truongThayDoi: "Trạng thái đơn vị tính",
+            giaTriTruoc: tenCu ?? $"ID {id}",
+            giaTriSau: "Đã xóa / Ngừng sử dụng");
     }
 
     // ==========================================
@@ -10713,6 +11275,8 @@ public sealed partial class DatabaseService
         if (!string.IsNullOrWhiteSpace(draftId))
             await EnsurePhieuNhapNhapTableAsync();
 
+        await EnsureAuditTableAsync();
+
         var attachmentCleanup = new AttachmentSaveCleanup();
         await using var connection = await OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -11038,18 +11602,23 @@ public sealed partial class DatabaseService
             if (!string.IsNullOrWhiteSpace(draftId))
                 await DanhDauPhieuNhapNhapHoanTatAsync(connection, transaction, draftId, phieu.Id);
 
-            await transaction.CommitAsync();
-
-            foreach (var tempFile in attachmentCleanup.TempFilesToDeleteOnCommit)
-                ChungTuStorageService.XoaFileTamNeuCo(tempFile);
-
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Nhập hàng",
                 "PHIEU_NHAP",
                 phieu.Id,
                 phieu.MaPhieuNhap,
                 $"Nhập hàng hóa {phieu.MaPhieuNhap} (Tổng tiền nhập: {phieu.TongTienNhap:N0} đ)",
-                phieu.TongTienNhap);
+                phieu.TongTienNhap,
+                truongThayDoi: "Phiếu nhập mới, Tồn kho, Công nợ NCC",
+                giaTriTruoc: "Chưa tồn tại",
+                giaTriSau: $"Tổng nhập: {phieu.TongTienNhap:N0} đ | Đã trả: {phieu.DaThanhToan:N0} đ | Còn nợ: {phieu.ConNo:N0} đ",
+                connection: connection,
+                transaction: transaction);
+
+            await transaction.CommitAsync();
+
+            foreach (var tempFile in attachmentCleanup.TempFilesToDeleteOnCommit)
+                ChungTuStorageService.XoaFileTamNeuCo(tempFile);
 
             return phieu.Id;
         }
@@ -13559,14 +14128,19 @@ public sealed partial class DatabaseService
             NguoiTaoId = nguoiTaoId,
             TrangThai = TrangThaiPhieuHoanThanh
         });
+        var phieuId = await connection.ExecuteScalarAsync<ulong?>("SELECT LAST_INSERT_ID();");
 
-        _ = LogSubAccountActivityAsync(
+        var phuongThucNorm = string.IsNullOrWhiteSpace(phuongThuc) ? "TIEN_MAT" : phuongThuc.Trim().ToUpperInvariant();
+        await LogSubAccountActivityAsync(
             laPhieuThu ? "Thu tiền" : "Chi tiền",
             "SO_QUY",
-            null,
+            phieuId,
             maPhieu.Trim(),
             noiDung ?? (laPhieuThu ? $"Lập phiếu thu {maPhieu.Trim()}" : $"Lập phiếu chi {maPhieu.Trim()}"),
-            laPhieuThu ? soTien : -soTien);
+            laPhieuThu ? soTien : -soTien,
+            truongThayDoi: laPhieuThu ? "Phiếu thu mới" : "Phiếu chi mới",
+            giaTriTruoc: "Chưa tồn tại",
+            giaTriSau: $"Số tiền: {soTien:N0} đ | Phương thức: {phuongThucNorm}");
     }
 
     /// <summary>Cắt chuỗi cho vừa độ dài của cột varchar(150) của nguoi_nop_nhan.</summary>
@@ -13609,11 +14183,43 @@ public sealed partial class DatabaseService
 
         // Phiếu nhập từ file có thể mang mã TT/CTM... nên phải đọc loại đã lưu,
         // không được suy loại chỉ từ tiền tố PT/PC.
-        var loaiPhieu = await connection.ExecuteScalarAsync<string?>(
-            "SELECT loai_phieu FROM phieu_chi WHERE ma_phieu_chi = @MaPhieu LIMIT 1;",
-            new { MaPhieu = maPhieu.Trim() });
+        var maClean = maPhieu.Trim();
+        var cuSql = coCotMoi
+            ? """
+              SELECT id AS Id,
+                     loai_phieu AS LoaiPhieu,
+                     so_tien AS SoTien,
+                     phuong_thuc AS PhuongThuc,
+                     noi_dung AS NoiDung,
+                     nguoi_nop_nhan AS NguoiNopNhan,
+                     ghi_chu AS GhiChu
+              FROM phieu_chi
+              WHERE ma_phieu_chi = @MaPhieu
+              LIMIT 1;
+              """
+            : """
+              SELECT id AS Id,
+                     loai_phieu AS LoaiPhieu,
+                     so_tien AS SoTien,
+                     phuong_thuc AS PhuongThuc,
+                     noi_dung AS NoiDung,
+                     CAST(NULL AS CHAR(150)) AS NguoiNopNhan,
+                     CAST(NULL AS CHAR(255)) AS GhiChu
+              FROM phieu_chi
+              WHERE ma_phieu_chi = @MaPhieu
+              LIMIT 1;
+              """;
+        var cu = await connection.QueryFirstOrDefaultAsync<(
+            ulong Id,
+            string? LoaiPhieu,
+            decimal SoTien,
+            string? PhuongThuc,
+            string? NoiDung,
+            string? NguoiNopNhan,
+            string? GhiChu)?>(cuSql, new { MaPhieu = maClean });
 
-        var laPhieuThu = LaPhieuThu(loaiPhieu, maPhieu);
+        var loaiPhieu = cu?.LoaiPhieu;
+        var laPhieuThu = LaPhieuThu(loaiPhieu, maClean);
 
         // Hai cột mới chỉ xuất hiện trong câu UPDATE khi migration đã chạy, tránh lỗi
         // "Unknown column" với database cũ. Giá trị vẫn đi qua tham số.
@@ -13631,29 +14237,73 @@ public sealed partial class DatabaseService
         LIMIT 1;
         """;
 
+        var phuongThucMoi = string.IsNullOrWhiteSpace(phuongThuc) ? null : phuongThuc.Trim().ToUpperInvariant();
+        var noiDungMoi = string.IsNullOrWhiteSpace(noiDung) ? null : noiDung.Trim();
+        var nguoiMoi = Truncate150(nguoiNopNhan);
+        var ghiChuMoi = string.IsNullOrWhiteSpace(ghiChu) ? null : ghiChu.Trim();
+
         var affected = await connection.ExecuteAsync(sql, new
         {
-            MaPhieu = maPhieu.Trim(),
+            MaPhieu = maClean,
             SoTien = soTien,
             ThoiGian = thoiGian,
             NhomChiPhiId = nhomChiPhiId,
-            PhuongThuc = string.IsNullOrWhiteSpace(phuongThuc) ? null : phuongThuc.Trim().ToUpperInvariant(),
-            NoiDung = string.IsNullOrWhiteSpace(noiDung) ? null : noiDung.Trim(),
-            NguoiNopNhan = Truncate150(nguoiNopNhan),
-            GhiChu = string.IsNullOrWhiteSpace(ghiChu) ? null : ghiChu.Trim(),
+            PhuongThuc = phuongThucMoi,
+            NoiDung = noiDungMoi,
+            NguoiNopNhan = nguoiMoi,
+            GhiChu = ghiChuMoi,
             TrangThaiHuy = TrangThaiPhieuHuy
         });
 
         if (affected > 0)
         {
-            var laThu = laPhieuThu;
-            _ = LogSubAccountActivityAsync(
+            var truongList = new List<string>();
+            var truocList = new List<string>();
+            var sauList = new List<string>();
+            if (cu.HasValue)
+            {
+                if (cu.Value.SoTien != soTien)
+                {
+                    truongList.Add("Số tiền");
+                    truocList.Add($"Số tiền: {cu.Value.SoTien:N0} đ");
+                    sauList.Add($"Số tiền: {soTien:N0} đ");
+                }
+                if (!string.Equals(cu.Value.PhuongThuc ?? "", phuongThucMoi ?? "", StringComparison.OrdinalIgnoreCase))
+                {
+                    truongList.Add("Phương thức");
+                    truocList.Add($"Phương thức: {cu.Value.PhuongThuc ?? "Trống"}");
+                    sauList.Add($"Phương thức: {phuongThucMoi ?? "Trống"}");
+                }
+                if (!string.Equals(cu.Value.NoiDung ?? "", noiDungMoi ?? "", StringComparison.Ordinal))
+                {
+                    truongList.Add("Nội dung");
+                    truocList.Add($"Nội dung: {cu.Value.NoiDung ?? "Trống"}");
+                    sauList.Add($"Nội dung: {noiDungMoi ?? "Trống"}");
+                }
+                if (coCotMoi && !string.Equals(cu.Value.NguoiNopNhan ?? "", nguoiMoi ?? "", StringComparison.Ordinal))
+                {
+                    truongList.Add("Người nộp/nhận");
+                    truocList.Add($"Người nộp/nhận: {cu.Value.NguoiNopNhan ?? "Trống"}");
+                    sauList.Add($"Người nộp/nhận: {nguoiMoi ?? "Trống"}");
+                }
+                if (coCotMoi && !string.Equals(cu.Value.GhiChu ?? "", ghiChuMoi ?? "", StringComparison.Ordinal))
+                {
+                    truongList.Add("Ghi chú");
+                    truocList.Add($"Ghi chú: {cu.Value.GhiChu ?? "Trống"}");
+                    sauList.Add($"Ghi chú: {ghiChuMoi ?? "Trống"}");
+                }
+            }
+
+            await LogSubAccountActivityAsync(
                 "Sửa sổ quỹ",
                 "SO_QUY",
-                null,
-                maPhieu.Trim(),
-                $"Cập nhật phiếu {maPhieu.Trim()}: {noiDung}",
-                laThu ? soTien : -soTien);
+                cu?.Id,
+                maClean,
+                $"Cập nhật phiếu {maClean}: {noiDungMoi ?? noiDung}",
+                laPhieuThu ? soTien : -soTien,
+                truongThayDoi: truongList.Count > 0 ? string.Join(", ", truongList) : "Thông tin phiếu quỹ",
+                giaTriTruoc: truocList.Count > 0 ? string.Join("\n", truocList) : (cu.HasValue ? $"Số tiền: {cu.Value.SoTien:N0} đ" : null),
+                giaTriSau: sauList.Count > 0 ? string.Join("\n", sauList) : $"Số tiền: {soTien:N0} đ");
         }
 
         return affected;
@@ -13870,12 +14520,17 @@ public sealed partial class DatabaseService
               `doi_tuong_id` INT(10) UNSIGNED DEFAULT NULL,
               `ma_chung_tu` VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
               `noi_dung` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+              `truong_thay_doi` VARCHAR(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+              `gia_tri_truoc` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+              `gia_tri_sau` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL,
               `gia_tri` DECIMAL(15,2) DEFAULT NULL,
               `dia_chi_ip` VARCHAR(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
               `thoi_gian` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
               PRIMARY KEY (`id`),
               KEY `idx_nhat_ky_nguoi_dung` (`nguoi_dung_id`),
-              KEY `idx_nhat_ky_thoi_gian` (`thoi_gian`)
+              KEY `idx_nhat_ky_thoi_gian` (`thoi_gian`),
+              KEY `idx_nhat_ky_ma_chung_tu` (`ma_chung_tu`),
+              KEY `idx_nhat_ky_hanh_dong` (`hanh_dong`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """);
 
@@ -13888,8 +14543,18 @@ public sealed partial class DatabaseService
                     await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN vai_tro VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER ho_ten;");
                 if (!existingCols.Contains("ma_chung_tu"))
                     await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN ma_chung_tu VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER doi_tuong_id;");
+                if (!existingCols.Contains("truong_thay_doi"))
+                    await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN truong_thay_doi VARCHAR(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER noi_dung;");
+                if (!existingCols.Contains("gia_tri_truoc"))
+                    await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN gia_tri_truoc TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER truong_thay_doi;");
+                if (!existingCols.Contains("gia_tri_sau"))
+                    await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN gia_tri_sau TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER gia_tri_truoc;");
                 if (!existingCols.Contains("gia_tri"))
-                    await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN gia_tri DECIMAL(15,2) DEFAULT NULL AFTER noi_dung;");
+                    await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN gia_tri DECIMAL(15,2) DEFAULT NULL AFTER gia_tri_sau;");
+
+                await TryAddIndexAsync(connection, "nhat_ky_hoat_dong", "idx_nhat_ky_ma_chung_tu", "ma_chung_tu");
+                await TryAddIndexAsync(connection, "nhat_ky_hoat_dong", "idx_nhat_ky_hanh_dong", "hanh_dong");
+                _daDamBaoBangNhatKy = true;
             }
             catch { }
 
@@ -14071,25 +14736,52 @@ public sealed partial class DatabaseService
     public async Task SaveUserPermissionsAsync(uint userId, IEnumerable<uint> permissionIds, uint? actorId = null)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersAssignPermission, "Bạn không có quyền phân quyền tài khoản.");
+        await EnsureAuditTableAsync();
         await using var connection = await OpenAsync();
+        var distinctPermIds = permissionIds.Distinct().ToList();
+        var taiKhoan = await LayTenTaiKhoanAsync(connection, userId);
+        var oldPerms = (await connection.QueryAsync<string>(
+            """
+            SELECT q.ten_quyen
+            FROM nguoi_dung_quyen ndq
+            JOIN quyen q ON q.id = ndq.quyen_id
+            WHERE ndq.nguoi_dung_id = @UserId AND ndq.cho_phep = 1
+            ORDER BY q.ten_quyen;
+            """,
+            new { UserId = userId })).ToList();
+        var newPerms = distinctPermIds.Count == 0
+            ? new List<string>()
+            : (await connection.QueryAsync<string>(
+                "SELECT ten_quyen FROM quyen WHERE id IN @Ids ORDER BY ten_quyen;",
+                new { Ids = distinctPermIds })).ToList();
+
         await using var tx = await connection.BeginTransactionAsync();
         try
         {
             await connection.ExecuteAsync("DELETE FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId", new { UserId = userId }, tx);
             var safeActorId = actorId.HasValue && actorId.Value > 0 ? actorId.Value : (uint?)null;
-            foreach (var pid in permissionIds.Distinct())
+            foreach (var pid in distinctPermIds)
             {
                 await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = userId, QuyenId = pid, ActorId = safeActorId }, tx);
             }
             try { await connection.ExecuteAsync("UPDATE nguoi_dung SET phan_quyen_rieng = 1 WHERE id = @UserId", new { UserId = userId }, tx); } catch { }
-            await tx.CommitAsync();
 
-            _ = LogSubAccountActivityAsync(
+            var addedPerms = newPerms.Except(oldPerms, StringComparer.Ordinal).ToList();
+            var removedPerms = oldPerms.Except(newPerms, StringComparer.Ordinal).ToList();
+            var tenHienThi = taiKhoan is not null ? $"{taiKhoan.Value.TenDangNhap} ({taiKhoan.Value.HoTen})" : $"ID {userId}";
+            await LogSubAccountActivityAsync(
                 "Phân quyền tài khoản",
                 "NGUOI_DUNG",
                 userId,
-                null,
-                $"Cập nhật phân quyền riêng cho tài khoản ID {userId}: {permissionIds.Distinct().Count()} quyền được cấp");
+                taiKhoan?.TenDangNhap,
+                $"Cập nhật phân quyền riêng cho tài khoản '{tenHienThi}': {distinctPermIds.Count} quyền (+{addedPerms.Count} / -{removedPerms.Count})",
+                truongThayDoi: "Quyền riêng tài khoản",
+                giaTriTruoc: $"{oldPerms.Count} quyền" + (removedPerms.Count > 0 ? $" (Thu hồi: {string.Join(", ", removedPerms.Take(8))}{(removedPerms.Count > 8 ? "..." : "")})" : ""),
+                giaTriSau: $"{newPerms.Count} quyền" + (addedPerms.Count > 0 ? $" (Cấp thêm: {string.Join(", ", addedPerms.Take(8))}{(addedPerms.Count > 8 ? "..." : "")})" : ""),
+                connection: connection,
+                transaction: tx);
+
+            await tx.CommitAsync();
         }
         catch
         {
@@ -14101,24 +14793,39 @@ public sealed partial class DatabaseService
     public async Task SaveRolePermissionsAsync(uint roleId, IEnumerable<uint> permissionIds, uint? actorId = null)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersAssignPermission, "Bạn không có quyền phân quyền vai trò.");
+        await EnsureAuditTableAsync();
         await using var connection = await OpenAsync();
+        var distinctPermIds = permissionIds.Distinct().ToList();
+        var roleInfo = await connection.QueryFirstOrDefaultAsync<(string MaVaiTro, string TenVaiTro)?>(
+            "SELECT ma_vai_tro, ten_vai_tro FROM vai_tro WHERE id = @RoleId LIMIT 1;",
+            new { RoleId = roleId });
+        var oldCount = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM vai_tro_quyen WHERE vai_tro_id = @RoleId;",
+            new { RoleId = roleId });
+
         await using var tx = await connection.BeginTransactionAsync();
         try
         {
             await connection.ExecuteAsync("DELETE FROM vai_tro_quyen WHERE vai_tro_id = @RoleId", new { RoleId = roleId }, tx);
             var safeActorId = actorId.HasValue && actorId.Value > 0 ? actorId.Value : (uint?)null;
-            foreach (var pid in permissionIds.Distinct())
+            foreach (var pid in distinctPermIds)
             {
                 await connection.ExecuteAsync("INSERT IGNORE INTO vai_tro_quyen (vai_tro_id, quyen_id, nguoi_cap_nhat_id) VALUES (@RoleId, @QuyenId, @ActorId)", new { RoleId = roleId, QuyenId = pid, ActorId = safeActorId }, tx);
             }
-            await tx.CommitAsync();
 
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Phân quyền vai trò",
                 "VAI_TRO",
                 roleId,
-                null,
-                $"Cập nhật phân quyền cho vai trò ID {roleId}: {permissionIds.Distinct().Count()} quyền được cấp");
+                roleInfo?.MaVaiTro,
+                $"Cập nhật phân quyền cho vai trò {roleInfo?.TenVaiTro ?? $"ID {roleId}"}: {distinctPermIds.Count} quyền được cấp",
+                truongThayDoi: "Danh sách quyền vai trò",
+                giaTriTruoc: $"{oldCount} quyền",
+                giaTriSau: $"{distinctPermIds.Count} quyền",
+                connection: connection,
+                transaction: tx);
+
+            await tx.CommitAsync();
         }
         catch
         {
@@ -14130,6 +14837,7 @@ public sealed partial class DatabaseService
     public async Task<uint> CreateUserAsync(UserCreateDto dto, uint? actorId = null)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersCreate, "Bạn không có quyền tạo tài khoản.");
+        await EnsureAuditTableAsync();
         await using var connection = await OpenAsync();
         await using var tx = await connection.BeginTransactionAsync();
         try
@@ -14151,25 +14859,33 @@ public sealed partial class DatabaseService
                 TrangThai = dto.TrangThai ? 1 : 0
             }, tx);
             var userId = await connection.ExecuteScalarAsync<uint>("SELECT LAST_INSERT_ID();", null, tx);
-            foreach (var rid in dto.RoleIds.Distinct())
+            var roleIds = dto.RoleIds.Distinct().ToList();
+            foreach (var rid in roleIds)
             {
                 await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_vai_tro (nguoi_dung_id, vai_tro_id) VALUES (@UserId, @RoleId)", new { UserId = userId, RoleId = rid }, tx);
             }
             var safeActorId = actorId.HasValue && actorId.Value > 0 ? actorId.Value : (uint?)null;
-            foreach (var pid in dto.PermissionIds.Distinct())
+            var permIds = dto.PermissionIds.Distinct().ToList();
+            foreach (var pid in permIds)
             {
                 await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = userId, QuyenId = pid, ActorId = safeActorId }, tx);
             }
             try { await connection.ExecuteAsync("UPDATE nguoi_dung SET phan_quyen_rieng = 1 WHERE id = @UserId", new { UserId = userId }, tx); } catch { }
-            await tx.CommitAsync();
 
             // Ghi nhật ký hoạt động quản trị (không bao giờ ghi mật khẩu).
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Tạo tài khoản",
                 "NGUOI_DUNG",
                 userId,
                 dto.TenDangNhap,
-                $"Tạo tài khoản mới '{dto.TenDangNhap}' ({dto.HoTen})");
+                $"Tạo tài khoản mới '{dto.TenDangNhap}' ({dto.HoTen})",
+                truongThayDoi: "Tài khoản mới",
+                giaTriTruoc: "Chưa tồn tại",
+                giaTriSau: $"{dto.TenDangNhap} ({dto.HoTen}) - Trạng thái: {(dto.TrangThai ? "Hoạt động" : "Khóa")} - {roleIds.Count} vai trò, {permIds.Count} quyền",
+                connection: connection,
+                transaction: tx);
+
+            await tx.CommitAsync();
 
             return userId;
         }
@@ -14208,7 +14924,32 @@ public sealed partial class DatabaseService
             }
         }
 
+        await EnsureAuditTableAsync();
         await using var connection = await OpenAsync();
+
+        var oldUser = await connection.QueryFirstOrDefaultAsync<(string TenDangNhap, string HoTen, bool TrangThai)?>(
+            "SELECT ten_dang_nhap AS TenDangNhap, ho_ten AS HoTen, trang_thai AS TrangThai FROM nguoi_dung WHERE id = @Id LIMIT 1;",
+            new { Id = dto.Id });
+        var oldRoleNames = (await connection.QueryAsync<string>(
+            """
+            SELECT vt.ten_vai_tro
+            FROM nguoi_dung_vai_tro ndvt
+            JOIN vai_tro vt ON vt.id = ndvt.vai_tro_id
+            WHERE ndvt.nguoi_dung_id = @UserId
+            ORDER BY vt.ten_vai_tro;
+            """,
+            new { UserId = dto.Id })).ToList();
+        var distinctRoleIds = dto.RoleIds.Distinct().ToList();
+        var newRoleNames = distinctRoleIds.Count == 0
+            ? new List<string>()
+            : (await connection.QueryAsync<string>(
+                "SELECT ten_vai_tro FROM vai_tro WHERE id IN @Ids ORDER BY ten_vai_tro;",
+                new { Ids = distinctRoleIds })).ToList();
+        var oldPermCount = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId AND cho_phep = 1;",
+            new { UserId = dto.Id });
+        var distinctPermIds = dto.PermissionIds.Distinct().ToList();
+
         await using var tx = await connection.BeginTransactionAsync();
         try
         {
@@ -14222,17 +14963,71 @@ public sealed partial class DatabaseService
                 await connection.ExecuteAsync("UPDATE nguoi_dung SET ho_ten = @HoTen, trang_thai = @TrangThai, ngay_cap_nhat = NOW() WHERE id = @Id", new { Id = dto.Id, HoTen = dto.HoTen, TrangThai = dto.TrangThai ? 1 : 0 }, tx);
             }
             await connection.ExecuteAsync("DELETE FROM nguoi_dung_vai_tro WHERE nguoi_dung_id = @UserId", new { UserId = dto.Id }, tx);
-            foreach (var rid in dto.RoleIds.Distinct())
+            foreach (var rid in distinctRoleIds)
             {
                 await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_vai_tro (nguoi_dung_id, vai_tro_id) VALUES (@UserId, @RoleId)", new { UserId = dto.Id, RoleId = rid }, tx);
             }
             await connection.ExecuteAsync("DELETE FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId", new { UserId = dto.Id }, tx);
             var safeActorId = actorId.HasValue && actorId.Value > 0 ? actorId.Value : (uint?)null;
-            foreach (var pid in dto.PermissionIds.Distinct())
+            foreach (var pid in distinctPermIds)
             {
                 await connection.ExecuteAsync("INSERT IGNORE INTO nguoi_dung_quyen (nguoi_dung_id, quyen_id, cho_phep, nguoi_cap_nhat_id) VALUES (@UserId, @QuyenId, 1, @ActorId)", new { UserId = dto.Id, QuyenId = pid, ActorId = safeActorId }, tx);
             }
             try { await connection.ExecuteAsync("UPDATE nguoi_dung SET phan_quyen_rieng = 1 WHERE id = @UserId", new { UserId = dto.Id }, tx); } catch { }
+
+            var truongList = new List<string>();
+            var truocList = new List<string>();
+            var sauList = new List<string>();
+            if (oldUser.HasValue)
+            {
+                if (!string.Equals(oldUser.Value.HoTen, dto.HoTen, StringComparison.Ordinal))
+                {
+                    truongList.Add("Họ tên");
+                    truocList.Add($"Họ tên: {oldUser.Value.HoTen}");
+                    sauList.Add($"Họ tên: {dto.HoTen}");
+                }
+                if (oldUser.Value.TrangThai != dto.TrangThai)
+                {
+                    truongList.Add("Trạng thái");
+                    truocList.Add($"Trạng thái: {(oldUser.Value.TrangThai ? "Hoạt động" : "Khóa")}");
+                    sauList.Add($"Trạng thái: {(dto.TrangThai ? "Hoạt động" : "Khóa")}");
+                }
+            }
+            var oldRoleText = oldRoleNames.Count > 0 ? string.Join(", ", oldRoleNames) : "Chưa có vai trò";
+            var newRoleText = newRoleNames.Count > 0 ? string.Join(", ", newRoleNames) : "Chưa có vai trò";
+            if (!string.Equals(oldRoleText, newRoleText, StringComparison.Ordinal))
+            {
+                truongList.Add("Vai trò");
+                truocList.Add($"Vai trò: {oldRoleText}");
+                sauList.Add($"Vai trò: {newRoleText}");
+            }
+            if (oldPermCount != distinctPermIds.Count)
+            {
+                truongList.Add("Số quyền riêng");
+                truocList.Add($"Số quyền riêng: {oldPermCount}");
+                sauList.Add($"Số quyền riêng: {distinctPermIds.Count}");
+            }
+            if (!string.IsNullOrWhiteSpace(dto.MatKhau))
+            {
+                truongList.Add("Mật khẩu");
+                truocList.Add("Mật khẩu: (đã thiết lập)");
+                sauList.Add("Mật khẩu: Đã đặt lại mới");
+            }
+
+            // Ghi nhật ký hoạt động quản trị (không bao giờ ghi mật khẩu).
+            await LogSubAccountActivityAsync(
+                "Sửa tài khoản",
+                "NGUOI_DUNG",
+                dto.Id,
+                dto.TenDangNhap,
+                $"Sửa tài khoản '{dto.TenDangNhap}': họ tên '{dto.HoTen}', trạng thái {(dto.TrangThai ? "hoạt động" : "khóa")}" +
+                    (string.IsNullOrWhiteSpace(dto.MatKhau) ? "" : ", đã đặt lại mật khẩu mới"),
+                truongThayDoi: truongList.Count > 0 ? string.Join(", ", truongList) : "Thông tin tài khoản",
+                giaTriTruoc: truocList.Count > 0 ? string.Join("\n", truocList) : null,
+                giaTriSau: sauList.Count > 0 ? string.Join("\n", sauList) : null,
+                connection: connection,
+                transaction: tx);
+
             await tx.CommitAsync();
         }
         catch
@@ -14240,15 +15035,6 @@ public sealed partial class DatabaseService
             await tx.RollbackAsync();
             throw;
         }
-
-        // Ghi nhật ký hoạt động quản trị (không bao giờ ghi mật khẩu).
-        _ = LogSubAccountActivityAsync(
-            "Sửa tài khoản",
-            "NGUOI_DUNG",
-            dto.Id,
-            dto.TenDangNhap,
-            $"Sửa tài khoản '{dto.TenDangNhap}': họ tên '{dto.HoTen}', trạng thái {(dto.TrangThai ? "hoạt động" : "khóa")}" +
-                (string.IsNullOrWhiteSpace(dto.MatKhau) ? "" : ", đã đặt lại mật khẩu mới"));
     }
 
     private async Task<string?> GetRoleCodeAsync(uint roleId)
@@ -14306,12 +15092,15 @@ public sealed partial class DatabaseService
 
         if (taiKhoan is not null)
         {
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Khóa tài khoản",
                 "NGUOI_DUNG",
                 userId,
                 taiKhoan.Value.TenDangNhap,
-                $"Khóa tài khoản '{taiKhoan.Value.TenDangNhap}' ({taiKhoan.Value.HoTen})");
+                $"Khóa tài khoản '{taiKhoan.Value.TenDangNhap}' ({taiKhoan.Value.HoTen})",
+                truongThayDoi: "Trạng thái tài khoản",
+                giaTriTruoc: "Đang hoạt động",
+                giaTriSau: "Đã khóa");
         }
     }
 
@@ -14324,35 +15113,55 @@ public sealed partial class DatabaseService
 
         if (taiKhoan is not null)
         {
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Mở khóa tài khoản",
                 "NGUOI_DUNG",
                 userId,
                 taiKhoan.Value.TenDangNhap,
-                $"Mở khóa tài khoản '{taiKhoan.Value.TenDangNhap}' ({taiKhoan.Value.HoTen})");
+                $"Mở khóa tài khoản '{taiKhoan.Value.TenDangNhap}' ({taiKhoan.Value.HoTen})",
+                truongThayDoi: "Trạng thái tài khoản",
+                giaTriTruoc: "Đã khóa",
+                giaTriSau: "Đang hoạt động");
         }
     }
 
     public async Task DeleteUserAsync(uint userId, uint? actorId = null)
     {
         Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.UsersDelete, "Bạn không có quyền xóa tài khoản.");
+        await EnsureAuditTableAsync();
         await using var connection = await OpenAsync();
         // Không xóa admin (id=1 thường) - phòng ngừa
         if (userId == 1) throw new InvalidOperationException("Không thể xóa tài khoản Admin mặc định.");
         await BaoVeQuanTriAsync(userId, "xóa");
         var taiKhoan = await LayTenTaiKhoanAsync(connection, userId);
-        await connection.ExecuteAsync("DELETE FROM nguoi_dung_vai_tro WHERE nguoi_dung_id = @UserId", new { UserId = userId });
-        await connection.ExecuteAsync("DELETE FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId", new { UserId = userId });
-        await connection.ExecuteAsync("DELETE FROM nguoi_dung WHERE id = @Id", new { Id = userId });
-
-        if (taiKhoan is not null)
+        await using var tx = await connection.BeginTransactionAsync();
+        try
         {
-            _ = LogSubAccountActivityAsync(
-                "Xóa tài khoản",
-                "NGUOI_DUNG",
-                userId,
-                taiKhoan.Value.TenDangNhap,
-                $"Xóa tài khoản '{taiKhoan.Value.TenDangNhap}' ({taiKhoan.Value.HoTen})");
+            await connection.ExecuteAsync("DELETE FROM nguoi_dung_vai_tro WHERE nguoi_dung_id = @UserId", new { UserId = userId }, tx);
+            await connection.ExecuteAsync("DELETE FROM nguoi_dung_quyen WHERE nguoi_dung_id = @UserId", new { UserId = userId }, tx);
+            await connection.ExecuteAsync("DELETE FROM nguoi_dung WHERE id = @Id", new { Id = userId }, tx);
+
+            if (taiKhoan is not null)
+            {
+                await LogSubAccountActivityAsync(
+                    "Xóa tài khoản",
+                    "NGUOI_DUNG",
+                    userId,
+                    taiKhoan.Value.TenDangNhap,
+                    $"Xóa tài khoản '{taiKhoan.Value.TenDangNhap}' ({taiKhoan.Value.HoTen})",
+                    truongThayDoi: "Trạng thái, Tài khoản",
+                    giaTriTruoc: $"Tồn tại ({taiKhoan.Value.TenDangNhap} - {taiKhoan.Value.HoTen})",
+                    giaTriSau: "Đã xóa",
+                    connection: connection,
+                    transaction: tx);
+            }
+
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
         }
     }
 
@@ -14368,12 +15177,15 @@ public sealed partial class DatabaseService
         // Ghi nhật ký nhưng KHÔNG bao giờ ghi nội dung mật khẩu.
         if (taiKhoan is not null)
         {
-            _ = LogSubAccountActivityAsync(
+            await LogSubAccountActivityAsync(
                 "Đặt lại mật khẩu",
                 "NGUOI_DUNG",
                 userId,
                 taiKhoan.Value.TenDangNhap,
-                $"Đặt lại mật khẩu cho tài khoản '{taiKhoan.Value.TenDangNhap}'");
+                $"Đặt lại mật khẩu cho tài khoản '{taiKhoan.Value.TenDangNhap}'",
+                truongThayDoi: "Mật khẩu đăng nhập",
+                giaTriTruoc: "Mật khẩu cũ",
+                giaTriSau: "Đã đặt lại mật khẩu mới (được bảo mật)");
         }
     }
 
@@ -14407,12 +15219,53 @@ public sealed partial class DatabaseService
     }
 
     private static bool _daDamBaoBangNhatKy;
+    private static readonly SemaphoreSlim _auditSchemaLock = new(1, 1);
+
+    private static async Task TryAddIndexAsync(
+        MySqlConnection connection,
+        string tableName,
+        string indexName,
+        string columnName)
+    {
+        try
+        {
+            var existingIdx = await connection.ExecuteScalarAsync<int>(
+                """
+                SELECT COUNT(*)
+                FROM INFORMATION_SCHEMA.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = @TableName
+                  AND INDEX_NAME = @IndexName;
+                """,
+                new { TableName = tableName, IndexName = indexName });
+
+            if (existingIdx == 0)
+            {
+                await connection.ExecuteAsync(
+                    $"ALTER TABLE `{tableName}` ADD INDEX `{indexName}` (`{columnName}`);");
+            }
+        }
+        catch (MySqlException ex) when (ex.Number == 1061)
+        {
+            // Index đã tồn tại
+        }
+        catch (Exception ex)
+        {
+            Helpers.SafeLog.WriteError($"TryAddIndexAsync({indexName}) error", ex);
+        }
+    }
 
     public async Task EnsureAuditTableAsync()
     {
         if (_daDamBaoBangNhatKy) return;
+
+        await _auditSchemaLock.WaitAsync();
         try
         {
+            if (_daDamBaoBangNhatKy) return;
+
+            // Luôn mở một kết nối độc lập cho DDL, tuyệt đối không dùng chung kết nối
+            // đang mở transaction nghiệp vụ (tránh implicit commit của MySQL).
             await using var connection = await OpenAsync();
             await connection.ExecuteAsync("""
             CREATE TABLE IF NOT EXISTS `nhat_ky_hoat_dong` (
@@ -14426,28 +15279,39 @@ public sealed partial class DatabaseService
               `doi_tuong_id` INT(10) UNSIGNED DEFAULT NULL,
               `ma_chung_tu` VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
               `noi_dung` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+              `truong_thay_doi` VARCHAR(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+              `gia_tri_truoc` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+              `gia_tri_sau` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL,
               `gia_tri` DECIMAL(15,2) DEFAULT NULL,
               `dia_chi_ip` VARCHAR(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
               `thoi_gian` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
               PRIMARY KEY (`id`),
               KEY `idx_nhat_ky_nguoi_dung` (`nguoi_dung_id`),
-              KEY `idx_nhat_ky_thoi_gian` (`thoi_gian`)
+              KEY `idx_nhat_ky_thoi_gian` (`thoi_gian`),
+              KEY `idx_nhat_ky_ma_chung_tu` (`ma_chung_tu`),
+              KEY `idx_nhat_ky_hanh_dong` (`hanh_dong`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """);
 
-            try
-            {
-                var existingCols = (await connection.QueryAsync<string>(
-                    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nhat_ky_hoat_dong';")).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var existingCols = (await connection.QueryAsync<string>(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'nhat_ky_hoat_dong';"))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-                if (!existingCols.Contains("vai_tro"))
-                    await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN vai_tro VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER ho_ten;");
-                if (!existingCols.Contains("ma_chung_tu"))
-                    await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN ma_chung_tu VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER doi_tuong_id;");
-                if (!existingCols.Contains("gia_tri"))
-                    await connection.ExecuteAsync("ALTER TABLE nhat_ky_hoat_dong ADD COLUMN gia_tri DECIMAL(15,2) DEFAULT NULL AFTER noi_dung;");
-            }
-            catch { }
+            if (!existingCols.Contains("vai_tro"))
+                await TryAddAuditColumnAsync(connection, "ALTER TABLE nhat_ky_hoat_dong ADD COLUMN vai_tro VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER ho_ten;");
+            if (!existingCols.Contains("ma_chung_tu"))
+                await TryAddAuditColumnAsync(connection, "ALTER TABLE nhat_ky_hoat_dong ADD COLUMN ma_chung_tu VARCHAR(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER doi_tuong_id;");
+            if (!existingCols.Contains("truong_thay_doi"))
+                await TryAddAuditColumnAsync(connection, "ALTER TABLE nhat_ky_hoat_dong ADD COLUMN truong_thay_doi VARCHAR(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER noi_dung;");
+            if (!existingCols.Contains("gia_tri_truoc"))
+                await TryAddAuditColumnAsync(connection, "ALTER TABLE nhat_ky_hoat_dong ADD COLUMN gia_tri_truoc TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER truong_thay_doi;");
+            if (!existingCols.Contains("gia_tri_sau"))
+                await TryAddAuditColumnAsync(connection, "ALTER TABLE nhat_ky_hoat_dong ADD COLUMN gia_tri_sau TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL AFTER gia_tri_truoc;");
+            if (!existingCols.Contains("gia_tri"))
+                await TryAddAuditColumnAsync(connection, "ALTER TABLE nhat_ky_hoat_dong ADD COLUMN gia_tri DECIMAL(15,2) DEFAULT NULL AFTER gia_tri_sau;");
+
+            await TryAddIndexAsync(connection, "nhat_ky_hoat_dong", "idx_nhat_ky_ma_chung_tu", "ma_chung_tu");
+            await TryAddIndexAsync(connection, "nhat_ky_hoat_dong", "idx_nhat_ky_hanh_dong", "hanh_dong");
 
             _daDamBaoBangNhatKy = true;
         }
@@ -14455,21 +15319,50 @@ public sealed partial class DatabaseService
         {
             Helpers.SafeLog.WriteError("EnsureAuditTableAsync error", ex);
         }
+        finally
+        {
+            _auditSchemaLock.Release();
+        }
     }
 
-    public async Task LogAuditAsync(AuditLog log)
+    private static async Task TryAddAuditColumnAsync(MySqlConnection connection, string alterSql)
     {
         try
         {
+            await connection.ExecuteAsync(alterSql);
+        }
+        catch (MySqlException ex) when (ex.Number == 1060)
+        {
+            // Cột đã tồn tại
+        }
+    }
+
+    public async Task LogAuditAsync(
+        AuditLog log,
+        MySqlConnection? connection = null,
+        MySqlTransaction? transaction = null)
+    {
+        const string sql = """
+            INSERT INTO nhat_ky_hoat_dong
+            (nguoi_dung_id, ten_dang_nhap, ho_ten, vai_tro, hanh_dong, doi_tuong, doi_tuong_id, ma_chung_tu, noi_dung, truong_thay_doi, gia_tri_truoc, gia_tri_sau, gia_tri, dia_chi_ip, thoi_gian)
+            VALUES
+            (@NguoiDungId, @TenDangNhap, @HoTen, @VaiTro, @HanhDong, @DoiTuong, @DoiTuongId, @MaChungTu, @NoiDung, @TruongThayDoi, @GiaTriTruoc, @GiaTriSau, @GiaTri, @DiaChiIp, NOW());
+        """;
+
+        if (connection is not null && transaction is not null)
+        {
+            if (!_daDamBaoBangNhatKy)
+                await EnsureAuditTableAsync();
+
+            await connection.ExecuteAsync(sql, log, transaction);
+            return;
+        }
+
+        try
+        {
             await EnsureAuditTableAsync();
-            await using var connection = await OpenAsync();
-            var sql = """
-                INSERT INTO nhat_ky_hoat_dong 
-                (nguoi_dung_id, ten_dang_nhap, ho_ten, vai_tro, hanh_dong, doi_tuong, doi_tuong_id, ma_chung_tu, noi_dung, gia_tri, dia_chi_ip, thoi_gian) 
-                VALUES 
-                (@NguoiDungId, @TenDangNhap, @HoTen, @VaiTro, @HanhDong, @DoiTuong, @DoiTuongId, @MaChungTu, @NoiDung, @GiaTri, @DiaChiIp, NOW());
-            """;
-            await connection.ExecuteAsync(sql, log);
+            await using var conn = connection ?? await OpenAsync();
+            await conn.ExecuteAsync(sql, log);
         }
         catch (Exception ex)
         {
@@ -14480,36 +15373,53 @@ public sealed partial class DatabaseService
     public async Task LogSubAccountActivityAsync(
         string hanhDong,
         string? doiTuong = null,
-        uint? doiTuongId = null,
+        ulong? doiTuongId = null,
         string? maChungTu = null,
         string? noiDung = null,
-        decimal? giaTri = null)
+        decimal? giaTri = null,
+        NguoiDung? actingUser = null,
+        string? truongThayDoi = null,
+        string? giaTriTruoc = null,
+        string? giaTriSau = null,
+        MySqlConnection? connection = null,
+        MySqlTransaction? transaction = null)
     {
         try
         {
-            var user = Session.CurrentUser;
-            if (user == null)
+            // Tuyệt đối không dùng tài khoản mặc định giả nếu không xác định được người thực hiện.
+            var user = actingUser ?? Session.CurrentUser;
+            if (user == null || user.Id == 0)
                 return;
+
+            var vaiTro = string.IsNullOrWhiteSpace(user.VaiTro)
+                ? (user.MaVaiTro ?? "")
+                : user.VaiTro;
 
             var log = new AuditLog
             {
                 NguoiDungId = user.Id,
                 TenDangNhap = user.TenDangNhap,
                 HoTen = user.HoTen,
-                VaiTro = user.VaiTro ?? user.MaVaiTro ?? "",
+                VaiTro = vaiTro,
                 HanhDong = hanhDong,
                 DoiTuong = doiTuong,
                 DoiTuongId = doiTuongId,
-                MaChungTu = maChungTu,
+                MaChungTu = string.IsNullOrWhiteSpace(maChungTu) ? null : maChungTu.Trim(),
                 NoiDung = noiDung,
+                TruongThayDoi = string.IsNullOrWhiteSpace(truongThayDoi) ? null : truongThayDoi.Trim(),
+                GiaTriTruoc = string.IsNullOrWhiteSpace(giaTriTruoc) ? null : giaTriTruoc.Trim(),
+                GiaTriSau = string.IsNullOrWhiteSpace(giaTriSau) ? null : giaTriSau.Trim(),
                 GiaTri = giaTri,
                 ThoiGian = DateTime.Now
             };
 
-            await LogAuditAsync(log);
+            await LogAuditAsync(log, connection, transaction);
         }
         catch (Exception ex)
         {
+            if (transaction is not null)
+                throw;
+
             Helpers.SafeLog.WriteError("LogSubAccountActivityAsync error", ex);
         }
     }

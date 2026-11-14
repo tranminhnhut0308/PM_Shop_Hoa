@@ -6009,21 +6009,22 @@
                         BorderBrush="#E2ECE8"
                         BorderThickness="1"
                         CornerRadius="8"
-                        MaxHeight="140"
+                        MaxHeight="160"
                         IsVisible="{Binding HasPhieuNhapSupplierSuggestions}">
-                        <ListBox ItemsSource="{Binding PhieuNhapSupplierSuggestions}"
+                        <ListBox x:Name="PhieuNhapSupplierListBox"
+                          ItemsSource="{Binding PhieuNhapSupplierSuggestions}"
                           SelectedIndex="{Binding PhieuNhapSupplierSelectedIndex, Mode=TwoWay}"
                           Focusable="False"
                           SelectionChanged="OnImportSupplierSearchResultSelectionChanged"
                           Background="Transparent"
                           BorderThickness="0"
-                          Padding="0"
+                          Padding="2"
                           ScrollViewer.VerticalScrollBarVisibility="Auto">
                             <ListBox.Styles>
                               <Style Selector="ListBoxItem">
                                 <Setter Property="Focusable" Value="False" />
                                 <Setter Property="Padding" Value="0" />
-                                <Setter Property="Margin" Value="0" />
+                                <Setter Property="Margin" Value="2,1" />
                                 <Setter Property="CornerRadius" Value="6" />
                                 <Setter Property="BorderThickness" Value="1" />
                                 <Setter Property="BorderBrush" Value="Transparent" />
@@ -6040,23 +6041,31 @@
                             </ListBox.Styles>
                             <ListBox.ItemTemplate>
                               <DataTemplate x:DataType="models:NhaCungCap">
-                                <Button HorizontalAlignment="Stretch"
-                                  HorizontalContentAlignment="Left"
-                                  Background="Transparent"
-                                  BorderThickness="0"
-                                  Foreground="#344054"
+                                <Border Background="Transparent"
                                   Padding="10,7"
-                                  Command="{Binding ElementName=RootWindow, Path=DataContext.ChonNhaCungCapNhapCommand}"
-                                  CommandParameter="{Binding}">
-                                  <StackPanel>
+                                  Cursor="Hand"
+                                  Tapped="OnImportSupplierItemTapped">
+                                  <StackPanel Spacing="2">
                                     <TextBlock Text="{Binding TenNhaCungCap}"
                                       FontSize="13"
+                                      FontWeight="SemiBold"
+                                      Foreground="#163F38"
                                       TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding MaNhaCungCap}"
-                                      FontSize="11"
-                                      Foreground="#98A2B3" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                      <TextBlock Text="{Binding MaNhaCungCap, StringFormat='Mã: {0}'}"
+                                        FontSize="11"
+                                        Foreground="#61736E" />
+                                      <TextBlock Text="•"
+                                        FontSize="11"
+                                        Foreground="#98A2B3"
+                                        IsVisible="{Binding SoDienThoai, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                      <TextBlock Text="{Binding SoDienThoai}"
+                                        FontSize="11"
+                                        Foreground="#61736E"
+                                        IsVisible="{Binding SoDienThoai, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    </StackPanel>
                                   </StackPanel>
-                                </Button>
+                                </Border>
                               </DataTemplate>
                             </ListBox.ItemTemplate>
                           </ListBox>

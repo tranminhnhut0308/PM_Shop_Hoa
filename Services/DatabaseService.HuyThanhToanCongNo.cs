@@ -49,6 +49,7 @@ public sealed partial class DatabaseService
 
         await EnsureBangLichSuThanhToanKhachHangAsync();
         await EnsurePhieuQuyCancelColumnsAsync();
+        await EnsureAuditTableAsync();
 
         await _khoaHuyThanhToanCongNo.WaitAsync();
         try
@@ -368,16 +369,21 @@ public sealed partial class DatabaseService
                     },
                     transaction);
 
-                await transaction.CommitAsync();
-                daCommit = true;
-
-                _ = LogSubAccountActivityAsync(
+                await LogSubAccountActivityAsync(
                     "Hủy thu nợ",
                     "KHACH_HANG",
                     record.KhachHangId,
                     record.MaGiaoDich,
                     $"Hủy phiếu thu nợ {record.MaGiaoDich} của khách hàng {tenKhachHang}: {record.SoTien:N0} đ. Lý do: {lyDoHuy.Trim()}",
-                    record.SoTien);
+                    record.SoTien,
+                    truongThayDoi: "Trạng thái phiếu thu nợ, Công nợ KH",
+                    giaTriTruoc: $"HOÀN THÀNH | Công nợ KH: {Math.Max(0m, congNoTruocKhiHuy):N0} đ",
+                    giaTriSau: $"ĐÃ HỦY | Công nợ KH: {Math.Max(0m, congNoSauKhiHuy):N0} đ",
+                    connection: connection,
+                    transaction: transaction);
+
+                await transaction.CommitAsync();
+                daCommit = true;
 
                 return new HuyThanhToanCongNoKetQua
                 {

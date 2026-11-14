@@ -177,7 +177,7 @@ public sealed class TongQuanHangTop
     public string SoLuongHienThi => $"{SoLuong:N0}";
 }
 
-/// <summary>Một dòng nhật ký hoạt động của tài khoản con (dành cho Admin trên Dashboard).</summary>
+/// <summary>Một dòng nhật ký hoạt động của tất cả tài khoản (bao gồm Admin và nhân viên).</summary>
 public sealed class TongQuanHoatDongTaiKhoanCon
 {
     public ulong Id { get; set; }
@@ -187,8 +187,12 @@ public sealed class TongQuanHoatDongTaiKhoanCon
     public string VaiTro { get; set; } = "";
     public string HanhDong { get; set; } = "";
     public string? DoiTuong { get; set; }
+    public ulong? DoiTuongId { get; set; }
     public string? MaChungTu { get; set; }
     public string? NoiDung { get; set; }
+    public string? TruongThayDoi { get; set; }
+    public string? GiaTriTruoc { get; set; }
+    public string? GiaTriSau { get; set; }
     public decimal? GiaTri { get; set; }
     public DateTime ThoiGian { get; set; }
 
@@ -200,9 +204,160 @@ public sealed class TongQuanHoatDongTaiKhoanCon
         ? $"{Math.Abs(GiaTri!.Value):N0} đ"
         : "";
     public bool CoMaChungTu => !string.IsNullOrWhiteSpace(MaChungTu);
+    public string MaChungTuSach => MaChungTu?.Trim() ?? "";
     public string MaChungTuHienThi => CoMaChungTu ? $"Mã phiếu: {MaChungTu!.Trim()}" : "";
     public bool CoNoiDung => !string.IsNullOrWhiteSpace(NoiDung);
-    public bool CoChiTietMoTa => CoMaChungTu || CoNoiDung;
+    public bool CoChiTietMoTa => CoMaChungTu || CoNoiDung || CoThayDoiChiTiet;
+
+    public bool CoTruongThayDoi => !string.IsNullOrWhiteSpace(TruongThayDoi);
+    public bool CoGiaTriTruoc => !string.IsNullOrWhiteSpace(GiaTriTruoc);
+    public bool CoGiaTriSau => !string.IsNullOrWhiteSpace(GiaTriSau);
+    public bool CoThayDoiChiTiet => CoTruongThayDoi || CoGiaTriTruoc || CoGiaTriSau;
+
+    public bool CoLienKetChungTu
+    {
+        get
+        {
+            if (CoMaChungTu)
+                return true;
+
+            if (!DoiTuongId.HasValue || DoiTuongId.Value == 0 || string.IsNullOrWhiteSpace(DoiTuong))
+                return false;
+
+            var dt = DoiTuong.Trim().ToUpperInvariant();
+            return dt is "HOA_DON" or "PHIEU_NHAP" or "SO_QUY" or "CONG_NO_KH" or "CONG_NO_NCC"
+                or "SAN_PHAM" or "KHACH_HANG" or "NHA_CUNG_CAP" or "NGUOI_DUNG";
+        }
+    }
+
+    public string DoiTuongHienThi => (DoiTuong ?? "").Trim().ToUpperInvariant() switch
+    {
+        "HOA_DON" => "Hóa đơn",
+        "PHIEU_NHAP" => "Phiếu nhập",
+        "SO_QUY" => "Sổ quỹ",
+        "CONG_NO_KH" => "Thu nợ KH",
+        "CONG_NO_NCC" => "Thanh toán NCC",
+        "SAN_PHAM" => "Sản phẩm",
+        "KHACH_HANG" => "Khách hàng",
+        "NHA_CUNG_CAP" => "Nhà cung cấp",
+        "DANH_MUC" => "Danh mục",
+        "DON_VI_TINH" => "Đơn vị tính",
+        "NGUOI_DUNG" or "VAI_TRO" => "Tài khoản & Quyền",
+        "HE_THONG" => "Hệ thống",
+        _ => ""
+    };
+
+    public bool CoDoiTuongHienThi => !string.IsNullOrWhiteSpace(DoiTuongHienThi);
+
+    public string NhanNutMoChungTu => CoMaChungTu
+        ? MaChungTu!.Trim()
+        : (CoDoiTuongHienThi ? $"Mở {DoiTuongHienThi}" : "Mở chi tiết");
+
+    public string TooltipMoChungTu => CoMaChungTu
+        ? $"Nhấn để mở trực tiếp chứng từ / dữ liệu {MaChungTu!.Trim()}"
+        : $"Nhấn để mở {DoiTuongHienThi}";
+
+    public string ChuCaiDaiDien
+    {
+        get
+        {
+            var raw = !string.IsNullOrWhiteSpace(HoTen) ? HoTen.Trim() : TenDangNhap.Trim();
+            if (string.IsNullOrEmpty(raw))
+                return "?";
+
+            var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var target = parts.Length > 0 ? parts[^1] : raw;
+            return target[..1].ToUpperInvariant();
+        }
+    }
+
+    public string MauNenAvatar
+    {
+        get
+        {
+            var vt = VaiTroHienThi;
+            if (vt.Contains("Quản trị", StringComparison.OrdinalIgnoreCase) || vt.Contains("Admin", StringComparison.OrdinalIgnoreCase))
+                return "#FEF3C7";
+            if (vt.Contains("Quản lý", StringComparison.OrdinalIgnoreCase))
+                return "#F3E8FF";
+            if (vt.Contains("kho", StringComparison.OrdinalIgnoreCase))
+                return "#FFEDD5";
+            if (vt.Contains("Thu ngân", StringComparison.OrdinalIgnoreCase))
+                return "#E0F2FE";
+            return "#DCFCE7";
+        }
+    }
+
+    public string MauChuAvatar
+    {
+        get
+        {
+            var vt = VaiTroHienThi;
+            if (vt.Contains("Quản trị", StringComparison.OrdinalIgnoreCase) || vt.Contains("Admin", StringComparison.OrdinalIgnoreCase))
+                return "#92400E";
+            if (vt.Contains("Quản lý", StringComparison.OrdinalIgnoreCase))
+                return "#6B21A8";
+            if (vt.Contains("kho", StringComparison.OrdinalIgnoreCase))
+                return "#9A3412";
+            if (vt.Contains("Thu ngân", StringComparison.OrdinalIgnoreCase))
+                return "#075985";
+            return "#166534";
+        }
+    }
+
+    public string BieuTuongHanhDong
+    {
+        get
+        {
+            var hd = HanhDong?.Trim() ?? "";
+            if (hd.Contains("Đăng nhập", StringComparison.OrdinalIgnoreCase) || hd.Equals("DANG_NHAP", StringComparison.OrdinalIgnoreCase))
+                return "🔐";
+            if (hd.Contains("Đăng xuất", StringComparison.OrdinalIgnoreCase) || hd.Equals("DANG_XUAT", StringComparison.OrdinalIgnoreCase))
+                return "🚪";
+            if (hd.StartsWith("Hủy", StringComparison.OrdinalIgnoreCase) || hd.Equals("HUY_DON", StringComparison.OrdinalIgnoreCase) || hd.Equals("HỦY", StringComparison.OrdinalIgnoreCase))
+                return "⛔";
+            if (hd.StartsWith("Xóa", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Ẩn", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Khóa", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Ngừng", StringComparison.OrdinalIgnoreCase))
+                return "🗑";
+            if (hd.Contains("Thanh toán", StringComparison.OrdinalIgnoreCase) || hd.Contains("Thu nợ", StringComparison.OrdinalIgnoreCase) || hd.Contains("Thu tiền", StringComparison.OrdinalIgnoreCase) || hd.Contains("Chi tiền", StringComparison.OrdinalIgnoreCase))
+                return "💳";
+            if (hd.StartsWith("Sửa", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Chỉnh", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Cập nhật", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Thay đổi", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Phân quyền", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Đặt lại", StringComparison.OrdinalIgnoreCase))
+                return "✏️";
+            if (hd.StartsWith("Tạo", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Thêm", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Nhập", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Bán", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Khôi phục", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Kích hoạt", StringComparison.OrdinalIgnoreCase) || hd.StartsWith("Mở khóa", StringComparison.OrdinalIgnoreCase))
+                return "➕";
+            return "📝";
+        }
+    }
+
+    public string NoiDungSaoChepDayDu
+    {
+        get
+        {
+            var lines = new List<string>
+            {
+                $"Nhân viên: {NguoiThucHienHienThi}",
+                $"Vai trò: {VaiTroHienThi}",
+                $"Hành động: {HanhDong}",
+                $"Thời gian: {ThoiGianHienThi}"
+            };
+
+            if (CoMaChungTu)
+                lines.Add($"Mã chứng từ: {MaChungTuSach}");
+            if (CoDoiTuongHienThi)
+                lines.Add($"Phân loại: {DoiTuongHienThi}");
+            if (CoGiaTri)
+                lines.Add($"Số tiền: {GiaTriHienThi}");
+            if (CoNoiDung)
+                lines.Add($"Nội dung: {NoiDung!.Trim()}");
+            if (CoTruongThayDoi)
+                lines.Add($"Trường thay đổi: {TruongThayDoi!.Trim()}");
+            if (CoGiaTriTruoc)
+                lines.Add($"Giá trị trước:\n{GiaTriTruoc!.Trim()}");
+            if (CoGiaTriSau)
+                lines.Add($"Giá trị sau:\n{GiaTriSau!.Trim()}");
+
+            return string.Join(Environment.NewLine, lines);
+        }
+    }
 
     public string NguoiThucHienHienThi
     {
@@ -261,7 +416,7 @@ public sealed class TongQuanHoatDongTaiKhoanCon
     private (string Fg, string Bg) LayMauVaiTro()
     {
         var text = VaiTroHienThi;
-        if (text.Contains("Quản trị", StringComparison.OrdinalIgnoreCase))
+        if (text.Contains("Quản trị", StringComparison.OrdinalIgnoreCase) || text.Contains("Admin", StringComparison.OrdinalIgnoreCase))
             return ("#B45309", "#FEF3C7");
         if (text.Contains("Quản lý", StringComparison.OrdinalIgnoreCase))
             return ("#6D28D9", "#F3E8FF");
@@ -278,52 +433,48 @@ public sealed class TongQuanHoatDongTaiKhoanCon
     {
         var hd = HanhDong?.Trim() ?? "";
 
-        if (hd.Equals("Thu nợ", StringComparison.OrdinalIgnoreCase))
-            return ("#0369A1", "#E0F2FE", "#BAE6FD");
+        // 1. Đăng nhập / Đăng xuất (Xám xanh trung tính)
+        if (hd.Contains("Đăng nhập", StringComparison.OrdinalIgnoreCase) ||
+            hd.Equals("DANG_NHAP", StringComparison.OrdinalIgnoreCase) ||
+            hd.Contains("Đăng xuất", StringComparison.OrdinalIgnoreCase) ||
+            hd.Equals("DANG_XUAT", StringComparison.OrdinalIgnoreCase))
+            return ("#334155", "#F1F5F9", "#CBD5E1");
 
-        if (hd.Equals("Bán hàng", StringComparison.OrdinalIgnoreCase) ||
-            hd.Equals("BAN_HANG", StringComparison.OrdinalIgnoreCase))
-            return ("#047857", "#ECFDF5", "#A7F3D0");
-
-        if (hd.Equals("Thu tiền", StringComparison.OrdinalIgnoreCase) ||
-            hd.Equals("THU_TIEN", StringComparison.OrdinalIgnoreCase))
-            return ("#0284C7", "#E0F2FE", "#BAE6FD");
-
-        if (hd.Equals("Nhập hàng", StringComparison.OrdinalIgnoreCase) ||
-            hd.Equals("NHAP_HANG", StringComparison.OrdinalIgnoreCase))
-            return ("#C2410C", "#FFF7ED", "#FED7AA");
-
-        if (hd.Equals("Chi tiền", StringComparison.OrdinalIgnoreCase) ||
-            hd.Equals("CHI_TIEN", StringComparison.OrdinalIgnoreCase))
-            return ("#C2410C", "#FFF7ED", "#FED7AA");
-
-        if (hd.Contains("Thanh toán", StringComparison.OrdinalIgnoreCase) &&
-            !hd.StartsWith("Hủy", StringComparison.OrdinalIgnoreCase))
-            return ("#B45309", "#FEF3C7", "#FDE68A");
-
-        if (hd.Equals("Sổ quỹ", StringComparison.OrdinalIgnoreCase) ||
-            hd.Equals("SO_QUY", StringComparison.OrdinalIgnoreCase))
-            return ("#1D4ED8", "#EFF6FF", "#BFDBFE");
-
-        if (hd.Equals("Đăng nhập", StringComparison.OrdinalIgnoreCase) ||
-            hd.Equals("DANG_NHAP", StringComparison.OrdinalIgnoreCase))
-            return ("#4338CA", "#EEF2FF", "#C7D2FE");
-
+        // 2. Hủy / Khóa / Ngừng hoạt động (Đỏ cảnh báo)
         if (hd.Equals("HUY_DON", StringComparison.OrdinalIgnoreCase) ||
             hd.Equals("HỦY", StringComparison.OrdinalIgnoreCase) ||
             hd.StartsWith("Hủy", StringComparison.OrdinalIgnoreCase) ||
-            hd.StartsWith("Xóa", StringComparison.OrdinalIgnoreCase) ||
             hd.StartsWith("Khóa", StringComparison.OrdinalIgnoreCase) ||
-            hd.StartsWith("Ẩn", StringComparison.OrdinalIgnoreCase))
+            hd.StartsWith("Ngừng", StringComparison.OrdinalIgnoreCase))
             return ("#B91C1C", "#FEF2F2", "#FECACA");
 
+        // 3. Xóa / Ẩn (Cam đậm cảnh báo)
+        if (hd.StartsWith("Xóa", StringComparison.OrdinalIgnoreCase) ||
+            hd.StartsWith("Ẩn", StringComparison.OrdinalIgnoreCase))
+            return ("#C2410C", "#FFF7ED", "#FED7AA");
+
+        // 4. Thanh toán / Thu nợ / Sổ quỹ (Tím / Xanh cổ vịt)
+        if (hd.Equals("Thu nợ", StringComparison.OrdinalIgnoreCase) ||
+            hd.Equals("Thu tiền", StringComparison.OrdinalIgnoreCase) ||
+            hd.Equals("THU_TIEN", StringComparison.OrdinalIgnoreCase) ||
+            hd.Equals("Chi tiền", StringComparison.OrdinalIgnoreCase) ||
+            hd.Equals("CHI_TIEN", StringComparison.OrdinalIgnoreCase) ||
+            hd.Contains("Thanh toán", StringComparison.OrdinalIgnoreCase) ||
+            hd.Equals("Sổ quỹ", StringComparison.OrdinalIgnoreCase) ||
+            hd.Equals("SO_QUY", StringComparison.OrdinalIgnoreCase))
+            return ("#5925DC", "#F4F3FF", "#D9D6FE");
+
+        // 5. Chỉnh sửa / Cập nhật / Thay đổi / Phân quyền (Xanh dương)
         if (hd.StartsWith("Sửa", StringComparison.OrdinalIgnoreCase) ||
             hd.StartsWith("Cập nhật", StringComparison.OrdinalIgnoreCase) ||
             hd.StartsWith("Chỉnh", StringComparison.OrdinalIgnoreCase) ||
-            hd.StartsWith("Phân quyền", StringComparison.OrdinalIgnoreCase))
-            return ("#6D28D9", "#F3E8FF", "#DDD6FE");
+            hd.StartsWith("Thay đổi", StringComparison.OrdinalIgnoreCase) ||
+            hd.StartsWith("Phân quyền", StringComparison.OrdinalIgnoreCase) ||
+            hd.StartsWith("Đặt lại", StringComparison.OrdinalIgnoreCase))
+            return ("#175CD3", "#EFF8FF", "#B2DDFF");
 
-        return ("#0F766E", "#F0FDFA", "#99F6E4");
+        // 6. Thêm mới / Tạo / Nhập hàng / Bán hàng / Khôi phục / Mở khóa (Xanh ngọc / Xanh lá)
+        return ("#027A48", "#ECFDF3", "#ABEFC6");
     }
 
     public string MauBadgeVaiTro => LayMauVaiTro().Fg;
