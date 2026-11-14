@@ -25,6 +25,10 @@ public sealed class PhieuNhapHangDetail
 
     public string? TenNhaCungCap { get; set; }
 
+    /// <summary>Chưa gắn nhà cung cấp (Issue #113: cho phép lưu phiếu chưa có NCC).</summary>
+    public bool ChuaCoNhaCungCap => NhaCungCapId == null || NhaCungCapId == 0;
+    public bool DaCoNhaCungCap => !ChuaCoNhaCungCap;
+
     public string? TenNhanVien { get; set; }
 
     /// <summary>Giảm giá cấp phiếu (cột giam_gia). Hiện nghiệp vụ luôn lưu 0.</summary>
@@ -190,7 +194,7 @@ public sealed class PhieuNhapHangDetail
         string.IsNullOrWhiteSpace(MaNhaCungCap) ? "—" : MaNhaCungCap!;
 
     public string TenNhaCungCapHienThi =>
-        string.IsNullOrWhiteSpace(TenNhaCungCap) ? "Không có nhà cung cấp" : TenNhaCungCap!;
+        ChuaCoNhaCungCap || string.IsNullOrWhiteSpace(TenNhaCungCap) ? "Chưa xác định NCC" : TenNhaCungCap!;
 
     public string TenNhanVienHienThi =>
         string.IsNullOrWhiteSpace(TenNhanVien) ? "—" : TenNhanVien!;

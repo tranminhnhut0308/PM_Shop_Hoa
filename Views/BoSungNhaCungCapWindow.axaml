@@ -1,0 +1,272 @@
+<Window xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:ShopHoa.Models"
+    x:Class="ShopHoa.Views.BoSungNhaCungCapWindow"
+    Title="Bổ sung nhà cung cấp"
+    Icon="/Assets/logo.ico"
+    Width="520"
+    Height="660"
+    MinWidth="480"
+    MinHeight="580"
+    CanResize="False"
+    WindowStartupLocation="CenterOwner"
+    RequestedThemeVariant="Light"
+    Background="#F4F7F6">
+
+    <Window.Styles>
+        <Style Selector="TextBlock">
+            <Setter Property="Foreground" Value="#263B35" />
+        </Style>
+
+        <Style Selector="TextBox">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="Foreground" Value="#263B35" />
+            <Setter Property="BorderBrush" Value="#D8E5E0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="TextBox:focus">
+            <Setter Property="BorderBrush" Value="#087F6E" />
+            <Setter Property="BorderThickness" Value="1.5" />
+        </Style>
+
+        <Style Selector="Button.cancelButton">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="Foreground" Value="#52645E" />
+            <Setter Property="BorderBrush" Value="#D8E5E0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="16,8" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.cancelButton:pointerover">
+            <Setter Property="Background" Value="#F4FAF8" />
+            <Setter Property="BorderBrush" Value="#B2DDD0" />
+            <Setter Property="Foreground" Value="#163F38" />
+        </Style>
+
+        <Style Selector="Button.actionButton">
+            <Setter Property="Background" Value="#087F6E" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="16,8" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.actionButton:pointerover">
+            <Setter Property="Background" Value="#0A9884" />
+        </Style>
+        <Style Selector="Button.actionButton:disabled">
+            <Setter Property="Background" Value="#A0D0C8" />
+            <Setter Property="Foreground" Value="#E0F2EF" />
+        </Style>
+    </Window.Styles>
+
+    <Border Background="#FFFFFF"
+        CornerRadius="16"
+        BorderBrush="#D8E5E0"
+        BorderThickness="1"
+        BoxShadow="0 8 28 #140A352E"
+        Margin="14"
+        Padding="22">
+
+        <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
+
+            <!-- HEADER -->
+            <StackPanel Grid.Row="0" Spacing="4">
+                <TextBlock x:Name="TxtHeaderTitle"
+                    Text="Bổ sung nhà cung cấp"
+                    FontSize="18"
+                    FontWeight="Bold"
+                    Foreground="#163F38" />
+                <TextBlock x:Name="TxtHeaderSubtitle"
+                    Text="Gán nhà cung cấp cho phiếu nhập và cập nhật công nợ theo đúng nghiệp vụ"
+                    FontSize="12"
+                    Foreground="#61736E" />
+            </StackPanel>
+
+            <!-- TÓM TẮT PHIẾU NHẬP -->
+            <Border Grid.Row="1"
+                Background="#F8FAFC"
+                BorderBrush="#E2E8F0"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="12,10">
+                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="6">
+                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
+                        <TextBlock Text="Mã phiếu nhập" FontSize="11" Foreground="#64748B" />
+                        <TextBlock x:Name="TxtMaPhieu" FontSize="13" FontWeight="Bold" Foreground="#0F172A" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2">
+                        <TextBlock Text="Thời gian nhập" FontSize="11" Foreground="#64748B" />
+                        <TextBlock x:Name="TxtThoiGian" FontSize="13" FontWeight="SemiBold" Foreground="#334155" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
+                        <TextBlock Text="Tổng tiền nhập" FontSize="11" Foreground="#64748B" />
+                        <TextBlock x:Name="TxtTongTien" FontSize="13" FontWeight="Bold" Foreground="#087F6E" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                        <TextBlock Text="Đã thanh toán / Còn nợ" FontSize="11" Foreground="#64748B" />
+                        <TextBlock x:Name="TxtThanhToanVaConNo" FontSize="13" FontWeight="SemiBold" Foreground="#334155" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- PHẦN CHỌN NHÀ CUNG CẤP -->
+            <Grid Grid.Row="2" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="8">
+
+                <!-- Label & Ô tìm kiếm -->
+                <TextBlock Grid.Row="0"
+                    Text="Tìm và chọn nhà cung cấp *"
+                    FontSize="12"
+                    FontWeight="SemiBold"
+                    Foreground="#163F38" />
+
+                <TextBox Grid.Row="1"
+                    x:Name="TxtSearch"
+                    Watermark="Nhập tên, mã hoặc SĐT nhà cung cấp..."
+                    Padding="10,8"
+                    FontSize="13" />
+
+                <!-- Danh sách gợi ý hoặc Khung xem trước NCC đã chọn -->
+                <Panel Grid.Row="2">
+                    <!-- Danh sách kết quả tìm kiếm -->
+                    <Border x:Name="BorderSuggestions"
+                        Background="#F8FAFC"
+                        BorderBrush="#E2E8F0"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        IsVisible="True">
+                        <ListBox x:Name="LstSuggestions"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="2">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="Padding" Value="8,6" />
+                                    <Setter Property="Margin" Value="2,1" />
+                                    <Setter Property="CornerRadius" Value="6" />
+                                </Style>
+                                <Style Selector="ListBoxItem:selected">
+                                    <Setter Property="Background" Value="#DFF5F0" />
+                                </Style>
+                                <Style Selector="ListBoxItem:pointerover">
+                                    <Setter Property="Background" Value="#F0FAF7" />
+                                </Style>
+                            </ListBox.Styles>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="models:NhaCungCap">
+                                    <Border Background="Transparent"
+                                        Cursor="Hand"
+                                        Padding="4,2"
+                                        Tapped="OnItemTapped">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="{Binding TenNhaCungCap}"
+                                                FontSize="13"
+                                                FontWeight="Bold"
+                                                Foreground="#163F38"
+                                                TextTrimming="CharacterEllipsis" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding MaNhaCungCap, StringFormat='Mã: {0}'}"
+                                                    FontSize="11"
+                                                    Foreground="#64748B" />
+                                                <TextBlock Text="•" FontSize="11" Foreground="#94A3B8" />
+                                                <TextBlock Text="{Binding SoDienThoai, StringFormat='SĐT: {0}'}"
+                                                    FontSize="11"
+                                                    Foreground="#64748B" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+
+                    <!-- Khung preview khi đã chọn nhà cung cấp -->
+                    <Border x:Name="BorderSelectedSupplier"
+                        Background="#F0FDF4"
+                        BorderBrush="#86EFAC"
+                        BorderThickness="1.5"
+                        CornerRadius="8"
+                        Padding="14,12"
+                        IsVisible="False">
+                        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="6">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="ĐÃ CHỌN NHÀ CUNG CẤP"
+                                        FontSize="11"
+                                        FontWeight="Bold"
+                                        Foreground="#16A34A" />
+                                    <TextBlock x:Name="TxtSelectedTenNcc"
+                                        FontSize="15"
+                                        FontWeight="Bold"
+                                        Foreground="#14532D" />
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                    x:Name="BtnDoiNcc"
+                                    Classes="cancelButton"
+                                    Content="Đổi NCC khác"
+                                    Padding="10,4"
+                                    FontSize="11" />
+                            </Grid>
+
+                            <Grid Grid.Row="1" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="3">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Mã NCC:" FontSize="11.5" Foreground="#64748B" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtSelectedMaNcc" FontSize="11.5" FontWeight="SemiBold" Foreground="#1E293B" />
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Điện thoại:" FontSize="11.5" Foreground="#64748B" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TxtSelectedSdt" FontSize="11.5" Foreground="#1E293B" />
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Địa chỉ:" FontSize="11.5" Foreground="#64748B" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TxtSelectedDiaChi" FontSize="11.5" Foreground="#1E293B" TextWrapping="Wrap" />
+                            </Grid>
+
+                            <TextBlock Grid.Row="2"
+                                Text="ℹ Sau khi xác nhận, công nợ nhập hàng và phiếu chi (nếu có thanh toán) sẽ được ghi nhận cho nhà cung cấp này."
+                                FontSize="11"
+                                Foreground="#047857"
+                                TextWrapping="Wrap"
+                                Margin="0,4,0,0" />
+                        </Grid>
+                    </Border>
+                </Panel>
+
+                <!-- Lý do bổ sung -->
+                <StackPanel Grid.Row="3" Spacing="4" Margin="0,4,0,0">
+                    <TextBlock Text="Lý do bổ sung / ghi chú (tùy chọn)"
+                        FontSize="11.5"
+                        Foreground="#64748B" />
+                    <TextBox x:Name="TxtLyDo"
+                        Text="Bổ sung nhà cung cấp cho phiếu nhập"
+                        Padding="10,6"
+                        FontSize="12" />
+                </StackPanel>
+            </Grid>
+
+            <!-- FOOTER -->
+            <StackPanel Grid.Row="3" Spacing="8">
+                <!-- Thông báo lỗi -->
+                <TextBlock x:Name="TxtError"
+                    FontSize="12"
+                    Foreground="#DC2626"
+                    FontWeight="SemiBold"
+                    TextWrapping="Wrap"
+                    IsVisible="False" />
+
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                    <Button Grid.Column="1"
+                        x:Name="BtnHuy"
+                        Classes="cancelButton"
+                        Content="Hủy bỏ"
+                        Width="100" />
+                    <Button Grid.Column="2"
+                        x:Name="BtnXacNhan"
+                        Classes="actionButton"
+                        Content="✔ Xác nhận bổ sung"
+                        IsEnabled="False" />
+                </Grid>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

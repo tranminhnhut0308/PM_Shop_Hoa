@@ -121,6 +121,49 @@ public partial class PhieuNhapDetailWindow : Window
 
         // Nút mua lại luôn sẵn sàng nếu có hàm mua lại
         MuaLaiButton.IsVisible = _muaLai is not null;
+
+        // Chỉ hiện nút bổ sung nhà cung cấp nếu phiếu chưa có NCC và chưa bị hủy
+        BoSungNccButton.IsVisible = detail.ChuaCoNhaCungCap && !detail.IsDaHuy;
+    }
+
+    private async void BoSungNccButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not PhieuNhapHangDetail detail)
+            return;
+
+        BoSungNccButton.IsEnabled = false;
+        try
+        {
+            var db = new DatabaseService();
+            var dlg = new BoSungNhaCungCapWindow(
+                detail.PhieuNhapId,
+                detail.MaPhieuNhap,
+                detail.ThoiGianNhap,
+                detail.TongTienNhap,
+                detail.DaThanhToan,
+                detail.ConNo,
+                db);
+
+            var result = await dlg.ShowDialog<bool>(this);
+            if (result)
+            {
+                var capNhat = await db.GetPhieuNhapHangDetailTheoMaAsync(detail.MaPhieuNhap);
+                if (capNhat is not null)
+                {
+                    DataContext = null;
+                    DataContext = capNhat;
+                    CapNhatGiaoDien(capNhat);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Lỗi bổ sung NCC từ cửa sổ chi tiết", ex);
+        }
+        finally
+        {
+            BoSungNccButton.IsEnabled = true;
+        }
     }
 
     private async void SuaPhieuButton_OnClick(object? sender, RoutedEventArgs e)

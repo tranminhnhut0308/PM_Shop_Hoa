@@ -43,6 +43,8 @@ public sealed partial class DatabaseService
     private bool? _coCotDuLieuKiotViet;
     private bool? _cotNgayTaoSanPhamChoPhepNull;
     private bool? _coCotDuLieuKiotVietNhaCungCap;
+    private bool? _hasPhieuNhapNhaCungCapNullable;
+    private readonly SemaphoreSlim _ensurePhieuNhapNhaCungCapNullable = new(1, 1);
     private bool? _hasHoaDonContactColumns;
     private bool _daBackfillNhomSoQuy;
     private bool _daDamBaoBangLichSuThanhToanKhachHang;
@@ -10595,7 +10597,8 @@ public sealed partial class DatabaseService
         string? tinhTrangThanhToan = null,
         DateTime? ngayLoc = null,
         DateTime? ngayBatDau = null,
-        DateTime? ngayKetThuc = null)
+        DateTime? ngayKetThuc = null,
+        string? trangThaiNcc = null)
     {
         if (page < 1)
             page = 1;
@@ -10622,6 +10625,13 @@ public sealed partial class DatabaseService
             _ => ""
         };
 
+        var nccCondition = (trangThaiNcc?.ToUpperInvariant()) switch
+        {
+            "CHUA_CO_NCC" or "CHUA_XAC_DINH" or "CHUA_CO" => "AND (p.nha_cung_cap_id IS NULL OR p.nha_cung_cap_id = 0)",
+            "DA_CO_NCC" or "DA_XAC_DINH" or "DA_CO" => "AND (p.nha_cung_cap_id IS NOT NULL AND p.nha_cung_cap_id > 0)",
+            _ => ""
+        };
+
         // ngayLoc giữ tương thích với các caller cũ; báo cáo dùng khoảng ngày.
         var dateCondition = ngayLoc.HasValue
             ? "AND DATE(p.thoi_gian_nhap) = DATE(@Ngay)"
@@ -10634,7 +10644,8 @@ public sealed partial class DatabaseService
         var searchCondition = @"(@Search = ''
         OR p.ma_phieu_nhap LIKE CONCAT('%', @Search, '%')
         OR ncc.ma_nha_cung_cap LIKE CONCAT('%', @Search, '%')
-        OR ncc.ten_nha_cung_cap LIKE CONCAT('%', @Search, '%'))";
+        OR ncc.ten_nha_cung_cap LIKE CONCAT('%', @Search, '%')
+        OR ((p.nha_cung_cap_id IS NULL OR p.nha_cung_cap_id = 0) AND ('chưa xác định ncc' LIKE CONCAT('%', @Search, '%') OR 'chưa có ncc' LIKE CONCAT('%', @Search, '%') OR 'chua co ncc' LIKE CONCAT('%', @Search, '%'))))";
 
         var countSql = $"""
     SELECT COUNT(*)
@@ -10643,6 +10654,7 @@ public sealed partial class DatabaseService
         ON ncc.id = p.nha_cung_cap_id
     WHERE {searchCondition}
       {paymentCondition}
+      {nccCondition}
       {dateCondition}
       {dateRangeCondition};
     """;
@@ -10676,6 +10688,7 @@ public sealed partial class DatabaseService
         ON nd.id = p.nguoi_nhap_id
     WHERE {searchCondition}
       {paymentCondition}
+      {nccCondition}
       {dateCondition}
       {dateRangeCondition}
     ORDER BY p.thoi_gian_nhap DESC, p.id DESC
@@ -10879,6 +10892,218 @@ public sealed partial class DatabaseService
         }
 
         return header;
+    }
+
+    /// <summary>
+    /// Bổ sung nhà cung cấp cho một phiếu nhập hàng chưa có NCC hoặc đổi NCC (Issue #113).
+    /// Cập nhật nha_cung_cap_id, ghi nhận công nợ (lich_su_cong_no_nha_cung_cap),
+    /// nếu có thanh toán tạo phiếu chi (phieu_chi), và ghi vết vào lich_su_chinh_sua_phieu_nhap.
+    /// Tồn kho không bị thay đổi / không bị nhân đôi.
+    /// </summary>
+    public async Task BoSungNhaCungCapChoPhieuNhapAsync(
+        uint phieuNhapId,
+        uint nhaCungCapId,
+        uint? userId = null,
+        string? lyDo = null)
+    {
+        if (phieuNhapId == 0)
+            throw new ArgumentException("Mã phiếu nhập không hợp lệ.", nameof(phieuNhapId));
+        if (nhaCungCapId == 0)
+            throw new ArgumentException("Vui lòng chọn nhà cung cấp hợp lệ.", nameof(nhaCungCapId));
+
+        await EnsureLichSuChinhSuaPhieuNhapTableAsync();
+        var hasPhieuQuyExtraColumns = await EnsurePhieuQuyExtraColumnsAsync();
+        var hasPhieuQuyPhieuNhapColumns = await EnsurePhieuQuyPhieuNhapColumnsAsync();
+
+        await using var connection = await OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            // 1. Kiểm tra nhà cung cấp mới
+            var ncc = await connection.QueryFirstOrDefaultAsync<NhaCungCap>(
+                """
+                SELECT id AS Id, ma_nha_cung_cap AS MaNhaCungCap, ten_nha_cung_cap AS TenNhaCungCap
+                FROM nha_cung_cap
+                WHERE id = @NhaCungCapId
+                LIMIT 1;
+                """,
+                new { NhaCungCapId = nhaCungCapId },
+                transaction) ?? throw new InvalidOperationException($"Không tìm thấy nhà cung cấp với ID = {nhaCungCapId}.");
+
+            // 2. Đọc và khóa phiếu nhập
+            var phieu = await connection.QueryFirstOrDefaultAsync<PhieuNhapHang>(
+                """
+                SELECT
+                    p.id AS Id,
+                    p.ma_phieu_nhap AS MaPhieuNhap,
+                    p.chi_nhanh_id AS ChiNhanhId,
+                    p.nha_cung_cap_id AS NhaCungCapId,
+                    p.nguoi_nhap_id AS NguoiNhapId,
+                    p.thoi_gian_nhap AS ThoiGianNhap,
+                    p.tong_tien_hang AS TongTienHang,
+                    p.giam_gia AS GiamGia,
+                    p.chi_phi_khac AS ChiPhiKhac,
+                    p.tong_tien_nhap AS TongTienNhap,
+                    p.da_thanh_toan AS DaThanhToan,
+                    p.con_no AS ConNo,
+                    p.trang_thai AS TrangThai,
+                    p.ghi_chu AS GhiChu,
+                    COALESCE(p.phuong_thuc_thanh_toan, 'TIEN_MAT') AS PhuongThucThanhToan
+                FROM phieu_nhap_hang p
+                WHERE p.id = @PhieuNhapId
+                FOR UPDATE;
+                """,
+                new { PhieuNhapId = phieuNhapId },
+                transaction) ?? throw new InvalidOperationException($"Không tìm thấy phiếu nhập với ID = {phieuNhapId}.");
+
+            if (phieu.IsDaHuy)
+                throw new InvalidOperationException("Không thể bổ sung nhà cung cấp cho phiếu nhập đã bị hủy.");
+
+            var oldNccId = phieu.NhaCungCapId;
+            var oldNccTen = oldNccId is > 0
+                ? await connection.ExecuteScalarAsync<string?>(
+                    "SELECT ten_nha_cung_cap FROM nha_cung_cap WHERE id = @Id LIMIT 1;",
+                    new { Id = oldNccId },
+                    transaction)
+                : null;
+
+            // 3. Cập nhật nha_cung_cap_id vào bảng phieu_nhap_hang
+            await connection.ExecuteAsync(
+                """
+                UPDATE phieu_nhap_hang
+                SET nha_cung_cap_id = @NhaCungCapId,
+                    ngay_cap_nhat = NOW()
+                WHERE id = @PhieuNhapId;
+                """,
+                new { NhaCungCapId = nhaCungCapId, PhieuNhapId = phieuNhapId },
+                transaction);
+
+            phieu.NhaCungCapId = nhaCungCapId;
+            phieu.TenNhaCungCap = ncc.TenNhaCungCap;
+            phieu.MaNhaCungCap = ncc.MaNhaCungCap;
+
+            var branchId = phieu.ChiNhanhId == 0 ? (Session.CurrentUser?.ChiNhanhId ?? 1) : phieu.ChiNhanhId;
+
+            // 4. Ghi nhận công nợ vào lich_su_cong_no_nha_cung_cap
+            await GhiCongNoNhaCungCapPhieuNhapAsync(
+                connection,
+                transaction,
+                phieu,
+                branchId,
+                soTienThanhToanBangTien: phieu.DaThanhToan,
+                xoaLichSuCu: true);
+
+            // 5. Nếu phiếu có DaThanhToan > 0, tạo hoặc cập nhật phiếu chi
+            if (phieu.DaThanhToan > 0)
+            {
+                await GhiPhieuChiNhapHangAsync(
+                    connection,
+                    transaction,
+                    branchId,
+                    userId ?? phieu.NguoiNhapId,
+                    phieu,
+                    hasPhieuQuyExtraColumns,
+                    hasPhieuQuyPhieuNhapColumns,
+                    phieu.DaThanhToan);
+            }
+
+            // 6. Ghi nhật ký vào lich_su_chinh_sua_phieu_nhap
+            var currentUserId = userId ?? Session.CurrentUser?.Id ?? phieu.NguoiNhapId;
+            var currentUserName = Session.CurrentUser?.HoTen ?? Session.CurrentUser?.TenDangNhap ?? "Hệ thống";
+            var lyDoThucHien = string.IsNullOrWhiteSpace(lyDo)
+                ? (oldNccId == null || oldNccId == 0
+                    ? $"Bổ sung nhà cung cấp: {ncc.TenNhaCungCap} ({ncc.MaNhaCungCap})"
+                    : $"Thay đổi nhà cung cấp từ {oldNccTen} sang {ncc.TenNhaCungCap}")
+                : lyDo.Trim();
+
+            var duLieuTruocJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                phieu.MaPhieuNhap,
+                NhaCungCapId = oldNccId,
+                TenNhaCungCap = oldNccTen ?? "Chưa xác định NCC",
+                phieu.TongTienNhap,
+                phieu.DaThanhToan,
+                phieu.ConNo
+            });
+
+            var duLieuSauJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                phieu.MaPhieuNhap,
+                NhaCungCapId = nhaCungCapId,
+                TenNhaCungCap = ncc.TenNhaCungCap,
+                phieu.TongTienNhap,
+                phieu.DaThanhToan,
+                phieu.ConNo
+            });
+
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO lich_su_chinh_sua_phieu_nhap
+                (
+                    phieu_nhap_id, ma_phieu_nhap, thoi_gian,
+                    nguoi_thuc_hien_id, ten_nguoi_thuc_hien, ly_do,
+                    tong_tien_truoc, tong_tien_sau,
+                    chi_phi_khac_truoc, chi_phi_khac_sau,
+                    giam_gia_truoc, giam_gia_sau,
+                    da_thanh_toan_truoc, da_thanh_toan_sau,
+                    con_no_truoc, con_no_sau,
+                    nha_cung_cap_id_truoc, nha_cung_cap_id_sau,
+                    ten_nha_cung_cap_truoc, ten_nha_cung_cap_sau,
+                    thoi_gian_nhap_truoc, thoi_gian_nhap_sau,
+                    du_lieu_truoc_json, du_lieu_sau_json,
+                    chi_tiet_thay_doi
+                )
+                VALUES
+                (
+                    @PhieuNhapId, @MaPhieuNhap, NOW(),
+                    @NguoiThucHienId, @TenNguoiThucHien, @LyDo,
+                    @TongTienTruoc, @TongTienSau,
+                    @ChiPhiKhacTruoc, @ChiPhiKhacSau,
+                    0, 0,
+                    @DaThanhToanTruoc, @DaThanhToanSau,
+                    @ConNoTruoc, @ConNoSau,
+                    @NhaCungCapIdTruoc, @NhaCungCapIdSau,
+                    @TenNhaCungCapTruoc, @TenNhaCungCapSau,
+                    @ThoiGianNhapTruoc, @ThoiGianNhapSau,
+                    @DuLieuTruocJson, @DuLieuSauJson,
+                    @ChiTietThayDoi
+                );
+                """,
+                new
+                {
+                    PhieuNhapId = phieuNhapId,
+                    phieu.MaPhieuNhap,
+                    NguoiThucHienId = currentUserId,
+                    TenNguoiThucHien = currentUserName,
+                    LyDo = lyDoThucHien,
+                    TongTienTruoc = phieu.TongTienNhap,
+                    TongTienSau = phieu.TongTienNhap,
+                    ChiPhiKhacTruoc = phieu.ChiPhiKhac,
+                    ChiPhiKhacSau = phieu.ChiPhiKhac,
+                    DaThanhToanTruoc = phieu.DaThanhToan,
+                    DaThanhToanSau = phieu.DaThanhToan,
+                    ConNoTruoc = phieu.ConNo,
+                    ConNoSau = phieu.ConNo,
+                    NhaCungCapIdTruoc = oldNccId,
+                    NhaCungCapIdSau = (uint?)nhaCungCapId,
+                    TenNhaCungCapTruoc = oldNccTen ?? "Chưa xác định NCC",
+                    TenNhaCungCapSau = ncc.TenNhaCungCap,
+                    ThoiGianNhapTruoc = phieu.ThoiGianNhap,
+                    ThoiGianNhapSau = phieu.ThoiGianNhap,
+                    DuLieuTruocJson = duLieuTruocJson,
+                    DuLieuSauJson = duLieuSauJson,
+                    ChiTietThayDoi = $"Gán nhà cung cấp {ncc.TenNhaCungCap} ({ncc.MaNhaCungCap})"
+                },
+                transaction);
+
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     /// <summary>
@@ -11770,9 +11995,6 @@ public sealed partial class DatabaseService
         decimal? soTienThanhToanBangTien = null,
         bool xoaLichSuCu = true)
     {
-        if (phieu.NhaCungCapId is not uint nccId || nccId == 0)
-            return;
-
         // Chống ghi trùng khi một phiếu được sửa rồi hoàn thành lại:
         // xoá các dòng cũ của chính mã phiếu này trước khi ghi lại.
         if (xoaLichSuCu)
@@ -11782,6 +12004,9 @@ public sealed partial class DatabaseService
                 new { phieu.MaPhieuNhap },
                 transaction);
         }
+
+        if (phieu.NhaCungCapId is not uint nccId || nccId == 0)
+            return;
 
         // Khoản mua làm tăng nợ phải trả, nên ghi nợ.
         if (phieu.TongTienNhap > 0)
@@ -11876,6 +12101,12 @@ public sealed partial class DatabaseService
         }
 
         // 2. Nếu phiếu có thanh toán tiền (> 0), tạo phiếu chi mới
+        // NẾU PHIẾU CHƯA CÓ NHÀ CUNG CẤP: KHÔNG GHI PHIẾU CHI CHO NCC (Issue #113)
+        if (phieu.NhaCungCapId is null or 0)
+        {
+            return;
+        }
+
         var soTienThanhToan = soTienThanhToanBangTien ?? phieu.DaThanhToan;
         if (soTienThanhToan > 0)
         {
@@ -12198,7 +12429,7 @@ public sealed partial class DatabaseService
         phieu.Id,
         phieu.MaPhieuNhap,
         phieu.ChiNhanhId,
-        phieu.NhaCungCapId,
+        NhaCungCapId = phieu.NhaCungCapId is null or 0 ? (uint?)null : phieu.NhaCungCapId,
         phieu.NguoiNhapId,
         phieu.ThoiGianNhap,
         phieu.TongTienHang,
@@ -12216,6 +12447,49 @@ public sealed partial class DatabaseService
         SdtNguoiGiaoHang = string.IsNullOrWhiteSpace(phieu.SdtNguoiGiaoHang) ? null : phieu.SdtNguoiGiaoHang.Trim()
     };
 
+    public async Task<bool> EnsurePhieuNhapNhaCungCapNullableAsync()
+    {
+        if (_hasPhieuNhapNhaCungCapNullable.HasValue)
+            return _hasPhieuNhapNhaCungCapNullable.Value;
+
+        await _ensurePhieuNhapNhaCungCapNullable.WaitAsync();
+        try
+        {
+            if (_hasPhieuNhapNhaCungCapNullable.HasValue)
+                return _hasPhieuNhapNhaCungCapNullable.Value;
+
+            await using var connection = new MySqlConnection(GetConnectionString());
+            await connection.OpenAsync();
+
+            var isNullable = await connection.ExecuteScalarAsync<string>(
+                """
+                SELECT IS_NULLABLE
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'phieu_nhap_hang'
+                  AND COLUMN_NAME = 'nha_cung_cap_id'
+                LIMIT 1;
+                """);
+
+            if (string.Equals(isNullable, "NO", StringComparison.OrdinalIgnoreCase))
+            {
+                await connection.ExecuteAsync("ALTER TABLE phieu_nhap_hang MODIFY COLUMN nha_cung_cap_id INT UNSIGNED NULL DEFAULT NULL;");
+            }
+
+            _hasPhieuNhapNhaCungCapNullable = true;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("EnsurePhieuNhapNhaCungCapNullableAsync error", ex);
+            return false;
+        }
+        finally
+        {
+            _ensurePhieuNhapNhaCungCapNullable.Release();
+        }
+    }
+
     /// <summary>
     /// Bảo đảm đủ 5 cột thông tin hóa đơn / người giao hàng của phiếu nhập.
     /// Database cũ có thể thiếu từng cột (đặc biệt <c>ma_dat_hang_nhap</c>), nên
@@ -12224,6 +12498,7 @@ public sealed partial class DatabaseService
     /// </summary>
     private async Task<bool> EnsurePhieuNhapExtraColumnsAsync()
     {
+        await EnsurePhieuNhapNhaCungCapNullableAsync();
         if (_hasPhieuNhapExtraColumns.HasValue)
             return _hasPhieuNhapExtraColumns.Value;
 

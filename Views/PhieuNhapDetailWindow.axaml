@@ -231,7 +231,21 @@
 
         <StackPanel Grid.Row="2" Grid.Column="1" Spacing="2">
           <TextBlock Classes="label" Text="Tên nhà cung cấp" />
-          <TextBlock Classes="value" FontWeight="Bold" Foreground="#164B40" Text="{Binding TenNhaCungCapHienThi}" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Classes="value" FontWeight="Bold" Foreground="#164B40" Text="{Binding TenNhaCungCapHienThi}" />
+            <Border Background="#FEF3C7"
+              BorderBrush="#F59E0B"
+              BorderThickness="1"
+              CornerRadius="6"
+              Padding="6,2"
+              VerticalAlignment="Center"
+              IsVisible="{Binding ChuaCoNhaCungCap}">
+              <TextBlock Text="Chưa xác định NCC"
+                FontSize="11"
+                FontWeight="Bold"
+                Foreground="#B45309" />
+            </Border>
+          </StackPanel>
         </StackPanel>
 
         <!-- HÀNG 4: ĐỊA CHỈ & SĐT / MST NCC -->
@@ -751,6 +765,16 @@
           Content="✏  Chỉnh sửa phiếu"
           VerticalAlignment="Center"
           Click="SuaPhieuButton_OnClick" />
+
+        <!-- NÚT BỔ SUNG NHÀ CUNG CẤP -->
+        <Button x:Name="BoSungNccButton"
+          Classes="toolbar-primary"
+          Background="#0284C7"
+          BorderBrush="#0284C7"
+          Content="🏢  Bổ sung nhà cung cấp"
+          VerticalAlignment="Center"
+          ToolTip.Tip="Bổ sung nhà cung cấp cho phiếu nhập này"
+          Click="BoSungNccButton_OnClick" />
 
         <!-- NÚT THANH TOÁN CÔNG NỢ -->
         <Button x:Name="ThanhToanButton"

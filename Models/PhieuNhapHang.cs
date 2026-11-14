@@ -23,6 +23,14 @@ public sealed partial class PhieuNhapHang : ObservableObject
     /// <summary>Mã nhà cung cấp, chỉ dùng cho báo cáo (join từ bảng nha_cung_cap).</summary>
     public string? MaNhaCungCap { get; set; }
 
+    /// <summary>Chưa gắn nhà cung cấp (Issue #113: cho phép lưu phiếu chưa có NCC).</summary>
+    public bool ChuaCoNhaCungCap => NhaCungCapId == null || NhaCungCapId == 0;
+    public bool DaCoNhaCungCap => !ChuaCoNhaCungCap;
+
+    public string TenNhaCungCapHienThi => ChuaCoNhaCungCap ? "Chưa xác định NCC" : (TenNhaCungCap ?? "—");
+    public string MaNhaCungCapHienThi => ChuaCoNhaCungCap ? "—" : (MaNhaCungCap ?? "—");
+    public string TrangThaiNccHienThi => ChuaCoNhaCungCap ? "Chưa có NCC" : "Đã có NCC";
+
     public uint? NguoiNhapId { get; set; }
 
     public string? TenNhanVien { get; set; }

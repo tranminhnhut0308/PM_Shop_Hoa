@@ -6101,7 +6101,7 @@
 
                         <TextBox Name="PhieuNhapNccSearchBox"
                           Text="{Binding ImportSupplierSearch, Mode=TwoWay}"
-                          Watermark="Tìm nhà cung cấp..."
+                          Watermark="Tìm nhà cung cấp (hoặc để trống)..."
                           TextChanged="OnImportSupplierSearchTextChanged"
                           KeyDown="OnImportSupplierSearchKeyDown"
                           Padding="10,8"
@@ -6125,6 +6125,13 @@
                           Command="{Binding ThemNhaCungCapNhapNhanhCommand}"
                           IsVisible="{Binding CanCreateSupplier}" />
                       </Grid>
+
+                      <!-- GHI CHÚ BỔ SUNG NCC SAU (ISSUE #113) -->
+                      <TextBlock Text="ℹ Có thể để trống và bổ sung nhà cung cấp sau"
+                        FontSize="11"
+                        Foreground="#0284C7"
+                        Margin="2,1,0,0"
+                        IsVisible="{Binding !HasSelectedPhieuNhapNcc}" />
 
                       <!-- KẾT QUẢ TÌM NHÀ CUNG CẤP -->
                       <Border Background="#F7FAF9"
@@ -6210,11 +6217,26 @@
                         Margin="0,4,0,0"
                         IsVisible="{Binding HasSelectedPhieuNhapNcc}">
                         <StackPanel Spacing="3">
-                          <TextBlock Text="{Binding SelectedPhieuNhapNcc.TenNhaCungCap, StringFormat='NHÀ CUNG CẤP: {0}'}"
-                            FontSize="12"
-                            FontWeight="Bold"
-                            Foreground="#166534"
-                            TextTrimming="CharacterEllipsis" />
+                          <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="{Binding SelectedPhieuNhapNcc.TenNhaCungCap, StringFormat='NHÀ CUNG CẤP: {0}'}"
+                              FontSize="12"
+                              FontWeight="Bold"
+                              Foreground="#166534"
+                              VerticalAlignment="Center"
+                              TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="1"
+                              Classes="toolbar-action"
+                              Content="✕ Bỏ chọn"
+                              FontSize="10.5"
+                              Padding="6,2"
+                              Height="22"
+                              Background="#FEE2E2"
+                              Foreground="#DC2626"
+                              BorderBrush="#FCA5A5"
+                              BorderThickness="1"
+                              Command="{Binding BoChonPhieuNhapNccCommand}"
+                              ToolTip.Tip="Bỏ chọn nhà cung cấp này (để trống phiếu nhập)" />
+                          </Grid>
                           <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="2" Margin="0,2,0,0">
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Mã NCC:" FontSize="11" Foreground="#4B5563" />
                             <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedPhieuNhapNcc.MaNhaCungCap}" FontSize="11" FontWeight="SemiBold" Foreground="#1F2937" />
@@ -7616,6 +7638,33 @@
                   CommandParameter="MOT_PHAN" />
               </WrapPanel>
             </StackPanel>
+
+            <StackPanel Spacing="6">
+              <TextBlock Text="Trạng thái nhà cung cấp"
+                FontSize="12"
+                FontWeight="SemiBold"
+                Foreground="#52645E" />
+              <WrapPanel Orientation="Horizontal">
+                <Button Classes="filterChip purchaseFilter"
+                  Classes.active="{Binding IsBaoCaoPhieuNhapNccTatCa}"
+                  Content="Tất cả"
+                  ToolTip.Tip="Hiển thị tất cả phiếu nhập"
+                  Command="{Binding LocBaoCaoPhieuNhapNccCommand}"
+                  CommandParameter="TAT_CA" />
+                <Button Classes="filterChip purchaseFilter"
+                  Classes.active="{Binding IsBaoCaoPhieuNhapNccDaCo}"
+                  Content="Đã có NCC"
+                  ToolTip.Tip="Lọc các phiếu nhập đã có nhà cung cấp"
+                  Command="{Binding LocBaoCaoPhieuNhapNccCommand}"
+                  CommandParameter="DA_CO_NCC" />
+                <Button Classes="filterChip purchaseFilter"
+                  Classes.active="{Binding IsBaoCaoPhieuNhapNccChuaCo}"
+                  Content="Chưa xác định NCC"
+                  ToolTip.Tip="Lọc các phiếu nhập chưa có nhà cung cấp để bổ sung"
+                  Command="{Binding LocBaoCaoPhieuNhapNccCommand}"
+                  CommandParameter="CHUA_CO_NCC" />
+              </WrapPanel>
+            </StackPanel>
           </StackPanel>
         </Border>
 
@@ -7762,13 +7811,30 @@
                           VerticalAlignment="Center"
                           IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapMaNcc}" />
 
-                        <TextBlock Grid.Column="2"
-                          Text="{Binding TenNhaCungCap}"
-                          Foreground="#263B35"
-                          FontWeight="Medium"
-                          TextTrimming="CharacterEllipsis"
+                        <StackPanel Grid.Column="2"
+                          Orientation="Horizontal"
+                          Spacing="6"
                           VerticalAlignment="Center"
-                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapTenNcc}" />
+                          IsVisible="{Binding ElementName=RootWindow, Path=DataContext.HienThiCotPhieuNhapTenNcc}">
+                          <TextBlock
+                            Text="{Binding TenNhaCungCapHienThi}"
+                            Foreground="#263B35"
+                            FontWeight="Medium"
+                            TextTrimming="CharacterEllipsis"
+                            VerticalAlignment="Center" />
+                          <Border Background="#FEF3C7"
+                            BorderBrush="#F59E0B"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="6,2"
+                            VerticalAlignment="Center"
+                            IsVisible="{Binding ChuaCoNhaCungCap}">
+                            <TextBlock Text="Chưa xác định NCC"
+                              FontSize="10.5"
+                              FontWeight="Bold"
+                              Foreground="#B45309" />
+                          </Border>
+                        </StackPanel>
 
                         <!-- PHƯƠNG THỨC / QUỸ CHI TRẢ -->
                         <StackPanel Grid.Column="3"
@@ -7860,6 +7926,24 @@
                                 VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
+                          <Button
+                            Classes="toolbar-action"
+                            Content="+ NCC"
+                            FontSize="11"
+                            FontWeight="SemiBold"
+                            Height="32"
+                            Padding="8,0"
+                            Margin="0"
+                            Background="#EFF6FF"
+                            Foreground="#1D4ED8"
+                            BorderBrush="#93C5FD"
+                            BorderThickness="1"
+                            IsVisible="{Binding ChuaCoNhaCungCap}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Bổ sung nhà cung cấp cho phiếu nhập này"
+                            Command="{Binding ElementName=RootWindow, Path=DataContext.BoSungNhaCungCapCommand}"
+                            CommandParameter="{Binding}" />
                           <Button
                             Classes="toolbar-action"
                             Content="✏"

@@ -245,9 +245,6 @@ public sealed partial class DatabaseService
         var dongHopLe = request.Items.Where(i => i.SanPhamId != 0 && i.SoLuong > 0).ToList();
         if (dongHopLe.Count == 0)
             throw new InvalidOperationException("Phiếu nhập phải có ít nhất 1 mặt hàng với số lượng lớn hơn 0.");
-
-        if (request.NhaCungCapId is null or 0)
-            throw new InvalidOperationException("Vui lòng chọn nhà cung cấp.");
     }
 
     public async Task CapNhatPhieuNhapHangAsync(PhieuNhapEditRequest request)
@@ -698,7 +695,7 @@ public sealed partial class DatabaseService
                 new
                 {
                     Id = request.PhieuNhapId,
-                    NhaCungCapId = request.NhaCungCapId,
+                    NhaCungCapId = request.NhaCungCapId is null or 0 ? (uint?)null : request.NhaCungCapId,
                     ThoiGianNhap = request.ThoiGianNhap,
                     TongTienHang = newTongTienHang,
                     GiamGia = newGiamGia,
@@ -722,7 +719,7 @@ public sealed partial class DatabaseService
                 Id = request.PhieuNhapId,
                 MaPhieuNhap = oldPhieu.MaPhieuNhap,
                 ChiNhanhId = branchId,
-                NhaCungCapId = request.NhaCungCapId,
+                NhaCungCapId = request.NhaCungCapId is null or 0 ? null : request.NhaCungCapId,
                 NguoiNhapId = Session.CurrentUser?.Id ?? oldPhieu.NguoiNhapId,
                 ThoiGianNhap = request.ThoiGianNhap,
                 TongTienHang = newTongTienHang,

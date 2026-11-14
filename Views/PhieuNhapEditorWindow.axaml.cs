@@ -244,9 +244,9 @@ public partial class PhieuNhapEditorWindow : Window
                 x.DisplayText.Contains(txt, StringComparison.OrdinalIgnoreCase));
         }
 
-        if (supplier is null || supplier.Id == 0)
+        if (!string.IsNullOrWhiteSpace(AcbNhaCungCap.Text) && (supplier is null || supplier.Id == 0))
         {
-            HienThiLoi("Vui lòng chọn nhà cung cấp từ danh sách.");
+            HienThiLoi("Vui lòng chọn nhà cung cấp từ danh sách hoặc xóa trống ô tìm kiếm.");
             AcbNhaCungCap.Focus();
             return;
         }
@@ -272,9 +272,9 @@ public partial class PhieuNhapEditorWindow : Window
 
         try
         {
-            _request.NhaCungCapId = supplier.Id;
-            _request.TenNhaCungCap = supplier.TenNhaCungCap;
-            _request.MaNhaCungCap = supplier.MaNhaCungCap;
+            _request.NhaCungCapId = supplier?.Id is > 0 ? supplier.Id : null;
+            _request.TenNhaCungCap = supplier?.TenNhaCungCap;
+            _request.MaNhaCungCap = supplier?.MaNhaCungCap;
 
             if (DpThoiGianNhap.SelectedDate.HasValue)
             {

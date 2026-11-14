@@ -57,6 +57,22 @@ internal class Program
             };
             return await KiemTraIssue92_BoLocHoaDonNangCaoAsync(csb.ConnectionString);
         }
+        if (args.Contains("--verify-issue-113", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue113_PhieuNhapKhongBatBuocNccAsync(csb.ConnectionString);
+        }
         if (args.Contains("--verify-issue-104", StringComparer.OrdinalIgnoreCase))
         {
             var configService = new DatabaseConfigService();
@@ -6107,5 +6123,190 @@ internal class Program
                 FlushUi();
             }
         });
+    }
+
+    private static async Task<int> KiemTraIssue113_PhieuNhapKhongBatBuocNccAsync(string connectionString)
+    {
+        Console.WriteLine("\n========================================================================");
+        Console.WriteLine("KIỂM TRA ISSUE #113: TẠO PHIẾU NHẬP KHÔNG BẮT BUỘC NHÀ CUNG CẤP & BỔ SUNG SAU");
+        Console.WriteLine("========================================================================");
+
+        var db = new DatabaseService();
+        await db.EnsurePhieuNhapNhaCungCapNullableAsync();
+
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        var previousUser = Session.CurrentUser;
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "tester",
+            HoTen = "Kiem Thu Vien #113",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        });
+
+        try
+        {
+        // Chuẩn bị 2 sản phẩm kiểm thử và 1 NCC kiểm thử
+        var sp1Id = await conn.ExecuteScalarAsync<uint>(
+            "SELECT id FROM san_pham WHERE trang_thai = 1 LIMIT 1;");
+        var sp2Id = await conn.ExecuteScalarAsync<uint>(
+            "SELECT id FROM san_pham WHERE trang_thai = 1 AND id != @Sp1Id LIMIT 1;",
+            new { Sp1Id = sp1Id });
+
+        var nccId = await conn.ExecuteScalarAsync<uint>(
+            "SELECT id FROM nha_cung_cap WHERE trang_thai = 1 LIMIT 1;");
+
+        KiemTra(sp1Id > 0 && sp2Id > 0 && nccId > 0, "Không tìm thấy đủ dữ liệu mẫu (sản phẩm/nhà cung cấp) để kiểm thử.");
+
+        // Lấy tồn kho ban đầu của 2 sản phẩm
+        var tonKho1Truoc = await conn.ExecuteScalarAsync<decimal>(
+            "SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @SpId LIMIT 1;",
+            new { SpId = sp1Id });
+        var tonKho2Truoc = await conn.ExecuteScalarAsync<decimal>(
+            "SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @SpId LIMIT 1;",
+            new { SpId = sp2Id });
+
+        Console.WriteLine("\n--- Kịch bản 1: Tạo phiếu nhập KHÔNG chọn nhà cung cấp ---");
+        var phieu1 = new PhieuNhapHang
+        {
+            ChiNhanhId = 1,
+            NhaCungCapId = null,
+            TenNhaCungCap = null,
+            ThoiGianNhap = DateTime.Now,
+            ChiPhiKhac = 20_000,
+            DaThanhToan = 50_000, // Thanh toán 1 phần
+            PhuongThucThanhToan = "TIEN_MAT",
+            GhiChu = "Kiểm thử Issue #113: Không có NCC",
+            TrangThai = "DA_NHAP_HANG"
+        };
+
+        var items1 = new List<ChiTietPhieuNhapHang>
+        {
+            new() { SanPham = new SanPham { Id = sp1Id }, SoLuong = 5, DonGiaNhap = 100_000 },
+            new() { SanPham = new SanPham { Id = sp2Id }, SoLuong = 3, DonGiaNhap = 150_000 }
+        };
+
+        var phieu1Id = await db.LuuPhieuNhapHangAsync(phieu1, items1);
+        KiemTra(phieu1Id > 0, "Lưu phiếu nhập không có NCC thất bại!");
+        Console.WriteLine($"[PASS] Đã tạo thành công phiếu nhập Id={phieu1Id}, Mã={phieu1.MaPhieuNhap} mà không cần NCC.");
+
+        // Kiểm tra database: nha_cung_cap_id phải là NULL
+        var savedNccId = await conn.ExecuteScalarAsync<object?>(
+            "SELECT nha_cung_cap_id FROM phieu_nhap_hang WHERE id = @Id;",
+            new { Id = phieu1Id });
+        KiemTra(savedNccId is null or DBNull, "nha_cung_cap_id trong DB phải là NULL, không được lưu số 0 hoặc NCC giả.");
+        Console.WriteLine("[PASS] Cột nha_cung_cap_id được lưu là NULL chuẩn xác trong DB.");
+
+        Console.WriteLine("\n--- Kịch bản 2: Kiểm tra cập nhật tồn kho ---");
+        var tonKho1Sau = await conn.ExecuteScalarAsync<decimal>(
+            "SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @SpId LIMIT 1;",
+            new { SpId = sp1Id });
+        var tonKho2Sau = await conn.ExecuteScalarAsync<decimal>(
+            "SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @SpId LIMIT 1;",
+            new { SpId = sp2Id });
+        KiemTra(tonKho1Sau == tonKho1Truoc + 5, $"Tồn kho SP1 không khớp: trước {tonKho1Truoc}, sau {tonKho1Sau}, kỳ vọng +5.");
+        KiemTra(tonKho2Sau == tonKho2Truoc + 3, $"Tồn kho SP2 không khớp: trước {tonKho2Truoc}, sau {tonKho2Sau}, kỳ vọng +3.");
+        Console.WriteLine("[PASS] Tồn kho được cộng chính xác dù phiếu không có NCC.");
+
+        Console.WriteLine("\n--- Kịch bản 3: Kiểm tra KHÔNG phát sinh công nợ khi chưa có NCC ---");
+        var soDongCongNo = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM lich_su_cong_no_nha_cung_cap WHERE ma_chung_tu = @Ma;",
+            new { Ma = phieu1.MaPhieuNhap });
+        KiemTra(soDongCongNo == 0, $"Không được ghi nhận công nợ khi chưa có NCC, thực tế có {soDongCongNo} dòng.");
+        Console.WriteLine("[PASS] Không có bản ghi công nợ nào được tạo cho phiếu chưa có NCC.");
+
+        Console.WriteLine("\n--- Kịch bản 4: Kiểm tra KHÔNG phát sinh phiếu chi sổ quỹ cho NCC ---");
+        var soPhieuChi = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM phieu_chi WHERE phieu_nhap_hang_id = @Id OR ma_phieu_nhap = @Ma;",
+            new { Id = phieu1Id, Ma = phieu1.MaPhieuNhap });
+        KiemTra(soPhieuChi == 0, $"Không được tạo phiếu chi sổ quỹ cho NCC chưa xác định, thực tế có {soPhieuChi} phiếu chi.");
+        Console.WriteLine("[PASS] Không có phiếu chi nào được tạo cho NCC chưa xác định.");
+
+        Console.WriteLine("\n--- Kịch bản 5: Đọc chi tiết và kiểm tra thuộc tính Model ---");
+        var detail = await db.GetPhieuNhapHangDetailTheoMaAsync(phieu1.MaPhieuNhap);
+        KiemTra(detail != null, "Không đọc được chi tiết phiếu nhập vừa tạo.");
+        KiemTra(detail!.ChuaCoNhaCungCap, "detail.ChuaCoNhaCungCap phải là true.");
+        KiemTra(detail.TenNhaCungCapHienThi == "Chưa xác định NCC", $"Tên NCC hiển thị phải là 'Chưa xác định NCC', thực tế: '{detail.TenNhaCungCapHienThi}'.");
+        Console.WriteLine($"[PASS] Chi tiết phiếu hiển thị đúng trạng thái 'Chưa xác định NCC'.");
+
+        Console.WriteLine("\n--- Kịch bản 6: Kiểm tra lọc và tìm kiếm danh sách phiếu nhập ---");
+        var (danhSachTatCa, _) = await db.GetPhieuNhapHangPagedAsync(null, 1, 50, trangThaiNcc: "TAT_CA");
+        KiemTra(danhSachTatCa.Any(p => p.Id == phieu1Id), "Danh sách 'TAT_CA' phải chứa phiếu vừa tạo.");
+
+        var (danhSachChuaCo, _) = await db.GetPhieuNhapHangPagedAsync(null, 1, 50, trangThaiNcc: "CHUA_CO_NCC");
+        KiemTra(danhSachChuaCo.Any(p => p.Id == phieu1Id), "Danh sách 'CHUA_CO_NCC' phải chứa phiếu vừa tạo.");
+
+        var (danhSachDaCo, _) = await db.GetPhieuNhapHangPagedAsync(null, 1, 50, trangThaiNcc: "DA_CO_NCC");
+        KiemTra(!danhSachDaCo.Any(p => p.Id == phieu1Id), "Danh sách 'DA_CO_NCC' KHÔNG ĐƯỢC chứa phiếu vừa tạo.");
+
+        var (timKiemTuKhoa, _) = await db.GetPhieuNhapHangPagedAsync("chưa có ncc", 1, 50);
+        KiemTra(timKiemTuKhoa.Any(p => p.Id == phieu1Id), "Tìm kiếm từ khóa 'chưa có ncc' phải tìm thấy phiếu vừa tạo.");
+        Console.WriteLine("[PASS] Bộ lọc trạng thái NCC và tìm kiếm từ khóa hoạt động hoàn hảo.");
+
+        Console.WriteLine("\n--- Kịch bản 7: Bổ sung nhà cung cấp sau bằng BoSungNhaCungCapChoPhieuNhapAsync ---");
+        await db.BoSungNhaCungCapChoPhieuNhapAsync(phieu1Id, nccId, lyDo: "Kiểm thử bổ sung NCC tự động");
+
+        var updatedPhieu = await db.GetPhieuNhapHangDetailTheoMaAsync(phieu1.MaPhieuNhap);
+        KiemTra(updatedPhieu != null, "Không đọc lại được phiếu nhập sau khi bổ sung NCC.");
+        KiemTra(updatedPhieu!.NhaCungCapId == nccId, $"nha_cung_cap_id sau khi bổ sung phải là {nccId}, thực tế: {updatedPhieu.NhaCungCapId}.");
+        KiemTra(updatedPhieu.DaCoNhaCungCap, "DaCoNhaCungCap phải là true.");
+        KiemTra(!updatedPhieu.ChuaCoNhaCungCap, "ChuaCoNhaCungCap phải là false.");
+        Console.WriteLine($"[PASS] Bổ sung NCC thành công: NCC ID={updatedPhieu.NhaCungCapId}, Tên={updatedPhieu.TenNhaCungCapHienThi}.");
+
+        Console.WriteLine("\n--- Kịch bản 8: Kiểm tra công nợ NCC sau khi bổ sung ---");
+        var congNoRows = (await conn.QueryAsync(
+            "SELECT * FROM lich_su_cong_no_nha_cung_cap WHERE ma_chung_tu = @Ma ORDER BY id ASC;",
+            new { Ma = phieu1.MaPhieuNhap })).ToList();
+        KiemTra(congNoRows.Count >= 2, $"Sau khi bổ sung NCC và có thanh toán, phải có ít nhất 2 dòng công nợ (ghi nợ tiền nhập + ghi có đã trả), thực tế: {congNoRows.Count}.");
+        Console.WriteLine($"[PASS] Đã ghi nhận đầy đủ {congNoRows.Count} dòng công nợ cho nhà cung cấp {nccId}.");
+
+        Console.WriteLine("\n--- Kịch bản 9: Kiểm tra phiếu chi sổ quỹ sau khi bổ sung ---");
+        var phieuChiMoi = await conn.QueryFirstOrDefaultAsync(
+            "SELECT * FROM phieu_chi WHERE phieu_nhap_hang_id = @Id;",
+            new { Id = phieu1Id });
+        KiemTra(phieuChiMoi != null, "Phiếu chi phải được tạo tự động sau khi bổ sung NCC cho phiếu có thanh toán.");
+        Console.WriteLine($"[PASS] Phiếu chi mã {phieuChiMoi.ma_phieu_chi} số tiền {phieuChiMoi.so_tien:N0} đ đã được tạo cho NCC.");
+
+        Console.WriteLine("\n--- Kịch bản 10: Kiểm tra nhật ký chỉnh sửa (audit trail) ---");
+        var auditRows = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM lich_su_chinh_sua_phieu_nhap WHERE phieu_nhap_id = @Id;",
+            new { Id = phieu1Id });
+        KiemTra(auditRows > 0, "Bắt buộc phải ghi nhận lịch sử thay đổi vào lich_su_chinh_sua_phieu_nhap.");
+        Console.WriteLine($"[PASS] Đã ghi nhật ký chỉnh sửa thành công ({auditRows} bản ghi).");
+
+        Console.WriteLine("\n--- Kịch bản 11: Kiểm tra tồn kho KHÔNG bị nhân đôi sau khi bổ sung NCC ---");
+        var tonKho1Cuoi = await conn.ExecuteScalarAsync<decimal>(
+            "SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @SpId LIMIT 1;",
+            new { SpId = sp1Id });
+        var tonKho2Cuoi = await conn.ExecuteScalarAsync<decimal>(
+            "SELECT COALESCE(ton_kho_excel, 0) FROM san_pham WHERE id = @SpId LIMIT 1;",
+            new { SpId = sp2Id });
+        KiemTra(tonKho1Cuoi == tonKho1Sau, $"Tồn kho SP1 bị thay đổi khi bổ sung NCC! Trước: {tonKho1Sau}, Sau: {tonKho1Cuoi}");
+        KiemTra(tonKho2Cuoi == tonKho2Sau, $"Tồn kho SP2 bị thay đổi khi bổ sung NCC! Trước: {tonKho2Sau}, Sau: {tonKho2Cuoi}");
+        Console.WriteLine("[PASS] Tồn kho tuyệt đối không bị nhân đôi sau khi bổ sung NCC.");
+
+        Console.WriteLine("\n--- Kịch bản 12: Kiểm tra lọc sau khi bổ sung NCC ---");
+        var (danhSachChuaCoSau, _) = await db.GetPhieuNhapHangPagedAsync(null, 1, 50, trangThaiNcc: "CHUA_CO_NCC");
+        KiemTra(!danhSachChuaCoSau.Any(p => p.Id == phieu1Id), "Sau khi bổ sung NCC, phiếu KHÔNG ĐƯỢC nằm trong 'CHUA_CO_NCC'.");
+
+        var (danhSachDaCoSau, _) = await db.GetPhieuNhapHangPagedAsync(null, 1, 50, trangThaiNcc: "DA_CO_NCC");
+        KiemTra(danhSachDaCoSau.Any(p => p.Id == phieu1Id), "Sau khi bổ sung NCC, phiếu PHẢI nằm trong 'DA_CO_NCC'.");
+        Console.WriteLine("[PASS] Bộ lọc cập nhật trạng thái ngay lập tức.");
+
+        Console.WriteLine("\n========================================================================");
+        Console.WriteLine(">>> TẤT CẢ 12 KỊCH BẢN ISSUE #113 ĐỀU THÀNH CÔNG RỰC RỠ (100% PASSED)! <<<");
+        Console.WriteLine("========================================================================");
+        return 0;
+        }
+        finally
+        {
+            if (previousUser != null)
+                Session.SetCurrentUser(previousUser);
+            else
+                Session.Clear();
+        }
     }
 }

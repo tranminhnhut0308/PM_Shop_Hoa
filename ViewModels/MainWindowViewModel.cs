@@ -4272,6 +4272,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private int baoCaoPhieuNhapTotalCount;
     [ObservableProperty] private bool isLoadingBaoCaoPhieuNhap;
     [ObservableProperty] private string baoCaoPhieuNhapLocThanhToan = "TAT_CA";
+    [ObservableProperty] private string baoCaoPhieuNhapLocNcc = "TAT_CA";
 
     public IReadOnlyList<int> BaoCaoPhieuNhapPageSizeOptions { get; } = [10, 20, 50, 100];
 
@@ -4283,6 +4284,9 @@ public partial class MainWindowViewModel : ObservableObject
     public bool IsBaoCaoPhieuNhapLocDaThanhToan => BaoCaoPhieuNhapLocThanhToan == "DA_THANH_TOAN";
     public bool IsBaoCaoPhieuNhapLocChuaThanhToan => BaoCaoPhieuNhapLocThanhToan == "CHUA_THANH_TOAN";
     public bool IsBaoCaoPhieuNhapLocThanhToanMotPhan => BaoCaoPhieuNhapLocThanhToan == "MOT_PHAN";
+    public bool IsBaoCaoPhieuNhapNccTatCa => BaoCaoPhieuNhapLocNcc == "TAT_CA";
+    public bool IsBaoCaoPhieuNhapNccDaCo => BaoCaoPhieuNhapLocNcc == "DA_CO_NCC";
+    public bool IsBaoCaoPhieuNhapNccChuaCo => BaoCaoPhieuNhapLocNcc == "CHUA_CO_NCC";
     public bool IsBaoCaoPhieuNhapDateToday => _baoCaoPhieuNhapKieuNgay == "TODAY";
     public bool IsBaoCaoPhieuNhapDateYesterday => _baoCaoPhieuNhapKieuNgay == "YESTERDAY";
     public bool IsBaoCaoPhieuNhapDateLast7Days => _baoCaoPhieuNhapKieuNgay == "LAST_7_DAYS";
@@ -4512,6 +4516,47 @@ public partial class MainWindowViewModel : ObservableObject
         await LoadBaoCaoPhieuNhapAsync();
     }
 
+    [RelayCommand]
+    private async Task LocBaoCaoPhieuNhapNccAsync(string? loai)
+    {
+        var filter = string.IsNullOrWhiteSpace(loai) ? "TAT_CA" : loai;
+        if (BaoCaoPhieuNhapLocNcc == filter)
+            return;
+
+        BaoCaoPhieuNhapLocNcc = filter;
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapNccTatCa));
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapNccDaCo));
+        OnPropertyChanged(nameof(IsBaoCaoPhieuNhapNccChuaCo));
+
+        BaoCaoPhieuNhapPage = 1;
+        await LoadBaoCaoPhieuNhapAsync();
+    }
+
+    [RelayCommand]
+    private async Task BoSungNhaCungCapAsync(PhieuNhapHang? phieu)
+    {
+        if (phieu is null || phieu.Id == 0 || OwnerWindow is null)
+            return;
+
+        var dlg = new BoSungNhaCungCapWindow(
+            phieu.Id,
+            phieu.MaPhieuNhap,
+            phieu.ThoiGianNhap,
+            phieu.TongTienNhap,
+            phieu.DaThanhToan,
+            phieu.ConNo,
+            _db);
+
+        var result = await dlg.ShowDialog<bool>(OwnerWindow);
+        if (result)
+        {
+            await LoadBaoCaoPhieuNhapAsync();
+            await NotificationWindow.ShowSuccessAsync(
+                $"Đã bổ sung nhà cung cấp cho phiếu {phieu.MaPhieuNhap}.",
+                owner: OwnerWindow);
+        }
+    }
+
     public int BaoCaoPhieuNhapTotalPages =>
         BaoCaoPhieuNhapPageSize <= 0
             ? 0
@@ -4711,7 +4756,8 @@ public partial class MainWindowViewModel : ObservableObject
                 BaoCaoPhieuNhapPageSize,
                 BaoCaoPhieuNhapLocThanhToan,
                 ngayBatDau: BaoCaoPhieuNhapTuNgay?.Date,
-                ngayKetThuc: BaoCaoPhieuNhapDenNgay?.Date);
+                ngayKetThuc: BaoCaoPhieuNhapDenNgay?.Date,
+                trangThaiNcc: BaoCaoPhieuNhapLocNcc);
 
             if (version != _baoCaoPhieuNhapLoadVersion)
                 return;
@@ -5886,6 +5932,24 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedPhieuNhapNccMstHienThi));
     }
 
+    [RelayCommand]
+    public void BoChonPhieuNhapNcc()
+    {
+        _lastConfirmedPhieuNhapNcc = null;
+        SelectedPhieuNhapNcc = null;
+        ImportSupplierSearch = string.Empty;
+        PhieuNhapSupplierSuggestions.Clear();
+        IsPhieuNhapSupplierSuggestionsClosed = true;
+        PhieuNhapSupplierSelectedIndex = -1;
+        OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
+        OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
+        OnPropertyChanged(nameof(HasSelectedPhieuNhapNcc));
+        OnPropertyChanged(nameof(DaChonNhaCungCapNhap));
+        OnPropertyChanged(nameof(SelectedPhieuNhapNccDiaChiHienThi));
+        OnPropertyChanged(nameof(SelectedPhieuNhapNccSdtHienThi));
+        OnPropertyChanged(nameof(SelectedPhieuNhapNccMstHienThi));
+    }
+
     public bool IsNhapHangListVisible => !IsNhapHangFormVisible;
 
     public bool CanSavePhieuNhap => !IsSavingPhieuNhap;
@@ -6710,14 +6774,7 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        // 4. Nhà cung cấp là trường bắt buộc khi hoàn thành phiếu
-        if (SelectedPhieuNhapNcc is null || SelectedPhieuNhapNcc.Id == 0)
-        {
-            await BaoLoiLuuPhieuNhapAsync("Vui lòng chọn nhà cung cấp.");
-            return;
-        }
-
-        // 5. Ngày nhập hợp lệ
+        // 4. Ngày nhập hợp lệ
         if (PhieuNhapNgayNhap is null)
         {
             await BaoLoiLuuPhieuNhapAsync("Vui lòng chọn ngày nhập.");
@@ -6763,8 +6820,8 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 Id = _phieuNhapId,
                 MaPhieuNhap = PhieuNhapMa?.Trim() ?? string.Empty,
-                NhaCungCapId = SelectedPhieuNhapNcc.Id,
-                TenNhaCungCap = SelectedPhieuNhapNcc.TenNhaCungCap,
+                NhaCungCapId = SelectedPhieuNhapNcc?.Id is > 0 ? SelectedPhieuNhapNcc.Id : null,
+                TenNhaCungCap = SelectedPhieuNhapNcc?.TenNhaCungCap,
                 ThoiGianNhap = PhieuNhapNgayNhap.Value,
                 ChiPhiKhac = PhieuNhapChiPhiKhac,
                 DaThanhToan = PhieuNhapDaThanhToan,
