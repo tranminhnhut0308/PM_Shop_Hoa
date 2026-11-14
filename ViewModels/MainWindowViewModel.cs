@@ -5686,10 +5686,22 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// True khi ngày nhập đang được cập nhật từ chính nội dung người dùng gõ.
-    /// Lúc đó không định dạng lại ô nhập để con trỏ không bị nhảy.
+    /// Đồng bộ với Calendar popup: chỉ thay đổi phần ngày/tháng/năm,
+    /// bảo toàn nguyên vẹn giờ và phút hiện có của phiếu nhập.
     /// </summary>
-    private bool _dangCapNhatNgayNhapTuText;
+    public DateTime? PhieuNhapNgayNhapDateOnly
+    {
+        get => PhieuNhapNgayNhap?.Date;
+        set
+        {
+            if (value.HasValue)
+            {
+                var currentTime = PhieuNhapNgayNhap?.TimeOfDay ?? DateTime.Now.TimeOfDay;
+                PhieuNhapNgayNhap = value.Value.Date + currentTime;
+            }
+            IsPhieuNhapCalendarOpen = false;
+        }
+    }
 
     /// <summary>
     /// Đọc chuỗi người dùng gõ trong ô Ngày nhập và cập nhật giá trị thật.
@@ -5698,32 +5710,18 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public bool KiemTraVaCapNhatPhieuNhapNgayNhapTuText()
     {
-        var text = (PhieuNhapNgayNhapText ?? string.Empty).Trim();
-
-        if (text.Length == 0)
-        {
-            CapNhatTextPhieuNhapNgayNhap();
-            return true;
-        }
-
-        if (!NgayNhapInput.TryParse(text, PhieuNhapNgayNhap, out var ngayGio))
+        if (PhieuNhapNgayNhap is null)
         {
             StatusMessage = "Ngày nhập không hợp lệ. Vui lòng nhập theo định dạng dd/MM/yyyy HH:mm.";
             return false;
         }
 
-        // Giữ nguyên nội dung ô người dùng vừa gõ (kể cả khi chỉ nhập ngày)
-        // để vị trí con trỏ không bị nhảy sau khi nhấn Enter / rời ô.
-        if (PhieuNhapNgayNhap != ngayGio)
+        var text = (PhieuNhapNgayNhapText ?? string.Empty).Trim();
+        if (text.Length > 0 && NgayNhapInput.TryParse(text, PhieuNhapNgayNhap, out var ngayGio))
         {
-            _dangCapNhatNgayNhapTuText = true;
-            try
+            if (PhieuNhapNgayNhap != ngayGio)
             {
                 PhieuNhapNgayNhap = ngayGio;
-            }
-            finally
-            {
-                _dangCapNhatNgayNhapTuText = false;
             }
         }
 
@@ -5739,6 +5737,7 @@ public partial class MainWindowViewModel : ObservableObject
             _phieuNhapNgayNhapText = text;
             OnPropertyChanged(nameof(PhieuNhapNgayNhapText));
         }
+        OnPropertyChanged(nameof(PhieuNhapNgayNhapDateOnly));
     }
 
     /// <summary>Công nợ còn phải trả cho nhà cung cấp, khớp với cột con_no trong database.</summary>
@@ -5888,14 +5887,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnPhieuNhapNgayNhapChanged(DateTime? value)
     {
-        // Người dùng đang gõ trực tiếp: không định dạng lại ô nhập và không đóng
-        // lịch (nếu vừa bấm nút lịch, LostFocus sẽ không làm lịch bị đóng ngay).
-        if (_dangCapNhatNgayNhapTuText)
-            return;
-
         CapNhatTextPhieuNhapNgayNhap();
-
-        // Chọn xong ngày trên lịch thì đóng lịch luôn
         IsPhieuNhapCalendarOpen = false;
     }
 
@@ -6300,7 +6292,7 @@ public partial class MainWindowViewModel : ObservableObject
         RecalculatePhieuNhapTongTienHang();
     }
 
-    private void RecalculatePhieuNhapTongTienHang()
+    public void RecalculatePhieuNhapTongTienHang()
     {
         PhieuNhapTongTienHang = PhieuNhapItems.Sum(item => item.ThanhTien);
 

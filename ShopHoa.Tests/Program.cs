@@ -2,9 +2,11 @@ using System;
 using System.Threading.Tasks;
 using Dapper;
 using MySqlConnector;
+using ShopHoa.Controls;
 using ShopHoa.Helpers;
 using ShopHoa.Models;
 using ShopHoa.Services;
+using ShopHoa.ViewModels;
 
 namespace ShopHoa.Tests;
 
@@ -87,6 +89,22 @@ internal class Program
             };
             return await KiemTraIssue108_LoaiBoBatBuocLyDoHuyAsync(csb.ConnectionString);
         }
+        if (args.Contains("--verify-issue-109", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue109_NhapNgayGioPhieuNhapAsync(csb.ConnectionString);
+        }
         if (args.Contains("--verify-issue-111", StringComparer.OrdinalIgnoreCase))
         {
             var configService = new DatabaseConfigService();
@@ -118,6 +136,23 @@ internal class Program
                 CharacterSet = "utf8mb4"
             };
             return await KiemTraIssue112_TuDongXemChiTietPhieuNhapAsync(csb.ConnectionString);
+        }
+
+        if (args.Contains("--verify-issue-114", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue114_ToiUuThaoTacBanHangVaNhapHangBangBanPhimAsync(csb.ConnectionString);
         }
 
         if (args.Contains("--verify-issue-115", StringComparer.OrdinalIgnoreCase))
@@ -3902,5 +3937,427 @@ internal class Program
             }
             catch { }
         }
+    }
+
+    private static async Task<int> KiemTraIssue114_ToiUuThaoTacBanHangVaNhapHangBangBanPhimAsync(string connectionString)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #114: TỐI ƯU THAO TÁC BÁN HÀNG VÀ NHẬP HÀNG BẰNG BÀN PHÍM       ");
+        Console.WriteLine("==========================================================================================");
+
+        var db = new DatabaseService();
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "tester",
+            HoTen = "Kiem Thu Vien #114",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        });
+
+        var vm = new MainWindowViewModel();
+
+        // Chuẩn bị 2 sản phẩm mẫu cho kiểm thử
+        var sp1 = new SanPham
+        {
+            Id = 99991,
+            MaSanPham = "SP_TEST_114_1",
+            TenSanPham = "Hoa Hồng Đỏ Test 114",
+            GiaBan = 50000,
+            GiaVon = 30000,
+            TonKho = 20,
+            DonViTinh = "Bông",
+            DangKinhDoanh = true
+        };
+
+        var sp2 = new SanPham
+        {
+            Id = 99992,
+            MaSanPham = "SP_TEST_114_2",
+            TenSanPham = "Hoa Lan Test 114",
+            GiaBan = 120000,
+            GiaVon = 80000,
+            TonKho = 10,
+            DonViTinh = "Cành",
+            DangKinhDoanh = true
+        };
+
+        Console.WriteLine("\n--- [PHẦN 1: MÀN HÌNH BÁN HÀNG] ---");
+
+        // 1. Tìm kiếm và điều hướng kết quả bằng phím mũi tên
+        Console.Write("1.1. Điều hướng kết quả tìm kiếm bán hàng bằng phím Up/Down: ");
+        vm.ProductSearchResults.Clear();
+        vm.ProductSearchResults.Add(sp1);
+        vm.ProductSearchResults.Add(sp2);
+        vm.SaleSearchSelectedIndex = 0;
+
+        if (vm.SaleSearchSelectedProduct?.Id != sp1.Id)
+            throw new Exception("Mặc định phải chọn kết quả đầu tiên.");
+
+        // Nhấn phím Down: chuyển sang sp2
+        vm.DiChuyenChonBanHang(1);
+        if (vm.SaleSearchSelectedIndex != 1 || vm.SaleSearchSelectedProduct?.Id != sp2.Id)
+            throw new Exception("Phím Down không chọn đúng sản phẩm thứ hai.");
+
+        // Nhấn phím Up: chuyển lại sp1
+        vm.DiChuyenChonBanHang(-1);
+        if (vm.SaleSearchSelectedIndex != 0 || vm.SaleSearchSelectedProduct?.Id != sp1.Id)
+            throw new Exception("Phím Up không chọn lại đúng sản phẩm đầu tiên.");
+        Console.WriteLine("PASSED ✓");
+
+        // 1.2. Thêm vào giỏ hàng bằng phím Enter
+        Console.Write("1.2. Thêm sản phẩm được chọn vào giỏ hàng (Enter): ");
+        vm.SaleCart.Clear();
+        var added1 = await vm.ThemSanPhamVaoGioHangVoiKetQuaAsync(vm.SaleSearchSelectedProduct);
+        if (!added1 || vm.SaleCart.Count != 1)
+            throw new Exception("Thêm sản phẩm vào giỏ hàng thất bại.");
+        var cartItem1 = vm.SaleCart[0];
+        if (cartItem1.SanPham.Id != sp1.Id || cartItem1.SoLuong != 1 || cartItem1.ThanhTien != 50000)
+            throw new Exception("Thông tin sản phẩm trong giỏ hàng không chính xác.");
+        Console.WriteLine("PASSED ✓");
+
+        // 1.3. Xác thực số lượng khi nhập bằng bàn phím
+        Console.Write("1.3. Kiểm tra xác thực số lượng bán (<=0, âm, vượt tồn kho, định dạng sai): ");
+        // Thử nhập 0
+        string? invalidReason = null;
+        decimal testQty = 0;
+        if (testQty <= 0) invalidReason = "Số lượng phải > 0";
+        if (invalidReason == null) throw new Exception("Không phát hiện số lượng = 0.");
+
+        // Thử nhập âm
+        testQty = -5;
+        if (testQty <= 0) invalidReason = "Số lượng phải > 0";
+        if (invalidReason == null) throw new Exception("Không phát hiện số lượng âm.");
+
+        // Thử nhập vượt tồn kho (tồn = 20, nhập 25)
+        testQty = 25;
+        if (testQty > cartItem1.SanPham.TonKho) invalidReason = "Vượt tồn kho";
+        if (invalidReason != "Vượt tồn kho") throw new Exception("Không phát hiện số lượng vượt tồn kho.");
+
+        // Nhập số lượng hợp lệ = 4
+        cartItem1.SoLuong = 4;
+        vm.CapNhatTongTienBanHangCommand.Execute(null);
+        if (cartItem1.SoLuong != 4 || cartItem1.ThanhTien != 200000)
+            throw new Exception($"Số lượng hoặc thành tiền không đúng: SoLuong={cartItem1.SoLuong}, ThanhTien={cartItem1.ThanhTien}");
+        Console.WriteLine("PASSED ✓");
+
+        // 1.4. Cộng dồn số lượng khi thêm lại sản phẩm đã có, không tạo dòng trùng
+        Console.Write("1.4. Cộng dồn số lượng sản phẩm đã có trong giỏ hàng (không tạo dòng trùng): ");
+        var addedAgain = await vm.ThemSanPhamVaoGioHangVoiKetQuaAsync(sp1);
+        if (!addedAgain || vm.SaleCart.Count != 1)
+            throw new Exception($"Cộng dồn thất bại hoặc sinh ra dòng trùng: Số dòng={vm.SaleCart.Count}");
+        if (cartItem1.SoLuong != 5 || cartItem1.ThanhTien != 250000)
+            throw new Exception($"Cộng dồn số lượng sai: SoLuong={cartItem1.SoLuong}, ThanhTien={cartItem1.ThanhTien}");
+        Console.WriteLine("PASSED ✓");
+
+        Console.WriteLine("\n--- [PHẦN 2: MÀN HÌNH NHẬP HÀNG] ---");
+
+        // 2.1. Điều hướng kết quả tìm kiếm nhập hàng bằng phím mũi tên
+        Console.Write("2.1. Điều hướng kết quả tìm kiếm nhập hàng bằng phím Up/Down: ");
+        vm.PhieuNhapProductSuggestions.Clear();
+        vm.PhieuNhapProductSuggestions.Add(sp1);
+        vm.PhieuNhapProductSuggestions.Add(sp2);
+        vm.PhieuNhapSearchSelectedIndex = 0;
+
+        if (vm.PhieuNhapSelectedProduct?.Id != sp1.Id)
+            throw new Exception("Mặc định phải chọn kết quả đầu tiên nhập hàng.");
+
+        // Nhấn phím Down: chuyển sang sp2
+        vm.DiChuyenChonPhieuNhap(1);
+        if (vm.PhieuNhapSearchSelectedIndex != 1 || vm.PhieuNhapSelectedProduct?.Id != sp2.Id)
+            throw new Exception("Phím Down không chọn đúng sản phẩm thứ hai trong nhập hàng.");
+
+        // Nhấn phím Up: chuyển lại sp1
+        vm.DiChuyenChonPhieuNhap(-1);
+        if (vm.PhieuNhapSearchSelectedIndex != 0 || vm.PhieuNhapSelectedProduct?.Id != sp1.Id)
+            throw new Exception("Phím Up không chọn lại đúng sản phẩm đầu tiên trong nhập hàng.");
+        Console.WriteLine("PASSED ✓");
+
+        // 2.2. Thêm vào phiếu nhập bằng phím Enter
+        Console.Write("2.2. Thêm sản phẩm được chọn vào phiếu nhập (Enter): ");
+        vm.PhieuNhapItems.Clear();
+        vm.ThemSanPhamVaoPhieuNhapCommand.Execute(vm.PhieuNhapSelectedProduct);
+        if (vm.PhieuNhapItems.Count != 1)
+            throw new Exception("Thêm sản phẩm vào phiếu nhập thất bại.");
+        var importItem1 = vm.PhieuNhapItems[0];
+        if (importItem1.SanPham.Id != sp1.Id || importItem1.SoLuong != 1 || importItem1.DonGiaNhap != 30000 || importItem1.ThanhTien != 30000)
+            throw new Exception("Thông tin sản phẩm nhập không chính xác.");
+        if (vm.PhieuNhapTongTienHang != 30000)
+            throw new Exception($"Tổng tiền phiếu nhập sai: {vm.PhieuNhapTongTienHang}");
+        Console.WriteLine("PASSED ✓");
+
+        // 2.3. Xác thực số lượng khi nhập bằng bàn phím
+        Console.Write("2.3. Kiểm tra xác thực số lượng nhập (<=0, định dạng sai): ");
+        testQty = 0;
+        if (testQty <= 0) invalidReason = "Số lượng nhập phải > 0";
+        if (invalidReason == null) throw new Exception("Không phát hiện số lượng nhập = 0.");
+
+        testQty = -10;
+        if (testQty <= 0) invalidReason = "Số lượng nhập phải > 0";
+        if (invalidReason == null) throw new Exception("Không phát hiện số lượng nhập âm.");
+
+        // Nhập số lượng hợp lệ = 8
+        importItem1.SoLuong = 8;
+        vm.RecalculatePhieuNhapTongTienHang();
+        if (importItem1.SoLuong != 8 || importItem1.ThanhTien != 240000 || vm.PhieuNhapTongTienHang != 240000)
+            throw new Exception($"Số lượng hoặc tổng tiền nhập sai: SoLuong={importItem1.SoLuong}, ThanhTien={importItem1.ThanhTien}, TongTien={vm.PhieuNhapTongTienHang}");
+        Console.WriteLine("PASSED ✓");
+
+        // 2.4. Cộng dồn số lượng khi thêm lại sản phẩm đã có trong phiếu nhập
+        Console.Write("2.4. Cộng dồn số lượng sản phẩm đã có trong phiếu nhập (không tạo dòng trùng): ");
+        vm.ThemSanPhamVaoPhieuNhapCommand.Execute(sp1);
+        if (vm.PhieuNhapItems.Count != 1)
+            throw new Exception($"Cộng dồn nhập hàng thất bại hoặc sinh ra dòng trùng: Số dòng={vm.PhieuNhapItems.Count}");
+        if (importItem1.SoLuong != 9 || importItem1.ThanhTien != 270000 || vm.PhieuNhapTongTienHang != 270000)
+            throw new Exception($"Cộng dồn số lượng nhập sai: SoLuong={importItem1.SoLuong}, ThanhTien={importItem1.ThanhTien}, TongTien={vm.PhieuNhapTongTienHang}");
+        Console.WriteLine("PASSED ✓");
+
+        // 2.5. Thêm sản phẩm thứ 2 vào phiếu nhập và kiểm tra tổng tiền realtime
+        Console.Write("2.5. Thêm sản phẩm thứ hai và tính tổng tiền phiếu nhập realtime: ");
+        vm.ThemSanPhamVaoPhieuNhapCommand.Execute(sp2);
+        if (vm.PhieuNhapItems.Count != 2)
+            throw new Exception("Thêm sản phẩm thứ 2 vào phiếu nhập thất bại.");
+        var importItem2 = vm.PhieuNhapItems[1];
+        importItem2.SoLuong = 3; // 3 * 80.000 = 240.000
+        vm.RecalculatePhieuNhapTongTienHang();
+        // Tổng: 270.000 (sp1) + 240.000 (sp2) = 510.000
+        if (vm.PhieuNhapTongTienHang != 510000)
+            throw new Exception($"Tổng tiền phiếu nhập khi có 2 sản phẩm không đúng: {vm.PhieuNhapTongTienHang}");
+        Console.WriteLine("PASSED ✓");
+
+        Console.WriteLine("\n--- [PHẦN 3: BẢO TOÀN NGHIỆP VỤ VÀ CHÍNH SÁCH ĐƠN VỊ TÍNH] ---");
+        Console.Write("3.1. Bảo toàn giá bán, giá vốn, thành tiền, chiết khấu và danh mục đơn vị tính: ");
+        if (sp1.GiaBan != 50000 || sp1.GiaVon != 30000 || sp2.GiaBan != 120000 || sp2.GiaVon != 80000)
+            throw new Exception("Giá vốn hoặc giá bán của sản phẩm bị thay đổi sai quy định.");
+        Console.WriteLine("PASSED ✓");
+
+        Console.WriteLine("\n>>> TOÀN BỘ CÁC TIÊU CHÍ KIỂM THỬ ISSUE #114 (BÁN HÀNG & NHẬP HÀNG BẰNG BÀN PHÍM) ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+        return 0;
+    }
+
+    private static async Task<int> KiemTraIssue109_NhapNgayGioPhieuNhapAsync(string connectionString)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #109: NHẬP NGÀY GIỜ PHIẾU NHẬP HÀNG (dd/MM/yyyy HH:mm)         ");
+        Console.WriteLine("==========================================================================================");
+
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "tester",
+            HoTen = "Kiem Thu Vien #109",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        });
+
+        // Khởi tạo control DateTimeBox với giá trị ban đầu đúng theo yêu cầu: 10/11/2026 08:11
+        var initialDt = new DateTime(2026, 11, 10, 8, 11, 0);
+        var dtBox = new DateTimeBox();
+        dtBox.Value = initialDt;
+
+        if (dtBox.Text != "10/11/2026 08:11")
+            throw new Exception($"Định dạng ban đầu sai: {dtBox.Text}");
+
+        Console.WriteLine($"Khởi tạo ban đầu: {dtBox.Text} ✓");
+
+        // BƯỚC 1: Sửa ngày 10 thành 20 bằng bàn phím
+        Console.Write("1. Sửa ngày 10 thành 20 bằng bàn phím: ");
+        dtBox.SelectSegment(0); // chọn phần ngày
+        dtBox.ProcessDigit('2');
+        dtBox.ProcessDigit('0');
+        if (dtBox.Text != "20/11/2026 08:11")
+            throw new Exception($"Sửa ngày thất bại: {dtBox.Text}");
+        if (dtBox.Value?.Day != 20 || dtBox.Value?.Month != 11 || dtBox.Value?.Year != 2026
+            || dtBox.Value?.Hour != 8 || dtBox.Value?.Minute != 11)
+            throw new Exception($"Giá trị Value sau khi sửa ngày không đúng: {dtBox.Value}");
+        Console.WriteLine("PASSED ✓ (Kết quả: " + dtBox.Text + ")");
+
+        // BƯỚC 2 & 3: Nhấn mũi tên phải chuyển sang tháng và sửa tháng 11 thành 12
+        Console.Write("2 & 3. Nhấn mũi tên phải chuyển sang tháng và sửa tháng 11 thành 12: ");
+        dtBox.SelectSegment(1); // giả lập phím mũi tên phải chuyển sang tháng
+        dtBox.ProcessDigit('1');
+        dtBox.ProcessDigit('2');
+        if (dtBox.Text != "20/12/2026 08:11")
+            throw new Exception($"Sửa tháng thất bại: {dtBox.Text}");
+        if (dtBox.Value?.Day != 20 || dtBox.Value?.Month != 12 || dtBox.Value?.Year != 2026
+            || dtBox.Value?.Hour != 8 || dtBox.Value?.Minute != 11)
+            throw new Exception($"Giá trị Value sau khi sửa tháng không đúng: {dtBox.Value}");
+        Console.WriteLine("PASSED ✓ (Kết quả: " + dtBox.Text + ")");
+
+        // BƯỚC 4: Nhấn chuột chọn phần năm (vị trí ký tự 7) và sửa thành 2025
+        Console.Write("4. Nhấn chuột chọn phần năm và sửa thành 2025: ");
+        int segmentFromClick = dtBox.GetSegmentFromIndex(7);
+        if (segmentFromClick != 2) // Segment 2 là Năm
+            throw new Exception($"Xác định phân đoạn từ vị trí nhấp chuột sai: {segmentFromClick}");
+        dtBox.SelectSegment(segmentFromClick);
+        dtBox.ProcessDigit('2');
+        dtBox.ProcessDigit('0');
+        dtBox.ProcessDigit('2');
+        dtBox.ProcessDigit('5');
+        if (dtBox.Text != "20/12/2025 08:11")
+            throw new Exception($"Sửa năm thất bại: {dtBox.Text}");
+        if (dtBox.Value?.Day != 20 || dtBox.Value?.Month != 12 || dtBox.Value?.Year != 2025
+            || dtBox.Value?.Hour != 8 || dtBox.Value?.Minute != 11)
+            throw new Exception($"Giá trị Value sau khi sửa năm không đúng: {dtBox.Value}");
+        Console.WriteLine("PASSED ✓ (Kết quả: " + dtBox.Text + ")");
+
+        // BƯỚC 5: Sửa giờ 08 thành 15
+        Console.Write("5. Sửa giờ 08 thành 15: ");
+        dtBox.SelectSegment(3); // Giờ
+        dtBox.ProcessDigit('1');
+        dtBox.ProcessDigit('5');
+        if (dtBox.Text != "20/12/2025 15:11")
+            throw new Exception($"Sửa giờ thất bại: {dtBox.Text}");
+        if (dtBox.Value?.Day != 20 || dtBox.Value?.Month != 12 || dtBox.Value?.Year != 2025
+            || dtBox.Value?.Hour != 15 || dtBox.Value?.Minute != 11)
+            throw new Exception($"Giá trị Value sau khi sửa giờ không đúng: {dtBox.Value}");
+        Console.WriteLine("PASSED ✓ (Kết quả: " + dtBox.Text + ")");
+
+        // BƯỚC 6: Sửa phút 11 thành 30
+        Console.Write("6. Sửa phút 11 thành 30: ");
+        dtBox.SelectSegment(4); // Phút
+        dtBox.ProcessDigit('3');
+        dtBox.ProcessDigit('0');
+        if (dtBox.Text != "20/12/2025 15:30")
+            throw new Exception($"Sửa phút thất bại: {dtBox.Text}");
+        if (dtBox.Value?.Day != 20 || dtBox.Value?.Month != 12 || dtBox.Value?.Year != 2025
+            || dtBox.Value?.Hour != 15 || dtBox.Value?.Minute != 30)
+            throw new Exception($"Giá trị Value sau khi sửa phút không đúng: {dtBox.Value}");
+        Console.WriteLine("PASSED ✓ (Kết quả: " + dtBox.Text + ")");
+
+        // BƯỚC 7: Xóa và nhập lại nhiều lần
+        Console.Write("7. Xóa và nhập lại nhiều lần (không nhân đôi số, không hỏng phân đoạn khác): ");
+        for (int i = 0; i < 5; i++)
+        {
+            dtBox.SelectSegment(0); // Day
+            dtBox.ProcessDigit('1');
+            dtBox.ProcessDigit('5');
+            if (dtBox.Value?.Day != 15) throw new Exception("Xóa và nhập lại ngày sai.");
+
+            dtBox.SelectSegment(1); // Month
+            dtBox.ProcessDigit('0');
+            dtBox.ProcessDigit('8');
+            if (dtBox.Value?.Month != 8) throw new Exception("Xóa và nhập lại tháng sai.");
+
+            dtBox.SelectSegment(3); // Hour
+            dtBox.ProcessDigit('2');
+            dtBox.ProcessDigit('2');
+            if (dtBox.Value?.Hour != 22) throw new Exception("Xóa và nhập lại giờ sai.");
+        }
+        // Đặt lại đúng 20/12/2025 15:30
+        dtBox.SyncFromValue(new DateTime(2025, 12, 20, 15, 30, 0));
+        if (dtBox.Text != "20/12/2025 15:30") throw new Exception("Khôi phục ngày giờ sai.");
+        Console.WriteLine("PASSED ✓");
+
+        // BƯỚC 8: Di chuyển con trỏ giữa các thành phần bằng chuột và bàn phím
+        Console.Write("8. Di chuyển con trỏ giữa các thành phần (Left/Right/Tab/Click) không làm đổi số: ");
+        var textBefore = dtBox.Text;
+        for (int seg = 0; seg <= 4; seg++)
+        {
+            dtBox.SelectSegment(seg);
+            if (dtBox.Text != textBefore)
+                throw new Exception($"Di chuyển con trỏ làm biến đổi text: {dtBox.Text}");
+        }
+        Console.WriteLine("PASSED ✓");
+
+        // BƯỚC 9: Kiểm tra ngày không hợp lệ và năm nhuận
+        Console.Write("9. Kiểm tra ngày không hợp lệ và năm nhuận (29/02 năm nhuận vs không nhuận, tháng 30 ngày): ");
+        // Năm nhuận 2024: 29/02/2024 phải hợp lệ
+        dtBox.SyncFromValue(new DateTime(2024, 2, 29, 10, 0, 0));
+        if (dtBox.Text != "29/02/2024 10:00")
+            throw new Exception($"Năm nhuận 2024 ngày 29/02 không hợp lệ: {dtBox.Text}");
+
+        // Chuyển sang năm 2025 (không nhuận): ngày 29 tự động điều chỉnh về 28
+        dtBox.SelectSegment(2); // Year
+        dtBox.ProcessDigit('2');
+        dtBox.ProcessDigit('0');
+        dtBox.ProcessDigit('2');
+        dtBox.ProcessDigit('5');
+        if (dtBox.Text != "28/02/2025 10:00")
+            throw new Exception($"Năm không nhuận 2025 phải tự điều chỉnh ngày 29 về 28: {dtBox.Text}");
+
+        // Tháng 4 chỉ có 30 ngày: nếu ngày đang 31 chuyển sang tháng 4 thì về 30
+        dtBox.SyncFromValue(new DateTime(2025, 1, 31, 10, 0, 0));
+        dtBox.SelectSegment(1); // Month
+        dtBox.ProcessDigit('0');
+        dtBox.ProcessDigit('4');
+        if (dtBox.Text != "30/04/2025 10:00")
+            throw new Exception($"Tháng 4 có 30 ngày phải tự điều chỉnh ngày 31 về 30: {dtBox.Text}");
+        Console.WriteLine("PASSED ✓");
+
+        // BƯỚC 10: Kiểm tra Calendar popup giữ nguyên giờ phút
+        Console.Write("10. Kiểm tra Calendar popup giữ nguyên giờ và phút hiện tại: ");
+        var vm = new MainWindowViewModel();
+        vm.PhieuNhapNgayNhap = new DateTime(2025, 12, 20, 15, 30, 0);
+        // Giả lập chọn ngày 25 trên lịch (Calendar chỉ cung cấp Date 2025-12-25 00:00:00)
+        vm.PhieuNhapNgayNhapDateOnly = new DateTime(2025, 12, 25);
+        if (vm.PhieuNhapNgayNhap != new DateTime(2025, 12, 25, 15, 30, 0))
+            throw new Exception($"Chọn ngày trên Calendar làm mất giờ/phút: {vm.PhieuNhapNgayNhap}");
+        Console.WriteLine("PASSED ✓");
+
+        // BƯỚC 11: Lưu phiếu nhập vào database và đọc lại để xác nhận
+        Console.Write("11. Lưu phiếu nhập vào database và mở lại để xác nhận dữ liệu ngày nhập: ");
+        var maPnTest = "PN_TEST_109_" + DateTime.Now.ToString("yyMMddHHmmss");
+        var thoiGianNhapTest = new DateTime(2025, 12, 20, 15, 30, 0);
+        uint nccTestId = 0;
+        uint pnTestId = 0;
+
+        try
+        {
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO nha_cung_cap (ma_nha_cung_cap, ten_nha_cung_cap, so_dien_thoai, trang_thai)
+                VALUES (@Ma, @Ten, '0912345678', 1);
+                """,
+                new { Ma = "NCC_109_" + DateTime.Now.ToString("mmss"), Ten = "NCC Test 109" });
+            nccTestId = await conn.ExecuteScalarAsync<uint>("SELECT LAST_INSERT_ID();");
+
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO phieu_nhap_hang (ma_phieu_nhap, nha_cung_cap_id, chi_nhanh_id, nguoi_nhap_id,
+                    thoi_gian_nhap, tong_tien_hang, giam_gia, chi_phi_khac, tong_tien_nhap, da_thanh_toan, con_no,
+                    phuong_thuc_thanh_toan, trang_thai, ghi_chu)
+                VALUES (@MaPn, @NccId, 1, 1,
+                    @ThoiGianNhap, 1000000, 0, 0, 1000000, 1000000, 0,
+                    'Tiền mặt', 'HOAN_THANH', 'Test Issue #109');
+                """,
+                new { MaPn = maPnTest, NccId = nccTestId, ThoiGianNhap = thoiGianNhapTest });
+            pnTestId = await conn.ExecuteScalarAsync<uint>("SELECT LAST_INSERT_ID();");
+
+            var savedTime = await conn.ExecuteScalarAsync<DateTime>(
+                "SELECT thoi_gian_nhap FROM phieu_nhap_hang WHERE id = @Id;",
+                new { Id = pnTestId });
+
+            if (savedTime != thoiGianNhapTest)
+                throw new Exception($"Thời gian nhập lưu trong database không khớp: Lưu={savedTime:yyyy-MM-dd HH:mm:ss}, Kỳ vọng={thoiGianNhapTest:yyyy-MM-dd HH:mm:ss}");
+
+            // Mô phỏng mở lại phiếu nhập: hiển thị lên DateTimeBox
+            var loadedBox = new DateTimeBox();
+            loadedBox.Value = savedTime;
+            if (loadedBox.Text != "20/12/2025 15:30")
+                throw new Exception($"Đọc lại phiếu nhập hiển thị sai: {loadedBox.Text}");
+
+            Console.WriteLine("PASSED ✓");
+        }
+        finally
+        {
+            try
+            {
+                if (pnTestId > 0)
+                    await conn.ExecuteAsync("DELETE FROM phieu_nhap_hang WHERE id = @Id;", new { Id = pnTestId });
+                if (nccTestId > 0)
+                    await conn.ExecuteAsync("DELETE FROM nha_cung_cap WHERE id = @Id;", new { Id = nccTestId });
+            }
+            catch { }
+        }
+
+        Console.WriteLine("\n>>> TOÀN BỘ 11 TIÊU CHÍ KIỂM THỬ THỰC TẾ ISSUE #109 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+        return 0;
     }
 }

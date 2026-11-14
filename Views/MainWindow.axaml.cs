@@ -11,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ShopHoa.Controls;
 using ShopHoa.Helpers;
 using ShopHoa.Models;
@@ -242,35 +243,6 @@ public partial class MainWindow : Window
         // Luôn gọi lần tìm mới: lần trước sẽ tự bị huỷ,
         // tránh trường hợp gõ nhanh mà danh sách vẫn là kết quả của ký tự cũ.
         _ = viewModel.TimKiemNhaCungCapNhapCommand.ExecuteAsync(textBox.Text);
-    }
-
-    private void OnPhieuNhapNgayNhapBoxTextChanged(
-        object? sender,
-        TextChangedEventArgs e)
-    {
-        if (DataContext is not MainWindowViewModel viewModel || sender is not TextBox textBox)
-            return;
-
-        // Chỉ đồng bộ nội dung đang gõ sang ViewModel. Binding là OneWay nên
-        // không bị ghi ngược lại làm nhảy con trỏ khi sửa giữa chuỗi.
-        viewModel.PhieuNhapNgayNhapText = textBox.Text ?? string.Empty;
-    }
-
-    private void OnPhieuNhapNgayNhapBoxLostFocus(
-        object? sender,
-        RoutedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-            viewModel.KiemTraVaCapNhatPhieuNhapNgayNhapTuText();
-    }
-
-    private void OnPhieuNhapNgayNhapBoxKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter || DataContext is not MainWindowViewModel viewModel)
-            return;
-
-        viewModel.KiemTraVaCapNhatPhieuNhapNgayNhapTuText();
-        e.Handled = true;
     }
 
     private void OnBaoCaoPhieuNhapSearchTextChanged(
@@ -1281,7 +1253,12 @@ public partial class MainWindow : Window
                 return;
 
             case Key.Escape:
-                if (!string.IsNullOrWhiteSpace(textBox.Text))
+                if (viewModel.HienThiKetQuaTimKiemBanHang)
+                {
+                    viewModel.DongKetQuaTimKiemBanHang();
+                    e.Handled = true;
+                }
+                else if (!string.IsNullOrWhiteSpace(textBox.Text))
                 {
                     textBox.Text = string.Empty;
                     viewModel.SaleSearchText = string.Empty;
@@ -1310,53 +1287,109 @@ public partial class MainWindow : Window
         _dangThemSanPhamBanHang = true;
         try
         {
-            // 1. Ưu tiên khớp chính xác mã hàng/mã vạch (máy quét barcode).
-            var sanPham = await viewModel.TimSanPhamKhopChinhXacAsync(keyword);
+            SanPham? sanPham = null;
 
-            if (sanPham is null)
+            // 1. Nếu người dùng đã dùng phím mũi tên để chọn rõ một dòng trong danh sách kết quả
+            if (viewModel.SaleSearchSelectedIndex >= 0 && viewModel.SaleSearchSelectedProduct is not null)
             {
-                // 2. Kết quả đang hiển thị đã đúng từ khóa: dùng dòng đang chọn.
-                if (viewModel.KetQuaBanHangKhopTuKhoa(keyword))
-                {
-                    if (viewModel.ProductSearchResults.Count == 0)
-                        return;
+                sanPham = viewModel.SaleSearchSelectedProduct;
+            }
+            else
+            {
+                // 2. Ưu tiên khớp chính xác mã hàng/mã vạch (máy quét barcode).
+                sanPham = await viewModel.TimSanPhamKhopChinhXacAsync(keyword);
 
-                    sanPham = viewModel.SaleSearchSelectedProduct
-                              ?? viewModel.ProductSearchResults[0];
-                }
-                else
+                if (sanPham is null)
                 {
-                    // 3. Debounce chưa xong: tìm ngay rồi mới quyết định.
-                    await viewModel.TimKiemHoaBanNgayAsync(keyword);
-
-                    if (viewModel.ProductSearchResults.Count > 0)
+                    // 3. Kết quả đang hiển thị đã đúng từ khóa: dùng dòng đầu tiên.
+                    if (viewModel.KetQuaBanHangKhopTuKhoa(keyword))
                     {
-                        sanPham = viewModel.SaleSearchSelectedProduct
-                                  ?? viewModel.ProductSearchResults[0];
+                        if (viewModel.ProductSearchResults.Count > 0)
+                        {
+                            sanPham = viewModel.ProductSearchResults[0];
+                        }
                     }
                     else
                     {
-                        // Nhiều kết quả rỗng: không làm gì
-                        return;
+                        // 4. Debounce chưa xong: tìm ngay rồi mới quyết định.
+                        await viewModel.TimKiemHoaBanNgayAsync(keyword);
+
+                        if (viewModel.ProductSearchResults.Count > 0)
+                        {
+                            sanPham = viewModel.ProductSearchResults[0];
+                        }
                     }
                 }
             }
 
-            if (sanPham is null || !viewModel.ThemVaoGioHangCommand.CanExecute(sanPham))
+            // Nếu không có sản phẩm phù hợp: thông báo rõ ràng, không tự thêm sản phẩm sai
+            if (sanPham is null)
+            {
+                viewModel.StatusMessage = $"⚠️ Không tìm thấy sản phẩm phù hợp với từ khóa '{keyword}'.";
+                textBox.SelectAll();
+                return;
+            }
+
+            if (!viewModel.ThemVaoGioHangCommand.CanExecute(sanPham))
                 return;
 
             var daThem = await viewModel.ThemSanPhamVaoGioHangVoiKetQuaAsync(sanPham);
             if (!daThem)
+            {
+                textBox.SelectAll();
                 return;
+            }
 
-            // Giữ nguyên danh sách sản phẩm bên trái và từ khóa tìm kiếm theo yêu cầu.
-            // Chọn toàn bộ text trong ô tìm kiếm để người dùng có thể quét barcode mới hoặc gõ từ khóa mới ngay lập tức.
-            textBox.SelectAll();
+            // Sau khi chọn sản phẩm: tự động đưa con trỏ vào ô Số lượng của sản phẩm vừa chọn và SelectAll
+            var cartItem = viewModel.SaleCart.FirstOrDefault(item => item.SanPham.Id == sanPham.Id);
+            if (cartItem is not null)
+            {
+                FocusCartItemQuantity(cartItem);
+            }
         }
         finally
         {
             _dangThemSanPhamBanHang = false;
         }
+    }
+
+    private void FocusCartItemQuantity(SaleCartItem cartItem)
+    {
+        var itemsControl = this.FindControl<ItemsControl>("SaleCartItemsControl");
+        if (itemsControl is null)
+            return;
+
+        void TryFocus()
+        {
+            var targetBox = itemsControl.GetVisualDescendants()
+                .OfType<TextBox>()
+                .FirstOrDefault(t => ReferenceEquals(t.DataContext, cartItem) && t.Classes.Contains("cartQuantityBox"));
+
+            if (targetBox is not null)
+            {
+                targetBox.BringIntoView();
+                targetBox.Focus();
+                targetBox.SelectAll();
+                return;
+            }
+
+            // Nếu phần tử vừa thêm vào ItemsControl chưa kịp khởi tạo visual, đợi 1 nhịp render tiếp theo
+            Dispatcher.UIThread.Post(() =>
+            {
+                var retryBox = itemsControl.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .FirstOrDefault(t => ReferenceEquals(t.DataContext, cartItem) && t.Classes.Contains("cartQuantityBox"));
+
+                if (retryBox is not null)
+                {
+                    retryBox.BringIntoView();
+                    retryBox.Focus();
+                    retryBox.SelectAll();
+                }
+            }, DispatcherPriority.Loaded);
+        }
+
+        Dispatcher.UIThread.Post(TryFocus, DispatcherPriority.Input);
     }
 
     private void OnInvoiceSearchKeyDown(object? sender, KeyEventArgs e)
@@ -1417,6 +1450,13 @@ public partial class MainWindow : Window
                     viewModel.DongGoiYPhieuNhap();
                     e.Handled = true;
                 }
+                else if (!string.IsNullOrWhiteSpace(textBox.Text))
+                {
+                    textBox.Text = string.Empty;
+                    viewModel.ImportProductSearch = string.Empty;
+                    _ = viewModel.TimKiemSanPhamNhapNgayAsync(string.Empty);
+                    e.Handled = true;
+                }
                 return;
 
             case Key.Enter:
@@ -1438,48 +1478,105 @@ public partial class MainWindow : Window
         _dangThemSanPhamNhapHang = true;
         try
         {
-            // 1. Ưu tiên khớp chính xác mã hàng/mã vạch (máy quét barcode).
-            var sanPham = await viewModel.TimSanPhamKhopChinhXacAsync(keyword);
+            SanPham? sanPham = null;
 
-            if (sanPham is null)
+            // 1. Nếu người dùng đã dùng phím mũi tên để chọn rõ một dòng trong gợi ý
+            if (viewModel.PhieuNhapSearchSelectedIndex >= 0 && viewModel.PhieuNhapSelectedProduct is not null)
             {
-                // 2. Kết quả đang hiển thị đã đúng từ khóa: dùng dòng đang chọn.
-                if (viewModel.KetQuaGoiYNhapKhopTuKhoa(keyword))
-                {
-                    if (viewModel.PhieuNhapProductSuggestions.Count == 0)
-                        return;
+                sanPham = viewModel.PhieuNhapSelectedProduct;
+            }
+            else
+            {
+                // 2. Ưu tiên khớp chính xác mã hàng/mã vạch (máy quét barcode).
+                sanPham = await viewModel.TimSanPhamKhopChinhXacAsync(keyword);
 
-                    sanPham = viewModel.PhieuNhapSelectedProduct
-                              ?? viewModel.PhieuNhapProductSuggestions[0];
-                }
-                else
+                if (sanPham is null)
                 {
-                    // 3. Debounce chưa xong: tìm ngay rồi mới quyết định.
-                    await viewModel.TimKiemSanPhamNhapNgayAsync(keyword);
-
-                    if (viewModel.PhieuNhapProductSuggestions.Count > 0)
+                    // 3. Kết quả đang hiển thị đã đúng từ khóa: dùng dòng đầu tiên.
+                    if (viewModel.KetQuaGoiYNhapKhopTuKhoa(keyword))
                     {
-                        sanPham = viewModel.PhieuNhapSelectedProduct
-                                  ?? viewModel.PhieuNhapProductSuggestions[0];
+                        if (viewModel.PhieuNhapProductSuggestions.Count > 0)
+                        {
+                            sanPham = viewModel.PhieuNhapProductSuggestions[0];
+                        }
                     }
                     else
                     {
-                        return;
+                        // 4. Debounce chưa xong: tìm ngay rồi mới quyết định.
+                        await viewModel.TimKiemSanPhamNhapNgayAsync(keyword);
+
+                        if (viewModel.PhieuNhapProductSuggestions.Count > 0)
+                        {
+                            sanPham = viewModel.PhieuNhapProductSuggestions[0];
+                        }
                     }
                 }
             }
 
-            if (sanPham is null || !viewModel.ThemSanPhamVaoPhieuNhapCommand.CanExecute(sanPham))
+            // Nếu không có sản phẩm phù hợp: thông báo rõ ràng, không tự thêm sản phẩm sai
+            if (sanPham is null)
+            {
+                viewModel.StatusMessage = $"⚠️ Không tìm thấy sản phẩm phù hợp với từ khóa '{keyword}'.";
+                textBox.SelectAll();
+                return;
+            }
+
+            if (!viewModel.ThemSanPhamVaoPhieuNhapCommand.CanExecute(sanPham))
                 return;
 
             viewModel.ThemSanPhamVaoPhieuNhapCommand.Execute(sanPham);
 
-            textBox.SelectAll();
+            // Sau khi chọn sản phẩm: tự động đưa con trỏ vào ô Số lượng của sản phẩm vừa chọn và SelectAll
+            var importItem = viewModel.PhieuNhapItems.FirstOrDefault(item => item.SanPham.Id == sanPham.Id);
+            if (importItem is not null)
+            {
+                FocusImportItemQuantity(importItem);
+            }
         }
         finally
         {
             _dangThemSanPhamNhapHang = false;
         }
+    }
+
+    private void FocusImportItemQuantity(ChiTietPhieuNhapHang importItem)
+    {
+        if (GridPhieuNhapItems is null)
+            return;
+
+        GridPhieuNhapItems.SelectedItem = importItem;
+        GridPhieuNhapItems.ScrollIntoView(importItem, null);
+
+        void TryFocus()
+        {
+            var targetBox = GridPhieuNhapItems.GetVisualDescendants()
+                .OfType<TextBox>()
+                .FirstOrDefault(t => ReferenceEquals(t.DataContext, importItem) && t.Classes.Contains("importQuantityBox"));
+
+            if (targetBox is not null)
+            {
+                targetBox.BringIntoView();
+                targetBox.Focus();
+                targetBox.SelectAll();
+                return;
+            }
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                var retryBox = GridPhieuNhapItems.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .FirstOrDefault(t => ReferenceEquals(t.DataContext, importItem) && t.Classes.Contains("importQuantityBox"));
+
+                if (retryBox is not null)
+                {
+                    retryBox.BringIntoView();
+                    retryBox.Focus();
+                    retryBox.SelectAll();
+                }
+            }, DispatcherPriority.Loaded);
+        }
+
+        Dispatcher.UIThread.Post(TryFocus, DispatcherPriority.Input);
     }
 
     private void OnSaleSearchResultSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -1597,14 +1694,63 @@ public partial class MainWindow : Window
 
     private void OnCartQuantityKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            var searchBox = this.FindControl<TextBox>("SaleSearchBox");
+            if (searchBox is not null)
+            {
+                searchBox.Focus();
+                searchBox.SelectAll();
+            }
+            return;
+        }
+
         if (e.Key != Key.Enter || sender is not TextBox tb)
             return;
 
-        // Rời focus → LostFocus sẽ chạy và sửa chữ trên ô
-        if (tb.Parent is Control parent)
-            parent.Focus();
-
         e.Handled = true;
+
+        if (tb.DataContext is not SaleCartItem item || DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        var rawText = (tb.Text ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(rawText)
+            || (!decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out var soLuong)
+                && !decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.CurrentCulture, out soLuong)))
+        {
+            viewModel.StatusMessage = "⚠️ Số lượng không đúng định dạng số.";
+            tb.SelectAll();
+            return;
+        }
+
+        if (soLuong <= 0)
+        {
+            viewModel.StatusMessage = "⚠️ Số lượng sản phẩm phải lớn hơn 0.";
+            tb.SelectAll();
+            return;
+        }
+
+        if (soLuong > item.SanPham.TonKho)
+        {
+            viewModel.StatusMessage = $"⚠️ Sản phẩm '{item.SanPham.TenSanPham}' chỉ còn tồn kho {item.SanPham.TonKho:N0}!";
+            tb.SelectAll();
+            return;
+        }
+
+        item.SoLuong = soLuong;
+        viewModel.CapNhatTongTienBanHangCommand.Execute(null);
+
+        // Sau khi xác nhận số lượng: tự động đưa con trỏ trở lại ô tìm kiếm và bôi đen nội dung cũ
+        Dispatcher.UIThread.Post(() =>
+        {
+            var searchBox = this.FindControl<TextBox>("SaleSearchBox");
+            if (searchBox is not null)
+            {
+                searchBox.Focus();
+                searchBox.SelectAll();
+            }
+        }, DispatcherPriority.Input);
     }
 
     private void OnCartQuantityLostFocus(object? sender, RoutedEventArgs e)
@@ -1612,10 +1758,100 @@ public partial class MainWindow : Window
         if (sender is not TextBox tb)
             return;
 
-        if (tb.DataContext is not SaleCartItem item)
+        if (tb.DataContext is not SaleCartItem item || DataContext is not MainWindowViewModel viewModel)
             return;
 
+        var rawText = (tb.Text ?? string.Empty).Trim();
+        if (decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
+            || decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.CurrentCulture, out parsed))
+        {
+            if (parsed > 0 && parsed <= item.SanPham.TonKho)
+            {
+                item.SoLuong = parsed;
+                viewModel.CapNhatTongTienBanHangCommand.Execute(null);
+            }
+        }
+
         // Ép chữ trên ô = số thật trong model (đã clamp)
+        var v = item.SoLuong;
+        tb.Text = v == Math.Truncate(v)
+            ? ((long)v).ToString()
+            : v.ToString("0.##");
+    }
+
+    private void OnImportQuantityKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            var searchBox = this.FindControl<TextBox>("ImportProductSearchBox");
+            if (searchBox is not null)
+            {
+                searchBox.Focus();
+                searchBox.SelectAll();
+            }
+            return;
+        }
+
+        if (e.Key != Key.Enter || sender is not TextBox tb)
+            return;
+
+        e.Handled = true;
+
+        if (tb.DataContext is not ChiTietPhieuNhapHang item || DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        var rawText = (tb.Text ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(rawText)
+            || (!decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out var soLuong)
+                && !decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.CurrentCulture, out soLuong)))
+        {
+            viewModel.StatusMessage = "⚠️ Số lượng nhập không đúng định dạng số.";
+            tb.SelectAll();
+            return;
+        }
+
+        if (soLuong <= 0)
+        {
+            viewModel.StatusMessage = "⚠️ Số lượng nhập phải lớn hơn 0.";
+            tb.SelectAll();
+            return;
+        }
+
+        item.SoLuong = soLuong;
+        viewModel.RecalculatePhieuNhapTongTienHang();
+
+        // Sau khi xác nhận số lượng: tự động đưa con trỏ trở lại ô tìm kiếm và bôi đen nội dung cũ
+        Dispatcher.UIThread.Post(() =>
+        {
+            var searchBox = this.FindControl<TextBox>("ImportProductSearchBox");
+            if (searchBox is not null)
+            {
+                searchBox.Focus();
+                searchBox.SelectAll();
+            }
+        }, DispatcherPriority.Input);
+    }
+
+    private void OnImportQuantityLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox tb)
+            return;
+
+        if (tb.DataContext is not ChiTietPhieuNhapHang item || DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        var rawText = (tb.Text ?? string.Empty).Trim();
+        if (decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
+            || decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.CurrentCulture, out parsed))
+        {
+            if (parsed > 0)
+            {
+                item.SoLuong = parsed;
+                viewModel.RecalculatePhieuNhapTongTienHang();
+            }
+        }
+
         var v = item.SoLuong;
         tb.Text = v == Math.Truncate(v)
             ? ((long)v).ToString()

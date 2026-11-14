@@ -2134,7 +2134,7 @@
                        FontSize="14" Margin="0,0,0,8" />
 
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-              <ItemsControl ItemsSource="{Binding SaleCart}">
+              <ItemsControl x:Name="SaleCartItemsControl" ItemsSource="{Binding SaleCart}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="models:SaleCartItem">
                     <Border Margin="0,0,0,8" Padding="10" CornerRadius="10"
@@ -2185,6 +2185,7 @@
                                       Command="{Binding ElementName=RootWindow, Path=DataContext.GiamSoLuongCommand}"
                                       CommandParameter="{Binding}" />
                               <TextBox Grid.Column="1" Width="42" Height="28" Padding="0"
+                                      Classes="cartQuantityBox"
                                       TextAlignment="Center" BorderThickness="0" Background="Transparent"
                                       HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                       FontSize="13" FontWeight="SemiBold"
@@ -5744,6 +5745,7 @@
                                 </Button>
 
                                 <TextBox Grid.Column="1"
+                                         Classes="importQuantityBox"
                                          MinWidth="52"
                                          Height="28"
                                          Margin="0"
@@ -5754,7 +5756,9 @@
                                          Background="#F8FBFA"
                                          BorderBrush="#CFE6E1"
                                          BorderThickness="1"
-                                         Text="{Binding SoLuong, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                         Text="{Binding SoLuong, Mode=TwoWay}"
+                                         KeyDown="OnImportQuantityKeyDown"
+                                         LostFocus="OnImportQuantityLostFocus" />
 
                                 <Button Grid.Column="2"
                                         Width="26"
@@ -5922,13 +5926,9 @@
                       <Grid ColumnDefinitions="*,Auto"
                         ColumnSpacing="6">
 
-                        <TextBox Name="PhieuNhapNgayNhapBox"
-                          Text="{Binding PhieuNhapNgayNhapText, Mode=OneWay}"
-                          Watermark="dd/MM/yyyy HH:mm"
+                        <controls:DateTimeBox Name="PhieuNhapNgayNhapBox"
+                          Value="{Binding PhieuNhapNgayNhap, Mode=TwoWay}"
                           ToolTip.Tip="Nhập trực tiếp ngày giờ (dd/MM/yyyy HH:mm) hoặc bấm 📅 để chọn"
-                          TextChanged="OnPhieuNhapNgayNhapBoxTextChanged"
-                          LostFocus="OnPhieuNhapNgayNhapBoxLostFocus"
-                          KeyDown="OnPhieuNhapNgayNhapBoxKeyDown"
                           Padding="10,8"
                           FontSize="13"
                           Margin="0" />
@@ -5960,7 +5960,7 @@
                             CornerRadius="8"
                             Padding="4">
                             <Calendar Name="PhieuNhapCalendar"
-                              SelectedDate="{Binding PhieuNhapNgayNhap, Mode=TwoWay}"
+                              SelectedDate="{Binding PhieuNhapNgayNhapDateOnly, Mode=TwoWay}"
                               Background="Transparent"
                               BorderThickness="0" />
                           </Border>

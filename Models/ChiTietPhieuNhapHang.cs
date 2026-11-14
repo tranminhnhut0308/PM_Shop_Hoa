@@ -20,13 +20,16 @@ public partial class ChiTietPhieuNhapHang : ObservableObject
     private int index;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ThanhTien))]
     private decimal soLuong = 1;
 
     /// <summary>Giá nhập - nguồn sự thật dùng để tính Thành tiền và lưu database.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ThanhTien))]
     private decimal donGiaNhap;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ThanhTien))]
     private decimal giamGia;
 
     public string? GhiChu { get; set; }
