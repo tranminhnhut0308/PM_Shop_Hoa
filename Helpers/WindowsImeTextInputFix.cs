@@ -90,6 +90,7 @@ public class WindowsImeTextInputFix
             topLevel,
             (IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
             {
+                DiagLog(topLevel, msg, wParam, lParam);
                 switch (msg)
                 {
                     case WmKeyDown:
@@ -245,6 +246,20 @@ public class WindowsImeTextInputFix
                 BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public));
 
         field?.SetValue(platformImpl, false);
+    }
+
+    // DIAG-TEMP
+    private static readonly bool s_diag = Environment.GetEnvironmentVariable("SHOPHOA_IME_LOG") == "1";
+    private static void DiagLog(TopLevel topLevel, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        if (!s_diag) return;
+        if (msg is not (0x100 or 0x101 or 0x102 or 0x104 or 0x105 or 0x10D or 0x10E or 0x10F or 0x286)) return;
+        var pi = topLevel.PlatformImpl;
+        var f = pi?.GetType().GetField(IgnoreWmCharFieldName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        var tb = topLevel.FocusManager?.GetFocusedElement() as TextBox;
+        var ch = msg is 0x102 or 0x286 ? $" '{(char)wParam.ToInt64()}'" : "";
+        System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "shophoa_ime.log"),
+            $"{DateTime.Now:HH:mm:ss.fff} msg=0x{msg:X3} w=0x{wParam.ToInt64():X}{ch} l=0x{lParam.ToInt64():X} ign={f?.GetValue(pi)} text=[{tb?.Text}] caret={tb?.CaretIndex}\n");
     }
 
     private sealed class HookState
