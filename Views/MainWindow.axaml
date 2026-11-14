@@ -14,8 +14,8 @@
   Height="900"
   WindowState="Maximized"
   FontFamily="Inter, Segoe UI, Arial"
-  MinWidth="1100"
-  MinHeight="700">
+  MinWidth="820"
+  MinHeight="600">
 
   <Window.Resources>
     <x:Double x:Key="DatePickerThemeMinWidth">0</x:Double>

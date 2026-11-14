@@ -120,6 +120,40 @@ internal class Program
             return await KiemTraIssue112_TuDongXemChiTietPhieuNhapAsync(csb.ConnectionString);
         }
 
+        if (args.Contains("--verify-issue-115", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue115_LichSuThanhToanCongNoAsync(csb.ConnectionString);
+        }
+
+        if (args.Contains("--verify-issue-116", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue116_GiaoDienTrangTongQuanAsync(csb.ConnectionString);
+        }
+
         Console.WriteLine("==========================================================================================");
         Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG SHOP HOA: ĐỐI SOÁT TOÀN DIỆN THỐNG KÊ TRANG TỔNG QUAN (#69)  ");
         Console.WriteLine("==========================================================================================");
@@ -2953,5 +2987,920 @@ internal class Program
 
         Console.WriteLine("\n>>> TOÀN BỘ 4 TIÊU CHÍ KIỂM THỬ ISSUE #108 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
         return 0;
+    }
+
+    private static async Task<int> KiemTraIssue116_GiaoDienTrangTongQuanAsync(string connStr)
+    {
+        Console.WriteLine("==========================================================================================");
+        Console.WriteLine("BẮT ĐẦU KIỂM THỬ ISSUE #116: CHỒNG LẤN NỘI DUNG TRANG TỔNG QUAN & RESPONSIVE");
+        Console.WriteLine("==========================================================================================");
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        // 1. Kiểm tra tĩnh cấu trúc XAML trang Tổng quan & MainWindow
+        Console.Write("[Issue #116 - Bước 1/4] Kiểm tra cấu trúc XAML Tổng quan & MainWindow (chống cắt chữ / chồng lấn)... ");
+        KiemTraCauTrucXamlIssue116();
+        Console.WriteLine("PASSED ✓");
+
+        // 2. Kiểm tra chuẩn hóa dữ liệu & badge Nhật ký hoạt động
+        Console.Write("[Issue #116 - Bước 2/4] Kiểm tra model TongQuanHoatDongTaiKhoanCon (tên, vai trò, mã phiếu, mô tả, màu badge)... ");
+        KiemTraModelNhatKyIssue116();
+        Console.WriteLine("PASSED ✓");
+
+        // 3. Kiểm tra dữ liệu thực DB + DashboardViewModel với 7 kịch bản (ngắn, dài, tên KH dài, mã phiếu dài, nhiều dòng liên tiếp)
+        Console.Write("[Issue #116 - Bước 3/4] Kiểm tra DB + DashboardViewModel qua 7 trường hợp hoạt động thực tế & bộ lọc... ");
+        var mauHoatDong = await KiemTraDuLieuVaBoLocIssue116Async(connStr);
+        Console.WriteLine($"PASSED ({mauHoatDong.Count} dòng TEST116_ tải & lọc nguyên vẹn) ✓");
+
+        // 4. Kiểm tra giao diện Avalonia thực tế: Responsive các độ rộng + đo chiều cao tự mở rộng của từng dòng Nhật ký
+        Console.Write("[Issue #116 - Bước 4/4] Kiểm tra Avalonia layout Responsive (1400/1000/820/620/540px) & tự tăng chiều cao thẻ... ");
+        var thongKeLayout = ChayTrenStaThread(() => KiemTraAvaloniaResponsiveVaDoCaoIssue116(mauHoatDong));
+        Console.WriteLine($"PASSED ({thongKeLayout}) ✓");
+
+        stopwatch.Stop();
+        Console.WriteLine("==========================================================================================");
+        Console.WriteLine($">>> TOÀN BỘ KIỂM THỬ ISSUE #116 ĐÃ ĐẠT 100% THÀNH CÔNG ({stopwatch.ElapsedMilliseconds} ms)! <<<");
+        return 0;
+    }
+
+    private static string TimThuMucGocRepo()
+    {
+        var dir = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(dir))
+        {
+            if (File.Exists(Path.Combine(dir, "ShopHoa.csproj")))
+                return dir;
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+        throw new DirectoryNotFoundException("Không tìm thấy thư mục gốc chứa ShopHoa.csproj.");
+    }
+
+    private static void KiemTraCauTrucXamlIssue116()
+    {
+        var root = TimThuMucGocRepo();
+        var mainWindowPath = Path.Combine(root, "Views", "MainWindow.axaml");
+        var tongQuanPath = Path.Combine(root, "Views", "TongQuanDashboardView.axaml");
+
+        var mainWindowXaml = File.ReadAllText(mainWindowPath);
+        KiemTra(mainWindowXaml.Contains("MinWidth=\"820\""), "MainWindow.axaml phải đặt MinWidth=\"820\" để hỗ trợ thu nhỏ cửa sổ.");
+        KiemTra(mainWindowXaml.Contains("MinHeight=\"600\""), "MainWindow.axaml phải đặt MinHeight=\"600\".");
+        KiemTra(!mainWindowXaml.Contains("MinWidth=\"1100\""), "MainWindow.axaml không được còn MinWidth=\"1100\" cũ.");
+
+        var xaml = File.ReadAllText(tongQuanPath);
+        var activityStart = xaml.IndexOf("ItemsSource=\"{Binding HoatDongTaiKhoanCon}\"", StringComparison.Ordinal);
+        KiemTra(activityStart > 0, "Không tìm thấy ItemsControl của HoatDongTaiKhoanCon trong TongQuanDashboardView.axaml.");
+        var activityEnd = xaml.IndexOf("</ItemsControl>", activityStart, StringComparison.Ordinal);
+        KiemTra(activityEnd > activityStart, "Không tìm thấy thẻ đóng </ItemsControl> của HoatDongTaiKhoanCon.");
+
+        var activityBlock = xaml.Substring(activityStart, activityEnd - activityStart);
+        KiemTra(!activityBlock.Contains("Width=\"170\""), "Nhật ký hoạt động không được dùng Width=\"170\" cố định gây tràn cột.");
+        KiemTra(!activityBlock.Contains("TextTrimming="), "Nhật ký hoạt động không được cắt nội dung bằng TextTrimming.");
+        KiemTra(activityBlock.Contains("<StackPanel Spacing=\"7\">"), "Mỗi thẻ Nhật ký hoạt động phải dùng StackPanel 3 tầng tự giãn chiều cao.");
+        KiemTra(activityBlock.Contains("<WrapPanel "), "Cột badge hành động & giá trị phải dùng WrapPanel để không đè cột nhân viên.");
+        KiemTra(activityBlock.Contains("{Binding NguoiThucHienHienThi}"), "Thiếu binding NguoiThucHienHienThi.");
+        KiemTra(activityBlock.Contains("{Binding VaiTroHienThi}"), "Thiếu binding VaiTroHienThi.");
+        KiemTra(activityBlock.Contains("{Binding MaChungTuHienThi}"), "Thiếu binding MaChungTuHienThi.");
+        KiemTra(activityBlock.Contains("{Binding NoiDung}"), "Thiếu binding NoiDung.");
+
+        var wrapCountInActivity = System.Text.RegularExpressions.Regex.Matches(activityBlock, "TextWrapping=\"Wrap\"").Count;
+        KiemTra(wrapCountInActivity >= 5, $"Các trường text trong thẻ Nhật ký phải bật TextWrapping=\"Wrap\" (hiện có {wrapCountInActivity}).");
+
+        KiemTra(xaml.Contains("x:Name=\"ChartScrollViewer\"") && xaml.Contains("MinHeight=\"195\""), "Biểu đồ doanh thu phải dùng MinHeight=\"195\" thay cho Height cố định.");
+        KiemTra(xaml.Contains("RowDefinitions=\"150,1,Auto\""), "Biểu đồ doanh thu phải dùng RowDefinitions=\"150,1,Auto\" để đủ chỗ nhãn đỉnh cột và trục hoành.");
+        KiemTra(xaml.Contains("x:Name=\"MetricsGrid\"") && xaml.Contains("x:Name=\"ExcludedMetricsGrid\"") && xaml.Contains("x:Name=\"WarehouseGrid\""), "Thiếu x:Name trên các Grid thống kê phục vụ responsive.");
+        KiemTra(xaml.Contains("x:Name=\"ChartInsightsGrid\"") && xaml.Contains("x:Name=\"Top10Grid\"") && xaml.Contains("x:Name=\"ActivityFilterGrid\""), "Thiếu x:Name trên các Grid biểu đồ/Top 10/lọc nhật ký.");
+
+        var top10Start = xaml.IndexOf("x:Name=\"Top10Grid\"", StringComparison.Ordinal);
+        var top10End = xaml.IndexOf("x:Name=\"ActivityHeaderGrid\"", top10Start, StringComparison.Ordinal);
+        KiemTra(top10Start > 0 && top10End > top10Start, "Không tìm thấy vùng Top10Grid.");
+        var top10Block = xaml.Substring(top10Start, top10End - top10Start);
+        KiemTra(!top10Block.Contains("TextTrimming="), "Khu vực Top 10 không được cắt ngắn tên hàng/tên khách hàng bằng TextTrimming.");
+    }
+
+    private static void KiemTraModelNhatKyIssue116()
+    {
+        var adminShort = new TongQuanHoatDongTaiKhoanCon
+        {
+            TenDangNhap = "admin",
+            HoTen = "admin",
+            VaiTro = "QUAN_TRI",
+            HanhDong = "Thu nợ",
+            MaChungTu = "PT_001",
+            NoiDung = "Thu đủ tiền mặt",
+            GiaTri = 250_000m,
+            ThoiGian = new DateTime(2026, 11, 14, 9, 15, 0)
+        };
+        KiemTra(adminShort.NguoiThucHienHienThi == "admin", $"HoTen==TenDangNhap phải hiển thị 'admin', thực tế: '{adminShort.NguoiThucHienHienThi}'");
+        KiemTra(adminShort.VaiTroHienThi == "Quản trị viên", $"QUAN_TRI phải chuẩn hóa thành 'Quản trị viên', thực tế: '{adminShort.VaiTroHienThi}'");
+        KiemTra(adminShort.CoMaChungTu && adminShort.MaChungTuHienThi == "Mã phiếu: PT_001", $"MaChungTuHienThi sai: '{adminShort.MaChungTuHienThi}'");
+        KiemTra(adminShort.CoGiaTri && adminShort.CoNoiDung && adminShort.CoChiTietMoTa, "Cờ hiển thị chi tiết mô tả/giá trị không đúng.");
+
+        var thuNgan = new TongQuanHoatDongTaiKhoanCon
+        {
+            TenDangNhap = "hoa_tn",
+            HoTen = "Nguyễn Thị Hoa",
+            VaiTro = "THU_NGAN",
+            HanhDong = "Hủy thu nợ",
+            MaChungTu = "",
+            NoiDung = ""
+        };
+        KiemTra(thuNgan.NguoiThucHienHienThi == "Nguyễn Thị Hoa (hoa_tn)", $"NguoiThucHienHienThi sai: '{thuNgan.NguoiThucHienHienThi}'");
+        KiemTra(thuNgan.VaiTroHienThi == "Thu ngân", $"THU_NGAN phải chuẩn hóa thành 'Thu ngân', thực tế: '{thuNgan.VaiTroHienThi}'");
+        KiemTra(!thuNgan.CoMaChungTu && !thuNgan.CoNoiDung && !thuNgan.CoChiTietMoTa && !thuNgan.CoGiaTri, "Khi mã phiếu/nội dung/giá trị trống phải ẩn hàng chi tiết.");
+
+        var huySoQuy = new TongQuanHoatDongTaiKhoanCon { VaiTro = "QUAN_LY", HanhDong = "Hủy sổ quỹ" };
+        var thuKho = new TongQuanHoatDongTaiKhoanCon { VaiTro = "KHO", HanhDong = "Nhập hàng" };
+        var nvRong = new TongQuanHoatDongTaiKhoanCon { VaiTro = "", HanhDong = "Chỉnh sửa hóa đơn" };
+        KiemTra(huySoQuy.VaiTroHienThi == "Quản lý", "QUAN_LY chuẩn hóa sai.");
+        KiemTra(thuKho.VaiTroHienThi == "Nhân viên kho", "KHO chuẩn hóa sai.");
+        KiemTra(nvRong.VaiTroHienThi == "Nhân viên", "Vai trò rỗng phải fallback 'Nhân viên'.");
+
+        foreach (var item in new[] { adminShort, thuNgan, huySoQuy, thuKho, nvRong })
+        {
+            KiemTra(item.MauBadgeVaiTro.StartsWith("#") && item.MauNenBadgeVaiTro.StartsWith("#"), "Màu badge vai trò không hợp lệ.");
+            KiemTra(item.MauBadgeHanhDong.StartsWith("#") && item.MauNenBadgeHanhDong.StartsWith("#") && item.MauVienBadgeHanhDong.StartsWith("#"), "Màu badge hành động không hợp lệ.");
+        }
+        KiemTra(adminShort.MauBadgeHanhDong != thuNgan.MauBadgeHanhDong, "Badge 'Thu nợ' và 'Hủy thu nợ' phải phân biệt màu rõ ràng.");
+        KiemTra(huySoQuy.MauBadgeHanhDong == "#B91C1C", "Badge 'Hủy sổ quỹ' phải dùng tông đỏ cảnh báo.");
+    }
+
+    private static async Task<List<TongQuanHoatDongTaiKhoanCon>> KiemTraDuLieuVaBoLocIssue116Async(string connStr)
+    {
+        var previousUser = Session.CurrentUser;
+        await using var conn = new MySqlConnection(connStr);
+        await conn.OpenAsync();
+
+        var existingUser = await conn.QueryFirstOrDefaultAsync<(uint Id, string TenDangNhap)>(
+            "SELECT id AS Id, ten_dang_nhap AS TenDangNhap FROM nguoi_dung ORDER BY id LIMIT 1;");
+        uint refUserId = existingUser.Id > 0 ? existingUser.Id : 1;
+
+        var testRecords = new List<(string TenDangNhap, string HoTen, string VaiTro, string HanhDong, string DoiTuong, string MaChungTu, string NoiDung, decimal GiaTri)>
+        {
+            // Case 1: Hoạt động ngắn
+            ("test116_nv1", "Trần Minh Anh", "NHAN_VIEN", "Thu nợ", "CONG_NO_KH", "TEST116_PT001", "Thu đủ tiền mặt.", 350_000m),
+            // Case 2: Nội dung mô tả rất dài nhiều dòng
+            ("test116_ql1", "Lê Quốc Bảo", "QUAN_LY", "Hủy thu nợ", "CONG_NO_KH", "TEST116_HUY002",
+                "Hủy phiếu thu nợ do kế toán hạch toán nhầm phương thức chuyển khoản sang tiền mặt khi đối soát sao kê cuối ngày.\nKhách hàng đề nghị tách thành 2 lần thanh toán riêng theo từng hợp đồng sự kiện tháng 11.\nĐã hoàn lại công nợ gốc và thông báo cho bộ phận thu ngân kiểm tra lại sổ quỹ cuối ca.", 4_850_000m),
+            // Case 3: Tên khách hàng cực dài
+            ("test116_thungan", "Phạm Thảo Vy", "THU_NGAN", "Thu nợ", "CONG_NO_KH", "TEST116_PT003",
+                "Thu tiền công nợ của khách hàng: Công ty Cổ Phần Thương Mại Dịch Vụ Hoa Tươi Quốc Tế Hoàng Gia Việt Nam – Chi Nhánh Sự Kiện Trung Tâm Quận 1 (Đợt thanh toán nghiệm thu cổng hoa hội nghị).", 12_500_000m),
+            // Case 4: Mã phiếu dài + mô tả dài (Hủy sổ quỹ)
+            ("test116_admin", "test116_admin", "QUAN_TRI", "Hủy sổ quỹ", "SO_QUY", "TEST116_SQ_HOANCHITIET_DOISOAT_HOADON_SUKIEN_LON_20261114_99887766",
+                "Hủy phiếu thu sổ quỹ phát sinh từ giao dịch hoàn hủy đơn hoa cưới VIP ngày 14/11 vì mã chứng từ liên kết bị trùng phiên đồng bộ và thay đổi tài khoản nhận thanh toán sang ví doanh nghiệp.", 8_200_000m)
+        };
+
+        // Case 5 & 7: 11 hoạt động xuất hiện liên tiếp đa vai trò / đa nghiệp vụ (tổng 15 bản ghi TEST116_)
+        string[] hanhDongMau = ["Thu nợ", "Hủy thu nợ", "Hủy sổ quỹ", "Chỉnh sửa hóa đơn", "Xuất kho"];
+        string[] vaiTroMau = ["NHAN_VIEN", "THU_NGAN", "KHO", "QUAN_LY", "QUAN_TRI"];
+        for (int i = 5; i <= 15; i++)
+        {
+            var hd = hanhDongMau[(i - 5) % hanhDongMau.Length];
+            var vt = vaiTroMau[(i - 5) % vaiTroMau.Length];
+            testRecords.Add((
+                $"test116_batch{(i % 3) + 1}",
+                $"Nhân sự Kiểm Thử #{i}",
+                vt,
+                hd,
+                "NHAT_KY",
+                $"TEST116_BATCH_{i:000}_{hd.Replace(' ', '_').ToUpperInvariant()}",
+                $"Hoạt động liên tiếp số {i}: Kiểm tra không chồng lấn dòng, giữ đủ thông tin khách hàng Công ty TNHH Sự Kiện Hoa Tươi Phương Nam #{i} và giá trị giao dịch.",
+                100_000m * i));
+        }
+
+        try
+        {
+            await conn.ExecuteAsync("DELETE FROM nhat_ky_hoat_dong WHERE ma_chung_tu LIKE 'TEST116_%';");
+
+            var baseTime = DateTime.Now.AddMinutes(5);
+            for (int i = 0; i < testRecords.Count; i++)
+            {
+                var r = testRecords[i];
+                await conn.ExecuteAsync(
+                    """
+                    INSERT INTO nhat_ky_hoat_dong
+                    (nguoi_dung_id, ten_dang_nhap, ho_ten, vai_tro, hanh_dong, doi_tuong, doi_tuong_id, ma_chung_tu, noi_dung, gia_tri, dia_chi_ip, thoi_gian)
+                    VALUES
+                    (@NguoiDungId, @TenDangNhap, @HoTen, @VaiTro, @HanhDong, @DoiTuong, @DoiTuongId, @MaChungTu, @NoiDung, @GiaTri, '127.0.0.1', @ThoiGian);
+                    """,
+                    new
+                    {
+                        NguoiDungId = refUserId,
+                        r.TenDangNhap,
+                        r.HoTen,
+                        r.VaiTro,
+                        r.HanhDong,
+                        r.DoiTuong,
+                        DoiTuongId = (uint)(9000 + i),
+                        r.MaChungTu,
+                        r.NoiDung,
+                        r.GiaTri,
+                        ThoiGian = baseTime.AddSeconds(i)
+                    });
+            }
+
+            Session.SetCurrentUser(new NguoiDung
+            {
+                Id = refUserId,
+                TenDangNhap = string.IsNullOrWhiteSpace(existingUser.TenDangNhap) ? "admin" : existingUser.TenDangNhap,
+                HoTen = "Quản trị viên kiểm thử",
+                MaVaiTro = Quyen.QuanTri
+            });
+
+            var db = new DatabaseService();
+            var vm = new global::ShopHoa.ViewModels.DashboardViewModel(db);
+            await vm.TaiDuLieuAsync();
+
+            KiemTra(vm.IsAdmin, "DashboardViewModel.IsAdmin phải true với tài khoản Quản trị.");
+            KiemTra(vm.CoHoatDongTaiKhoanCon, "DashboardViewModel phải tải được nhật ký hoạt động.");
+
+            var loadedTestRows = vm.HoatDongTaiKhoanCon
+                .Where(h => h.MaChungTu != null && h.MaChungTu.StartsWith("TEST116_", StringComparison.Ordinal))
+                .ToList();
+
+            KiemTra(loadedTestRows.Count == testRecords.Count,
+                $"Phải tải đủ {testRecords.Count} bản ghi TEST116_ (thực tế: {loadedTestRows.Count}).");
+
+            // Đối soát không cắt ngắn nội dung mô tả & mã phiếu
+            foreach (var r in testRecords)
+            {
+                var matched = loadedTestRows.FirstOrDefault(x => x.MaChungTu == r.MaChungTu);
+                KiemTra(matched != null, $"Thiếu bản ghi '{r.MaChungTu}' trong HoatDongTaiKhoanCon.");
+                KiemTra(matched!.NoiDung == r.NoiDung, $"Nội dung bản ghi '{r.MaChungTu}' bị cắt/sai lệch.");
+            }
+
+            var selfDup = loadedTestRows.First(x => x.TenDangNhap == "test116_admin");
+            KiemTra(selfDup.NguoiThucHienHienThi == "test116_admin", $"HoTen==TenDangNhap từ DB không được lặp tên: '{selfDup.NguoiThucHienHienThi}'");
+            KiemTra(selfDup.VaiTroHienThi == "Quản trị viên", $"Vai trò admin từ DB sai: '{selfDup.VaiTroHienThi}'");
+
+            // Kiểm tra lọc theo từ khóa tên khách hàng dài, hành động, nhân viên & nút reset
+            vm.TimKiemHoatDongSub = "Hoàng Gia Việt Nam";
+            KiemTra(vm.HoatDongTaiKhoanCon.Count == 1 && vm.HoatDongTaiKhoanCon[0].MaChungTu == "TEST116_PT003",
+                "Lọc từ khóa khách hàng dài không khớp.");
+
+            vm.XoaBoLocHoatDongSubCommand.Execute(null);
+            KiemTra(vm.HoatDongTaiKhoanCon.Count >= testRecords.Count, "Xóa bộ lọc không khôi phục danh sách.");
+
+            vm.LocHanhDongSub = "Hủy sổ quỹ";
+            KiemTra(vm.HoatDongTaiKhoanCon.Any(x => x.MaChungTu == "TEST116_SQ_HOANCHITIET_DOISOAT_HOADON_SUKIEN_LON_20261114_99887766")
+                && vm.HoatDongTaiKhoanCon.All(x => string.Equals(x.HanhDong, "Hủy sổ quỹ", StringComparison.OrdinalIgnoreCase)),
+                "Lọc theo hành động 'Hủy sổ quỹ' không đúng.");
+
+            vm.LocTaiKhoanSub = "test116_thungan";
+            vm.LocHanhDongSub = "Thu nợ";
+            KiemTra(vm.HoatDongTaiKhoanCon.Count == 1 && vm.HoatDongTaiKhoanCon[0].MaChungTu == "TEST116_PT003",
+                "Lọc kết hợp nhân viên + hành động không đúng.");
+
+            vm.XoaBoLocHoatDongSubCommand.Execute(null);
+            return loadedTestRows;
+        }
+        finally
+        {
+            try
+            {
+                await conn.ExecuteAsync("DELETE FROM nhat_ky_hoat_dong WHERE ma_chung_tu LIKE 'TEST116_%';");
+            }
+            catch { }
+
+            if (previousUser != null)
+                Session.SetCurrentUser(previousUser);
+            else
+                Session.Clear();
+        }
+    }
+
+    private static T ChayTrenStaThread<T>(Func<T> action)
+    {
+        if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+            return action();
+
+        T? result = default;
+        Exception? captured = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                result = action();
+            }
+            catch (Exception ex)
+            {
+                captured = ex;
+            }
+        });
+        if (OperatingSystem.IsWindows())
+            thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        if (captured != null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(captured).Throw();
+
+        return result!;
+    }
+
+    private static string KiemTraAvaloniaResponsiveVaDoCaoIssue116(List<TongQuanHoatDongTaiKhoanCon> mauHoatDong)
+    {
+        if (global::Avalonia.Application.Current is null)
+            global::ShopHoa.Program.BuildAvaloniaApp().SetupWithoutStarting();
+
+        var view = new global::ShopHoa.Views.TongQuanDashboardView();
+        var vm = new global::ShopHoa.ViewModels.DashboardViewModel(new DatabaseService());
+        vm.TopHangBanChay.Add(new TongQuanHangTop
+        {
+            ThuTu = 1,
+            Ten = "Kệ Hoa Chúc Mừng Khai Trương Cao Cấp Kết Hợp Lan Hồ Điệp Trắng Vàng Và Hồng Ohara Nhập Khẩu",
+            TenPhu = "Nhóm Hoa Sự Kiện Cao Cấp • Tồn kho an toàn tại Chi nhánh Trung Tâm",
+            SoLuong = 42,
+            DoanhThu = 148_500_000m,
+            TyLePhanTram = 100,
+            TyLeSoLuong = 100
+        });
+        vm.TopKhachHang.Add(new TongQuanHangTop
+        {
+            ThuTu = 1,
+            Ten = "Công ty Cổ Phần Tổ Chức Sự Kiện Quốc Tế Hoàng Gia Việt Nam – Chi Nhánh Quận 1",
+            TenPhu = "0901234567 • Đối tác sự kiện thanh toán công nợ định kỳ hàng tháng",
+            SoLuong = 95,
+            DoanhThu = 320_000_000m,
+            TyLePhanTram = 100,
+            TyLeSoLuong = 100
+        });
+        foreach (var item in mauHoatDong)
+            vm.HoatDongTaiKhoanCon.Add(item);
+
+        view.DataContext = vm;
+
+        static T MustFind<T>(global::Avalonia.Controls.Control root, string name) where T : class
+        {
+            var found = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(root)
+                .OfType<global::Avalonia.Controls.Control>()
+                .FirstOrDefault(c => c.Name == name) as T;
+            KiemTra(found != null, $"Không tìm thấy control '{name}' trong TongQuanDashboardView.");
+            return found!;
+        }
+
+        var metricsGrid = MustFind<global::Avalonia.Controls.Grid>(view, "MetricsGrid");
+        var metricCard4 = MustFind<global::Avalonia.Controls.Control>(view, "MetricCard4");
+        var excludedGrid = MustFind<global::Avalonia.Controls.Grid>(view, "ExcludedMetricsGrid");
+        var warehouseGrid = MustFind<global::Avalonia.Controls.Grid>(view, "WarehouseGrid");
+        var chartHeaderGrid = MustFind<global::Avalonia.Controls.Grid>(view, "ChartHeaderGrid");
+        var chartInsightsGrid = MustFind<global::Avalonia.Controls.Grid>(view, "ChartInsightsGrid");
+        var top10Grid = MustFind<global::Avalonia.Controls.Grid>(view, "Top10Grid");
+        var activityHeaderGrid = MustFind<global::Avalonia.Controls.Grid>(view, "ActivityHeaderGrid");
+        var activityFilterGrid = MustFind<global::Avalonia.Controls.Grid>(view, "ActivityFilterGrid");
+        var activitySearchBox = MustFind<global::Avalonia.Controls.Control>(view, "ActivitySearchBox");
+
+        void CheckGrid(global::Avalonia.Controls.Grid g, int expectedCols, int expectedRows, double width, string label)
+        {
+            KiemTra(g.ColumnDefinitions.Count == expectedCols && g.RowDefinitions.Count == expectedRows,
+                $"{label} ở độ rộng {width}px phải có {expectedCols}x{expectedRows}, thực tế {g.ColumnDefinitions.Count}x{g.RowDefinitions.Count}.");
+        }
+
+        // Kiểm tra tất cả ngưỡng responsive (1400 màn hình lớn, 1000 laptop, 820 thu nhỏ vừa, 620 thu nhỏ cửa sổ 820px có sidebar, 540 rất hẹp)
+        view.CapNhatBoCucResponsive(1400);
+        CheckGrid(metricsGrid, 5, 1, 1400, "MetricsGrid");
+        CheckGrid(excludedGrid, 4, 1, 1400, "ExcludedMetricsGrid");
+        CheckGrid(warehouseGrid, 6, 2, 1400, "WarehouseGrid");
+        CheckGrid(chartHeaderGrid, 2, 1, 1400, "ChartHeaderGrid");
+        CheckGrid(chartInsightsGrid, 3, 1, 1400, "ChartInsightsGrid");
+        CheckGrid(top10Grid, 2, 1, 1400, "Top10Grid");
+        CheckGrid(activityHeaderGrid, 2, 1, 1400, "ActivityHeaderGrid");
+        CheckGrid(activityFilterGrid, 4, 1, 1400, "ActivityFilterGrid");
+
+        view.CapNhatBoCucResponsive(1000);
+        CheckGrid(metricsGrid, 3, 2, 1000, "MetricsGrid");
+        CheckGrid(excludedGrid, 4, 1, 1000, "ExcludedMetricsGrid");
+        CheckGrid(warehouseGrid, 6, 2, 1000, "WarehouseGrid");
+        CheckGrid(top10Grid, 2, 1, 1000, "Top10Grid");
+        CheckGrid(activityFilterGrid, 4, 1, 1000, "ActivityFilterGrid");
+
+        view.CapNhatBoCucResponsive(820);
+        CheckGrid(metricsGrid, 3, 2, 820, "MetricsGrid");
+        CheckGrid(excludedGrid, 2, 2, 820, "ExcludedMetricsGrid");
+        CheckGrid(warehouseGrid, 3, 4, 820, "WarehouseGrid");
+        CheckGrid(chartHeaderGrid, 2, 1, 820, "ChartHeaderGrid");
+        CheckGrid(chartInsightsGrid, 3, 1, 820, "ChartInsightsGrid");
+        CheckGrid(top10Grid, 1, 2, 820, "Top10Grid");
+        CheckGrid(activityFilterGrid, 3, 2, 820, "ActivityFilterGrid");
+        KiemTra(global::Avalonia.Controls.Grid.GetColumnSpan(activitySearchBox) == 3, "ActivitySearchBox ở 820px phải span 3 cột.");
+
+        view.CapNhatBoCucResponsive(620);
+        CheckGrid(metricsGrid, 2, 3, 620, "MetricsGrid");
+        KiemTra(global::Avalonia.Controls.Grid.GetColumnSpan(metricCard4) == 2, "MetricCard4 ở 620px phải span 2 cột.");
+        CheckGrid(warehouseGrid, 2, 5, 620, "WarehouseGrid");
+        CheckGrid(chartHeaderGrid, 1, 2, 620, "ChartHeaderGrid");
+        CheckGrid(chartInsightsGrid, 1, 3, 620, "ChartInsightsGrid");
+        CheckGrid(top10Grid, 1, 2, 620, "Top10Grid");
+        CheckGrid(activityHeaderGrid, 1, 2, 620, "ActivityHeaderGrid");
+        CheckGrid(activityFilterGrid, 3, 2, 620, "ActivityFilterGrid");
+
+        view.CapNhatBoCucResponsive(540);
+        CheckGrid(metricsGrid, 2, 3, 540, "MetricsGrid");
+        CheckGrid(excludedGrid, 2, 2, 540, "ExcludedMetricsGrid");
+        CheckGrid(warehouseGrid, 2, 5, 540, "WarehouseGrid");
+        CheckGrid(activityFilterGrid, 1, 4, 540, "ActivityFilterGrid");
+
+        // Đo toàn bộ UserControl ở các độ rộng responsive để đảm bảo không tràn ngang & layout hoàn chỉnh
+        foreach (var w in new[] { 1366d, 1000d, 820d, 540d })
+        {
+            view.CapNhatBoCucResponsive(w);
+            view.Measure(new global::Avalonia.Size(w, double.PositiveInfinity));
+            view.Arrange(new global::Avalonia.Rect(0, 0, w, Math.Max(800, view.DesiredSize.Height)));
+            KiemTra(view.DesiredSize.Width <= w + 1.0,
+                $"TongQuanDashboardView ở độ rộng {w}px bị tràn chiều ngang: DesiredWidth={view.DesiredSize.Width:F1}.");
+        }
+
+        // Tìm đúng ItemsControl của Nhật ký hoạt động để dựng thẻ thực từ DataTemplate đã compile
+        var itemsControls = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(view)
+            .OfType<global::Avalonia.Controls.ItemsControl>()
+            .Where(ic => ic.GetType() == typeof(global::Avalonia.Controls.ItemsControl))
+            .ToList();
+
+        global::Avalonia.Controls.ItemsControl? activityItemsControl = null;
+        foreach (var ic in itemsControls)
+        {
+            if (ic.ItemTemplate is null || mauHoatDong.Count == 0)
+                continue;
+            if (ReferenceEquals(ic.ItemsSource, vm.HoatDongTaiKhoanCon) ||
+                (ic.ItemTemplate.Build(mauHoatDong[0]) is global::Avalonia.Controls.Border b &&
+                 b.Child is global::Avalonia.Controls.StackPanel sp &&
+                 sp.Children.Count == 3 &&
+                 Math.Abs(sp.Spacing - 7) < 0.01))
+            {
+                activityItemsControl = ic;
+                break;
+            }
+        }
+        KiemTra(activityItemsControl?.ItemTemplate != null, "Không tìm thấy DataTemplate của Nhật ký hoạt động trên TongQuanDashboardView.");
+
+        var itemShort = mauHoatDong.First(x => x.MaChungTu == "TEST116_PT001");
+        var itemLong = mauHoatDong.First(x => x.MaChungTu == "TEST116_HUY002");
+        var itemLongCustomer = mauHoatDong.First(x => x.MaChungTu == "TEST116_PT003");
+        var itemLongCode = mauHoatDong.First(x => x.MaChungTu == "TEST116_SQ_HOANCHITIET_DOISOAT_HOADON_SUKIEN_LON_20261114_99887766");
+
+        var buildSamples = new[] { itemShort, itemLong, itemLongCustomer, itemLongCode };
+        var cards = new List<global::Avalonia.Controls.Control>();
+        var hostStack = new global::Avalonia.Controls.StackPanel { Spacing = 0 };
+
+        foreach (var sample in buildSamples)
+        {
+            var card = activityItemsControl!.ItemTemplate!.Build(sample);
+            KiemTra(card != null, $"DataTemplate.Build trả null cho {sample.MaChungTu}.");
+            card!.DataContext = sample;
+            cards.Add(card);
+            hostStack.Children.Add(card);
+        }
+
+        // Gắn vào Window ẩn (không gọi Show) để kích hoạt LogicalRoot / Styling / Binding hoàn chỉnh rồi đo ở độ rộng hẹp 500px
+        const double narrowCardWidth = 500d;
+        var hostWindow = new global::Avalonia.Controls.Window
+        {
+            Width = narrowCardWidth,
+            Height = 2000,
+            Content = hostStack
+        };
+        try
+        {
+            hostStack.ApplyStyling();
+            hostStack.Measure(new global::Avalonia.Size(narrowCardWidth, double.PositiveInfinity));
+            hostStack.Arrange(new global::Avalonia.Rect(0, 0, narrowCardWidth, hostStack.DesiredSize.Height));
+
+            // Đảm bảo binding nội dung đã kích hoạt thực sự trên card
+            var sampleDescText = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(cards[1])
+                .OfType<global::Avalonia.Controls.TextBlock>()
+                .Select(tb => tb.Text)
+                .FirstOrDefault(t => t == itemLong.NoiDung);
+            KiemTra(sampleDescText == itemLong.NoiDung, "Binding nội dung mô tả dài chưa kích hoạt trên thẻ Nhật ký hoạt động.");
+
+            var shortH = cards[0].DesiredSize.Height;
+            var longH = cards[1].DesiredSize.Height;
+            var custH = cards[2].DesiredSize.Height;
+            var codeH = cards[3].DesiredSize.Height;
+
+            KiemTra(shortH > 40, $"Chiều cao thẻ ngắn bất thường: {shortH:F1}");
+            KiemTra(longH > shortH + 25, $"Thẻ mô tả dài không tự tăng chiều cao (Ngắn={shortH:F1}, Dài={longH:F1}).");
+            KiemTra(custH > shortH + 10, $"Thẻ tên khách hàng dài không tự xuống dòng tăng chiều cao (Ngắn={shortH:F1}, Tên KH dài={custH:F1}).");
+            KiemTra(codeH > shortH + 20, $"Thẻ mã phiếu + mô tả dài không tự tăng chiều cao (Ngắn={shortH:F1}, Mã dài={codeH:F1}).");
+
+            // Kiểm tra không chồng lấn giữa các thẻ hoạt động liên tiếp và giữa 3 hàng trong từng thẻ
+            for (int i = 0; i < cards.Count; i++)
+            {
+                var card = cards[i];
+                KiemTra(card.Bounds.Width <= narrowCardWidth + 0.5, $"Thẻ #{i} tràn ngang: Width={card.Bounds.Width:F1}");
+
+                if (i + 1 < cards.Count)
+                {
+                    KiemTra(card.Bounds.Bottom <= cards[i + 1].Bounds.Top - 7.5,
+                        $"Thẻ #{i} (Bottom={card.Bounds.Bottom:F1}) đè/thiếu khoảng cách với thẻ #{i + 1} (Top={cards[i + 1].Bounds.Top:F1}).");
+                }
+
+                var cardBorder = card as global::Avalonia.Controls.Border;
+                var rootStack = cardBorder?.Child as global::Avalonia.Controls.StackPanel;
+                KiemTra(rootStack != null && rootStack.Children.Count == 3,
+                    $"Thẻ #{i} phải có StackPanel 3 hàng (Nhân viên/Loại, Vai trò/Thời gian, Mã phiếu/Nội dung).");
+
+                var row0 = rootStack!.Children[0] as global::Avalonia.Controls.Grid;
+                var row1 = rootStack.Children[1] as global::Avalonia.Controls.Grid;
+                var row2 = rootStack.Children[2] as global::Avalonia.Controls.Border;
+                KiemTra(row0 != null && row1 != null && row2 != null && row2.IsVisible,
+                    $"Thẻ #{i} thiếu thành phần ở 3 hàng hoặc hàng mô tả bị ẩn.");
+
+                // Không chồng lấn theo chiều dọc giữa 3 tầng
+                KiemTra(row0!.Bounds.Bottom <= row1!.Bounds.Top - 6.5,
+                    $"Thẻ #{i}: Hàng 1 (Bottom={row0.Bounds.Bottom:F1}) đè lên Hàng 2 (Top={row1.Bounds.Top:F1}).");
+                KiemTra(row1.Bounds.Bottom <= row2!.Bounds.Top - 6.5,
+                    $"Thẻ #{i}: Hàng 2 (Bottom={row1.Bounds.Bottom:F1}) đè lên Hàng 3 (Top={row2.Bounds.Top:F1}).");
+
+                // Không chồng lấn theo chiều ngang trong Hàng 1 (Nhân viên | Badge hành động) & Hàng 2 (Vai trò | Thời gian)
+                var r0Col0 = row0.Children[0];
+                var r0Col1 = row0.Children[1];
+                KiemTra(r0Col0.Bounds.Right <= r0Col1.Bounds.Left - 11.5,
+                    $"Thẻ #{i}: Tên nhân viên (Right={r0Col0.Bounds.Right:F1}) đè lên Loại hoạt động (Left={r0Col1.Bounds.Left:F1}).");
+
+                var r1Col0 = row1.Children[0];
+                var r1Col1 = row1.Children[1];
+                KiemTra(r1Col0.Bounds.Right <= r1Col1.Bounds.Left - 11.5,
+                    $"Thẻ #{i}: Vai trò (Right={r1Col0.Bounds.Right:F1}) đè lên Thời gian (Left={r1Col1.Bounds.Left:F1}).");
+
+                // Bên trong Hàng 3: Mã phiếu và Nội dung mô tả không đè lên nhau
+                var detailStack = row2.Child as global::Avalonia.Controls.StackPanel;
+                KiemTra(detailStack != null && detailStack.Children.Count == 2, $"Thẻ #{i} thiếu StackPanel chi tiết mã phiếu/mô tả.");
+                var codePill = detailStack!.Children[0];
+                var descBlock = detailStack.Children[1];
+                if (codePill.IsVisible && descBlock.IsVisible)
+                {
+                    KiemTra(codePill.Bounds.Bottom <= descBlock.Bounds.Top - 5.5,
+                        $"Thẻ #{i}: Mã phiếu (Bottom={codePill.Bounds.Bottom:F1}) đè lên Mô tả (Top={descBlock.Bounds.Top:F1}).");
+                }
+            }
+
+            // Đo lại toàn bộ 15 thẻ cùng lúc trong ItemsControl stack ở 500px để mô phỏng Scenario 5 & 7
+            var batchStack = new global::Avalonia.Controls.StackPanel { Spacing = 0 };
+            foreach (var item in mauHoatDong)
+            {
+                var c = activityItemsControl!.ItemTemplate!.Build(item)!;
+                c.DataContext = item;
+                batchStack.Children.Add(c);
+            }
+            hostWindow.Content = batchStack;
+            batchStack.ApplyStyling();
+            batchStack.Measure(new global::Avalonia.Size(narrowCardWidth, double.PositiveInfinity));
+            batchStack.Arrange(new global::Avalonia.Rect(0, 0, narrowCardWidth, batchStack.DesiredSize.Height));
+            for (int i = 0; i + 1 < batchStack.Children.Count; i++)
+            {
+                KiemTra(batchStack.Children[i].Bounds.Bottom <= batchStack.Children[i + 1].Bounds.Top - 7.5,
+                    $"Danh sách 15 hoạt động: dòng {i} đè lên dòng {i + 1}.");
+            }
+
+            return $"5 breakpoints đạt chuẩn; Chiều cao thẻ @500px: Ngắn={shortH:F1}px, KH dài={custH:F1}px, Mã dài={codeH:F1}px, Mô tả dài={longH:F1}px; {batchStack.Children.Count} thẻ nối tiếp không chồng lấn";
+        }
+        finally
+        {
+            hostWindow.Content = null;
+        }
+    }
+
+    private static async Task<int> KiemTraIssue115_LichSuThanhToanCongNoAsync(string connectionString)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #115: HIỂN THỊ LỊCH SỬ THANH TOÁN CÔNG NỢ KHÁCH HÀNG & NHÀ CUNG CẤP ");
+        Console.WriteLine("==========================================================================================");
+
+        var db = new DatabaseService();
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+        await DatabaseService.EnsureTraTruocSchemaAsync(conn);
+
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "tester",
+            HoTen = "Kiem Thu Vien #115",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        });
+
+        // ==========================================================================================
+        // PHẦN 1: KIỂM THỬ KHÁCH HÀNG
+        // ==========================================================================================
+        Console.WriteLine("\n--- [PHẦN 1: KHÁCH HÀNG] ---");
+        var maKhTest = "KH_TEST_115_" + DateTime.Now.ToString("yyMMddHHmmss");
+        var hdTestCode1 = "HD_TEST_115_1_" + DateTime.Now.ToString("yyMMddHHmmss");
+        var hdTestCode2 = "HD_TEST_115_2_" + DateTime.Now.ToString("yyMMddHHmmss");
+        uint khId = 0;
+        uint hd1Id = 0;
+        uint hd2Id = 0;
+        var createdSlipsKh = new List<string>();
+
+        try
+        {
+            // Tạo khách hàng test
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO khach_hang (ma_khach_hang, ten_khach_hang, so_dien_thoai, trang_thai, so_du_tra_truoc)
+                VALUES (@Ma, @Ten, '0988776655', 1, 0.00);
+                """,
+                new { Ma = maKhTest, Ten = "Khách Hàng Test 115" });
+            khId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM khach_hang WHERE ma_khach_hang = @Ma;", new { Ma = maKhTest });
+
+            // Ban đầu khách nợ 44.361.000đ (đúng số liệu trong ví dụ Issue #115)
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO hoa_don_ban_hang (ma_hoa_don, khach_hang_id, chi_nhanh_id, nguoi_ban_id, thoi_gian_ban,
+                    tong_tien_hang, giam_gia, khach_can_tra, khach_da_thanh_toan, con_no,
+                    trang_thai_thanh_toan, trang_thai_hoa_don, ghi_chu)
+                VALUES (@MaHd, @KhId, 1, 1, NOW(),
+                    44361000, 0, 44361000, 0, 44361000,
+                    'CHUA_THANH_TOAN', 'HOAN_THANH', 'Hóa đơn nợ ban đầu test 115');
+                """,
+                new { MaHd = hdTestCode1, KhId = khId });
+            hd1Id = await conn.ExecuteScalarAsync<uint>("SELECT id FROM hoa_don_ban_hang WHERE ma_hoa_don = @MaHd;", new { MaHd = hdTestCode1 });
+
+            // Ghi nợ vào sổ cái công nợ
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO lich_su_cong_no_khach_hang (khach_hang_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu, ghi_no, ghi_co, so_du, thoi_gian, ghi_chu)
+                VALUES (@KhId, 1, 'GHI_NO', 'HOA_DON', @MaHd, 44361000, 0, 44361000, NOW(), 'Ghi nợ hóa đơn ban đầu test 115');
+                """,
+                new { KhId = khId, MaHd = hdTestCode1 });
+
+            // 1. Tình huống 3 của Issue: Chưa có phiếu thanh toán nào
+            Console.Write("1. Chưa có phiếu thanh toán: Công nợ trước & sau phải lấy đúng số nợ thực tế (44.361.000đ, không phải 0đ)... ");
+            var tk0 = await db.GetThongKeLichSuThanhToanCongNoKhachHangAsync(khId);
+            if (tk0.TongSoGiaoDich != 0)
+                throw new Exception($"Tổng số GD phải là 0, thực tế={tk0.TongSoGiaoDich}");
+            if (tk0.TongTienDaThanhToan != 0m)
+                throw new Exception($"Tổng đã TT phải là 0đ, thực tế={tk0.TongTienDaThanhToan:N0}");
+            if (tk0.CongNoTruocThanhToan != 44361000m)
+                throw new Exception($"Công nợ trước TT phải là 44.361.000đ, thực tế={tk0.CongNoTruocThanhToan:N0}");
+            if (tk0.CongNoSauThanhToan != 44361000m)
+                throw new Exception($"Công nợ sau TT phải là 44.361.000đ, thực tế={tk0.CongNoSauThanhToan:N0}");
+            if (tk0.CongNoHienTai != 44361000m)
+                throw new Exception($"Công nợ hiện tại phải là 44.361.000đ, thực tế={tk0.CongNoHienTai:N0}");
+            Console.WriteLine("PASSED ✓");
+
+            // 2. Tình huống 1 của Issue: Thanh toán 4.000.000đ
+            Console.Write("2. Thanh toán 4.000.000đ: Nợ trước=44.361.000đ, Thanh toán=4.000.000đ, Nợ sau=40.361.000đ... ");
+            var pt1 = await db.ThuNoKhachHangAsync(khId, 4000000m, "TIEN_MAT", null, "Thu nợ PT1 test 115");
+            createdSlipsKh.Add(pt1.MaGiaoDich);
+
+            var tk1 = await db.GetThongKeLichSuThanhToanCongNoKhachHangAsync(khId);
+            if (tk1.TongSoGiaoDich != 1)
+                throw new Exception($"Tổng số GD phải là 1, thực tế={tk1.TongSoGiaoDich}");
+            if (tk1.TongTienDaThanhToan != 4000000m)
+                throw new Exception($"Tổng đã TT phải là 4.000.000đ, thực tế={tk1.TongTienDaThanhToan:N0}");
+            if (tk1.CongNoTruocThanhToan != 44361000m)
+                throw new Exception($"Công nợ trước TT phải là 44.361.000đ, thực tế={tk1.CongNoTruocThanhToan:N0}");
+            if (tk1.CongNoSauThanhToan != 40361000m)
+                throw new Exception($"Công nợ sau TT phải là 40.361.000đ, thực tế={tk1.CongNoSauThanhToan:N0}");
+            if (tk1.CongNoHienTai != 40361000m)
+                throw new Exception($"Công nợ hiện tại phải là 40.361.000đ, thực tế={tk1.CongNoHienTai:N0}");
+            Console.WriteLine("PASSED ✓");
+
+            // 3. Tình huống 2 của Issue: Hủy phiếu thanh toán (PT0038 trong ví dụ)
+            Console.Write("3. Hủy phiếu thanh toán: Giữ nguyên lịch sử (Đã hủy), Nợ trước giữ 44.361.000đ (không về 0đ), Khôi phục nợ hiện tại 44.361.000đ... ");
+            var huyPt1 = await db.HuyThanhToanCongNoKhachHangAsync(khId, pt1.MaGiaoDich, "Hủy do nhập nhầm số tiền");
+            if (!huyPt1.ThanhCong)
+                throw new Exception($"Hủy phiếu thất bại: {huyPt1.ThongBao}");
+
+            var tkHuy = await db.GetThongKeLichSuThanhToanCongNoKhachHangAsync(khId);
+            if (tkHuy.TongSoGiaoDich != 1)
+                throw new Exception($"Phiếu đã hủy vẫn phải nằm trong lịch sử (Tổng GD=1), thực tế={tkHuy.TongSoGiaoDich}");
+            if (tkHuy.TongTienDaThanhToan != 0m)
+                throw new Exception($"Giao dịch đã hủy không được tính vào tổng thanh toán (kỳ vọng 0đ), thực tế={tkHuy.TongTienDaThanhToan:N0}");
+            if (tkHuy.CongNoTruocThanhToan != 44361000m)
+                throw new Exception($"Công nợ trước TT không được đưa về 0đ (kỳ vọng 44.361.000đ), thực tế={tkHuy.CongNoTruocThanhToan:N0}");
+            if (tkHuy.CongNoSauThanhToan != 44361000m)
+                throw new Exception($"Công nợ sau TT khi hủy không được về 0đ (kỳ vọng 44.361.000đ), thực tế={tkHuy.CongNoSauThanhToan:N0}");
+            if (tkHuy.CongNoHienTai != 44361000m)
+                throw new Exception($"Công nợ hiện tại phải được khôi phục về 44.361.000đ, thực tế={tkHuy.CongNoHienTai:N0}");
+
+            // Kiểm tra trạng thái dòng lịch sử
+            var dsLsKh = await db.GetLichSuThanhToanCongNoKhachHangAsync(khId, null, null, null, 10, 0);
+            var dongPt1 = dsLsKh.FirstOrDefault(x => x.MaGiaoDich == pt1.MaGiaoDich);
+            if (dongPt1 == null || dongPt1.TrangThai != "HUY" || dongPt1.TrangThaiHienThi != "Đã hủy")
+                throw new Exception($"Dòng phiếu {pt1.MaGiaoDich} trong lịch sử không hiển thị trạng thái 'Đã hủy'.");
+            if (dongPt1.CongNoTruoc != 44361000m || dongPt1.CongNoSau != 40361000m || dongPt1.SoTien != 4000000m)
+                throw new Exception("Dữ liệu gốc của giao dịch đã hủy bị sai lệch.");
+            Console.WriteLine("PASSED ✓");
+
+            // 4. Phát sinh công nợ mới sau khi thanh toán hợp lệ
+            Console.Write("4. Thanh toán 10M rồi mua thêm nợ mới 5M: Nợ sau TT=34.361.000đ, Nợ hiện tại=39.361.000đ (độc lập)... ");
+            var pt2 = await db.ThuNoKhachHangAsync(khId, 10000000m, "CHUYEN_KHOAN", null, "Thu nợ PT2 test 115");
+            createdSlipsKh.Add(pt2.MaGiaoDich);
+
+            // Mua thêm đơn hàng mới nợ 5.000.000đ
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO hoa_don_ban_hang (ma_hoa_don, khach_hang_id, chi_nhanh_id, nguoi_ban_id, thoi_gian_ban,
+                    tong_tien_hang, giam_gia, khach_can_tra, khach_da_thanh_toan, con_no,
+                    trang_thai_thanh_toan, trang_thai_hoa_don, ghi_chu)
+                VALUES (@MaHd, @KhId, 1, 1, NOW(),
+                    5000000, 0, 5000000, 0, 5000000,
+                    'CHUA_THANH_TOAN', 'HOAN_THANH', 'Hóa đơn nợ mới phát sinh');
+                """,
+                new { MaHd = hdTestCode2, KhId = khId });
+            hd2Id = await conn.ExecuteScalarAsync<uint>("SELECT id FROM hoa_don_ban_hang WHERE ma_hoa_don = @MaHd;", new { MaHd = hdTestCode2 });
+
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO lich_su_cong_no_khach_hang (khach_hang_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu, ghi_no, ghi_co, so_du, thoi_gian, ghi_chu)
+                VALUES (@KhId, 1, 'GHI_NO', 'HOA_DON', @MaHd, 5000000, 0, 39361000, NOW(), 'Ghi nợ hóa đơn mới');
+                """,
+                new { KhId = khId, MaHd = hdTestCode2 });
+
+            var tkMoi = await db.GetThongKeLichSuThanhToanCongNoKhachHangAsync(khId);
+            if (tkMoi.TongSoGiaoDich != 2) // 1 hủy + 1 hợp lệ
+                throw new Exception($"Tổng số GD phải là 2, thực tế={tkMoi.TongSoGiaoDich}");
+            if (tkMoi.TongTienDaThanhToan != 10000000m) // chỉ tính phiếu hợp lệ
+                throw new Exception($"Tổng đã TT phải là 10.000.000đ, thực tế={tkMoi.TongTienDaThanhToan:N0}");
+            if (tkMoi.CongNoTruocThanhToan != 44361000m)
+                throw new Exception($"Công nợ trước TT kỳ lọc phải là 44.361.000đ, thực tế={tkMoi.CongNoTruocThanhToan:N0}");
+            if (tkMoi.CongNoSauThanhToan != 34361000m)
+                throw new Exception($"Công nợ sau TT phải là 34.361.000đ, thực tế={tkMoi.CongNoSauThanhToan:N0}");
+            if (tkMoi.CongNoHienTai != 39361000m)
+                throw new Exception($"Công nợ hiện tại phải là 39.361.000đ (đã cộng nợ hóa đơn mới), thực tế={tkMoi.CongNoHienTai:N0}");
+            Console.WriteLine("PASSED ✓");
+        }
+        finally
+        {
+            // Dọn dẹp khách hàng test
+            try
+            {
+                if (khId > 0)
+                {
+                    await conn.ExecuteAsync("DELETE FROM lich_su_tra_truoc_khach_hang WHERE khach_hang_id = @Id;", new { Id = khId });
+                    await conn.ExecuteAsync("DELETE FROM thanh_toan WHERE hoa_don_id IN (@Hd1, @Hd2);", new { Hd1 = hd1Id, Hd2 = hd2Id });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_thanh_toan_cong_no_khach_hang WHERE khach_hang_id = @Id;", new { Id = khId });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_cong_no_khach_hang WHERE khach_hang_id = @Id;", new { Id = khId });
+                    if (createdSlipsKh.Count > 0)
+                        await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE ma_phieu_chi IN @Slips;", new { Slips = createdSlipsKh });
+                    if (hd1Id > 0 || hd2Id > 0)
+                        await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id IN (@Hd1, @Hd2);", new { Hd1 = hd1Id, Hd2 = hd2Id });
+                    await conn.ExecuteAsync("DELETE FROM khach_hang WHERE id = @Id;", new { Id = khId });
+                }
+            }
+            catch { }
+        }
+
+        // ==========================================================================================
+        // PHẦN 2: KIỂM THỬ NHÀ CUNG CẤP
+        // ==========================================================================================
+        Console.WriteLine("\n--- [PHẦN 2: NHÀ CUNG CẤP] ---");
+        var maNccTest = "NCC_115_" + DateTime.Now.ToString("yyMMddHHmmss");
+        var pnTestCode1 = "PN_115_1_" + DateTime.Now.ToString("yyMMddHHmmss");
+        var pnTestCode2 = "PN_115_2_" + DateTime.Now.ToString("yyMMddHHmmss");
+        uint nccId = 0;
+        uint pn1Id = 0;
+        uint pn2Id = 0;
+        var createdSlipsNcc = new List<string>();
+
+        try
+        {
+            // Tạo nhà cung cấp test
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO nha_cung_cap (ma_nha_cung_cap, ten_nha_cung_cap, so_dien_thoai, trang_thai, chi_nhanh_id)
+                VALUES (@Ma, @Ten, '0977665544', 1, 1);
+                """,
+                new { Ma = maNccTest, Ten = "Nhà Cung Cấp Test 115" });
+            nccId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM nha_cung_cap WHERE ma_nha_cung_cap = @Ma;", new { Ma = maNccTest });
+
+            // Ban đầu nợ NCC 44.361.000đ
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO phieu_nhap_hang (ma_phieu_nhap, nha_cung_cap_id, chi_nhanh_id, nguoi_nhap_id, thoi_gian_nhap,
+                    tong_tien_hang, giam_gia, chi_phi_khac, tong_tien_nhap, da_thanh_toan, con_no, trang_thai, cong_no_da_ghi_nhan, ghi_chu)
+                VALUES (@MaPn, @NccId, 1, 1, NOW(),
+                    44361000, 0, 0, 44361000, 0, 44361000, 'HOAN_THANH', 1, 'Phiếu nhập nợ ban đầu test 115');
+                """,
+                new { MaPn = pnTestCode1, NccId = nccId });
+            pn1Id = await conn.ExecuteScalarAsync<uint>("SELECT id FROM phieu_nhap_hang WHERE ma_phieu_nhap = @MaPn;", new { MaPn = pnTestCode1 });
+
+            // Ghi nợ vào sổ cái công nợ NCC
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO lich_su_cong_no_nha_cung_cap (nha_cung_cap_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu, ghi_no, ghi_co, thoi_gian, ghi_chu)
+                VALUES (@NccId, 1, 'GHI_NO_NHAP', 'PHIEU_NHAP', @MaPn, 44361000, 0, NOW(), 'Ghi nợ phiếu nhập ban đầu test 115');
+                """,
+                new { NccId = nccId, MaPn = pnTestCode1 });
+
+            // 1. Chưa có phiếu thanh toán NCC nào
+            Console.Write("1. NCC chưa có phiếu thanh toán: Công nợ trước & sau phải lấy đúng số nợ thực tế (44.361.000đ, không phải 0đ)... ");
+            var tkNcc0 = await db.GetThongKeLichSuThanhToanCongNoNhaCungCapAsync(nccId);
+            if (tkNcc0.TongSoGiaoDich != 0)
+                throw new Exception($"Tổng số GD phải là 0, thực tế={tkNcc0.TongSoGiaoDich}");
+            if (tkNcc0.TongTienDaThanhToan != 0m)
+                throw new Exception($"Tổng đã TT phải là 0đ, thực tế={tkNcc0.TongTienDaThanhToan:N0}");
+            if (tkNcc0.CongNoTruocThanhToan != 44361000m)
+                throw new Exception($"Công nợ trước TT phải là 44.361.000đ, thực tế={tkNcc0.CongNoTruocThanhToan:N0}");
+            if (tkNcc0.CongNoSauThanhToan != 44361000m)
+                throw new Exception($"Công nợ sau TT phải là 44.361.000đ, thực tế={tkNcc0.CongNoSauThanhToan:N0}");
+            if (tkNcc0.CongNoHienTai != 44361000m)
+                throw new Exception($"Công nợ hiện tại phải là 44.361.000đ, thực tế={tkNcc0.CongNoHienTai:N0}");
+            Console.WriteLine("PASSED ✓");
+
+            // 2. Thanh toán cho NCC 4.000.000đ
+            Console.Write("2. Thanh toán cho NCC 4.000.000đ: Nợ trước=44.361.000đ, Thanh toán=4.000.000đ, Nợ sau=40.361.000đ... ");
+            var ptNcc1 = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 4000000m, "TIEN_MAT", null, "Thanh toán NCC đợt 1 test 115");
+            createdSlipsNcc.Add(ptNcc1.MaGiaoDich);
+
+            var tkNcc1 = await db.GetThongKeLichSuThanhToanCongNoNhaCungCapAsync(nccId);
+            if (tkNcc1.TongSoGiaoDich != 1)
+                throw new Exception($"Tổng số GD phải là 1, thực tế={tkNcc1.TongSoGiaoDich}");
+            if (tkNcc1.TongTienDaThanhToan != 4000000m)
+                throw new Exception($"Tổng đã TT phải là 4.000.000đ, thực tế={tkNcc1.TongTienDaThanhToan:N0}");
+            if (tkNcc1.CongNoTruocThanhToan != 44361000m)
+                throw new Exception($"Công nợ trước TT phải là 44.361.000đ, thực tế={tkNcc1.CongNoTruocThanhToan:N0}");
+            if (tkNcc1.CongNoSauThanhToan != 40361000m)
+                throw new Exception($"Công nợ sau TT phải là 40.361.000đ, thực tế={tkNcc1.CongNoSauThanhToan:N0}");
+            if (tkNcc1.CongNoHienTai != 40361000m)
+                throw new Exception($"Công nợ hiện tại phải là 40.361.000đ, thực tế={tkNcc1.CongNoHienTai:N0}");
+            Console.WriteLine("PASSED ✓");
+
+            // 3. Hủy phiếu thanh toán của NCC
+            Console.Write("3. Hủy phiếu thanh toán NCC: Giữ nguyên lịch sử (Đã hủy), Nợ trước giữ 44.361.000đ (không về 0đ), Khôi phục nợ hiện tại 44.361.000đ... ");
+            var huyPtNcc1 = await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, ptNcc1.MaGiaoDich, "Hủy do nhân viên thanh toán nhầm");
+            if (!huyPtNcc1.ThanhCong)
+                throw new Exception($"Hủy phiếu NCC thất bại: {huyPtNcc1.ThongBao}");
+
+            var tkNccHuy = await db.GetThongKeLichSuThanhToanCongNoNhaCungCapAsync(nccId);
+            if (tkNccHuy.TongSoGiaoDich != 1)
+                throw new Exception($"Phiếu đã hủy vẫn phải nằm trong lịch sử (Tổng GD=1), thực tế={tkNccHuy.TongSoGiaoDich}");
+            if (tkNccHuy.TongTienDaThanhToan != 0m)
+                throw new Exception($"Giao dịch đã hủy không được tính vào tổng thanh toán NCC (kỳ vọng 0đ), thực tế={tkNccHuy.TongTienDaThanhToan:N0}");
+            if (tkNccHuy.CongNoTruocThanhToan != 44361000m)
+                throw new Exception($"Công nợ trước TT NCC không được đưa về 0đ (kỳ vọng 44.361.000đ), thực tế={tkNccHuy.CongNoTruocThanhToan:N0}");
+            if (tkNccHuy.CongNoSauThanhToan != 44361000m)
+                throw new Exception($"Công nợ sau TT NCC khi hủy không được về 0đ (kỳ vọng 44.361.000đ), thực tế={tkNccHuy.CongNoSauThanhToan:N0}");
+            if (tkNccHuy.CongNoHienTai != 44361000m)
+                throw new Exception($"Công nợ hiện tại NCC phải được khôi phục về 44.361.000đ, thực tế={tkNccHuy.CongNoHienTai:N0}");
+
+            var dsLsNcc = await db.GetLichSuThanhToanCongNoNhaCungCapAsync(nccId, null, null, null, 10, 0);
+            var dongPtNcc1 = dsLsNcc.FirstOrDefault(x => x.MaGiaoDich == ptNcc1.MaGiaoDich);
+            if (dongPtNcc1 == null || dongPtNcc1.TrangThai != "HUY" || dongPtNcc1.TrangThaiHienThi != "Đã hủy")
+                throw new Exception($"Dòng phiếu NCC {ptNcc1.MaGiaoDich} trong lịch sử không hiển thị trạng thái 'Đã hủy'.");
+            if (dongPtNcc1.CongNoTruoc != 44361000m || dongPtNcc1.CongNoSau != 40361000m || dongPtNcc1.SoTien != 4000000m)
+                throw new Exception("Dữ liệu gốc của giao dịch NCC đã hủy bị sai lệch.");
+            Console.WriteLine("PASSED ✓");
+
+            // 4. Phát sinh công nợ nhập mới sau thanh toán hợp lệ
+            Console.Write("4. NCC thanh toán 10M rồi nhập thêm nợ mới 5M: Nợ sau TT=34.361.000đ, Nợ hiện tại=39.361.000đ (độc lập)... ");
+            var ptNcc2 = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 10000000m, "CHUYEN_KHOAN", null, "Thanh toán NCC đợt 2 test 115");
+            createdSlipsNcc.Add(ptNcc2.MaGiaoDich);
+
+            // Nhập thêm hoa mới nợ 5.000.000đ
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO phieu_nhap_hang (ma_phieu_nhap, nha_cung_cap_id, chi_nhanh_id, nguoi_nhap_id, thoi_gian_nhap,
+                    tong_tien_hang, giam_gia, chi_phi_khac, tong_tien_nhap, da_thanh_toan, con_no, trang_thai, cong_no_da_ghi_nhan, ghi_chu)
+                VALUES (@MaPn, @NccId, 1, 1, NOW(),
+                    5000000, 0, 0, 5000000, 0, 5000000, 'HOAN_THANH', 1, 'Phiếu nhập nợ mới phát sinh');
+                """,
+                new { MaPn = pnTestCode2, NccId = nccId });
+            pn2Id = await conn.ExecuteScalarAsync<uint>("SELECT id FROM phieu_nhap_hang WHERE ma_phieu_nhap = @MaPn;", new { MaPn = pnTestCode2 });
+
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO lich_su_cong_no_nha_cung_cap (nha_cung_cap_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu, ghi_no, ghi_co, thoi_gian, ghi_chu)
+                VALUES (@NccId, 1, 'GHI_NO_NHAP', 'PHIEU_NHAP', @MaPn, 5000000, 0, NOW(), 'Ghi nợ phiếu nhập mới');
+                """,
+                new { NccId = nccId, MaPn = pnTestCode2 });
+
+            var tkNccMoi = await db.GetThongKeLichSuThanhToanCongNoNhaCungCapAsync(nccId);
+            if (tkNccMoi.TongSoGiaoDich != 2) // 1 hủy + 1 hợp lệ
+                throw new Exception($"Tổng số GD NCC phải là 2, thực tế={tkNccMoi.TongSoGiaoDich}");
+            if (tkNccMoi.TongTienDaThanhToan != 10000000m) // chỉ tính phiếu hợp lệ
+                throw new Exception($"Tổng đã TT NCC phải là 10.000.000đ, thực tế={tkNccMoi.TongTienDaThanhToan:N0}");
+            if (tkNccMoi.CongNoTruocThanhToan != 44361000m)
+                throw new Exception($"Công nợ trước TT NCC kỳ lọc phải là 44.361.000đ, thực tế={tkNccMoi.CongNoTruocThanhToan:N0}");
+            if (tkNccMoi.CongNoSauThanhToan != 34361000m)
+                throw new Exception($"Công nợ sau TT NCC phải là 34.361.000đ, thực tế={tkNccMoi.CongNoSauThanhToan:N0}");
+            if (tkNccMoi.CongNoHienTai != 39361000m)
+                throw new Exception($"Công nợ hiện tại NCC phải là 39.361.000đ (đã cộng nợ phiếu nhập mới), thực tế={tkNccMoi.CongNoHienTai:N0}");
+            Console.WriteLine("PASSED ✓");
+
+            Console.WriteLine("\n>>> TOÀN BỘ 8 TIÊU CHÍ KIỂM THỬ ISSUE #115 (KHÁCH HÀNG & NCC) ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+            return 0;
+        }
+        finally
+        {
+            // Dọn dẹp nhà cung cấp test
+            try
+            {
+                if (nccId > 0)
+                {
+                    await conn.ExecuteAsync("DELETE FROM lich_su_tra_truoc_ncc WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    await conn.ExecuteAsync("DELETE FROM thanh_toan_nha_cung_cap WHERE phieu_nhap_id IN (@Pn1, @Pn2);", new { Pn1 = pn1Id, Pn2 = pn2Id });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_thanh_toan_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    if (createdSlipsNcc.Count > 0)
+                        await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE ma_phieu_chi IN @Slips;", new { Slips = createdSlipsNcc });
+                    if (pn1Id > 0 || pn2Id > 0)
+                        await conn.ExecuteAsync("DELETE FROM phieu_nhap_hang WHERE id IN (@Pn1, @Pn2);", new { Pn1 = pn1Id, Pn2 = pn2Id });
+                    await conn.ExecuteAsync("DELETE FROM nha_cung_cap WHERE id = @Id;", new { Id = nccId });
+                }
+            }
+            catch { }
+        }
     }
 }

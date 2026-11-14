@@ -265,6 +265,7 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
         TxtTongGiaoDich.Text = $"{_summary.TongSoGiaoDich:N0}";
         TxtCongNoTruoc.Text = $"{_summary.CongNoTruocThanhToan:N0} đ";
         TxtCongNoSau.Text = $"{_summary.CongNoSauThanhToan:N0} đ";
+        TxtCongNoHienTai.Text = $"{_summary.CongNoHienTai:N0} đ";
     }
 
     private int TongSoTrang => Math.Max(1, (int)Math.Ceiling(_totalCount / (double)_pageSize));
@@ -666,6 +667,8 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
         sheet.Cell(3, 15).Value = summary.CongNoTruocThanhToan;
         sheet.Cell(4, 14).Value = "Công nợ sau thanh toán";
         sheet.Cell(4, 15).Value = summary.CongNoSauThanhToan;
+        sheet.Cell(5, 14).Value = "Công nợ hiện tại";
+        sheet.Cell(5, 15).Value = summary.CongNoHienTai;
         sheet.Column(2).Style.DateFormat.Format = "dd/mm/yyyy hh:mm";
         sheet.Columns(6, 8).Style.NumberFormat.Format = "#,##0";
         sheet.Columns().AdjustToContents();

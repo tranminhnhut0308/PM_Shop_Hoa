@@ -168,29 +168,33 @@
     <Style Selector="TextBlock.tqMetricLabel">
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="#61736E" />
+      <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <Style Selector="TextBlock.tqMetricValue">
       <Setter Property="FontSize" Value="18" />
       <Setter Property="FontWeight" Value="Bold" />
       <Setter Property="Foreground" Value="#163F38" />
-      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <Style Selector="TextBlock.tqSectionTitle">
       <Setter Property="FontSize" Value="16" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Foreground" Value="#163F38" />
+      <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <Style Selector="TextBlock.tqSectionSub">
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="#61736E" />
+      <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <Style Selector="TextBlock.tqMuted">
       <Setter Property="FontSize" Value="11" />
       <Setter Property="Foreground" Value="#7A8C86" />
+      <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <!-- Nút dùng chung với toolbar của MainWindow, khai báo lại để UserControl độc lập -->
@@ -244,14 +248,14 @@
   </UserControl.Styles>
 
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Margin="0,0,16,16" Spacing="10">
+    <StackPanel Margin="0,0,12,16" Spacing="10">
 
       <!-- TIÊU ĐỀ + NÚT LÀM MỚI -->
       <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
         <StackPanel>
-          <TextBlock Classes="page-title" Text="Tổng quan" />
+          <TextBlock Classes="page-title" Text="Tổng quan" TextWrapping="Wrap" />
           <TextBlock Text="Số liệu lấy trực tiếp từ dữ liệu bán hàng, nhập hàng và sổ quỹ"
-            Foreground="#61736E" />
+            Foreground="#61736E" TextWrapping="Wrap" />
         </StackPanel>
 
         <ProgressBar Grid.Column="1" Width="120" Height="6" Margin="0,0,4,0"
@@ -335,18 +339,18 @@
       <Border Classes="tqCard" Background="#F0F8FF" BorderBrush="#BEE3F8"
         BorderThickness="1" CornerRadius="12" Padding="14,12"
         IsVisible="{Binding HienThiBannerChuaCoDuLieu}">
-        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+        <Grid x:Name="EmptyPeriodBannerGrid" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" RowSpacing="10">
           <Border Width="38" Height="38" CornerRadius="19" Background="#E1EFFE"
             VerticalAlignment="Center">
             <TextBlock Text="💡" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
             <TextBlock Text="Chưa có dữ liệu phát sinh trong kỳ này"
-              FontWeight="Bold" FontSize="13" Foreground="#1E429F" />
+              FontWeight="Bold" FontSize="13" Foreground="#1E429F" TextWrapping="Wrap" />
             <TextBlock Text="{Binding NoiDungBannerChuaCoDuLieu}"
               FontSize="12" Foreground="#3F83F8" TextWrapping="Wrap" />
           </StackPanel>
-          <WrapPanel Grid.Column="2" Orientation="Horizontal" ItemSpacing="8" LineSpacing="6"
+          <WrapPanel x:Name="EmptyPeriodBannerActions" Grid.Column="2" Orientation="Horizontal" ItemSpacing="8" LineSpacing="6"
             VerticalAlignment="Center" HorizontalAlignment="Right">
             <Button Classes="toolbar-action" Height="32" Padding="10,0" FontSize="11.5"
               IsVisible="{Binding CoTheXemThangTruoc}"
@@ -364,93 +368,93 @@
       </Border>
 
       <!-- 5 THẺ KẾT QUẢ BÁN HÀNG THEO KỲ ĐANG CHỌN -->
-      <Grid ColumnDefinitions="*,*,*,*,*" ColumnSpacing="10">
-        <Border Classes="tqMetric" Padding="16">
+      <Grid x:Name="MetricsGrid" ColumnDefinitions="*,*,*,*,*" ColumnSpacing="10" RowSpacing="10">
+        <Border x:Name="MetricCard0" Classes="tqMetric" Padding="14">
           <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10">
-            <Border Width="34" Height="34" CornerRadius="10" Background="#EAF9F5">
+            <Border Width="34" Height="34" CornerRadius="10" Background="#EAF9F5" VerticalAlignment="Top">
               <TextBlock Text="₫" FontSize="18" FontWeight="Bold" Foreground="#087F6E"
                 HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <TextBlock Grid.Column="1" Text="{Binding TieuDeTheDoanhThu}" Classes="tqMetricLabel"
-              VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              VerticalAlignment="Center" TextWrapping="Wrap" />
             <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding DoanhThuHomNayHienThi}"
-              Classes="tqMetricValue" FontSize="20" Margin="0,5,0,1" />
+              Classes="tqMetricValue" FontSize="19" Margin="0,6,0,2" TextWrapping="Wrap" />
             <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding PhuDeTheDoanhThu}"
-              Classes="tqMuted" TextTrimming="CharacterEllipsis" />
+              Classes="tqMuted" TextWrapping="Wrap" />
           </Grid>
         </Border>
 
-        <Border Grid.Column="1" Classes="tqMetric" Padding="16">
+        <Border x:Name="MetricCard1" Grid.Column="1" Classes="tqMetric" Padding="14">
           <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10">
-            <Border Width="34" Height="34" CornerRadius="10" Background="#EEF2FF">
+            <Border Width="34" Height="34" CornerRadius="10" Background="#EEF2FF" VerticalAlignment="Top">
               <TextBlock Text="#" FontSize="18" FontWeight="Bold" Foreground="#5262A6"
                 HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <TextBlock Grid.Column="1" Text="SỐ HÓA ĐƠN" Classes="tqMetricLabel"
-              VerticalAlignment="Center" />
+              VerticalAlignment="Center" TextWrapping="Wrap" />
             <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding SoHoaDonHomNayHienThi}"
-              Classes="tqMetricValue" FontSize="20" Margin="0,5,0,1" />
+              Classes="tqMetricValue" FontSize="19" Margin="0,6,0,2" TextWrapping="Wrap" />
             <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding PhuDeTheSoHoaDon}"
-              Classes="tqMuted" TextTrimming="CharacterEllipsis" />
+              Classes="tqMuted" TextWrapping="Wrap" />
           </Grid>
         </Border>
 
-        <Border Grid.Column="2" Classes="tqMetric" Padding="16">
+        <Border x:Name="MetricCard2" Grid.Column="2" Classes="tqMetric" Padding="14">
           <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10">
-            <Border Width="34" Height="34" CornerRadius="10" Background="#EAF9F5">
+            <Border Width="34" Height="34" CornerRadius="10" Background="#EAF9F5" VerticalAlignment="Top">
               <TextBlock Text="✓" FontSize="16" FontWeight="Bold" Foreground="#087F6E"
                 HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <TextBlock Grid.Column="1" Text="ĐÃ THU" Classes="tqMetricLabel"
-              VerticalAlignment="Center" />
+              VerticalAlignment="Center" TextWrapping="Wrap" />
             <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding DaThuHomNayHienThi}"
-              Classes="tqMetricValue" FontSize="20" Foreground="#087F6E" Margin="0,5,0,1" />
+              Classes="tqMetricValue" FontSize="19" Foreground="#087F6E" Margin="0,6,0,2" TextWrapping="Wrap" />
             <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding PhuDeTheDaThu}"
-              Classes="tqMuted" TextTrimming="CharacterEllipsis" />
+              Classes="tqMuted" TextWrapping="Wrap" />
           </Grid>
         </Border>
 
-        <Border Grid.Column="3" Classes="tqMetric" Padding="16">
+        <Border x:Name="MetricCard3" Grid.Column="3" Classes="tqMetric" Padding="14">
           <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10">
-            <Border Width="34" Height="34" CornerRadius="10" Background="#FFF5E5">
+            <Border Width="34" Height="34" CornerRadius="10" Background="#FFF5E5" VerticalAlignment="Top">
               <TextBlock Text="!" FontSize="17" FontWeight="Bold" Foreground="#C27803"
                 HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <TextBlock Grid.Column="1" Text="CÒN NỢ" Classes="tqMetricLabel"
-              VerticalAlignment="Center" />
+              VerticalAlignment="Center" TextWrapping="Wrap" />
             <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding ConNoHomNayHienThi}"
-              Classes="tqMetricValue" FontSize="20" Foreground="#C27803" Margin="0,5,0,1" />
+              Classes="tqMetricValue" FontSize="19" Foreground="#C27803" Margin="0,6,0,2" TextWrapping="Wrap" />
             <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding PhuDeTheConNo}"
-              Classes="tqMuted" TextTrimming="CharacterEllipsis" />
+              Classes="tqMuted" TextWrapping="Wrap" />
           </Grid>
         </Border>
 
-        <Border Grid.Column="4" Classes="tqMetric" Padding="16">
+        <Border x:Name="MetricCard4" Grid.Column="4" Classes="tqMetric" Padding="14">
           <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10">
-            <Border Width="34" Height="34" CornerRadius="10" Background="#F0F6F4">
+            <Border Width="34" Height="34" CornerRadius="10" Background="#F0F6F4" VerticalAlignment="Top">
               <TextBlock Text="↗" FontSize="18" FontWeight="Bold" Foreground="#163F38"
                 HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <TextBlock Grid.Column="1" Text="SỐ ĐƠN HÀNG" Classes="tqMetricLabel"
-              VerticalAlignment="Center" />
+              VerticalAlignment="Center" TextWrapping="Wrap" />
             <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding SoDonHangHomNayHienThi}"
-              Classes="tqMetricValue" FontSize="20" Margin="0,5,0,1" />
+              Classes="tqMetricValue" FontSize="19" Margin="0,6,0,2" TextWrapping="Wrap" />
             <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding PhuDeTheSoDonHang}"
-              Classes="tqMuted" TextTrimming="CharacterEllipsis" />
+              Classes="tqMuted" TextWrapping="Wrap" />
           </Grid>
         </Border>
       </Grid>
 
       <Border Classes="tqCard" Padding="12,10" IsVisible="{Binding CoHoaDonChuaGhiNhan}">
         <StackPanel Spacing="8">
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <Grid x:Name="ExcludedHeaderGrid" ColumnDefinitions="*,Auto" ColumnSpacing="10" RowSpacing="8">
             <StackPanel Spacing="2">
               <TextBlock Text="HÓA ĐƠN BỊ LOẠI TRỪ KHỎI TỔNG BÁN"
-                Classes="tqSectionTitle" />
+                Classes="tqSectionTitle" TextWrapping="Wrap" />
               <TextBlock Text="Gồm các hóa đơn ĐÃ HỦY hoặc LƯU TẠM trong kỳ. Không tính vào Doanh thu chính thức."
-                Classes="tqSectionSub" />
+                Classes="tqSectionSub" TextWrapping="Wrap" />
             </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <WrapPanel x:Name="ExcludedHeaderActions" Grid.Column="1" Orientation="Horizontal" ItemSpacing="8" LineSpacing="6" VerticalAlignment="Center" HorizontalAlignment="Right">
               <Border Background="#FFF5E5" CornerRadius="6"
                 Padding="8,4" VerticalAlignment="Center">
                 <TextBlock Text="{Binding SoHoaDonChuaGhiNhanHienThi, StringFormat='{}{0} hóa đơn'}"
@@ -463,35 +467,35 @@
                       Padding="10,0"
                       FontSize="12"
                       Cursor="Hand" />
-            </StackPanel>
+            </WrapPanel>
           </Grid>
-          <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
-            <Border Classes="tqFilter" Padding="10,6">
+          <Grid x:Name="ExcludedMetricsGrid" ColumnDefinitions="*,*,*,*" ColumnSpacing="8" RowSpacing="8">
+            <Border x:Name="ExcludedCard0" Classes="tqFilter" Padding="10,7">
               <StackPanel Spacing="2">
-                <TextBlock Text="Tổng tiền hàng" Classes="tqMuted" />
+                <TextBlock Text="Tổng tiền hàng" Classes="tqMuted" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding TongTienHangChuaGhiNhanHienThi}"
-                  FontSize="16" FontWeight="Bold" Foreground="#163F38" />
+                  FontSize="16" FontWeight="Bold" Foreground="#163F38" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
-            <Border Grid.Column="1" Classes="tqFilter" Padding="10,6">
+            <Border x:Name="ExcludedCard1" Grid.Column="1" Classes="tqFilter" Padding="10,7">
               <StackPanel Spacing="2">
-                <TextBlock Text="Doanh thu liên quan" Classes="tqMuted" />
+                <TextBlock Text="Doanh thu liên quan" Classes="tqMuted" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding DoanhThuChuaGhiNhanHienThi}"
-                  FontSize="16" FontWeight="Bold" Foreground="#087F6E" />
+                  FontSize="16" FontWeight="Bold" Foreground="#087F6E" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
-            <Border Grid.Column="2" Classes="tqFilter" Padding="10,6">
+            <Border x:Name="ExcludedCard2" Grid.Column="2" Classes="tqFilter" Padding="10,7">
               <StackPanel Spacing="2">
-                <TextBlock Text="Đã thu từ hóa đơn" Classes="tqMuted" />
+                <TextBlock Text="Đã thu từ hóa đơn" Classes="tqMuted" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding DaThuChuaGhiNhanHienThi}"
-                  FontSize="16" FontWeight="Bold" Foreground="#087F6E" />
+                  FontSize="16" FontWeight="Bold" Foreground="#087F6E" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
-            <Border Grid.Column="3" Classes="tqFilter" Padding="10,6">
+            <Border x:Name="ExcludedCard3" Grid.Column="3" Classes="tqFilter" Padding="10,7">
               <StackPanel Spacing="2">
-                <TextBlock Text="Còn nợ trên hóa đơn" Classes="tqMuted" />
+                <TextBlock Text="Còn nợ trên hóa đơn" Classes="tqMuted" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding ConNoChuaGhiNhanHienThi}"
-                  FontSize="16" FontWeight="Bold" Foreground="#A45B00" />
+                  FontSize="16" FontWeight="Bold" Foreground="#A45B00" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
           </Grid>
@@ -500,53 +504,53 @@
 
       <!-- THỐNG KÊ KHO -->
       <Border Classes="tqCard" Padding="12">
-        <Grid ColumnDefinitions="Auto,*,*,*,*,*" ColumnSpacing="8" RowDefinitions="Auto,Auto">
-          <StackPanel VerticalAlignment="Center" Margin="0,0,6,0">
-            <TextBlock Text="THỐNG KÊ KHO" Classes="tqSectionTitle" FontSize="13" />
-            <TextBlock Text="Hiện tại" Classes="tqMuted" />
+        <Grid x:Name="WarehouseGrid" ColumnDefinitions="Auto,*,*,*,*,*" ColumnSpacing="8" RowDefinitions="Auto,Auto" RowSpacing="8">
+          <StackPanel x:Name="WarehouseTitlePanel" VerticalAlignment="Center" Margin="0,0,6,0">
+            <TextBlock Text="THỐNG KÊ KHO" Classes="tqSectionTitle" FontSize="13" TextWrapping="Wrap" />
+            <TextBlock Text="Hiện tại" Classes="tqMuted" TextWrapping="Wrap" />
           </StackPanel>
-          <Border Grid.Column="1" Classes="tqFilter" Padding="10,7">
+          <Border x:Name="WarehouseCard0" Grid.Column="1" Classes="tqFilter" Padding="10,7">
             <StackPanel>
-              <TextBlock Text="Tổng hàng hóa" Classes="tqMuted" />
+              <TextBlock Text="Tổng hàng hóa" Classes="tqMuted" TextWrapping="Wrap" />
               <TextBlock Text="{Binding TongSoHangHoa}" FontSize="18"
-                FontWeight="Bold" Foreground="#163F38" />
+                FontWeight="Bold" Foreground="#163F38" TextWrapping="Wrap" />
             </StackPanel>
           </Border>
-          <Border Grid.Column="2" Classes="tqFilter" Padding="10,7">
+          <Border x:Name="WarehouseCard1" Grid.Column="2" Classes="tqFilter" Padding="10,7">
             <StackPanel>
-              <TextBlock Text="Sắp hết hàng" Classes="tqMuted" />
+              <TextBlock Text="Sắp hết hàng" Classes="tqMuted" TextWrapping="Wrap" />
               <TextBlock Text="{Binding HangSapHet}" FontSize="18"
-                FontWeight="Bold" Foreground="#C27803" />
+                FontWeight="Bold" Foreground="#C27803" TextWrapping="Wrap" />
             </StackPanel>
           </Border>
-          <Border Grid.Column="3" Classes="tqFilter" Padding="10,7">
+          <Border x:Name="WarehouseCard2" Grid.Column="3" Classes="tqFilter" Padding="10,7">
             <StackPanel>
-              <TextBlock Text="Hết hàng" Classes="tqMuted" />
+              <TextBlock Text="Hết hàng" Classes="tqMuted" TextWrapping="Wrap" />
               <TextBlock Text="{Binding HangHetHang}" FontSize="18"
-                FontWeight="Bold" Foreground="#D64545" />
+                FontWeight="Bold" Foreground="#D64545" TextWrapping="Wrap" />
             </StackPanel>
           </Border>
-          <Border Grid.Column="4" Classes="tqFilter" Padding="10,7">
+          <Border x:Name="WarehouseCard3" Grid.Column="4" Classes="tqFilter" Padding="10,7">
             <StackPanel>
-              <TextBlock Text="Khách hàng" Classes="tqMuted" />
+              <TextBlock Text="Khách hàng" Classes="tqMuted" TextWrapping="Wrap" />
               <TextBlock Text="{Binding TongSoKhachHang}" FontSize="18"
-                FontWeight="Bold" Foreground="#163F38" />
+                FontWeight="Bold" Foreground="#163F38" TextWrapping="Wrap" />
             </StackPanel>
           </Border>
-          <Border Grid.Column="5" Classes="tqFilter" Padding="10,7">
+          <Border x:Name="WarehouseCard4" Grid.Column="5" Classes="tqFilter" Padding="10,7">
             <StackPanel>
-              <TextBlock Text="Nhà cung cấp" Classes="tqMuted" />
+              <TextBlock Text="Nhà cung cấp" Classes="tqMuted" TextWrapping="Wrap" />
               <TextBlock Text="{Binding TongSoNhaCungCap}" FontSize="18"
-                FontWeight="Bold" Foreground="#163F38" />
+                FontWeight="Bold" Foreground="#163F38" TextWrapping="Wrap" />
             </StackPanel>
           </Border>
-          <Border Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="5"
-            Classes="tqFilter" Padding="10,7" Margin="0,6,0,0">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Text="Giá trị tồn kho" Classes="tqMuted" VerticalAlignment="Center" />
+          <Border x:Name="WarehouseInventoryValueCard" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="5"
+            Classes="tqFilter" Padding="10,7">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+              <TextBlock Text="Giá trị tồn kho" Classes="tqMuted" VerticalAlignment="Center" TextWrapping="Wrap" />
               <TextBlock Grid.Column="1" Text="{Binding GiaTriTonKhoHienThi}"
                 FontSize="18" FontWeight="Bold" Foreground="#087F6E"
-                TextTrimming="CharacterEllipsis" />
+                TextWrapping="Wrap" TextAlignment="Right" />
             </Grid>
           </Border>
         </Grid>
@@ -557,16 +561,16 @@
         <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
 
           <!-- Header -->
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-            <StackPanel Spacing="2">
-              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <TextBlock Text="{Binding TieuDeBieuDo}" Classes="tqSectionTitle" />
+          <Grid x:Name="ChartHeaderGrid" ColumnDefinitions="*,Auto" ColumnSpacing="12" RowSpacing="8">
+            <StackPanel Spacing="3">
+              <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="4" VerticalAlignment="Center">
+                <TextBlock Text="{Binding TieuDeBieuDo}" Classes="tqSectionTitle" TextWrapping="Wrap" />
                 <Border Background="#EAF9F5" CornerRadius="6" Padding="8,2" VerticalAlignment="Center">
                   <TextBlock Text="{Binding ChieuDoanhThuHienThi}" FontSize="11" FontWeight="SemiBold" Foreground="#087F6E" />
                 </Border>
-              </StackPanel>
-              <TextBlock Text="{Binding MoTaChieuDoanhThu}" Classes="tqSectionSub" />
-              <TextBlock Text="{Binding ThoiGianHienThi, StringFormat='Khoảng thời gian: {0}'}" Classes="tqMuted" />
+              </WrapPanel>
+              <TextBlock Text="{Binding MoTaChieuDoanhThu}" Classes="tqSectionSub" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding ThoiGianHienThi, StringFormat='Khoảng thời gian: {0}'}" Classes="tqMuted" TextWrapping="Wrap" />
               <!-- Góc nhìn chỉ điều khiển biểu đồ doanh thu nên đặt ngay trong khung biểu đồ -->
               <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6" Margin="0,6,0,0">
                 <TextBlock Text="Góc nhìn:" Classes="tqSectionSub" FontWeight="SemiBold"
@@ -597,38 +601,38 @@
                 </Button>
               </WrapPanel>
             </StackPanel>
-            <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <StackPanel x:Name="ChartHeaderSummaryPanel" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
               <TextBlock Text="{Binding TongDoanhThuKyChonHienThi}"
                          FontSize="20" FontWeight="Bold" Foreground="#087F6E"
-                         HorizontalAlignment="Right" />
+                         TextWrapping="Wrap" />
               <TextBlock Text="{Binding TongSoHoaDonKyChonHienThi}"
-                         Classes="tqMuted" HorizontalAlignment="Right" />
+                         Classes="tqMuted" TextWrapping="Wrap" />
             </StackPanel>
           </Grid>
 
           <!-- 3 Thẻ phân tích theo Góc nhìn (Theo ngày / Theo giờ / Theo thứ) -->
-          <Grid Grid.Row="1" ColumnDefinitions="*,*,*" ColumnSpacing="10">
-            <Border Background="#F2FBF8" BorderBrush="#CBECE3" BorderThickness="1" CornerRadius="10" Padding="12,8">
+          <Grid x:Name="ChartInsightsGrid" Grid.Row="1" ColumnDefinitions="*,*,*" ColumnSpacing="10" RowSpacing="8">
+            <Border x:Name="InsightCard0" Background="#F2FBF8" BorderBrush="#CBECE3" BorderThickness="1" CornerRadius="10" Padding="12,8">
               <StackPanel Spacing="2">
-                <TextBlock Text="{Binding TieuDeDiemCaoNhat}" FontSize="11" FontWeight="SemiBold" Foreground="#087F6E" />
-                <TextBlock Text="{Binding GiaTriDiemCaoNhat}" FontSize="15" FontWeight="Bold" Foreground="#163F38" TextTrimming="CharacterEllipsis" />
-                <TextBlock Text="{Binding PhuDeDiemCaoNhat}" Classes="tqMuted" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding TieuDeDiemCaoNhat}" FontSize="11" FontWeight="SemiBold" Foreground="#087F6E" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding GiaTriDiemCaoNhat}" FontSize="15" FontWeight="Bold" Foreground="#163F38" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding PhuDeDiemCaoNhat}" Classes="tqMuted" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
 
-            <Border Grid.Column="1" Background="#F8FAFC" BorderBrush="#E2ECE8" BorderThickness="1" CornerRadius="10" Padding="12,8">
+            <Border x:Name="InsightCard1" Grid.Column="1" Background="#F8FAFC" BorderBrush="#E2ECE8" BorderThickness="1" CornerRadius="10" Padding="12,8">
               <StackPanel Spacing="2">
-                <TextBlock Text="{Binding TieuDeTrungBinhChieu}" FontSize="11" FontWeight="SemiBold" Foreground="#4B5D57" />
-                <TextBlock Text="{Binding GiaTriTrungBinhChieu}" FontSize="15" FontWeight="Bold" Foreground="#163F38" TextTrimming="CharacterEllipsis" />
-                <TextBlock Text="{Binding PhuDeTrungBinhChieu}" Classes="tqMuted" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding TieuDeTrungBinhChieu}" FontSize="11" FontWeight="SemiBold" Foreground="#4B5D57" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding GiaTriTrungBinhChieu}" FontSize="15" FontWeight="Bold" Foreground="#163F38" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding PhuDeTrungBinhChieu}" Classes="tqMuted" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
 
-            <Border Grid.Column="2" Background="#F8FAFC" BorderBrush="#E2ECE8" BorderThickness="1" CornerRadius="10" Padding="12,8">
+            <Border x:Name="InsightCard2" Grid.Column="2" Background="#F8FAFC" BorderBrush="#E2ECE8" BorderThickness="1" CornerRadius="10" Padding="12,8">
               <StackPanel Spacing="2">
-                <TextBlock Text="{Binding TieuDeMatDoChieu}" FontSize="11" FontWeight="SemiBold" Foreground="#4B5D57" />
-                <TextBlock Text="{Binding GiaTriMatDoChieu}" FontSize="15" FontWeight="Bold" Foreground="#163F38" TextTrimming="CharacterEllipsis" />
-                <TextBlock Text="{Binding PhuDeMatDoChieu}" Classes="tqMuted" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding TieuDeMatDoChieu}" FontSize="11" FontWeight="SemiBold" Foreground="#4B5D57" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding GiaTriMatDoChieu}" FontSize="15" FontWeight="Bold" Foreground="#163F38" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding PhuDeMatDoChieu}" Classes="tqMuted" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
           </Grid>
@@ -638,12 +642,12 @@
           <!-- Vùng biểu đồ -->
           <Grid Grid.Row="3">
             <ScrollViewer x:Name="ChartScrollViewer"
-                          Height="195"
+                          MinHeight="195"
                           VerticalScrollBarVisibility="Disabled"
                           HorizontalScrollBarVisibility="Auto"
-                          Padding="4,6,4,4"
+                          Padding="4,8,4,16"
                           IsVisible="{Binding CoDuLieu}">
-              <Grid RowDefinitions="140,1,Auto"
+              <Grid RowDefinitions="150,1,Auto"
                     MinWidth="{Binding #ChartScrollViewer.Bounds.Width}"
                     HorizontalAlignment="Left">
                 <!-- Đường trục đáy trải dài toàn bộ chiều rộng vùng vẽ -->
@@ -661,11 +665,11 @@
 
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="models:TongQuanDiemDoanhThu">
-                      <Grid RowDefinitions="140,1,Auto"
+                      <Grid RowDefinitions="150,1,Auto"
                             Width="{Binding BeRongCot, FallbackValue=55}"
                             ToolTip.Tip="{Binding ToolTipDayDu}">
 
-                        <!-- Cột + Số liệu trên đầu cột (Row 0: 140px, neo tại đáy) -->
+                        <!-- Cột + Số liệu trên đầu cột (Row 0: 150px, neo tại đáy) -->
                         <Grid Grid.Row="0">
                           <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Spacing="2">
                             <TextBlock Text="{Binding DoanhThuNganGon}"
@@ -720,8 +724,8 @@
               Padding="14" HorizontalAlignment="Stretch">
               <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
                 <TextBlock Text="{Binding TrangThaiBieuDo}" FontWeight="SemiBold"
-                  Foreground="#4B5D57" HorizontalAlignment="Center" TextAlignment="Center" />
-                <WrapPanel Orientation="Horizontal" ItemSpacing="8" HorizontalAlignment="Center"
+                  Foreground="#4B5D57" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+                <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6" HorizontalAlignment="Center"
                   IsVisible="{Binding HienThiBannerChuaCoDuLieu}">
                   <Button Classes="toolbar-action" Height="30" Padding="10,0" FontSize="11"
                     IsVisible="{Binding CoTheXemThangTruoc}"
@@ -738,30 +742,30 @@
 
       <!-- TOP 10 -->
       <StackPanel Spacing="8">
-        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+        <Grid x:Name="Top10SectionHeaderGrid" ColumnDefinitions="*,Auto" ColumnSpacing="12" RowSpacing="4">
           <StackPanel Spacing="2">
-            <TextBlock Text="Thống kê Top 10" Classes="tqSectionTitle" />
+            <TextBlock Text="Thống kê Top 10" Classes="tqSectionTitle" TextWrapping="Wrap" />
             <TextBlock Text="Bộ lọc xếp hạng chỉ áp dụng cho Top 10 hàng bán chạy; Top 10 khách hàng luôn xếp theo doanh thu."
               Classes="tqSectionSub" TextWrapping="Wrap" />
           </StackPanel>
-          <TextBlock Grid.Column="1" Text="{Binding ThoiGianHienThi}" Classes="tqMuted"
-            VerticalAlignment="Center" />
+          <TextBlock x:Name="Top10SectionPeriodText" Grid.Column="1" Text="{Binding ThoiGianHienThi}" Classes="tqMuted"
+            VerticalAlignment="Center" TextWrapping="Wrap" />
         </Grid>
 
-        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+        <Grid x:Name="Top10Grid" ColumnDefinitions="*,*" ColumnSpacing="12" RowSpacing="12">
           <!-- TOP 10 HÀNG -->
-          <Border Classes="tqCard" Padding="16">
+          <Border x:Name="TopProductsCard" Classes="tqCard" Padding="16">
             <StackPanel Spacing="8">
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+              <Grid x:Name="TopProductsHeaderGrid" ColumnDefinitions="*,Auto" ColumnSpacing="10" RowSpacing="6">
                 <StackPanel>
                   <TextBlock Text="TOP 10 HÀNG BÁN CHẠY" Classes="tqSectionTitle"
-                    TextTrimming="CharacterEllipsis" />
+                    TextWrapping="Wrap" />
                   <TextBlock Text="{Binding ThoiGianHienThi}" Classes="tqSectionSub"
-                    Margin="0,2,0,0" />
+                    Margin="0,2,0,0" TextWrapping="Wrap" />
                 </StackPanel>
 
                 <!-- Tùy chọn chỉ điều khiển Top 10 hàng nên đặt ngay trong tiêu đề khung -->
-                <WrapPanel Grid.Column="1" Orientation="Horizontal" ItemSpacing="6"
+                <WrapPanel x:Name="TopProductsFilterPanel" Grid.Column="1" Orientation="Horizontal" ItemSpacing="6"
                   LineSpacing="4" VerticalAlignment="Center" HorizontalAlignment="Right">
                   <TextBlock Text="Xếp hạng:" Classes="tqMuted" VerticalAlignment="Center" />
                   <RadioButton GroupName="tqXepTop10" Classes="tqChip"
@@ -779,8 +783,8 @@
 
               <Border Height="1" Background="#EEF4F2" />
 
-              <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto"
-                HorizontalScrollBarVisibility="Disabled">
+              <ScrollViewer MaxHeight="340" VerticalScrollBarVisibility="Auto"
+                HorizontalScrollBarVisibility="Disabled" Padding="0,0,6,0">
                 <ItemsControl ItemsSource="{Binding TopHangBanChay}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="models:TongQuanHangTop">
@@ -788,23 +792,28 @@
                         <StackPanel Spacing="5">
                           <Grid ColumnDefinitions="28,*,Auto" ColumnSpacing="8">
                             <Border Width="22" Height="22" CornerRadius="11"
-                              Background="#EAF9F5" VerticalAlignment="Center">
+                              Background="#EAF9F5" VerticalAlignment="Top" Margin="0,2,0,0">
                               <TextBlock Text="{Binding ThuTu}" FontSize="11"
                                 Foreground="#087F6E" FontWeight="SemiBold"
                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
 
-                            <TextBlock Grid.Column="1" Text="{Binding Ten}"
-                              FontWeight="SemiBold" Foreground="#263B35"
-                              VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding Ten}"
+                                FontWeight="SemiBold" Foreground="#263B35"
+                                TextWrapping="Wrap" LineHeight="18" />
+                              <TextBlock Text="{Binding TenPhu}" Classes="tqMuted"
+                                TextWrapping="Wrap"
+                                IsVisible="{Binding TenPhu, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            </StackPanel>
 
                             <StackPanel Grid.Column="2" Orientation="Horizontal"
-                              Spacing="14" VerticalAlignment="Center">
+                              Spacing="12" VerticalAlignment="Top" Margin="0,2,0,0">
                               <TextBlock Text="{Binding SoLuongHienThi}" Classes="tqMuted"
                                 VerticalAlignment="Center" />
                               <TextBlock Text="{Binding DoanhThuHienThi}" FontWeight="SemiBold"
-                                Foreground="#087F6E" MinWidth="96"
-                                HorizontalAlignment="Right" />
+                                Foreground="#087F6E" MinWidth="90"
+                                TextAlignment="Right" VerticalAlignment="Center" />
                             </StackPanel>
                           </Grid>
 
@@ -828,23 +837,23 @@
           </Border>
 
           <!-- TOP 10 KHÁCH HÀNG -->
-          <Border Grid.Column="1" Classes="tqCard" Padding="16">
+          <Border x:Name="TopCustomersCard" Grid.Column="1" Classes="tqCard" Padding="16">
             <StackPanel Spacing="8">
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+              <Grid x:Name="TopCustomersHeaderGrid" ColumnDefinitions="*,Auto" ColumnSpacing="10" RowSpacing="4">
                 <StackPanel>
                   <TextBlock Text="TOP 10 KHÁCH HÀNG" Classes="tqSectionTitle"
-                    TextTrimming="CharacterEllipsis" />
+                    TextWrapping="Wrap" />
                   <TextBlock Text="Khách hàng mua nhiều nhất theo doanh thu" Classes="tqSectionSub"
-                    Margin="0,2,0,0" />
+                    Margin="0,2,0,0" TextWrapping="Wrap" />
                 </StackPanel>
-                <TextBlock Grid.Column="1" Text="{Binding ThoiGianHienThi}" Classes="tqMuted"
-                  VerticalAlignment="Center" />
+                <TextBlock x:Name="TopCustomersPeriodText" Grid.Column="1" Text="{Binding ThoiGianHienThi}" Classes="tqMuted"
+                  VerticalAlignment="Center" TextWrapping="Wrap" />
               </Grid>
 
               <Border Height="1" Background="#EEF4F2" />
 
-              <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto"
-                HorizontalScrollBarVisibility="Disabled">
+              <ScrollViewer MaxHeight="340" VerticalScrollBarVisibility="Auto"
+                HorizontalScrollBarVisibility="Disabled" Padding="0,0,6,0">
                 <ItemsControl ItemsSource="{Binding TopKhachHang}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="models:TongQuanHangTop">
@@ -852,20 +861,25 @@
                         <StackPanel Spacing="5">
                           <Grid ColumnDefinitions="28,*,Auto" ColumnSpacing="8">
                             <Border Width="22" Height="22" CornerRadius="11"
-                              Background="#EAF9F5" VerticalAlignment="Center">
+                              Background="#EAF9F5" VerticalAlignment="Top" Margin="0,2,0,0">
                               <TextBlock Text="{Binding ThuTu}" FontSize="11"
                                 Foreground="#087F6E" FontWeight="SemiBold"
                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
 
-                            <TextBlock Grid.Column="1" Text="{Binding Ten}"
-                              FontWeight="SemiBold" Foreground="#263B35"
-                              VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding Ten}"
+                                FontWeight="SemiBold" Foreground="#263B35"
+                                TextWrapping="Wrap" LineHeight="18" />
+                              <TextBlock Text="{Binding TenPhu}" Classes="tqMuted"
+                                TextWrapping="Wrap"
+                                IsVisible="{Binding TenPhu, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            </StackPanel>
 
                             <TextBlock Grid.Column="2" Text="{Binding DoanhThuHienThi}"
                               FontWeight="SemiBold" Foreground="#087F6E"
-                              VerticalAlignment="Center" MinWidth="96"
-                              HorizontalAlignment="Right" />
+                              VerticalAlignment="Top" Margin="0,2,0,0" MinWidth="90"
+                              TextAlignment="Right" />
                           </Grid>
 
                           <Grid ColumnDefinitions="28,*">
@@ -895,36 +909,38 @@
       <Border Classes="tqCard" Padding="18" Margin="0,4,0,0" IsVisible="{Binding IsAdmin}">
         <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="12">
           <!-- HÀNG 1: TIÊU ĐỀ VÀ THÔNG TIN QUYỀN -->
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <Grid x:Name="ActivityHeaderGrid" ColumnDefinitions="*,Auto" ColumnSpacing="12" RowSpacing="8">
             <StackPanel Spacing="4">
-              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <TextBlock Text="NHẬT KÝ HOẠT ĐỘNG NHÂN VIÊN" Classes="tqSectionTitle" />
+              <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="4" VerticalAlignment="Center">
+                <TextBlock Text="NHẬT KÝ HOẠT ĐỘNG NHÂN VIÊN" Classes="tqSectionTitle" TextWrapping="Wrap" />
                 <Border Background="#FEF3C7" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
                   <TextBlock Text="DÀNH CHO QUẢN TRỊ VIÊN" FontSize="10" FontWeight="Bold" Foreground="#B45309" />
                 </Border>
-              </StackPanel>
+              </WrapPanel>
               <TextBlock Text="Theo dõi chi tiết các thao tác bán hàng, xuất nhập kho, thu chi và cập nhật từ đội ngũ nhân sự"
-                         Classes="tqSectionSub" />
+                         Classes="tqSectionSub" TextWrapping="Wrap" />
             </StackPanel>
 
             <!-- Tổng số hoạt động gần nhất -->
-            <Border Grid.Column="1" Classes="tqFilter" Padding="10,6" VerticalAlignment="Center">
+            <Border x:Name="ActivityHeaderCountBadge" Grid.Column="1" Classes="tqFilter" Padding="10,6" VerticalAlignment="Center" HorizontalAlignment="Right">
               <TextBlock Text="{Binding SoLuongHoatDongTaiKhoanCon, StringFormat='{}{0} hoạt động gần nhất'}"
                          FontSize="12" FontWeight="SemiBold" Foreground="#163F38" />
             </Border>
           </Grid>
 
           <!-- HÀNG 2: BỘ LỌC TÌM KIẾM, NHÂN VIÊN, HÀNH ĐỘNG, ĐẶT LẠI -->
-          <Grid Grid.Row="1" ColumnDefinitions="2*,1.2*,1.2*,Auto" ColumnSpacing="10">
+          <Grid x:Name="ActivityFilterGrid" Grid.Row="1" ColumnDefinitions="2*,1.2*,1.2*,Auto" ColumnSpacing="10" RowSpacing="8">
             <!-- Ô tìm kiếm -->
-            <TextBox Text="{Binding TimKiemHoatDongSub}"
+            <TextBox x:Name="ActivitySearchBox"
+                     Text="{Binding TimKiemHoatDongSub}"
                      Watermark="🔍 Tìm nhân viên, mã đơn, chứng từ, ghi chú..."
-                     CornerRadius="8" Padding="10,7" FontSize="12" Height="36"
+                     CornerRadius="8" Padding="10,7" FontSize="12" MinHeight="36"
                      VerticalContentAlignment="Center"
                      BorderBrush="#D8E5E0" BorderThickness="1" Background="#FFFFFF" />
 
             <!-- Lọc theo nhân viên -->
-            <ComboBox Grid.Column="1"
+            <ComboBox x:Name="ActivityUserCombo"
+                      Grid.Column="1"
                       Classes="tqCombo"
                       ItemsSource="{Binding DanhSachTaiKhoanCon}"
                       SelectedItem="{Binding LocTaiKhoanSub}"
@@ -932,13 +948,14 @@
                       PlaceholderText="Lọc theo nhân viên">
               <ComboBox.ItemTemplate>
                 <DataTemplate>
-                  <TextBlock Text="{Binding}" Foreground="#263B35" FontSize="12" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding}" Foreground="#263B35" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
 
             <!-- Lọc theo loại hành động -->
-            <ComboBox Grid.Column="2"
+            <ComboBox x:Name="ActivityActionCombo"
+                      Grid.Column="2"
                       Classes="tqCombo"
                       ItemsSource="{Binding DanhSachHanhDongCon}"
                       SelectedItem="{Binding LocHanhDongSub}"
@@ -946,13 +963,14 @@
                       PlaceholderText="Lọc theo nghiệp vụ">
               <ComboBox.ItemTemplate>
                 <DataTemplate>
-                  <TextBlock Text="{Binding}" Foreground="#263B35" FontSize="12" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding}" Foreground="#263B35" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
 
             <!-- Nút đặt lại bộ lọc -->
-            <Button Grid.Column="3"
+            <Button x:Name="ActivityResetButton"
+                    Grid.Column="3"
                     Command="{Binding XoaBoLocHoatDongSubCommand}"
                     Classes="toolbar-action"
                     Height="36"
@@ -971,49 +989,123 @@
 
           <!-- HÀNG 3: DANH SÁCH HOẠT ĐỘNG -->
           <Grid Grid.Row="3">
-            <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer MaxHeight="460" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,6,0">
               <ItemsControl ItemsSource="{Binding HoatDongTaiKhoanCon}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="models:TongQuanHoatDongTaiKhoanCon">
-                    <Border Classes="tqRow" Padding="0,10">
-                      <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12" VerticalAlignment="Center">
-                        <!-- Cột 1: Thông tin người thực hiện & Vai trò -->
-                        <StackPanel Width="170" VerticalAlignment="Center" Spacing="3">
-                          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <Border Width="24" Height="24" CornerRadius="12" Background="#EAF9F5" VerticalAlignment="Center">
-                              <TextBlock Text="👤" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Border Background="#FBFDFC"
+                            BorderBrush="#E3EEE9"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="14,11"
+                            Margin="0,0,0,8">
+                      <StackPanel Spacing="7">
+                        <!-- Dòng 1: Nhân viên | Loại hoạt động (+ Giá trị tiền) -->
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                          <Grid Grid.Column="0" ColumnDefinitions="Auto,*" ColumnSpacing="8" VerticalAlignment="Center">
+                            <Border Width="26" Height="26" CornerRadius="13" Background="#EAF9F5" VerticalAlignment="Top">
+                              <TextBlock Text="👤" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
-                            <TextBlock Text="{Binding TenDangNhap}" FontWeight="Bold" Foreground="#163F38" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                          </StackPanel>
-                          <StackPanel Orientation="Horizontal" Spacing="6" Margin="30,0,0,0">
-                            <Border Background="{Binding MauNenBadgeVaiTro}" CornerRadius="4" Padding="5,1">
-                              <TextBlock Text="{Binding VaiTroHienThi}" FontSize="10" FontWeight="SemiBold" Foreground="{Binding MauBadgeVaiTro}" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding NguoiThucHienHienThi}"
+                                       FontWeight="Bold"
+                                       Foreground="#163F38"
+                                       FontSize="13.5"
+                                       LineHeight="19"
+                                       TextWrapping="Wrap"
+                                       VerticalAlignment="Center" />
+                          </Grid>
+
+                          <WrapPanel Grid.Column="1"
+                                     Orientation="Horizontal"
+                                     ItemSpacing="6"
+                                     LineSpacing="4"
+                                     MaxWidth="340"
+                                     HorizontalAlignment="Right"
+                                     VerticalAlignment="Top">
+                            <Border Background="{Binding MauNenBadgeHanhDong}"
+                                    BorderBrush="{Binding MauVienBadgeHanhDong}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="8,3"
+                                    VerticalAlignment="Center">
+                              <TextBlock Text="{Binding HanhDong}"
+                                         FontWeight="Bold"
+                                         FontSize="11.5"
+                                         Foreground="{Binding MauBadgeHanhDong}"
+                                         TextWrapping="Wrap" />
                             </Border>
-                            <TextBlock Text="{Binding HoTen}" Classes="tqMuted" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                          </StackPanel>
-                        </StackPanel>
 
-                        <!-- Cột 2: Badge hành động & Nội dung chi tiết -->
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
-                          <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Border Background="{Binding MauNenBadgeHanhDong}" CornerRadius="4" Padding="6,2">
-                              <TextBlock Text="{Binding HanhDong}" FontWeight="Bold" FontSize="11" Foreground="{Binding MauBadgeHanhDong}" />
+                            <Border Background="#ECFDF5"
+                                    BorderBrush="#A7F3D0"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="8,3"
+                                    VerticalAlignment="Center"
+                                    IsVisible="{Binding CoGiaTri}">
+                              <TextBlock Text="{Binding GiaTriHienThi}"
+                                         FontWeight="Bold"
+                                         FontSize="12"
+                                         Foreground="#047857" />
                             </Border>
-                            <TextBlock Text="{Binding MaChungTu}" FontWeight="SemiBold" Foreground="#263B35" FontSize="12"
-                                       IsVisible="{Binding MaChungTu, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                          </WrapPanel>
+                        </Grid>
+
+                        <!-- Dòng 2: Vai trò nhân viên | Thời gian -->
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="34,0,0,0">
+                          <Border Grid.Column="0"
+                                  Background="{Binding MauNenBadgeVaiTro}"
+                                  CornerRadius="5"
+                                  Padding="7,2"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center">
+                            <TextBlock Text="{Binding VaiTroHienThi}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{Binding MauBadgeVaiTro}"
+                                       TextWrapping="Wrap" />
+                          </Border>
+
+                          <TextBlock Grid.Column="1"
+                                     Text="{Binding ThoiGianHienThi}"
+                                     Classes="tqMuted"
+                                     FontSize="11.5"
+                                     VerticalAlignment="Center"
+                                     HorizontalAlignment="Right" />
+                        </Grid>
+
+                        <!-- Dòng 3: Mã phiếu & Nội dung mô tả hoạt động -->
+                        <Border Margin="34,0,0,0"
+                                Background="#F3F7F5"
+                                BorderBrush="#E4EFEA"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="10,8"
+                                IsVisible="{Binding CoChiTietMoTa}">
+                          <StackPanel Spacing="6">
+                            <Border Background="#FFFFFF"
+                                    BorderBrush="#CFE0DA"
+                                    BorderThickness="1"
+                                    CornerRadius="5"
+                                    Padding="8,3"
+                                    HorizontalAlignment="Left"
+                                    IsVisible="{Binding CoMaChungTu}">
+                              <TextBlock Text="{Binding MaChungTuHienThi}"
+                                         FontSize="11.5"
+                                         FontWeight="SemiBold"
+                                         Foreground="#163F38"
+                                         TextWrapping="Wrap" />
+                            </Border>
+
+                            <TextBlock Text="{Binding NoiDung}"
+                                       Foreground="#263B35"
+                                       FontSize="12.5"
+                                       LineHeight="19"
+                                       TextWrapping="Wrap"
+                                       IsVisible="{Binding CoNoiDung}" />
                           </StackPanel>
-                          <TextBlock Text="{Binding NoiDung}" Foreground="#4B5D57" FontSize="12" TextWrapping="Wrap" />
-                        </StackPanel>
-
-                        <!-- Cột 3: Giá trị tiền giao dịch (nếu có) -->
-                        <TextBlock Grid.Column="2" Text="{Binding GiaTriHienThi}" FontWeight="Bold" FontSize="13"
-                                   Foreground="#087F6E" VerticalAlignment="Center" HorizontalAlignment="Right" MinWidth="90" TextAlignment="Right" />
-
-                        <!-- Cột 4: Thời gian thực hiện -->
-                        <StackPanel Grid.Column="3" Width="105" VerticalAlignment="Center" HorizontalAlignment="Right">
-                          <TextBlock Text="{Binding ThoiGianHienThi}" Classes="tqMuted" HorizontalAlignment="Right" />
-                        </StackPanel>
-                      </Grid>
+                        </Border>
+                      </StackPanel>
                     </Border>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>

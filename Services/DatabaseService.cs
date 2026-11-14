@@ -3758,16 +3758,34 @@ public sealed partial class DatabaseService
     {
         await EnsureBangLichSuThanhToanKhachHangAsync();
         await EnsurePhieuQuyCancelColumnsAsync();
+        await EnsureTraTruocSchemaAsync();
+
+        var coBangTraHang = await HasBangTraHangAsync();
+        var coCotKiotViet = await DamBaoCotDuLieuKiotVietAsync();
+        var tien = TaoBieuThucTienKhachHang(coBangTraHang, "kh.id", coCotKiotViet);
+
+        await using var connection = await OpenAsync();
+
+        // 1. Lấy công nợ hiện tại thực tế của khách hàng (A - Single Source of Truth)
+        var congNoHienTai = await connection.ExecuteScalarAsync<decimal?>(
+            $"""
+            SELECT {tien.NoHienTai}
+            FROM khach_hang kh
+            WHERE kh.id = @CustomerId
+            LIMIT 1;
+            """,
+            new { CustomerId = customerId }) ?? 0m;
+
+        // 2. Thống kê lịch sử giao dịch thanh toán trong kỳ lọc
         const string sql = """
         SELECT
             COUNT(*) AS TongSoGiaoDich,
             COALESCE(SUM(CASE WHEN ls.trang_thai <> 'HUY' THEN ls.so_tien ELSE 0 END), 0) AS TongTienDaThanhToan,
-            COALESCE((
+            (
                 SELECT first_record.cong_no_truoc
                 FROM lich_su_thanh_toan_cong_no_khach_hang first_record
                 LEFT JOIN nguoi_dung first_user ON first_user.id = first_record.nguoi_thuc_hien_id
                 WHERE first_record.khach_hang_id = @CustomerId
-                  AND first_record.trang_thai <> 'HUY'
                   AND (@TuNgay IS NULL OR first_record.thoi_gian >= @TuNgay)
                   AND (@DenNgayExclusive IS NULL OR first_record.thoi_gian < @DenNgayExclusive)
                   AND (@TuKhoa IS NULL OR (
@@ -3780,8 +3798,8 @@ public sealed partial class DatabaseService
                   ))
                 ORDER BY first_record.thoi_gian ASC, first_record.id ASC
                 LIMIT 1
-            ), 0) AS CongNoTruocThanhToan,
-            COALESCE((
+            ) AS CongNoTruocThanhToanRaw,
+            (
                 SELECT last_record.cong_no_sau
                 FROM lich_su_thanh_toan_cong_no_khach_hang last_record
                 LEFT JOIN nguoi_dung last_user ON last_user.id = last_record.nguoi_thuc_hien_id
@@ -3799,7 +3817,7 @@ public sealed partial class DatabaseService
                   ))
                 ORDER BY last_record.thoi_gian DESC, last_record.id DESC
                 LIMIT 1
-            ), 0) AS CongNoSauThanhToan
+            ) AS CongNoSauThanhToanRaw
         FROM lich_su_thanh_toan_cong_no_khach_hang ls
         LEFT JOIN nguoi_dung nd ON nd.id = ls.nguoi_thuc_hien_id
         WHERE ls.khach_hang_id = @CustomerId
@@ -3814,8 +3832,7 @@ public sealed partial class DatabaseService
               OR COALESCE(ls.ghi_chu, '') LIKE CONCAT('%', @TuKhoa, '%')
           ));
         """;
-        await using var connection = await OpenAsync();
-        return await connection.QueryFirstOrDefaultAsync<ThanhToanCongNoLichSuThongKe>(
+        var row = await connection.QueryFirstOrDefaultAsync<(int TongSoGiaoDich, decimal TongTienDaThanhToan, decimal? CongNoTruocThanhToanRaw, decimal? CongNoSauThanhToanRaw)>(
             sql,
             new
             {
@@ -3823,7 +3840,16 @@ public sealed partial class DatabaseService
                 TuNgay = tuNgay,
                 DenNgayExclusive = denNgayExclusive,
                 TuKhoa = string.IsNullOrWhiteSpace(tuKhoa) ? null : tuKhoa.Trim()
-            }) ?? new ThanhToanCongNoLichSuThongKe();
+            });
+
+        return new ThanhToanCongNoLichSuThongKe
+        {
+            TongSoGiaoDich = row.TongSoGiaoDich,
+            TongTienDaThanhToan = row.TongTienDaThanhToan,
+            CongNoTruocThanhToan = row.CongNoTruocThanhToanRaw ?? congNoHienTai,
+            CongNoSauThanhToan = row.CongNoSauThanhToanRaw ?? congNoHienTai,
+            CongNoHienTai = congNoHienTai
+        };
     }
 
     public async Task<uint> ThemKhachHangAsync(KhachHang customer)
@@ -6668,7 +6694,7 @@ public sealed partial class DatabaseService
                 "Thu nợ",
                 "KHACH_HANG",
                 khachHangId,
-                null,
+                maPhieuThu,
                 $"Thu nợ khách hàng {(tenKhach ?? khachHangId.ToString())}: {soTien:N0} đ",
                 soTien);
 
@@ -7791,16 +7817,46 @@ public sealed partial class DatabaseService
                 string? tuKhoa = null)
             {
                 await EnsureBangLichSuThanhToanNhaCungCapAsync();
+                await EnsureTraTruocSchemaAsync();
+
+                var coCotKiotViet = await DamBaoCotDuLieuKiotVietNhaCungCapAsync();
+                var tien = TaoBieuThucTienNhaCungCap("ncc.id", coCotKiotViet);
+
+                await using var connection = await OpenAsync();
+
+                // 1. Lấy công nợ hiện tại thực tế của nhà cung cấp (A - Single Source of Truth)
+                decimal congNoHienTai;
+                if (nhaCungCapId.HasValue && nhaCungCapId.Value > 0)
+                {
+                    congNoHienTai = await connection.ExecuteScalarAsync<decimal?>(
+                        $"""
+                        SELECT {tien.NoHienTai}
+                        FROM nha_cung_cap ncc
+                        WHERE ncc.id = @NhaCungCapId
+                        LIMIT 1;
+                        """,
+                        new { NhaCungCapId = nhaCungCapId.Value }) ?? 0m;
+                }
+                else
+                {
+                    congNoHienTai = await connection.ExecuteScalarAsync<decimal?>(
+                        $"""
+                        SELECT SUM({tien.NoHienTai})
+                        FROM nha_cung_cap ncc
+                        WHERE ncc.trang_thai = 1;
+                        """) ?? 0m;
+                }
+
+                // 2. Thống kê lịch sử giao dịch thanh toán trong kỳ lọc
                 const string sql = """
                 SELECT
                     COUNT(*) AS TongSoGiaoDich,
                     COALESCE(SUM(CASE WHEN ls.trang_thai <> 'HUY' THEN ls.so_tien ELSE 0 END), 0) AS TongTienDaThanhToan,
-                    COALESCE((
+                    (
                         SELECT first_record.cong_no_truoc
                         FROM lich_su_thanh_toan_cong_no_nha_cung_cap first_record
                         LEFT JOIN nguoi_dung first_user ON first_user.id = first_record.nguoi_thuc_hien_id
                         WHERE (@NhaCungCapId IS NULL OR first_record.nha_cung_cap_id = @NhaCungCapId)
-                          AND first_record.trang_thai <> 'HUY'
                           AND (@TuNgay IS NULL OR first_record.thoi_gian >= @TuNgay)
                           AND (@DenNgayExclusive IS NULL OR first_record.thoi_gian < @DenNgayExclusive)
                           AND (@TuKhoa IS NULL OR (
@@ -7816,8 +7872,8 @@ public sealed partial class DatabaseService
                           ))
                         ORDER BY first_record.thoi_gian ASC, first_record.id ASC
                         LIMIT 1
-                    ), 0) AS CongNoTruocThanhToan,
-                    COALESCE((
+                    ) AS CongNoTruocThanhToanRaw,
+                    (
                         SELECT last_record.cong_no_sau
                         FROM lich_su_thanh_toan_cong_no_nha_cung_cap last_record
                         LEFT JOIN nguoi_dung last_user ON last_user.id = last_record.nguoi_thuc_hien_id
@@ -7838,7 +7894,7 @@ public sealed partial class DatabaseService
                           ))
                         ORDER BY last_record.thoi_gian DESC, last_record.id DESC
                         LIMIT 1
-                    ), 0) AS CongNoSauThanhToan
+                    ) AS CongNoSauThanhToanRaw
                 FROM lich_su_thanh_toan_cong_no_nha_cung_cap ls
                 LEFT JOIN nguoi_dung nd ON nd.id = ls.nguoi_thuc_hien_id
                 WHERE (@NhaCungCapId IS NULL OR ls.nha_cung_cap_id = @NhaCungCapId)
@@ -7856,8 +7912,7 @@ public sealed partial class DatabaseService
                       OR COALESCE(ls.ghi_chu, '') LIKE CONCAT('%', @TuKhoa, '%')
                   ));
                 """;
-                await using var connection = await OpenAsync();
-                return await connection.QueryFirstOrDefaultAsync<ThanhToanCongNoLichSuThongKe>(
+                var row = await connection.QueryFirstOrDefaultAsync<(int TongSoGiaoDich, decimal TongTienDaThanhToan, decimal? CongNoTruocThanhToanRaw, decimal? CongNoSauThanhToanRaw)>(
                     sql,
                     new
                     {
@@ -7865,7 +7920,16 @@ public sealed partial class DatabaseService
                         TuNgay = tuNgay,
                         DenNgayExclusive = denNgayExclusive,
                         TuKhoa = string.IsNullOrWhiteSpace(tuKhoa) ? null : tuKhoa.Trim()
-                    }) ?? new ThanhToanCongNoLichSuThongKe();
+                    });
+
+                return new ThanhToanCongNoLichSuThongKe
+                {
+                    TongSoGiaoDich = row.TongSoGiaoDich,
+                    TongTienDaThanhToan = row.TongTienDaThanhToan,
+                    CongNoTruocThanhToan = row.CongNoTruocThanhToanRaw ?? congNoHienTai,
+                    CongNoSauThanhToan = row.CongNoSauThanhToanRaw ?? congNoHienTai,
+                    CongNoHienTai = congNoHienTai
+                };
             }
 
             public async Task<IReadOnlyList<PhanBoThanhToanNhaCungCap>> GetPhanBoThanhToanNhaCungCapAsync(

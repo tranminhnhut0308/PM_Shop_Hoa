@@ -82,7 +82,8 @@ public partial class LichSuThanhToanKhachHangWindow
             $"Tổng đã thanh toán: {summary.TongTienDaThanhToan:N0} đ"
             + $" | Tổng số giao dịch: {summary.TongSoGiaoDich:N0}"
             + $" | Công nợ trước: {summary.CongNoTruocThanhToan:N0} đ"
-            + $" | Công nợ sau: {summary.CongNoSauThanhToan:N0} đ";
+            + $" | Công nợ sau: {summary.CongNoSauThanhToan:N0} đ"
+            + $" | Công nợ hiện tại: {summary.CongNoHienTai:N0} đ";
 
         var headers = LayTieuDeBaoCao();
         for (var index = 0; index < headers.Length; index++)

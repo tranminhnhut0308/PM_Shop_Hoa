@@ -375,7 +375,7 @@ public sealed partial class DatabaseService
                     "Hủy thu nợ",
                     "KHACH_HANG",
                     record.KhachHangId,
-                    null,
+                    record.MaGiaoDich,
                     $"Hủy phiếu thu nợ {record.MaGiaoDich} của khách hàng {tenKhachHang}: {record.SoTien:N0} đ. Lý do: {lyDoHuy.Trim()}",
                     record.SoTien);
 

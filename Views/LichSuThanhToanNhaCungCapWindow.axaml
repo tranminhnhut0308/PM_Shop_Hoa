@@ -122,7 +122,7 @@
             </Grid>
 
             <!-- CHỈ SỐ TỔNG KẾT -->
-            <Grid Grid.Row="3" ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
+            <Grid Grid.Row="3" ColumnDefinitions="*,*,*,*,*" ColumnSpacing="10">
                 <Border Background="#F0F9F6" BorderBrush="#D8EDE6" BorderThickness="1" CornerRadius="9" Padding="12,9">
                     <StackPanel><TextBlock Text="TỔNG SỐ GIAO DỊCH" FontSize="11" Foreground="#61736E" />
                         <TextBlock x:Name="TxtTongGiaoDich" Margin="0,3" FontSize="18" FontWeight="Bold" Foreground="#163F38" /></StackPanel>
@@ -138,6 +138,10 @@
                 <Border Grid.Column="3" Background="#FFFBEB" BorderBrush="#F5E9C8" BorderThickness="1" CornerRadius="9" Padding="12,9">
                     <StackPanel><TextBlock Text="CÔNG NỢ SAU THANH TOÁN" FontSize="11" Foreground="#61736E" />
                         <TextBlock x:Name="TxtCongNoSau" Margin="0,3" FontSize="18" FontWeight="Bold" Foreground="#8A5A00" /></StackPanel>
+                </Border>
+                <Border Grid.Column="4" Background="#FEF3F2" BorderBrush="#FECDCA" BorderThickness="1" CornerRadius="9" Padding="12,9">
+                    <StackPanel><TextBlock Text="CÔNG NỢ HIỆN TẠI" FontSize="11" Foreground="#61736E" />
+                        <TextBlock x:Name="TxtCongNoHienTai" Margin="0,3" FontSize="18" FontWeight="Bold" Foreground="#B42318" /></StackPanel>
                 </Border>
             </Grid>
 
