@@ -261,7 +261,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            _saleSearchCts?.Cancel();
+            HuyTimKiemHoaBan();
             IsSearchingSaleProducts = false;
             ProductSearchResults.Clear();
             _saleSearchKeywordDaTim = string.Empty;
@@ -3714,12 +3714,31 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
 
+    private void HuyTimKiemHoaBan()
+    {
+        var oldCts = Interlocked.Exchange(ref _saleSearchCts, null);
+        if (oldCts is null)
+            return;
+
+        try
+        {
+            if (!oldCts.IsCancellationRequested)
+            {
+                oldCts.Cancel();
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // Bỏ qua nếu token source đã bị dispose từ trước
+        }
+    }
+
     private async Task ThucHienTimKiemHoaBanAsync(string? keyword, int debounceMs)
     {
         var seq = ++_saleSearchSeq;
 
-        _saleSearchCts?.Cancel();
-        _saleSearchCts?.Dispose();
+        // Hủy an toàn lượt tìm kiếm trước đó nếu còn đang chạy dở
+        HuyTimKiemHoaBan();
 
         var search = (keyword ?? SaleSearchText ?? "").Trim();
         if (string.IsNullOrWhiteSpace(search))
@@ -3735,31 +3754,32 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         _saleSearchCts = cts;
+        var token = cts.Token;
 
         try
         {
             if (debounceMs > 0)
             {
-                await Task.Delay(debounceMs, cts.Token);
-                if (cts.Token.IsCancellationRequested || seq != _saleSearchSeq)
+                await Task.Delay(debounceMs, token);
+                if (token.IsCancellationRequested || seq != _saleSearchSeq)
                     return;
             }
 
             IsSearchingSaleProducts = true;
             OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayBanHang));
 
-            var products = await LaySanPhamChoBanHangAsync(search, cts.Token);
+            var products = await LaySanPhamChoBanHangAsync(search, token);
 
-            if (cts.Token.IsCancellationRequested || seq != _saleSearchSeq)
+            if (token.IsCancellationRequested || seq != _saleSearchSeq)
                 return;
 
             ApDungKetQuaTimKiemBanHang(products, search);
         }
         catch (OperationCanceledException)
         {
-            // Bị hủy do người dùng tiếp tục gõ từ khóa mới
+            // Bị hủy an toàn do người dùng tiếp tục gõ từ khóa mới hoặc đổi từ khóa
         }
         catch (Exception ex)
         {
@@ -3773,6 +3793,9 @@ public partial class MainWindowViewModel : ObservableObject
                 IsSearchingSaleProducts = false;
                 OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayBanHang));
             }
+
+            // Giải phóng tham chiếu tới CTS này nếu nó vẫn là CTS đang kích hoạt
+            Interlocked.CompareExchange(ref _saleSearchCts, null, cts);
         }
     }
 
@@ -3874,7 +3897,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     public void HuyTimKiemBanHang()
     {
-        _saleSearchCts?.Cancel();
+        HuyTimKiemHoaBan();
     }
 
 
