@@ -4713,7 +4713,7 @@
                 -->
                 <Border Padding="16,14,29,14" BorderBrush="#E2ECE8" BorderThickness="0,0,0,1"
                   Background="#F1F8F5">
-                  <Grid ColumnDefinitions="110,*,140,150,*,130,140,40" ColumnSpacing="10">
+                  <Grid ColumnDefinitions="95,2*,115,125,*,115,125,35" ColumnSpacing="10">
 
                     <TextBlock Grid.Column="0" Text="MÃ NCC" FontWeight="SemiBold"
                       Foreground="#164B40" FontSize="12" VerticalAlignment="Center" />
@@ -4775,37 +4775,45 @@
                         <StackPanel>
 
                           <!-- DÒNG CHÍNH -->
-                          <Grid ColumnDefinitions="110,*,140,150,*,130,140,40"
-                            ColumnSpacing="10" Height="54" Margin="16,0,16,0">
+                          <Grid ColumnDefinitions="95,2*,115,125,*,115,125,35"
+                            ColumnSpacing="10" Height="54" Margin="16,0,16,0" ClipToBounds="True">
 
                             <TextBlock Grid.Column="0" Text="{Binding MaNhaCungCap}"
                               FontSize="12" Foreground="#667A74" VerticalAlignment="Center"
-                              TextTrimming="CharacterEllipsis" />
+                              TextTrimming="CharacterEllipsis"
+                              ToolTip.Tip="{Binding MaNhaCungCap}" />
 
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="9"
-                              VerticalAlignment="Center">
-                              <Border Width="30" Height="30" CornerRadius="15"
+                            <Grid Grid.Column="1" ColumnDefinitions="Auto,*" ColumnSpacing="9"
+                              VerticalAlignment="Center" ClipToBounds="True">
+                              <Border Grid.Column="0" Width="30" Height="30" CornerRadius="15"
                                 Background="#E3F2ED" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding ChuCaiDau}" FontSize="12"
                                   FontWeight="Bold" Foreground="#087F6E"
                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
                               </Border>
-                              <TextBlock Text="{Binding TenNhaCungCap}" FontSize="13"
+                              <TextBlock Grid.Column="1" Text="{Binding TenNhaCungCap}" FontSize="13"
                                 FontWeight="SemiBold" Foreground="#163F38"
-                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
+                                VerticalAlignment="Center"
+                                TextWrapping="Wrap"
+                                MaxHeight="36"
+                                TextTrimming="CharacterEllipsis"
+                                ToolTip.Tip="{Binding TenNhaCungCap}" />
+                            </Grid>
 
                             <TextBlock Grid.Column="2" Text="{Binding SoDienThoai}"
                               FontSize="12" Foreground="#344B45" VerticalAlignment="Center"
-                              TextTrimming="CharacterEllipsis" />
+                              TextTrimming="CharacterEllipsis"
+                              ToolTip.Tip="{Binding SoDienThoai}" />
 
                             <TextBlock Grid.Column="3" Text="{Binding Email}" FontSize="12"
                               Foreground="#344B45" VerticalAlignment="Center"
-                              TextTrimming="CharacterEllipsis" />
+                              TextTrimming="CharacterEllipsis"
+                              ToolTip.Tip="{Binding Email}" />
 
                             <TextBlock Grid.Column="4" Text="{Binding DiaChi}" FontSize="12"
                               Foreground="#52645E" VerticalAlignment="Center"
-                              TextTrimming="CharacterEllipsis" />
+                              TextTrimming="CharacterEllipsis"
+                              ToolTip.Tip="{Binding DiaChi}" />
 
                             <TextBlock Grid.Column="5" Text="{Binding TongMuaText}"
                               FontSize="12" Foreground="#344B45" VerticalAlignment="Center"
