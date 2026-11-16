@@ -293,7 +293,7 @@
 
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
             VerticalAlignment="Center">
-            <TextBox Classes="bcInput" Width="260" VerticalAlignment="Center"
+            <TextBox Classes="bcInput searchInput" Width="260" VerticalAlignment="Center"
               Watermark="Tìm theo mã, tên, số điện thoại"
               Text="{Binding TimKiem, Mode=TwoWay}" />
             <TextBlock Classes="bcMuted" VerticalAlignment="Center"
@@ -738,7 +738,7 @@
               <TextBlock Classes="bcSectionTitle" Text="{Binding ChiTietTieuDe}" />
               <TextBlock Classes="bcSectionSub" Text="{Binding ChiTietPhuDe}" />
             </StackPanel>
-            <TextBox Grid.Column="1" Classes="bcInput" Width="220" VerticalAlignment="Center"
+            <TextBox Grid.Column="1" Classes="bcInput searchInput" Width="220" VerticalAlignment="Center"
               Watermark="Tìm mã phiếu nhập"
               Text="{Binding ChiTietSearch, Mode=TwoWay}" />
             <Button Grid.Column="2" Classes="bcBtn" Content="Đóng"

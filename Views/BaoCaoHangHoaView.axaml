@@ -637,7 +637,7 @@
                   <TextBlock Classes="bcSectionSub" TextWrapping="Wrap"
                     Text="Bấm tiêu đề cột để sắp xếp; STT tính liên tục giữa các trang." />
                 </StackPanel>
-                <TextBox Grid.Column="1" Classes="flInput" Width="230"
+                <TextBox Grid.Column="1" Classes="flInput searchInput" Width="230"
                   Watermark="Tìm trong bảng…"
                   Text="{Binding TimKiemBang, Mode=TwoWay}"
                   VerticalAlignment="Center" />

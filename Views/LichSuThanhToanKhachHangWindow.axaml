@@ -124,9 +124,11 @@
                 <TextBlock Text="⌕" FontSize="22" Foreground="#087F6E"
                     VerticalAlignment="Center" />
                 <TextBox x:Name="TimKiemBox" Grid.Column="1"
+                    Classes="searchInput"
                     Watermark="Tìm mã giao dịch, mã tham chiếu, phương thức, người thực hiện, ghi chú..."
                     VerticalContentAlignment="Center" Height="42"
-                    KeyDown="OnSearchKeyDown" />
+                    KeyDown="OnSearchKeyDown"
+                    TextChanged="OnTimKiemTextChanged" />
                 <Button Grid.Column="2" Content="Lọc dữ liệu" Padding="16,8"
                     Background="#087F6E" Foreground="White" CornerRadius="8"
                     Click="OnFilterClick" />

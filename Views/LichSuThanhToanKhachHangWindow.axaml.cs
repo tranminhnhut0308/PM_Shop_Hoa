@@ -292,6 +292,16 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         e.Handled = true;
     }
 
+    private async void OnTimKiemTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(TimKiemBox.Text) && !string.IsNullOrEmpty(_appliedKeyword))
+        {
+            _appliedKeyword = "";
+            _currentPage = 1;
+            await NapDuLieuAsync();
+        }
+    }
+
     private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         var selected = LichSuGrid.SelectedItem as ThanhToanCongNoKhachHang;

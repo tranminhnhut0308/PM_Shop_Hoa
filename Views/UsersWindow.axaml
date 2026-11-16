@@ -72,7 +72,8 @@
       <!-- 2. Search & Action Toolbar -->
       <Border Grid.Row="1" Background="White" CornerRadius="8" BorderBrush="#E2E8F0" BorderThickness="1" Padding="12" Margin="0,0,0,16">
         <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
-          <TextBox Watermark="Tìm kiếm theo tài khoản, họ tên..." 
+          <TextBox Classes="searchInput"
+                   Watermark="Tìm kiếm theo tài khoản, họ tên..." 
                    Text="{Binding SearchText}" 
                    Height="38"
                    CornerRadius="6"

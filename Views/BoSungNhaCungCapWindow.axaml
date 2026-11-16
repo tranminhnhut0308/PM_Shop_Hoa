@@ -128,6 +128,7 @@
                 <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="6">
                     <TextBox Grid.Column="0"
                         x:Name="TxtSearch"
+                        Classes="searchInput"
                         Watermark="Nhập tên, mã hoặc SĐT nhà cung cấp..."
                         Padding="10,8"
                         FontSize="13" />

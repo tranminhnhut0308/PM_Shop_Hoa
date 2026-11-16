@@ -12,6 +12,12 @@
             <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial" />
             <Setter Property="helpers:WindowsImeTextInputFix.Enabled" Value="True" />
         </Style>
+        <Style Selector="TextBox.searchInput">
+            <Setter Property="helpers:SearchBoxHelper.IsSearchBox" Value="True" />
+        </Style>
+        <Style Selector="TextBox.searchBox">
+            <Setter Property="helpers:SearchBoxHelper.IsSearchBox" Value="True" />
+        </Style>
     </Application.Styles>
 
 </Application>

@@ -2006,6 +2006,7 @@
             <Grid Grid.Column="0">
               <Border CornerRadius="8" BorderBrush="#D8E5E0" BorderThickness="1">
                 <TextBox x:Name="SaleSearchBox"
+                         Classes="searchInput"
                          Watermark="🔍 Tìm tên, mã hoa, mã vạch..."
                          Text="{Binding SaleSearchText, Mode=TwoWay}"
                          Padding="10,7"
@@ -2232,6 +2233,7 @@
               <TextBlock Text="Khách hàng" Foreground="#61736E" FontSize="11.5" FontWeight="SemiBold" />
 
               <TextBox x:Name="SaleCustomerSearchBox"
+                       Classes="searchInput"
                        Text="{Binding SaleCustomerName, Mode=TwoWay}"
                        Watermark="Tìm khách hàng..."
                        FontSize="12"
@@ -6171,6 +6173,7 @@
                         ColumnSpacing="6">
 
                         <TextBox Name="PhieuNhapNccSearchBox"
+                          Classes="searchInput"
                           Text="{Binding ImportSupplierSearch, Mode=TwoWay}"
                           Watermark="Tìm nhà cung cấp (hoặc để trống)..."
                           TextChanged="OnImportSupplierSearchTextChanged"

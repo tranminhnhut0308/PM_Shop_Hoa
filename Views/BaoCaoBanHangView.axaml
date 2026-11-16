@@ -676,7 +676,7 @@
               <TextBlock Classes="bcSectionTitle" Text="Chi tiết hóa đơn trong ngày" />
               <TextBlock Classes="bcSectionSub" Text="{Binding NgayChiTietHienThi}" />
             </StackPanel>
-            <TextBox Grid.Column="1" Width="230" VerticalAlignment="Center"
+            <TextBox Grid.Column="1" Classes="searchInput" Width="230" VerticalAlignment="Center"
               Watermark="Tìm mã hóa đơn / khách hàng"
               Text="{Binding ChiTietSearch, Mode=TwoWay}" />
             <Button Grid.Column="2" Classes="bcBtn" Content="Đóng"

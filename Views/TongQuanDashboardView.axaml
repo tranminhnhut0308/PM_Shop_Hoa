@@ -932,6 +932,7 @@
           <Grid x:Name="ActivityFilterGrid" Grid.Row="1" ColumnDefinitions="2*,1.2*,1.2*,Auto" ColumnSpacing="10" RowSpacing="8">
             <!-- Ô tìm kiếm -->
             <TextBox x:Name="ActivitySearchBox"
+                     Classes="searchInput"
                      Text="{Binding TimKiemHoatDongSub}"
                      Watermark="🔍 Tìm mã phiếu, nhân viên, nội dung, giá trị cũ/mới..."
                      CornerRadius="8" Padding="10,7" FontSize="12" MinHeight="36"

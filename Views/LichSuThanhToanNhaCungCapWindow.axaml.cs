@@ -352,6 +352,15 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
         e.Handled = true;
     }
 
+    private void OnTimKiemTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(TimKiemBox.Text) && !string.IsNullOrEmpty(_appliedKeyword))
+        {
+            _appliedKeyword = "";
+            OnFilterClick(sender, new RoutedEventArgs());
+        }
+    }
+
     private void OnDateChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (_updatingDateRange)

@@ -108,8 +108,10 @@
                     FirstDayOfWeek="Monday" Watermark="DD/MM/YYYY"
                     SelectedDateChanged="OnDateChanged" />
                 <TextBox x:Name="TimKiemBox" Grid.Row="1" Grid.Column="3"
+                    Classes="searchInput"
                     Watermark="Mã giao dịch, tham chiếu, phương thức, người thực hiện, ghi chú..."
-                    VerticalContentAlignment="Center" Height="38" KeyDown="OnSearchKeyDown" />
+                    VerticalContentAlignment="Center" Height="38" KeyDown="OnSearchKeyDown"
+                    TextChanged="OnTimKiemTextChanged" />
                 <StackPanel Grid.Row="1" Grid.Column="4" Orientation="Horizontal" Spacing="8">
                     <Button Content="Lọc" Padding="15,8" Background="#087F6E"
                         Foreground="White" CornerRadius="6" Click="OnFilterClick" />
