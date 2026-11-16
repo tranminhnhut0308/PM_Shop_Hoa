@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using ShopHoa.Helpers;
 using ShopHoa.Models;
 using ShopHoa.Services;
@@ -64,6 +66,9 @@ public partial class ProductEditorWindow : Window
         DonViTinhComboBox.ItemsSource = _unitsList;
 
         ApCheQuyenTungTruong();
+
+        CaiDatOThongKeSo(TonKhoTextBox);
+        CaiDatOThongKeSo(KhachDatTextBox);
 
         Title = _isNew ? "Thêm sản phẩm" : (_cheDoXem ? "Chi tiết sản phẩm" : "Sửa sản phẩm");
         LoadProduct();
@@ -253,9 +258,41 @@ public partial class ProductEditorWindow : Window
         return options.FirstOrDefault(option => option.Id == id.Value);
     }
 
+    private static void CaiDatOThongKeSo(TextBox tb)
+    {
+        tb.GotFocus += (s, e) => Dispatcher.UIThread.Post(() => {
+            if (!string.IsNullOrEmpty(tb.Text)) tb.SelectAll();
+        }, DispatcherPriority.Input);
+        tb.AddHandler(InputElement.PointerReleasedEvent, (s, e) => {
+            if (e.InitialPressMouseButton == MouseButton.Left)
+                Dispatcher.UIThread.Post(() => {
+                    if (!string.IsNullOrEmpty(tb.Text)) tb.SelectAll();
+                }, DispatcherPriority.Input);
+        }, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
+        tb.TextChanged += (s, e) => {
+            if (tb.Tag is bool updating && updating) return;
+            var src = tb.Text ?? "";
+            if (MoneyInput.TryFormatEditingText(src, tb.CaretIndex, 999999999, out var formatted, out var caret))
+            {
+                tb.Tag = true;
+                try
+                {
+                    if (tb.Text != formatted)
+                        tb.Text = formatted;
+                    tb.CaretIndex = caret;
+                }
+                finally
+                {
+                    tb.Tag = false;
+                }
+            }
+        };
+    }
+
     private static bool TryReadDecimal(string? value, out decimal result)
     {
-        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out result) ||
+        return MoneyInput.TryParse(value, false, out result, out _) ||
+               decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out result) ||
                decimal.TryParse(value, NumberStyles.Number, CultureInfo.CurrentCulture, out result);
     }
 

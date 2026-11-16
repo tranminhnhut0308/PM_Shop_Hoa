@@ -3,6 +3,8 @@ using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
 
 namespace ShopHoa.Views;
@@ -10,10 +12,42 @@ namespace ShopHoa.Views;
 public partial class ChinhSoLuongNhanhWindow : Window
 {
     public KetQuaChinhSoLuong? KetQua { get; private set; }
+    private bool _updatingSoLuong;
 
     public ChinhSoLuongNhanhWindow()
     {
         InitializeComponent();
+
+        SoLuongTextBox.GotFocus += (s, e) => Dispatcher.UIThread.Post(() => {
+            if (!string.IsNullOrEmpty(SoLuongTextBox.Text)) SoLuongTextBox.SelectAll();
+        }, DispatcherPriority.Input);
+        SoLuongTextBox.AddHandler(InputElement.PointerReleasedEvent, (s, e) => {
+            if (e.InitialPressMouseButton == MouseButton.Left)
+                Dispatcher.UIThread.Post(() => {
+                    if (!string.IsNullOrEmpty(SoLuongTextBox.Text)) SoLuongTextBox.SelectAll();
+                }, DispatcherPriority.Input);
+        }, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
+        SoLuongTextBox.TextChanged += SoLuongTextBox_TextChanged;
+    }
+
+    private void SoLuongTextBox_TextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_updatingSoLuong) return;
+        var src = SoLuongTextBox.Text ?? "";
+        if (MoneyInput.TryFormatEditingText(src, SoLuongTextBox.CaretIndex, 999999, out var formatted, out var caret))
+        {
+            _updatingSoLuong = true;
+            try
+            {
+                if (SoLuongTextBox.Text != formatted)
+                    SoLuongTextBox.Text = formatted;
+                SoLuongTextBox.CaretIndex = caret;
+            }
+            finally
+            {
+                _updatingSoLuong = false;
+            }
+        }
     }
 
     public ChinhSoLuongNhanhWindow(SanPham product) : this()

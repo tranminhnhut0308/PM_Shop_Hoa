@@ -5619,7 +5619,7 @@
                       <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6"
                                   IsVisible="{Binding HienThiThongBaoKhongTimThayNhapHang}">
                         <TextBlock Text="🔍" FontSize="26" HorizontalAlignment="Center" Opacity="0.5" />
-                        <TextBlock Text="Không tìm thấy sản phẩm"
+                        <TextBlock Text="Không tìm thấy sản phẩm phù hợp"
                                    Foreground="#718096" FontWeight="SemiBold" FontSize="13"
                                    HorizontalAlignment="Center" />
                       </StackPanel>
@@ -5627,6 +5627,7 @@
                       <!-- ListBox sản phẩm -->
                       <ListBox ItemsSource="{Binding PhieuNhapProductSuggestions}"
                                SelectedIndex="{Binding PhieuNhapSearchSelectedIndex, Mode=TwoWay}"
+                               IsVisible="{Binding HienThiGoiYPhieuNhap}"
                                Focusable="False"
                                SelectionChanged="OnImportSearchResultSelectionChanged"
                                Background="Transparent"

@@ -38,6 +38,30 @@ public partial class MainWindow : Window
 
         AddHandler(KeyDownEvent, OnGlobalKeyDown, RoutingStrategies.Tunnel);
 
+        AddHandler(InputElement.PointerReleasedEvent, (sender, e) =>
+        {
+            if (e.InitialPressMouseButton == MouseButton.Left && e.Source is TextBox tb && tb.Classes.Contains("cartQuantityBox"))
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (!string.IsNullOrEmpty(tb.Text))
+                        tb.SelectAll();
+                }, Avalonia.Threading.DispatcherPriority.Input);
+            }
+        }, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
+
+        AddHandler(InputElement.GotFocusEvent, (sender, e) =>
+        {
+            if (e.Source is TextBox tb && tb.Classes.Contains("cartQuantityBox"))
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (!string.IsNullOrEmpty(tb.Text))
+                        tb.SelectAll();
+                }, Avalonia.Threading.DispatcherPriority.Input);
+            }
+        }, RoutingStrategies.Bubble);
+
         viewModel.PropertyChanged += (sender, e) =>
         {
             if (e.PropertyName == nameof(MainWindowViewModel.IsSalesPanelVisible))
@@ -1831,7 +1855,8 @@ public partial class MainWindow : Window
 
         var rawText = (tb.Text ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(rawText)
-            || (!decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out var soLuong)
+            || (!MoneyInput.TryParse(rawText, false, out var soLuong, out _)
+                && !decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out soLuong)
                 && !decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.CurrentCulture, out soLuong)))
         {
             viewModel.StatusMessage = "⚠️ Số lượng không đúng định dạng số.";
@@ -1877,7 +1902,8 @@ public partial class MainWindow : Window
             return;
 
         var rawText = (tb.Text ?? string.Empty).Trim();
-        if (decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
+        if (MoneyInput.TryParse(rawText, false, out var parsed, out _)
+            || decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out parsed)
             || decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.CurrentCulture, out parsed))
         {
             if (parsed > 0 && parsed <= item.SanPham.TonKho)
@@ -1918,7 +1944,8 @@ public partial class MainWindow : Window
 
         var rawText = (tb.Text ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(rawText)
-            || (!decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out var soLuong)
+            || (!MoneyInput.TryParse(rawText, false, out var soLuong, out _)
+                && !decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out soLuong)
                 && !decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.CurrentCulture, out soLuong)))
         {
             viewModel.StatusMessage = "⚠️ Số lượng nhập không đúng định dạng số.";
@@ -1957,7 +1984,8 @@ public partial class MainWindow : Window
             return;
 
         var rawText = (tb.Text ?? string.Empty).Trim();
-        if (decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
+        if (MoneyInput.TryParse(rawText, false, out var parsed, out _)
+            || decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out parsed)
             || decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.CurrentCulture, out parsed))
         {
             if (parsed > 0)

@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using ShopHoa.Helpers;
 
 namespace ShopHoa.Controls;
@@ -11,6 +13,7 @@ namespace ShopHoa.Controls;
 ///   số nguyên thì không hiện ".00".
 /// - Khi nhập vẫn giữ dấu phân cách và cập nhật số tiền, đồng thời giữ vị trí con trỏ.
 /// - Nội dung trống được giữ trống khi người dùng đang sửa.
+/// - Khi click vào ô hoặc nhận focus: tự động bôi đen toàn bộ (Select All) để nhập số mới nhanh chóng.
 /// </summary>
 public partial class MoneyTextBox : UserControl
 {
@@ -79,6 +82,8 @@ public partial class MoneyTextBox : UserControl
         Input.GotFocus += OnInputGotFocus;
         Input.LostFocus += OnInputLostFocus;
         Input.TextChanged += OnInputTextChanged;
+        Input.AddHandler(InputElement.PointerPressedEvent, OnInputPointerPressed, RoutingStrategies.Tunnel);
+        Input.AddHandler(InputElement.PointerReleasedEvent, OnInputPointerReleased, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
         Input.IsReadOnly = IsReadOnly;
 
         SyncFromValue();
@@ -87,17 +92,40 @@ public partial class MoneyTextBox : UserControl
     public void FocusInput()
     {
         Input.Focus();
-        if (Value == 0 && Input.Text == "0")
-            Input.SelectAll();
-        else
-            Input.CaretIndex = Input.Text?.Length ?? 0;
+        SelectAllWhenHasContent();
+    }
+
+    private void OnInputPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(Input).Properties.IsLeftButtonPressed)
+        {
+            SelectAllWhenHasContent();
+        }
+    }
+
+    private void OnInputPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (e.InitialPressMouseButton == MouseButton.Left)
+        {
+            SelectAllWhenHasContent();
+        }
     }
 
     private void OnInputGotFocus(object? sender, RoutedEventArgs e)
     {
         _hasFocus = true;
-        if (Value == 0 && Input.Text == "0")
-            Input.SelectAll();
+        SelectAllWhenHasContent();
+    }
+
+    private void SelectAllWhenHasContent()
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (Input is not null && !string.IsNullOrEmpty(Input.Text))
+            {
+                Input.SelectAll();
+            }
+        }, DispatcherPriority.Input);
     }
 
     private void OnInputLostFocus(object? sender, RoutedEventArgs e)

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -184,11 +184,14 @@ public sealed partial class MainWindowViewModel
         try
         {
             danhSachSanPham = await _db.GetSanPhamAsync();
+            SaleSearchText = string.Empty;
             _saleSearchKeywordDaTim = string.Empty;
             IsSaleSearchResultsClosed = false;
             ProductSearchResults.Clear();
-            foreach (var sp in danhSachSanPham)
-                ProductSearchResults.Add(sp);
+            SaleSearchSelectedIndex = -1;
+            OnPropertyChanged(nameof(IsSaleSearchEmpty));
+            OnPropertyChanged(nameof(HienThiKetQuaTimKiemBanHang));
+            OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayBanHang));
         }
         catch (Exception ex)
         {

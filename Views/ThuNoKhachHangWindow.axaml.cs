@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Globalization;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using ShopHoa.Models;
 
 namespace ShopHoa.Views;
@@ -69,6 +71,15 @@ public partial class ThuNoKhachHangWindow : Window
         // Không điền sẵn số tiền
         TxtSoTienThu.Text = "";
         TxtSoTienThu.TextChanged += TxtSoTienThu_TextChanged;
+        TxtSoTienThu.GotFocus += (s, e) => Dispatcher.UIThread.Post(() => {
+            if (!string.IsNullOrEmpty(TxtSoTienThu.Text)) TxtSoTienThu.SelectAll();
+        }, DispatcherPriority.Input);
+        TxtSoTienThu.AddHandler(InputElement.PointerReleasedEvent, (s, e) => {
+            if (e.InitialPressMouseButton == MouseButton.Left)
+                Dispatcher.UIThread.Post(() => {
+                    if (!string.IsNullOrEmpty(TxtSoTienThu.Text)) TxtSoTienThu.SelectAll();
+                }, DispatcherPriority.Input);
+        }, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
 
         NgayThanhToanPicker.SelectedDate = DateTimeOffset.Now.Date;
         GioThanhToanBox.Text = DateTime.Now.ToString("HH:mm", CultureInfo.InvariantCulture);

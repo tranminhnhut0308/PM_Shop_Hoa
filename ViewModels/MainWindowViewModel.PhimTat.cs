@@ -117,7 +117,10 @@ public sealed partial class MainWindowViewModel
                 if (IsNhapHangFormVisible)
                 {
                     await LoadPhieuNhapDonViTinhOptionsAsync();
-                    await LoadPhieuNhapProductSuggestionsAsync();
+                    if (!string.IsNullOrWhiteSpace(ImportProductSearch))
+                    {
+                        await LoadPhieuNhapProductSuggestionsAsync();
+                    }
                     StatusMessage = "Đã làm mới dữ liệu gợi ý của phiếu nhập.";
                 }
                 else
