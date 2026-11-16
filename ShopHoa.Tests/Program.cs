@@ -220,6 +220,23 @@ internal class Program
             return await KiemTraIssue115_LichSuThanhToanCongNoAsync(csb.ConnectionString);
         }
 
+        if (args.Contains("--verify-issue-122", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue122_HuyPhieuThanhToanCongNoAsync(csb.ConnectionString);
+        }
+
         if (args.Contains("--verify-issue-116", StringComparer.OrdinalIgnoreCase))
         {
             var configService = new DatabaseConfigService();
@@ -4007,6 +4024,234 @@ internal class Program
         }
     }
 
+    private static async Task<int> KiemTraIssue122_HuyPhieuThanhToanCongNoAsync(string connectionString)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #122: SỬA SAI CÔNG NỢ SAU KHI HỦY PHIẾU THANH TOÁN (KH & NCC)    ");
+        Console.WriteLine("==========================================================================================");
+
+        var db = new DatabaseService();
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "tester",
+            HoTen = "Kiem Thu Vien #122",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        });
+
+        // ------------------------------------------------------------------------------------------
+        // PHẦN 1: KIỂM THỬ KHÁCH HÀNG
+        // ------------------------------------------------------------------------------------------
+        Console.WriteLine("\n--- [PHẦN 1: KHÁCH HÀNG] ---");
+        var maKhTest = "KH_122_" + DateTime.Now.ToString("yyMMddHHmmss");
+        var hdTestCode = "HD_122_" + DateTime.Now.ToString("yyMMddHHmmss");
+        uint khId = 0;
+        uint hdId = 0;
+        var createdSlipsKh = new List<string>();
+
+        try
+        {
+            // Tạo khách hàng test
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO khach_hang (ma_khach_hang, ten_khach_hang, so_dien_thoai, trang_thai, ngay_tao, ngay_cap_nhat)
+                VALUES (@Ma, @Ten, '0988122122', 1, NOW(), NOW());
+                """,
+                new { Ma = maKhTest, Ten = "Khách Hàng Test 122" });
+            khId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM khach_hang WHERE ma_khach_hang = @Ma;", new { Ma = maKhTest });
+
+            // Công nợ ban đầu: 44.361.000đ
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO hoa_don_ban_hang (ma_hoa_don, khach_hang_id, chi_nhanh_id, nguoi_ban_id, thoi_gian_ban,
+                    tong_tien_hang, giam_gia, khach_can_tra, khach_da_thanh_toan, con_no,
+                    trang_thai_thanh_toan, trang_thai_hoa_don, ghi_chu)
+                VALUES (@MaHd, @KhId, 1, 1, NOW(),
+                    44361000, 0, 44361000, 0, 44361000,
+                    'CHUA_THANH_TOAN', 'HOAN_THANH', 'Hóa đơn nợ ban đầu test 122');
+                """,
+                new { MaHd = hdTestCode, KhId = khId });
+            hdId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM hoa_don_ban_hang WHERE ma_hoa_don = @MaHd;", new { MaHd = hdTestCode });
+
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO lich_su_cong_no_khach_hang (khach_hang_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu, ghi_no, ghi_co, so_du, thoi_gian, ghi_chu)
+                VALUES (@KhId, 1, 'GHI_NO', 'HOA_DON', @MaHd, 44361000, 0, 44361000, NOW(), 'Ghi nợ hóa đơn ban đầu test 122');
+                """,
+                new { KhId = khId, MaHd = hdTestCode });
+
+            // Bước 1: Thanh toán phiếu PT0038: 4.000.000đ -> sau đó hủy
+            Console.Write("1. Khách hàng: Thu nợ 4.000.000đ rồi hủy phiếu... ");
+            var pt1 = await db.ThuNoKhachHangAsync(khId, 4000000m, "TIEN_MAT", null, "Thu nợ PT0038 test 122");
+            createdSlipsKh.Add(pt1.MaGiaoDich);
+
+            var huyPt1 = await db.HuyThanhToanCongNoKhachHangAsync(khId, pt1.MaGiaoDich, "Hủy do nhập nhầm theo Issue 122");
+            if (!huyPt1.ThanhCong)
+                throw new Exception($"Hủy phiếu thất bại: {huyPt1.ThongBao}");
+            Console.WriteLine("PASSED ✓");
+
+            // Bước 2: Thanh toán phiếu PT0051: 50.000.000đ -> hoàn thành
+            Console.Write("2. Khách hàng: Thu nợ 50.000.000đ (hoàn thành) và kiểm tra kết quả Issue #122... ");
+            var pt2 = await db.ThuNoKhachHangAsync(khId, 50000000m, "CHUYEN_KHOAN", null, "Thu nợ PT0051 test 122");
+            createdSlipsKh.Add(pt2.MaGiaoDich);
+
+            var tkKh = await db.GetThongKeLichSuThanhToanCongNoKhachHangAsync(khId);
+            // Yêu cầu:
+            // - Chỉ ghi nhận 50.000.000đ của PT0051
+            // - 4.000.000đ của PT0038 không được tính
+            // - Công nợ trước thanh toán: 44.361.000đ
+            // - Công nợ sau thanh toán: 0đ
+            // - Công nợ hiện tại: 0đ
+            // - Tiền trả trước: 5.639.000đ
+            if (tkKh.TongTienDaThanhToan != 50000000m)
+                throw new Exception($"Tổng đã TT phải là 50.000.000đ (loại 4M hủy), thực tế={tkKh.TongTienDaThanhToan:N0}");
+            if (tkKh.CongNoTruocThanhToan != 44361000m)
+                throw new Exception($"Công nợ trước TT phải là 44.361.000đ, thực tế={tkKh.CongNoTruocThanhToan:N0}");
+            if (tkKh.CongNoSauThanhToan != 0m)
+                throw new Exception($"Công nợ sau TT phải là 0đ, thực tế={tkKh.CongNoSauThanhToan:N0}");
+            if (tkKh.CongNoHienTai != 0m)
+                throw new Exception($"Công nợ hiện tại phải là 0đ, thực tế={tkKh.CongNoHienTai:N0}");
+            if (tkKh.SoDuTraTruoc != 5639000m)
+                throw new Exception($"Tiền trả trước phải là 5.639.000đ, thực tế={tkKh.SoDuTraTruoc:N0}");
+            Console.WriteLine("PASSED ✓");
+        }
+        finally
+        {
+            try
+            {
+                if (khId > 0)
+                {
+                    await conn.ExecuteAsync("DELETE FROM lich_su_tra_truoc_khach_hang WHERE khach_hang_id = @Id;", new { Id = khId });
+                    await conn.ExecuteAsync("DELETE FROM thanh_toan WHERE hoa_don_id = @HdId;", new { HdId = hdId });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_thanh_toan_cong_no_khach_hang WHERE khach_hang_id = @Id;", new { Id = khId });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_cong_no_khach_hang WHERE khach_hang_id = @Id;", new { Id = khId });
+                    if (createdSlipsKh.Count > 0)
+                        await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE ma_phieu_chi IN @Slips;", new { Slips = createdSlipsKh });
+                    if (hdId > 0)
+                        await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id = @HdId;", new { HdId = hdId });
+                    await conn.ExecuteAsync("DELETE FROM khach_hang WHERE id = @Id;", new { Id = khId });
+                }
+            }
+            catch { }
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // PHẦN 2: KIỂM THỬ NHÀ CUNG CẤP
+        // ------------------------------------------------------------------------------------------
+        Console.WriteLine("\n--- [PHẦN 2: NHÀ CUNG CẤP] ---");
+        var maNccTest = "NCC_122_" + DateTime.Now.ToString("yyMMddHHmmss");
+        var pnTestCode = "PN_122_" + DateTime.Now.ToString("yyMMddHHmmss");
+        uint nccId = 0;
+        uint pnId = 0;
+        var createdSlipsNcc = new List<string>();
+
+        try
+        {
+            // Tạo NCC test
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO nha_cung_cap (ma_nha_cung_cap, ten_nha_cung_cap, so_dien_thoai, trang_thai, chi_nhanh_id)
+                VALUES (@Ma, @Ten, '0988122333', 1, 1);
+                """,
+                new { Ma = maNccTest, Ten = "Nhà Cung Cấp Test 122" });
+            nccId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM nha_cung_cap WHERE ma_nha_cung_cap = @Ma;", new { Ma = maNccTest });
+
+            // Công nợ ban đầu: 44.361.000đ
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO phieu_nhap_hang (ma_phieu_nhap, nha_cung_cap_id, chi_nhanh_id, nguoi_nhap_id, thoi_gian_nhap,
+                    tong_tien_hang, giam_gia, chi_phi_khac, tong_tien_nhap, da_thanh_toan, con_no, trang_thai, cong_no_da_ghi_nhan, ghi_chu)
+                VALUES (@MaPn, @NccId, 1, 1, NOW(),
+                    44361000, 0, 0, 44361000, 0, 44361000, 'HOAN_THANH', 1, 'Phiếu nhập nợ ban đầu test 122');
+                """,
+                new { MaPn = pnTestCode, NccId = nccId });
+            pnId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM phieu_nhap_hang WHERE ma_phieu_nhap = @MaPn;", new { MaPn = pnTestCode });
+
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO lich_su_cong_no_nha_cung_cap (nha_cung_cap_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu, ghi_no, ghi_co, thoi_gian, ghi_chu)
+                VALUES (@NccId, 1, 'GHI_NO_NHAP', 'PHIEU_NHAP', @MaPn, 44361000, 0, NOW(), 'Ghi nợ phiếu nhập ban đầu test 122');
+                """,
+                new { NccId = nccId, MaPn = pnTestCode });
+
+            // Bước 1: Thanh toán NCC 4.000.000đ -> sau đó hủy
+            Console.Write("1. NCC: Thanh toán 4.000.000đ rồi hủy phiếu... ");
+            var ptNcc1 = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 4000000m, "TIEN_MAT", null, "Thanh toán NCC PT0038 test 122");
+            createdSlipsNcc.Add(ptNcc1.MaGiaoDich);
+
+            var huyPtNcc1 = await db.HuyThanhToanCongNoNhaCungCapAsync(nccId, ptNcc1.MaGiaoDich, "Hủy do nhập nhầm theo Issue 122");
+            if (!huyPtNcc1.ThanhCong)
+                throw new Exception($"Hủy phiếu NCC thất bại: {huyPtNcc1.ThongBao}");
+            Console.WriteLine("PASSED ✓");
+
+            // Bước 2: Thanh toán NCC 50.000.000đ -> hoàn thành
+            Console.Write("2. NCC: Thanh toán 50.000.000đ (hoàn thành) và kiểm tra kết quả Issue #122... ");
+            var ptNcc2 = await db.ThanhToanCongNoNhaCungCapAsync(nccId, 50000000m, "CHUYEN_KHOAN", null, "Thanh toán NCC PT0051 test 122");
+            createdSlipsNcc.Add(ptNcc2.MaGiaoDich);
+
+            var tkNcc = await db.GetThongKeLichSuThanhToanCongNoNhaCungCapAsync(nccId);
+            if (tkNcc.TongTienDaThanhToan != 50000000m)
+                throw new Exception($"Tổng đã TT NCC phải là 50.000.000đ (loại 4M hủy), thực tế={tkNcc.TongTienDaThanhToan:N0}");
+            if (tkNcc.CongNoTruocThanhToan != 44361000m)
+                throw new Exception($"Công nợ trước TT NCC phải là 44.361.000đ, thực tế={tkNcc.CongNoTruocThanhToan:N0}");
+            if (tkNcc.CongNoSauThanhToan != 0m)
+                throw new Exception($"Công nợ sau TT NCC phải là 0đ, thực tế={tkNcc.CongNoSauThanhToan:N0}");
+            if (tkNcc.CongNoHienTai != 0m)
+                throw new Exception($"Công nợ hiện tại NCC phải là 0đ, thực tế={tkNcc.CongNoHienTai:N0}");
+            if (tkNcc.SoDuTraTruoc != 5639000m)
+                throw new Exception($"Tiền trả trước NCC phải là 5.639.000đ, thực tế={tkNcc.SoDuTraTruoc:N0}");
+            Console.WriteLine("PASSED ✓");
+
+            // Bước 3: Kiểm tra Báo cáo công nợ nhà cung cấp
+            Console.Write("3. NCC: Kiểm tra Báo cáo công nợ NCC không bị tính phiếu đã hủy... ");
+            var baoCaoService = new BaoCaoNhaCungCapService(async () =>
+            {
+                var c = new MySqlConnection(connectionString);
+                await c.OpenAsync();
+                return c;
+            });
+            var homNay = DateTime.Today;
+            var bcData = await baoCaoService.TaiDuLieuAsync(homNay.AddDays(-1), homNay.AddDays(1), maNccTest, BaoCaoNhaCungCapService.KhoaMacDinh, false, 1, 15);
+            var dongNcc = bcData.DongTrang.FirstOrDefault(d => d.Id == nccId);
+            if (dongNcc != null)
+            {
+                // Tổng nợ là 44.361.000đ, thanh toán 50M -> đã thanh toán đủ 44.361.000đ, thừa 5.639.000đ trả trước.
+                // Phiếu đã hủy (4.000.000đ) không bị cộng dồn vào DaThanhToan (nếu bị cộng sai sẽ là 48.361.000đ).
+                if (dongNcc.DaThanhToan != 44361000m)
+                    throw new Exception($"Báo cáo NCC: Đã TT phải là 44.361.000đ (loại 4M hủy), thực tế={dongNcc.DaThanhToan:N0}");
+                if (dongNcc.CongNo != 0m)
+                    throw new Exception($"Báo cáo NCC: Công nợ phải là 0đ, thực tế={dongNcc.CongNo:N0}");
+            }
+            Console.WriteLine("PASSED ✓");
+
+            Console.WriteLine("\n>>> TOÀN BỘ CÁC TIÊU CHÍ KIỂM THỬ ISSUE #122 (KHÁCH HÀNG & NCC) ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+            return 0;
+        }
+        finally
+        {
+            try
+            {
+                if (nccId > 0)
+                {
+                    await conn.ExecuteAsync("DELETE FROM lich_su_tra_truoc_ncc WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    await conn.ExecuteAsync("DELETE FROM thanh_toan_nha_cung_cap WHERE phieu_nhap_id = @PnId;", new { PnId = pnId });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_thanh_toan_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id;", new { Id = nccId });
+                    if (createdSlipsNcc.Count > 0)
+                        await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE ma_phieu_chi IN @Slips;", new { Slips = createdSlipsNcc });
+                    if (pnId > 0)
+                        await conn.ExecuteAsync("DELETE FROM phieu_nhap_hang WHERE id = @PnId;", new { PnId = pnId });
+                    await conn.ExecuteAsync("DELETE FROM nha_cung_cap WHERE id = @Id;", new { Id = nccId });
+                }
+            }
+            catch { }
+        }
+    }
+
     private static async Task<int> KiemTraIssue114_ToiUuThaoTacBanHangVaNhapHangBangBanPhimAsync(string connectionString)
     {
         Console.WriteLine("\n==========================================================================================");
@@ -4224,50 +4469,42 @@ internal class Program
             MaVaiTro = Quyen.QuanTri
         });
 
-        // Khởi tạo control DateTimeBox với giá trị ban đầu đúng theo yêu cầu: 10/11/2026 08:11
+        // Khởi tạo control DateInputBox phân đoạn 3 ô: Ngày / Tháng / Năm
         var initialDt = new DateTime(2026, 11, 10, 8, 11, 0);
-        var dtBox = new DateTimeBox();
-        dtBox.Value = initialDt;
+        var dateBox = new DateInputBox();
+        dateBox.Value = initialDt;
 
-        if (dtBox.Text != "10/11/2026 08:11")
-            throw new Exception($"Định dạng ban đầu sai: {dtBox.Text}");
+        if (dateBox.DayBox.Text != "10" || dateBox.MonthBox.Text != "11" || dateBox.YearBox.Text != "2026")
+            throw new Exception($"Phân đoạn Ngày/Tháng/Năm ban đầu sai: {dateBox.Text}");
 
-        Console.WriteLine($"Khởi tạo ban đầu: {dtBox.Text} ✓");
+        Console.WriteLine($"Khởi tạo DateInputBox 3 ô riêng biệt: Ngày={dateBox.DayBox.Text}, Tháng={dateBox.MonthBox.Text}, Năm={dateBox.YearBox.Text} ({dateBox.Text}) ✓");
 
         // BƯỚC 1: Sửa ngày 10 thành 20 bằng bàn phím
         Console.Write("1. Sửa ngày 10 thành 20 bằng bàn phím: ");
-        dtBox.SelectSegment(0); // chọn phần ngày
-        dtBox.ProcessDigit('2');
-        dtBox.ProcessDigit('0');
-        if (dtBox.Text != "20/11/2026 08:11")
-            throw new Exception($"Sửa ngày thất bại: {dtBox.Text}");
-        if (dtBox.Value?.Day != 20 || dtBox.Value?.Month != 11 || dtBox.Value?.Year != 2026
-            || dtBox.Value?.Hour != 8 || dtBox.Value?.Minute != 11)
-            throw new Exception($"Giá trị Value sau khi sửa ngày không đúng: {dtBox.Value}");
-        Console.WriteLine("PASSED ✓ (Kết quả: " + dtBox.Text + ")");
+        dateBox.DayBox.Text = "20";
+        if (dateBox.DayBox.Text != "20" || dateBox.Value?.Day != 20)
+            throw new Exception($"Sửa ngày thất bại: Text={dateBox.Text}, Value={dateBox.Value:dd/MM/yyyy HH:mm}");
+        Console.WriteLine("PASSED ✓ (Kết quả: " + dateBox.Text + ")");
 
-        // BƯỚC 2 & 3: Nhấn mũi tên phải chuyển sang tháng và sửa tháng 11 thành 12
-        Console.Write("2 & 3. Nhấn mũi tên phải chuyển sang tháng và sửa tháng 11 thành 12: ");
-        dtBox.SelectSegment(1); // giả lập phím mũi tên phải chuyển sang tháng
-        dtBox.ProcessDigit('1');
-        dtBox.ProcessDigit('2');
-        if (dtBox.Text != "20/12/2026 08:11")
-            throw new Exception($"Sửa tháng thất bại: {dtBox.Text}");
-        if (dtBox.Value?.Day != 20 || dtBox.Value?.Month != 12 || dtBox.Value?.Year != 2026
-            || dtBox.Value?.Hour != 8 || dtBox.Value?.Minute != 11)
-            throw new Exception($"Giá trị Value sau khi sửa tháng không đúng: {dtBox.Value}");
-        Console.WriteLine("PASSED ✓ (Kết quả: " + dtBox.Text + ")");
+        // BƯỚC 2 & 3: Tự động chuyển sang tháng và sửa tháng 11 thành 12
+        Console.Write("2 & 3. Tự động chuyển sang tháng và sửa tháng 11 thành 12: ");
+        dateBox.MonthBox.Text = "12";
+        if (dateBox.MonthBox.Text != "12" || dateBox.Value?.Month != 12)
+            throw new Exception($"Sửa tháng thất bại: {dateBox.Text}");
+        Console.WriteLine("PASSED ✓ (Kết quả: " + dateBox.Text + ")");
 
-        // BƯỚC 4: Nhấn chuột chọn phần năm (vị trí ký tự 7) và sửa thành 2025
-        Console.Write("4. Nhấn chuột chọn phần năm và sửa thành 2025: ");
-        int segmentFromClick = dtBox.GetSegmentFromIndex(7);
-        if (segmentFromClick != 2) // Segment 2 là Năm
-            throw new Exception($"Xác định phân đoạn từ vị trí nhấp chuột sai: {segmentFromClick}");
-        dtBox.SelectSegment(segmentFromClick);
-        dtBox.ProcessDigit('2');
-        dtBox.ProcessDigit('0');
-        dtBox.ProcessDigit('2');
-        dtBox.ProcessDigit('5');
+        // BƯỚC 4: Tự động chuyển sang năm và sửa thành 2025
+        Console.Write("4. Tự động chuyển sang năm và sửa thành 2025: ");
+        dateBox.YearBox.Text = "2025";
+        if (dateBox.YearBox.Text != "2025" || dateBox.Value?.Year != 2025)
+            throw new Exception($"Sửa năm thất bại: {dateBox.Text}");
+        if (dateBox.Text != "20/12/2025")
+            throw new Exception($"Định dạng DateInputBox sau khi sửa ngày/tháng/năm sai: {dateBox.Text}");
+        Console.WriteLine("PASSED ✓ (Kết quả: " + dateBox.Text + ")");
+
+        // Khởi tạo control DateTimeBox cho backward-compatibility
+        var dtBox = new DateTimeBox();
+        dtBox.Value = new DateTime(2025, 12, 20, 8, 11, 0);
         if (dtBox.Text != "20/12/2025 08:11")
             throw new Exception($"Sửa năm thất bại: {dtBox.Text}");
         if (dtBox.Value?.Day != 20 || dtBox.Value?.Month != 12 || dtBox.Value?.Year != 2025
@@ -4337,6 +4574,24 @@ internal class Program
         // BƯỚC 9: Kiểm tra ngày không hợp lệ và năm nhuận
         Console.Write("9. Kiểm tra ngày không hợp lệ và năm nhuận (29/02 năm nhuận vs không nhuận, tháng 30 ngày): ");
         // Năm nhuận 2024: 29/02/2024 phải hợp lệ
+        dateBox.SyncFromValue(new DateTime(2024, 2, 29, 10, 0, 0));
+        if (dateBox.Text != "29/02/2024" || dateBox.DayBox.Text != "29" || dateBox.MonthBox.Text != "02" || dateBox.YearBox.Text != "2024")
+            throw new Exception($"DateInputBox năm nhuận 2024 ngày 29/02 không hợp lệ: {dateBox.Text}");
+
+        // Chuyển sang năm 2025 (không nhuận): ngày 29 tự động điều chỉnh về 28
+        dateBox.YearBox.Text = "2025";
+        dateBox.CommitIfValid();
+        if (dateBox.DayBox.Text != "28" || dateBox.MonthBox.Text != "02" || dateBox.YearBox.Text != "2025")
+            throw new Exception($"DateInputBox năm không nhuận 2025 phải tự điều chỉnh ngày 29 về 28: {dateBox.Text}");
+
+        // Tháng 4 chỉ có 30 ngày: nếu ngày đang 31 chuyển sang tháng 4 thì về 30
+        dateBox.SetDate(31, 1, 2025);
+        dateBox.MonthBox.Text = "04";
+        dateBox.CommitIfValid();
+        if (dateBox.DayBox.Text != "30" || dateBox.MonthBox.Text != "04")
+            throw new Exception($"DateInputBox tháng 4 có 30 ngày phải tự điều chỉnh ngày 31 về 30: {dateBox.Text}");
+
+        // Năm nhuận 2024 trên DateTimeBox: 29/02/2024 phải hợp lệ
         dtBox.SyncFromValue(new DateTime(2024, 2, 29, 10, 0, 0));
         if (dtBox.Text != "29/02/2024 10:00")
             throw new Exception($"Năm nhuận 2024 ngày 29/02 không hợp lệ: {dtBox.Text}");
@@ -4367,6 +4622,12 @@ internal class Program
         vm.PhieuNhapNgayNhapDateOnly = new DateTime(2025, 12, 25);
         if (vm.PhieuNhapNgayNhap != new DateTime(2025, 12, 25, 15, 30, 0))
             throw new Exception($"Chọn ngày trên Calendar làm mất giờ/phút: {vm.PhieuNhapNgayNhap}");
+
+        // Đồng bộ DateInputBox với ViewModel
+        var dateBoxSync = new DateInputBox();
+        dateBoxSync.Value = vm.PhieuNhapNgayNhap;
+        if (dateBoxSync.DayBox.Text != "25" || dateBoxSync.MonthBox.Text != "12" || dateBoxSync.YearBox.Text != "2025")
+            throw new Exception($"DateInputBox không đồng bộ với Calendar: {dateBoxSync.Text}");
         Console.WriteLine("PASSED ✓");
 
         // BƯỚC 11: Lưu phiếu nhập vào database và đọc lại để xác nhận
@@ -4405,7 +4666,12 @@ internal class Program
             if (savedTime != thoiGianNhapTest)
                 throw new Exception($"Thời gian nhập lưu trong database không khớp: Lưu={savedTime:yyyy-MM-dd HH:mm:ss}, Kỳ vọng={thoiGianNhapTest:yyyy-MM-dd HH:mm:ss}");
 
-            // Mô phỏng mở lại phiếu nhập: hiển thị lên DateTimeBox
+            // Mô phỏng mở lại phiếu nhập: hiển thị lên DateInputBox và DateTimeBox
+            var loadedDateBox = new DateInputBox();
+            loadedDateBox.Value = savedTime;
+            if (loadedDateBox.DayBox.Text != "20" || loadedDateBox.MonthBox.Text != "12" || loadedDateBox.YearBox.Text != "2025")
+                throw new Exception($"Đọc lại phiếu nhập lên DateInputBox hiển thị sai: {loadedDateBox.Text}");
+
             var loadedBox = new DateTimeBox();
             loadedBox.Value = savedTime;
             if (loadedBox.Text != "20/12/2025 15:30")

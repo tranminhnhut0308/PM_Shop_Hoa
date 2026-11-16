@@ -6121,11 +6121,10 @@
                       <Grid ColumnDefinitions="*,Auto"
                         ColumnSpacing="6">
 
-                        <controls:DateTimeBox Name="PhieuNhapNgayNhapBox"
+                        <controls:DateInputBox Name="PhieuNhapNgayNhapBox"
                           Value="{Binding PhieuNhapNgayNhap, Mode=TwoWay}"
-                          ToolTip.Tip="Nhập trực tiếp ngày giờ (dd/MM/yyyy HH:mm) hoặc bấm 📅 để chọn"
-                          Padding="10,8"
-                          FontSize="13"
+                          ToolTip.Tip="Nhập ngày tháng năm (dd/MM/yyyy) hoặc bấm 📅 để chọn"
+                          Height="38"
                           Margin="0" />
 
                         <Button Grid.Column="1"
