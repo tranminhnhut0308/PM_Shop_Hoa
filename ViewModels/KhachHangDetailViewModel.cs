@@ -70,6 +70,10 @@ public sealed partial class KhachHangDetailViewModel : ObservableObject
 
     public ObservableCollection<HoaDon> HoaDons { get; } = new();
 
+    public ObservableCollection<HoaDon> HoaDonConNos { get; } = new();
+
+    public bool HasHoaDonConNo => HoaDonConNos.Count > 0;
+
     public ObservableCollection<LichSuTraTruocItem> LichSuTraTruocs { get; } = new();
 
     public bool HasLichSuTraTruoc => LichSuTraTruocs.Count > 0;
@@ -187,11 +191,17 @@ public sealed partial class KhachHangDetailViewModel : ObservableObject
     public void NapLichSuMuaHang(IReadOnlyList<HoaDon> hoaDons)
     {
         HoaDons.Clear();
+        HoaDonConNos.Clear();
 
         foreach (var hoaDon in hoaDons)
+        {
             HoaDons.Add(hoaDon);
+            if (hoaDon.ConNoDuong)
+                HoaDonConNos.Add(hoaDon);
+        }
 
         OnPropertyChanged(nameof(HasLichSuMuaHang));
+        OnPropertyChanged(nameof(HasHoaDonConNo));
     }
 
     // ============================================================

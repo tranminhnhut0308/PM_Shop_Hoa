@@ -125,11 +125,29 @@
                     FontWeight="SemiBold"
                     Foreground="#163F38" />
 
-                <TextBox Grid.Row="1"
-                    x:Name="TxtSearch"
-                    Watermark="Nhập tên, mã hoặc SĐT nhà cung cấp..."
-                    Padding="10,8"
-                    FontSize="13" />
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                    <TextBox Grid.Column="0"
+                        x:Name="TxtSearch"
+                        Watermark="Nhập tên, mã hoặc SĐT nhà cung cấp..."
+                        Padding="10,8"
+                        FontSize="13" />
+                    <Button Grid.Column="1"
+                        x:Name="BtnThemNccMoi"
+                        Content="+"
+                        Width="38"
+                        Padding="0"
+                        FontSize="17"
+                        FontWeight="Bold"
+                        Background="#087F6E"
+                        Foreground="White"
+                        BorderBrush="Transparent"
+                        BorderThickness="0"
+                        CornerRadius="8"
+                        VerticalAlignment="Stretch"
+                        HorizontalAlignment="Stretch"
+                        Cursor="Hand"
+                        ToolTip.Tip="Thêm nhà cung cấp mới" />
+                </Grid>
 
                 <!-- Danh sách gợi ý hoặc Khung xem trước NCC đã chọn -->
                 <Panel Grid.Row="2">

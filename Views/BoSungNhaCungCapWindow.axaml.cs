@@ -52,6 +52,7 @@ public partial class BoSungNhaCungCapWindow : Window
         TxtSearch.KeyDown += OnSearchKeyDown;
         LstSuggestions.SelectionChanged += OnSuggestionsSelectionChanged;
         BtnDoiNcc.Click += OnDoiNccClick;
+        BtnThemNccMoi.Click += OnThemNccMoiClick;
         BtnHuy.Click += (_, _) => Close(false);
         BtnXacNhan.Click += OnXacNhanClick;
 
@@ -190,6 +191,42 @@ public partial class BoSungNhaCungCapWindow : Window
         BtnXacNhan.IsEnabled = false;
         CapNhatGoiY(TxtSearch.Text);
         TxtSearch.Focus();
+    }
+
+    private async void OnThemNccMoiClick(object? sender, RoutedEventArgs e)
+    {
+        if (_db is null) return;
+
+        try
+        {
+            var generatedCode = await _db.TaoMaNhaCungCapMoiAsync();
+            var newSupplier = new NhaCungCap
+            {
+                MaNhaCungCap = generatedCode,
+                TenNhaCungCap = string.Empty,
+                TrangThai = true
+            };
+
+            var editor = new NhaCungCapEditorWindow(newSupplier);
+            var saved = await editor.ShowDialog<bool>(this);
+            if (!saved) return;
+
+            editor.Supplier.Id = await _db.ThemNhaCungCapAsync(editor.Supplier);
+
+            // Cập nhật lại danh sách nhà cung cấp từ database
+            var list = await _db.GetNhaCungCapAsync();
+            _allSuppliers = list.Where(n => n.TrangThai).ToList();
+
+            // Tự động chọn ngay nhà cung cấp vừa tạo
+            var nccVuaThem = _allSuppliers.FirstOrDefault(n => n.Id == editor.Supplier.Id) ?? editor.Supplier;
+            ChonNhaCungCap(nccVuaThem);
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Lỗi thêm nhà cung cấp mới trong BoSungNhaCungCapWindow", ex);
+            TxtError.Text = "Không thể thêm nhà cung cấp: " + ex.Message;
+            TxtError.IsVisible = true;
+        }
     }
 
     private async void OnXacNhanClick(object? sender, RoutedEventArgs e)

@@ -16,7 +16,7 @@ public partial class PhieuNhapEditorWindow : Window
     private readonly PhieuNhapEditRequest _request;
     private readonly DatabaseService _db;
     private readonly IReadOnlyList<SanPham> _allProducts;
-    private readonly IReadOnlyList<SupplierOption> _suppliers;
+    private List<SupplierOption> _suppliers;
     private readonly ObservableCollection<PhieuNhapItemEditModel> _items;
 
     public bool IsSaved { get; private set; }
@@ -37,7 +37,7 @@ public partial class PhieuNhapEditorWindow : Window
         _request = request;
         _db = db;
         _allProducts = allProducts;
-        _suppliers = suppliers;
+        _suppliers = suppliers.ToList();
         _items = new ObservableCollection<PhieuNhapItemEditModel>(_request.Items);
 
         // 1. Ngày nhập
@@ -59,6 +59,21 @@ public partial class PhieuNhapEditorWindow : Window
         };
 
         var selectedSupplier = _suppliers.FirstOrDefault(s => s.Id == _request.NhaCungCapId);
+        if (selectedSupplier == null && _request.NhaCungCapId is > 0)
+        {
+            var tenNcc = !string.IsNullOrWhiteSpace(_request.TenNhaCungCap) ? _request.TenNhaCungCap : $"NCC #{_request.NhaCungCapId}";
+            var maNcc = _request.MaNhaCungCap ?? "";
+            selectedSupplier = new SupplierOption
+            {
+                Id = _request.NhaCungCapId.Value,
+                MaNhaCungCap = maNcc,
+                TenNhaCungCap = tenNcc
+            };
+            _suppliers.Add(selectedSupplier);
+            AcbNhaCungCap.ItemsSource = null;
+            AcbNhaCungCap.ItemsSource = _suppliers;
+        }
+
         if (selectedSupplier != null)
         {
             AcbNhaCungCap.SelectedItem = selectedSupplier;
@@ -113,12 +128,17 @@ public partial class PhieuNhapEditorWindow : Window
 
         CapNhatTongTien();
 
-        // Đảm bảo cột phải luôn cuộn lên đầu khi mở cửa sổ
+        // Đảm bảo cột phải luôn cuộn lên đầu và hiển thị đúng NCC khi mở cửa sổ
         Loaded += (_, _) =>
         {
             if (SvRightPanel != null)
             {
                 SvRightPanel.Offset = Vector.Zero;
+            }
+            if (selectedSupplier != null)
+            {
+                AcbNhaCungCap.SelectedItem = selectedSupplier;
+                AcbNhaCungCap.Text = selectedSupplier.DisplayText;
             }
             AcbSanPham.Focus();
         };
@@ -215,6 +235,46 @@ public partial class PhieuNhapEditorWindow : Window
         CapNhatTongTien();
     }
 
+    private async void BtnThemNccMoi_OnClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var generatedCode = await _db.TaoMaNhaCungCapMoiAsync();
+            var newSupplier = new NhaCungCap
+            {
+                MaNhaCungCap = generatedCode,
+                TenNhaCungCap = string.Empty,
+                TrangThai = true
+            };
+
+            var editor = new NhaCungCapEditorWindow(newSupplier);
+            var saved = await editor.ShowDialog<bool>(this);
+            if (!saved) return;
+
+            editor.Supplier.Id = await _db.ThemNhaCungCapAsync(editor.Supplier);
+
+            var opt = new SupplierOption
+            {
+                Id = editor.Supplier.Id,
+                MaNhaCungCap = editor.Supplier.MaNhaCungCap,
+                TenNhaCungCap = editor.Supplier.TenNhaCungCap,
+                SoDienThoai = editor.Supplier.SoDienThoai
+            };
+
+            _suppliers.Add(opt);
+
+            AcbNhaCungCap.ItemsSource = null;
+            AcbNhaCungCap.ItemsSource = _suppliers;
+            AcbNhaCungCap.SelectedItem = opt;
+            AcbNhaCungCap.Text = opt.DisplayText;
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Lỗi thêm nhà cung cấp mới trong PhieuNhapEditorWindow", ex);
+            HienThiLoi("Không thể thêm nhà cung cấp: " + ex.Message);
+        }
+    }
+
     private void BtnXoaItem_OnClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.DataContext is PhieuNhapItemEditModel item)
@@ -231,24 +291,35 @@ public partial class PhieuNhapEditorWindow : Window
 
         // 1. Kiểm tra nhà cung cấp
         SupplierOption? supplier = null;
-        if (AcbNhaCungCap.SelectedItem is SupplierOption s)
+        var nccText = AcbNhaCungCap.Text?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrEmpty(nccText))
+        {
+            // Người dùng chủ động để trống hoặc xóa trống ô tìm kiếm
+            supplier = null;
+        }
+        else if (AcbNhaCungCap.SelectedItem is SupplierOption s &&
+                 (string.Equals(s.DisplayText, nccText, StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(s.TenNhaCungCap, nccText, StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(s.MaNhaCungCap, nccText, StringComparison.OrdinalIgnoreCase)))
         {
             supplier = s;
         }
-        else if (!string.IsNullOrWhiteSpace(AcbNhaCungCap.Text))
+        else
         {
-            var txt = AcbNhaCungCap.Text.Trim();
+            // Tìm trong danh sách gợi ý
             supplier = _suppliers.FirstOrDefault(x =>
-                string.Equals(x.MaNhaCungCap, txt, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x.TenNhaCungCap, txt, StringComparison.OrdinalIgnoreCase) ||
-                x.DisplayText.Contains(txt, StringComparison.OrdinalIgnoreCase));
-        }
+                string.Equals(x.MaNhaCungCap, nccText, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x.TenNhaCungCap, nccText, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x.DisplayText, nccText, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(x.DisplayText) && x.DisplayText.Contains(nccText, StringComparison.OrdinalIgnoreCase)));
 
-        if (!string.IsNullOrWhiteSpace(AcbNhaCungCap.Text) && (supplier is null || supplier.Id == 0))
-        {
-            HienThiLoi("Vui lòng chọn nhà cung cấp từ danh sách hoặc xóa trống ô tìm kiếm.");
-            AcbNhaCungCap.Focus();
-            return;
+            if (supplier is null || supplier.Id == 0)
+            {
+                HienThiLoi("Vui lòng chọn nhà cung cấp từ danh sách hoặc xóa trống ô tìm kiếm.");
+                AcbNhaCungCap.Focus();
+                return;
+            }
         }
 
         // 2. Kiểm tra hàng hóa

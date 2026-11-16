@@ -192,12 +192,32 @@
           </StackPanel>
 
           <StackPanel Grid.Column="2">
-            <TextBlock Text="Nhà cung cấp (*)" Classes="field-label" />
-            <AutoCompleteBox x:Name="AcbNhaCungCap"
-                             Height="38"
-                             FilterMode="Contains"
-                             ValueMemberBinding="{Binding DisplayText, DataType=models:SupplierOption}"
-                             Watermark="🔍 Tìm mã hoặc tên nhà cung cấp..." />
+            <TextBlock Text="Nhà cung cấp" Classes="field-label" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+              <AutoCompleteBox Grid.Column="0" x:Name="AcbNhaCungCap"
+                               Height="38"
+                               FilterMode="Contains"
+                               ValueMemberBinding="{Binding DisplayText, DataType=models:SupplierOption}"
+                               Watermark="🔍 Tìm mã hoặc tên nhà cung cấp (hoặc để trống)..." />
+              <Button Grid.Column="1"
+                      x:Name="BtnThemNccMoi"
+                      Content="+"
+                      Width="38"
+                      Height="38"
+                      Padding="0"
+                      FontSize="17"
+                      FontWeight="Bold"
+                      Background="#087F6E"
+                      Foreground="White"
+                      BorderBrush="Transparent"
+                      BorderThickness="0"
+                      CornerRadius="8"
+                      VerticalAlignment="Center"
+                      HorizontalAlignment="Center"
+                      Cursor="Hand"
+                      ToolTip.Tip="Thêm nhà cung cấp mới"
+                      Click="BtnThemNccMoi_OnClick" />
+            </Grid>
           </StackPanel>
 
           <StackPanel Grid.Column="4">

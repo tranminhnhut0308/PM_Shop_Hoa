@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:vm="using:ShopHoa.ViewModels"
   xmlns:models="using:ShopHoa.Models"
@@ -3180,7 +3180,7 @@
                                 Background="Transparent" IsVisible="{Binding Detail.IsLoading}" />
 
                               <!-- Ô THỐNG KÊ NHANH (BẤM ĐỂ MỞ TAB TƯƠNG ỨNG) -->
-                              <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+                              <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12" IsVisible="{Binding !Detail.IsTabCongNo}">
 
                                 <Border Grid.Column="0" Classes="statBox" Tag="lichsu"
                                   PointerPressed="OnCustomerSummaryPressed">
@@ -3220,7 +3220,7 @@
 
                               </Grid>
 
-                              <StackPanel Orientation="Horizontal" Spacing="8">
+                              <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding !Detail.IsTabCongNo}">
                                 <TextBlock Text="Tổng bán trừ trả hàng" FontSize="11"
                                   Foreground="#61736E" />
                                 <TextBlock Text="{Binding Detail.TongBanTruTraHangText}" FontSize="11"
@@ -3228,8 +3228,8 @@
                               </StackPanel>
 
                             <!-- TAB: THÔNG TIN / LỊCH SỬ MUA HÀNG / CÔNG NỢ -->
-                            <StackPanel Spacing="8" Margin="0,0,0,6">
-                              <StackPanel Orientation="Horizontal">
+                            <Grid Margin="0,0,0,6">
+                              <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
 
                                 <!-- TAB 1: THÔNG TIN -->
                                 <Button Command="{Binding Detail.ChonTabCommand}"
@@ -3334,7 +3334,7 @@
                                         Command="{Binding ElementName=RootWindow, Path=DataContext.XemLichSuThanhToanKhachHangCommand}"
                                         CommandParameter="{Binding}" />
                               </StackPanel>
-                            </StackPanel>
+                            </Grid>
 
                               <!-- TAB 1: THÔNG TIN -->
                               <Grid IsVisible="{Binding Detail.IsTabThongTin}"
@@ -3474,29 +3474,30 @@
                               <!-- TAB 3: CÔNG NỢ -->
                               <StackPanel IsVisible="{Binding Detail.IsTabCongNo}" Spacing="12">
 
-                                <Border Classes="statBox" Background="White"
-                                  IsVisible="{Binding Detail.HasCongNoData}">
+                                <!-- KHU VỰC TỔNG HỢP CÔNG NỢ DUY NHẤT -->
+                                <Border Background="White" CornerRadius="8" BorderBrush="#E2ECE8" BorderThickness="1"
+                                  Padding="14,12" IsVisible="{Binding Detail.HasCongNoData}">
                                   <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="14">
                                     <StackPanel>
                                       <TextBlock Text="Tổng tiền đã mua" FontSize="11"
                                         Foreground="#61736E" />
-                                      <TextBlock Text="{Binding Detail.TongTienDaMuaText}" FontSize="18"
+                                      <TextBlock Text="{Binding Detail.TongTienDaMuaText}" FontSize="17"
                                         FontWeight="Bold" Foreground="#163F38" Margin="0,3,0,0" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1">
-                                      <TextBlock Text="Đã thanh toán" FontSize="11"
+                                      <TextBlock Text="Tổng tiền đã thanh toán" FontSize="11"
                                         Foreground="#61736E" />
-                                      <TextBlock Text="{Binding Detail.TongDaThanhToanText}" FontSize="18"
+                                      <TextBlock Text="{Binding Detail.TongDaThanhToanText}" FontSize="17"
                                         FontWeight="Bold" Foreground="#087F6E" Margin="0,3,0,0" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
-                                      <TextBlock Text="Còn nợ" FontSize="11" Foreground="#61736E" />
-                                      <TextBlock Text="{Binding Detail.TongCongNoText}" FontSize="18"
+                                      <TextBlock Text="Tổng công nợ hiện tại" FontSize="11" Foreground="#61736E" />
+                                      <TextBlock Text="{Binding Detail.TongCongNoText}" FontSize="17"
                                         FontWeight="Bold" Foreground="#D64545" Margin="0,3,0,0" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="3">
                                       <TextBlock Text="Số dư trả trước" FontSize="11" Foreground="#61736E" />
-                                      <TextBlock Text="{Binding Detail.SoDuTraTruocText}" FontSize="18"
+                                      <TextBlock Text="{Binding Detail.SoDuTraTruocText}" FontSize="17"
                                         FontWeight="Bold" Foreground="#087F6E" Margin="0,3,0,0" />
                                     </StackPanel>
                                   </Grid>
@@ -3506,17 +3507,78 @@
                                   IsVisible="{Binding !Detail.HasCongNoData}"
                                   Foreground="#98A2B3" FontSize="13" />
 
-                                <StackPanel IsVisible="{Binding Detail.HasCongNoData}" Spacing="4">
-                                  <TextBlock Text="{Binding Detail.NguonCongNoText}" FontSize="12"
-                                    Foreground="#61736E" />
-                                  <TextBlock Text="{Binding Detail.SoLanGhiCongNoText, TargetNullValue='0'}" FontSize="12"
-                                    Foreground="#667A74" />
-                                  <TextBlock FontSize="12" Foreground="#667A74"
-                                    Text="{Binding Detail.LanGhiCongNoText, StringFormat='Lần ghi công nợ gần nhất: {0}'}" />
+                                <TextBlock Text="{Binding Detail.NguonCongNoText, StringFormat='Nguồn dữ liệu: {0}'}"
+                                  FontSize="11" Foreground="#889893" FontStyle="Italic"
+                                  IsVisible="{Binding Detail.HasCongNoData}" />
+
+                                <!-- DANH SÁCH HÓA ĐƠN CÒN NỢ -->
+                                <StackPanel Spacing="6" Margin="0,4,0,0">
+                                  <TextBlock Text="Danh sách hóa đơn còn nợ" FontWeight="Bold" FontSize="13" Foreground="#163F38" />
+
+                                  <Border Background="#F8FAFA" CornerRadius="8" Padding="14,10"
+                                    IsVisible="{Binding !Detail.HasHoaDonConNo}">
+                                    <TextBlock Text="Khách hàng hiện không có hóa đơn nào còn nợ"
+                                      Foreground="#61736E" FontSize="12" FontStyle="Italic" />
+                                  </Border>
+
+                                  <Border Background="White" CornerRadius="8" BorderBrush="#E2ECE8" BorderThickness="1" Padding="12,6"
+                                    IsVisible="{Binding Detail.HasHoaDonConNo}">
+                                    <StackPanel>
+                                      <!-- Tiêu đề cột -->
+                                      <Border BorderBrush="#E2ECE8" BorderThickness="0,0,0,1" Padding="0,6">
+                                        <Grid ColumnDefinitions="170,150,*,120,120,120" ColumnSpacing="10">
+                                          <TextBlock Text="Mã hóa đơn" FontSize="11" FontWeight="SemiBold" Foreground="#61736E" />
+                                          <TextBlock Grid.Column="1" Text="Thời gian" FontSize="11" FontWeight="SemiBold" Foreground="#61736E" />
+                                          <TextBlock Grid.Column="2" Text="Khách hàng" FontSize="11" FontWeight="SemiBold" Foreground="#61736E" />
+                                          <TextBlock Grid.Column="3" Text="Tổng tiền" FontSize="11" FontWeight="SemiBold" Foreground="#61736E" HorizontalAlignment="Right" />
+                                          <TextBlock Grid.Column="4" Text="Đã thanh toán" FontSize="11" FontWeight="SemiBold" Foreground="#61736E" HorizontalAlignment="Right" />
+                                          <TextBlock Grid.Column="5" Text="Còn nợ" FontSize="11" FontWeight="SemiBold" Foreground="#D64545" HorizontalAlignment="Right" />
+                                        </Grid>
+                                      </Border>
+
+                                      <!-- Danh sách các hóa đơn nợ -->
+                                      <ItemsControl ItemsSource="{Binding Detail.HoaDonConNos}">
+                                        <ItemsControl.ItemTemplate>
+                                          <DataTemplate x:DataType="models:HoaDon">
+                                            <Border BorderBrush="#E2ECE8" BorderThickness="0,0,0,1" Padding="0,8">
+                                              <Grid ColumnDefinitions="170,150,*,120,120,120" ColumnSpacing="10">
+                                                <Button Classes="customerLink"
+                                                  Content="{Binding MaHoaDon}"
+                                                  FontSize="12"
+                                                  FontWeight="SemiBold"
+                                                  Foreground="#087F6E"
+                                                  VerticalAlignment="Center"
+                                                  ToolTip.Tip="Bấm để xem chi tiết hóa đơn"
+                                                  Command="{Binding ElementName=RootWindow, Path=DataContext.XemHoaDonCommand}"
+                                                  CommandParameter="{Binding}" />
+                                                <TextBlock Grid.Column="1" Text="{Binding ThoiGianBanText}"
+                                                  FontSize="12" Foreground="#667A74" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="2" Text="{Binding TenKhachHang}"
+                                                  FontSize="12" Foreground="#344B45" VerticalAlignment="Center"
+                                                  TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Grid.Column="3"
+                                                  Text="{Binding KhachCanTra, StringFormat={}{0:N0} đ}"
+                                                  FontSize="12" FontWeight="SemiBold" Foreground="#087F6E"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="4"
+                                                  Text="{Binding KhachDaThanhToan, StringFormat={}{0:N0} đ}"
+                                                  FontSize="12" Foreground="#344B45"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="5"
+                                                  Text="{Binding ConNo, StringFormat={}{0:N0} đ}"
+                                                  FontSize="12" FontWeight="Bold" Foreground="#D64545"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                              </Grid>
+                                            </Border>
+                                          </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                      </ItemsControl>
+                                    </StackPanel>
+                                  </Border>
                                 </StackPanel>
 
                                 <!-- Lịch sử sử dụng tiền trả trước -->
-                                <StackPanel IsVisible="{Binding Detail.HasLichSuTraTruoc}" Spacing="6" Margin="0,8,0,0">
+                                <StackPanel IsVisible="{Binding Detail.HasLichSuTraTruoc}" Spacing="6" Margin="0,4,0,0">
                                   <TextBlock Text="Lịch sử sử dụng tiền trả trước" FontWeight="Bold" FontSize="13" Foreground="#163F38" />
                                   <Border Background="White" CornerRadius="8" BorderBrush="#E2ECE8" BorderThickness="1" Padding="10">
                                     <ItemsControl ItemsSource="{Binding Detail.LichSuTraTruocs}">

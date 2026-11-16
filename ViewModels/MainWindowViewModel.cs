@@ -6837,6 +6837,7 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 SelectedPhieuNhapNcc = supplier;
             }
+            _lastConfirmedPhieuNhapNcc = SelectedPhieuNhapNcc;
             OnPropertyChanged(nameof(HasSelectedPhieuNhapNcc));
             OnPropertyChanged(nameof(SelectedPhieuNhapNccDiaChiHienThi));
             OnPropertyChanged(nameof(SelectedPhieuNhapNccSdtHienThi));
