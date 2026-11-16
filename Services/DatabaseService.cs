@@ -4197,10 +4197,10 @@ public sealed partial class DatabaseService
         var congNoHienTai = thongTinKhach.NoHienTai ?? 0m;
         var soDuTraTruoc = thongTinKhach.SoDuTraTruoc ?? 0m;
 
-        // 2. Thống kê lịch sử giao dịch thanh toán trong kỳ lọc (chỉ tính phiếu HOAN_THANH)
+        // 2. Thống kê lịch sử giao dịch thanh toán trong kỳ lọc
         const string sql = """
         SELECT
-            COUNT(CASE WHEN ls.trang_thai = 'HOAN_THANH' THEN 1 END) AS TongSoGiaoDich,
+            COUNT(*) AS TongSoGiaoDich,
             COALESCE(SUM(CASE WHEN ls.trang_thai = 'HOAN_THANH' THEN ls.so_tien ELSE 0 END), 0) AS TongTienDaThanhToan,
             (
                 SELECT first_record.cong_no_truoc
@@ -8381,10 +8381,10 @@ public sealed partial class DatabaseService
                     soDuTraTruoc = nccInfo.SoDuTraTruoc ?? 0m;
                 }
 
-                // 2. Thống kê lịch sử giao dịch thanh toán trong kỳ lọc (chỉ tính phiếu HOAN_THANH)
+                // 2. Thống kê lịch sử giao dịch thanh toán trong kỳ lọc
                 const string sql = """
                 SELECT
-                    COUNT(CASE WHEN ls.trang_thai = 'HOAN_THANH' THEN 1 END) AS TongSoGiaoDich,
+                    COUNT(*) AS TongSoGiaoDich,
                     COALESCE(SUM(CASE WHEN ls.trang_thai = 'HOAN_THANH' THEN ls.so_tien ELSE 0 END), 0) AS TongTienDaThanhToan,
                     (
                         SELECT first_record.cong_no_truoc
