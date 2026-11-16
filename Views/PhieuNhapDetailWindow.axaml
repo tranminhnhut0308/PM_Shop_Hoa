@@ -5,9 +5,9 @@
   x:DataType="models:PhieuNhapHangDetail"
   Title="{Binding TieuDe}"
   Width="1080"
-  Height="840"
-  MinWidth="900"
-  MinHeight="640"
+  Height="760"
+  MinWidth="860"
+  MinHeight="560"
   WindowStartupLocation="CenterOwner"
   FontFamily="Inter, Segoe UI, Arial"
   Background="#F4FAF8">
@@ -28,8 +28,10 @@
       <Setter Property="Background" Value="#087F6E" />
       <Setter Property="Foreground" Value="#FFFFFF" />
       <Setter Property="BorderBrush" Value="#087F6E" />
-      <Setter Property="Padding" Value="16,9" />
-      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="12,7" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="Button.toolbar-primary:pointerover">
       <Setter Property="Background" Value="#056B5D" />
@@ -41,8 +43,9 @@
       <Setter Property="Foreground" Value="#087F6E" />
       <Setter Property="BorderBrush" Value="#087F6E" />
       <Setter Property="BorderThickness" Value="1.5" />
-      <Setter Property="Padding" Value="14,9" />
-      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="11,7" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontSize" Value="12" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="Button.toolbar-outline:pointerover /template/ ContentPresenter#PART_ContentPresenter">
@@ -73,11 +76,14 @@
     </Style>
   </Window.Styles>
 
-  <ScrollViewer VerticalScrollBarVisibility="Auto"
-    HorizontalScrollBarVisibility="Disabled">
-  <Grid Margin="22"
-    RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
-    RowSpacing="14">
+  <Grid RowDefinitions="*,Auto">
+    <!-- NỘI DUNG CUỘN (SCROLLABLE CONTENT) -->
+    <ScrollViewer Grid.Row="0"
+      VerticalScrollBarVisibility="Auto"
+      HorizontalScrollBarVisibility="Disabled">
+      <Grid Margin="20,16,20,16"
+        RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+        RowSpacing="14">
 
     <!-- 1. TIÊU ĐỀ + BADGE TRẠNG THÁI -->
     <Grid ColumnDefinitions="*,Auto">
@@ -290,8 +296,7 @@
           BorderBrush="#D5EAE3"
           BorderThickness="0,0,0,1"
           Padding="16,11">
-          <Grid ColumnDefinitions="45,115,*,75,70,130,110,140"
-            MinWidth="920"
+          <Grid ColumnDefinitions="45,110,*,70,65,120,100,130"
             ColumnSpacing="8">
             <TextBlock Classes="table-header" Text="STT" />
             <TextBlock Grid.Column="1" Classes="table-header" Text="MÃ HÀNG" />
@@ -309,9 +314,9 @@
         </Border>
 
         <ScrollViewer Grid.Row="1"
-          MaxHeight="340"
+          MaxHeight="360"
           VerticalScrollBarVisibility="Auto"
-          HorizontalScrollBarVisibility="Auto"
+          HorizontalScrollBarVisibility="Disabled"
           IsVisible="{Binding CoHangHoa}">
           <ItemsControl ItemsSource="{Binding Items}">
             <ItemsControl.ItemTemplate>
@@ -319,8 +324,7 @@
                 <Border BorderBrush="#EEF3F1"
                   BorderThickness="0,0,0,1"
                   Padding="16,9">
-                  <Grid ColumnDefinitions="45,115,*,75,70,130,110,140"
-                    MinWidth="920"
+                  <Grid ColumnDefinitions="45,110,*,70,65,120,100,130"
                     ColumnSpacing="8"
                     VerticalAlignment="Center">
                     <TextBlock Text="{Binding Index}"
@@ -691,17 +695,25 @@
       </StackPanel>
     </Border>
 
-    <!-- 7. THANH CÔNG CỤ NÚT BẤM (IN / PDF / SAO CHÉP / MUA LẠI / HỦY / SỬA / THANH TOÁN / ĐÓNG) -->
-    <Grid Grid.Row="7"
-      ColumnDefinitions="Auto,*,Auto"
-      ColumnSpacing="10">
+    </Grid>
+  </ScrollViewer>
 
+  <!-- THANH CÔNG CỤ NÚT BẤM CỐ ĐỊNH Ở ĐÁY CỬA SỔ -->
+  <Border Grid.Row="1"
+    Background="White"
+    BorderBrush="#D5EAE3"
+    BorderThickness="0,1,0,0"
+    Padding="16,10"
+    BoxShadow="0 -2 10 #0D000000">
+
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
       <!-- CÁC NÚT TÀI LIỆU (BÊN TRÁI) -->
-      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+      <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
         <!-- NÚT SAO CHÉP MÃ -->
         <Button x:Name="SaoChepMaButton"
           Classes="toolbar-outline"
           Content="📋  Sao chép mã"
+          Margin="0,2,6,2"
           VerticalAlignment="Center"
           ToolTip.Tip="Sao chép mã phiếu nhập vào bộ nhớ tạm"
           Click="SaoChepMaButton_OnClick" />
@@ -712,6 +724,7 @@
           Background="#087F6E"
           BorderBrush="#087F6E"
           Content="🖨  In phiếu nhập"
+          Margin="0,2,6,2"
           VerticalAlignment="Center"
           ToolTip.Tip="Mở bản in phiếu nhập trong trình duyệt (Ctrl+P)"
           Click="InPhieuButton_OnClick" />
@@ -720,19 +733,25 @@
         <Button x:Name="XuatPdfButton"
           Classes="toolbar-outline"
           Content="📄  Xuất PDF"
+          Margin="0,2,6,2"
           VerticalAlignment="Center"
           ToolTip.Tip="Lưu phiếu nhập dưới dạng tập tin PDF"
           Click="XuatPdfButton_OnClick" />
-      </StackPanel>
+      </WrapPanel>
 
-      <!-- CÁC NÚT NGHIỆP VỤ (BÊN PHẢI) -->
-      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+      <!-- CÁC NÚT TÁC VỤ (BÊN PHẢI) -->
+      <WrapPanel Grid.Column="1"
+        Orientation="Horizontal"
+        HorizontalAlignment="Right"
+        VerticalAlignment="Center">
+
         <!-- NÚT MUA LẠI / TẠO PHIẾU MỚI TỪ PHIẾU NÀY -->
         <Button x:Name="MuaLaiButton"
           Classes="toolbar-primary"
           Background="#087F6E"
           BorderBrush="#087F6E"
           Content="🛒  Mua lại"
+          Margin="4,2,0,2"
           VerticalAlignment="Center"
           ToolTip.Tip="Tạo một phiếu nhập mới sao chép danh sách hàng hóa từ phiếu này"
           Click="MuaLaiButton_OnClick" />
@@ -743,6 +762,7 @@
           Background="#DC2626"
           BorderBrush="#DC2626"
           Content="🚫  Hủy phiếu"
+          Margin="4,2,0,2"
           VerticalAlignment="Center"
           ToolTip.Tip="Hủy phiếu nhập hàng và hoàn tác tồn kho, công nợ"
           Click="HuyPhieuButton_OnClick" />
@@ -753,6 +773,7 @@
           Background="#2563EB"
           BorderBrush="#2563EB"
           Content="🔄  Khôi phục phiếu"
+          Margin="4,2,0,2"
           VerticalAlignment="Center"
           ToolTip.Tip="Khôi phục lại phiếu nhập đã hủy"
           Click="KhoiPhucPhieuButton_OnClick" />
@@ -763,6 +784,7 @@
           Background="#0A68A7"
           BorderBrush="#0A68A7"
           Content="✏  Chỉnh sửa phiếu"
+          Margin="4,2,0,2"
           VerticalAlignment="Center"
           Click="SuaPhieuButton_OnClick" />
 
@@ -772,6 +794,7 @@
           Background="#0284C7"
           BorderBrush="#0284C7"
           Content="🏢  Bổ sung nhà cung cấp"
+          Margin="4,2,0,2"
           VerticalAlignment="Center"
           ToolTip.Tip="Bổ sung nhà cung cấp cho phiếu nhập này"
           Click="BoSungNccButton_OnClick" />
@@ -780,6 +803,7 @@
         <Button x:Name="ThanhToanButton"
           Classes="toolbar-primary"
           Content="💳  Thanh toán công nợ"
+          Margin="4,2,0,2"
           VerticalAlignment="Center"
           Click="ThanhToanButton_OnClick" />
 
@@ -789,10 +813,11 @@
           Background="#64748B"
           BorderBrush="#64748B"
           Content="Đóng"
+          Margin="4,2,0,2"
           VerticalAlignment="Center"
           Click="OnCloseClicked" />
-      </StackPanel>
+      </WrapPanel>
     </Grid>
-  </Grid>
-  </ScrollViewer>
+  </Border>
+</Grid>
 </Window>
