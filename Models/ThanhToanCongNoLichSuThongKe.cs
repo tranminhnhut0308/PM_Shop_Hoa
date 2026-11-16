@@ -7,4 +7,5 @@ public sealed class ThanhToanCongNoLichSuThongKe
     public decimal CongNoTruocThanhToan { get; set; }
     public decimal CongNoSauThanhToan { get; set; }
     public decimal CongNoHienTai { get; set; }
+    public decimal SoDuTraTruoc { get; set; }
 }

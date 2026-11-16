@@ -267,7 +267,7 @@ public sealed partial class DatabaseService
         HoaDonHienTaiRow header)
     {
         var total = await connection.ExecuteScalarAsync<decimal>(
-            "SELECT COALESCE(SUM(so_tien), 0) FROM thanh_toan WHERE hoa_don_id = @HoaDonId;",
+            "SELECT COALESCE(SUM(so_tien), 0) FROM thanh_toan WHERE hoa_don_id = @HoaDonId AND trang_thai = 'HOAN_THANH';",
             new { HoaDonId = header.Id },
             transaction);
         if (total < 0 || total > header.KhachDaThanhToan)

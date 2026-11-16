@@ -182,7 +182,8 @@ public partial class LichSuThanhToanKhachHangWindow : Window
         TxtCongNoTruoc.Text = $"{_summary.CongNoTruocThanhToan:N0} đ";
         TxtCongNoSau.Text = $"{_summary.CongNoSauThanhToan:N0} đ";
         TxtCongNoHienTai.Text = $"{_summary.CongNoHienTai:N0} đ";
-        TxtKhachHang.Text = $"{_customerCode} - {_customerName} • Công nợ hiện tại: {_summary.CongNoHienTai:N0} đ";
+        var traTruocStr = _summary.SoDuTraTruoc > 0 ? $" • Trả trước: {_summary.SoDuTraTruoc:N0} đ" : "";
+        TxtKhachHang.Text = $"{_customerCode} - {_customerName} • Công nợ hiện tại: {_summary.CongNoHienTai:N0} đ{traTruocStr}";
     }
 
     private bool KiemTraKhoangNgay()

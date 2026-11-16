@@ -214,13 +214,18 @@ public sealed class BaoCaoNhaCungCapService
         return congNoNoiBo;
     }
 
-    private static string BieuThucDaThanhToan() => @"COALESCE((
-        SELECT SUM(ls.ghi_co)
+    private static string BieuThucDaThanhToan() => @"GREATEST(0, COALESCE((
+        SELECT SUM(
+            CASE
+                WHEN ls.loai_giao_dich = 'THANH_TOAN_NHAP' THEN ls.ghi_co
+                WHEN ls.loai_giao_dich = 'HUY_THANH_TOAN' THEN -ls.ghi_no
+                ELSE 0
+            END)
         FROM lich_su_cong_no_nha_cung_cap ls
         WHERE ls.nha_cung_cap_id = ncc.id
-          AND ls.loai_giao_dich = 'THANH_TOAN_NHAP'
+          AND ls.loai_giao_dich IN ('THANH_TOAN_NHAP', 'HUY_THANH_TOAN')
           AND ls.thoi_gian >= @TuNgay AND ls.thoi_gian < @DenKeTiep
-    ), 0)";
+    ), 0))";
 
     private async Task<BaoCaoNhaCungCapTongHop> TaiTongHopAsync(
         MySqlConnection conn, DieuKien dk, CancellationToken token)
@@ -344,10 +349,15 @@ public sealed class BaoCaoNhaCungCapService
         MySqlConnection conn, DieuKien dk, CancellationToken token)
     {
         var sql = $"""
-        SELECT COALESCE(SUM(ls.ghi_co), 0)
+        SELECT GREATEST(0, COALESCE(SUM(
+            CASE
+                WHEN ls.loai_giao_dich = 'THANH_TOAN_NHAP' THEN ls.ghi_co
+                WHEN ls.loai_giao_dich = 'HUY_THANH_TOAN' THEN -ls.ghi_no
+                ELSE 0
+            END), 0))
         FROM lich_su_cong_no_nha_cung_cap ls
         INNER JOIN nha_cung_cap ncc ON ncc.id = ls.nha_cung_cap_id
-        WHERE ls.loai_giao_dich = 'THANH_TOAN_NHAP'
+        WHERE ls.loai_giao_dich IN ('THANH_TOAN_NHAP', 'HUY_THANH_TOAN')
           AND ls.thoi_gian >= @TuNgay AND ls.thoi_gian < @DenKeTiep
           AND ncc.trang_thai = 1
           {(dk.TimKiem is null ? "" : "AND (ncc.ma_nha_cung_cap LIKE @TimKiem OR ncc.ten_nha_cung_cap LIKE @TimKiem OR ncc.so_dien_thoai LIKE @TimKiem)")};

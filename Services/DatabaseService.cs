@@ -4183,26 +4183,31 @@ public sealed partial class DatabaseService
 
         await using var connection = await OpenAsync();
 
-        // 1. Lấy công nợ hiện tại thực tế của khách hàng (A - Single Source of Truth)
-        var congNoHienTai = await connection.ExecuteScalarAsync<decimal?>(
+        // 1. Lấy công nợ hiện tại thực tế và số dư trả trước của khách hàng (A - Single Source of Truth)
+        var thongTinKhach = await connection.QueryFirstOrDefaultAsync<(decimal? NoHienTai, decimal? SoDuTraTruoc)>(
             $"""
-            SELECT {tien.NoHienTai}
+            SELECT {tien.NoHienTai} AS NoHienTai,
+                   COALESCE(kh.so_du_tra_truoc, 0) AS SoDuTraTruoc
             FROM khach_hang kh
             WHERE kh.id = @CustomerId
             LIMIT 1;
             """,
-            new { CustomerId = customerId }) ?? 0m;
+            new { CustomerId = customerId });
 
-        // 2. Thống kê lịch sử giao dịch thanh toán trong kỳ lọc
+        var congNoHienTai = thongTinKhach.NoHienTai ?? 0m;
+        var soDuTraTruoc = thongTinKhach.SoDuTraTruoc ?? 0m;
+
+        // 2. Thống kê lịch sử giao dịch thanh toán trong kỳ lọc (chỉ tính phiếu HOAN_THANH)
         const string sql = """
         SELECT
-            COUNT(*) AS TongSoGiaoDich,
-            COALESCE(SUM(CASE WHEN ls.trang_thai <> 'HUY' THEN ls.so_tien ELSE 0 END), 0) AS TongTienDaThanhToan,
+            COUNT(CASE WHEN ls.trang_thai = 'HOAN_THANH' THEN 1 END) AS TongSoGiaoDich,
+            COALESCE(SUM(CASE WHEN ls.trang_thai = 'HOAN_THANH' THEN ls.so_tien ELSE 0 END), 0) AS TongTienDaThanhToan,
             (
                 SELECT first_record.cong_no_truoc
                 FROM lich_su_thanh_toan_cong_no_khach_hang first_record
                 LEFT JOIN nguoi_dung first_user ON first_user.id = first_record.nguoi_thuc_hien_id
                 WHERE first_record.khach_hang_id = @CustomerId
+                  AND first_record.trang_thai = 'HOAN_THANH'
                   AND (@TuNgay IS NULL OR first_record.thoi_gian >= @TuNgay)
                   AND (@DenNgayExclusive IS NULL OR first_record.thoi_gian < @DenNgayExclusive)
                   AND (@TuKhoa IS NULL OR (
@@ -4221,7 +4226,7 @@ public sealed partial class DatabaseService
                 FROM lich_su_thanh_toan_cong_no_khach_hang last_record
                 LEFT JOIN nguoi_dung last_user ON last_user.id = last_record.nguoi_thuc_hien_id
                 WHERE last_record.khach_hang_id = @CustomerId
-                  AND last_record.trang_thai <> 'HUY'
+                  AND last_record.trang_thai = 'HOAN_THANH'
                   AND (@TuNgay IS NULL OR last_record.thoi_gian >= @TuNgay)
                   AND (@DenNgayExclusive IS NULL OR last_record.thoi_gian < @DenNgayExclusive)
                   AND (@TuKhoa IS NULL OR (
@@ -4265,7 +4270,8 @@ public sealed partial class DatabaseService
             TongTienDaThanhToan = row.TongTienDaThanhToan,
             CongNoTruocThanhToan = row.CongNoTruocThanhToanRaw ?? congNoHienTai,
             CongNoSauThanhToan = row.CongNoSauThanhToanRaw ?? congNoHienTai,
-            CongNoHienTai = congNoHienTai
+            CongNoHienTai = congNoHienTai,
+            SoDuTraTruoc = soDuTraTruoc
         };
     }
 
@@ -8345,39 +8351,47 @@ public sealed partial class DatabaseService
 
                 await using var connection = await OpenAsync();
 
-                // 1. Lấy công nợ hiện tại thực tế của nhà cung cấp (A - Single Source of Truth)
+                // 1. Lấy công nợ hiện tại thực tế và số dư trả trước của nhà cung cấp (A - Single Source of Truth)
                 decimal congNoHienTai;
+                decimal soDuTraTruoc = 0m;
                 if (nhaCungCapId.HasValue && nhaCungCapId.Value > 0)
                 {
-                    congNoHienTai = await connection.ExecuteScalarAsync<decimal?>(
+                    var nccInfo = await connection.QueryFirstOrDefaultAsync<(decimal? NoHienTai, decimal? SoDuTraTruoc)>(
                         $"""
-                        SELECT {tien.NoHienTai}
+                        SELECT {tien.NoHienTai} AS NoHienTai,
+                               COALESCE(ncc.so_du_tra_truoc, 0) AS SoDuTraTruoc
                         FROM nha_cung_cap ncc
                         WHERE ncc.id = @NhaCungCapId
                         LIMIT 1;
                         """,
-                        new { NhaCungCapId = nhaCungCapId.Value }) ?? 0m;
+                        new { NhaCungCapId = nhaCungCapId.Value });
+                    congNoHienTai = nccInfo.NoHienTai ?? 0m;
+                    soDuTraTruoc = nccInfo.SoDuTraTruoc ?? 0m;
                 }
                 else
                 {
-                    congNoHienTai = await connection.ExecuteScalarAsync<decimal?>(
+                    var nccInfo = await connection.QueryFirstOrDefaultAsync<(decimal? NoHienTai, decimal? SoDuTraTruoc)>(
                         $"""
-                        SELECT SUM({tien.NoHienTai})
+                        SELECT SUM({tien.NoHienTai}) AS NoHienTai,
+                               SUM(COALESCE(ncc.so_du_tra_truoc, 0)) AS SoDuTraTruoc
                         FROM nha_cung_cap ncc
                         WHERE ncc.trang_thai = 1;
-                        """) ?? 0m;
+                        """);
+                    congNoHienTai = nccInfo.NoHienTai ?? 0m;
+                    soDuTraTruoc = nccInfo.SoDuTraTruoc ?? 0m;
                 }
 
-                // 2. Thống kê lịch sử giao dịch thanh toán trong kỳ lọc
+                // 2. Thống kê lịch sử giao dịch thanh toán trong kỳ lọc (chỉ tính phiếu HOAN_THANH)
                 const string sql = """
                 SELECT
-                    COUNT(*) AS TongSoGiaoDich,
-                    COALESCE(SUM(CASE WHEN ls.trang_thai <> 'HUY' THEN ls.so_tien ELSE 0 END), 0) AS TongTienDaThanhToan,
+                    COUNT(CASE WHEN ls.trang_thai = 'HOAN_THANH' THEN 1 END) AS TongSoGiaoDich,
+                    COALESCE(SUM(CASE WHEN ls.trang_thai = 'HOAN_THANH' THEN ls.so_tien ELSE 0 END), 0) AS TongTienDaThanhToan,
                     (
                         SELECT first_record.cong_no_truoc
                         FROM lich_su_thanh_toan_cong_no_nha_cung_cap first_record
                         LEFT JOIN nguoi_dung first_user ON first_user.id = first_record.nguoi_thuc_hien_id
                         WHERE (@NhaCungCapId IS NULL OR first_record.nha_cung_cap_id = @NhaCungCapId)
+                          AND first_record.trang_thai = 'HOAN_THANH'
                           AND (@TuNgay IS NULL OR first_record.thoi_gian >= @TuNgay)
                           AND (@DenNgayExclusive IS NULL OR first_record.thoi_gian < @DenNgayExclusive)
                           AND (@TuKhoa IS NULL OR (
@@ -8399,7 +8413,7 @@ public sealed partial class DatabaseService
                         FROM lich_su_thanh_toan_cong_no_nha_cung_cap last_record
                         LEFT JOIN nguoi_dung last_user ON last_user.id = last_record.nguoi_thuc_hien_id
                         WHERE (@NhaCungCapId IS NULL OR last_record.nha_cung_cap_id = @NhaCungCapId)
-                          AND last_record.trang_thai <> 'HUY'
+                          AND last_record.trang_thai = 'HOAN_THANH'
                           AND (@TuNgay IS NULL OR last_record.thoi_gian >= @TuNgay)
                           AND (@DenNgayExclusive IS NULL OR last_record.thoi_gian < @DenNgayExclusive)
                           AND (@TuKhoa IS NULL OR (
@@ -8449,7 +8463,8 @@ public sealed partial class DatabaseService
                     TongTienDaThanhToan = row.TongTienDaThanhToan,
                     CongNoTruocThanhToan = row.CongNoTruocThanhToanRaw ?? congNoHienTai,
                     CongNoSauThanhToan = row.CongNoSauThanhToanRaw ?? congNoHienTai,
-                    CongNoHienTai = congNoHienTai
+                    CongNoHienTai = congNoHienTai,
+                    SoDuTraTruoc = soDuTraTruoc
                 };
             }
 
@@ -10852,6 +10867,7 @@ public sealed partial class DatabaseService
         FROM thanh_toan_nha_cung_cap tt
         LEFT JOIN nguoi_dung nd ON nd.id = tt.nguoi_thuc_hien_id
         WHERE tt.phieu_nhap_id = @PhieuNhapId
+          AND tt.trang_thai = 'HOAN_THANH'
         ORDER BY tt.thoi_gian DESC, tt.id DESC;
         """;
 
