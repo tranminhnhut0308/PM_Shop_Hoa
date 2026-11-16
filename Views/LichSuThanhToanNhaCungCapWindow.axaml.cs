@@ -272,12 +272,13 @@ public partial class LichSuThanhToanNhaCungCapWindow : Window
         TxtCongNoTruoc.Text = $"{_summary.CongNoTruocThanhToan:N0} đ";
         TxtCongNoSau.Text = $"{_summary.CongNoSauThanhToan:N0} đ";
         TxtCongNoHienTai.Text = $"{_summary.CongNoHienTai:N0} đ";
-        if (_initialSupplierId.HasValue && _summary.SoDuTraTruoc > 0)
+        if (_initialSupplierId.HasValue)
         {
             var baseText = string.IsNullOrWhiteSpace(_supplierCode)
                 ? (string.IsNullOrWhiteSpace(_supplierName) ? "Nhà cung cấp" : _supplierName)
                 : (_supplierName.StartsWith(_supplierCode, StringComparison.OrdinalIgnoreCase) ? _supplierName : $"{_supplierCode} - {_supplierName}");
-            TxtNhaCungCap.Text = $"{baseText} • Trả trước: {_summary.SoDuTraTruoc:N0} đ";
+            var traTruocStr = _summary.SoDuTraTruoc > 0 ? $" • Trả trước: {_summary.SoDuTraTruoc:N0} đ" : "";
+            TxtNhaCungCap.Text = $"{baseText} • Công nợ hiện tại: {_summary.CongNoHienTai:N0} đ{traTruocStr}";
         }
     }
 

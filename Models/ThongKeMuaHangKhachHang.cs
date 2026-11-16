@@ -60,11 +60,7 @@ public sealed class ThongKeMuaHangKhachHang
     public bool CoDuLieuKiotViet => SoHoaDon == 0 && SoLanGhiCongNo == 0;
 
     /// <summary>
-    /// Công nợ hiện tại: ưu tiên số dư từ sổ cái công nợ,
-    /// khi chưa có sổ cái thì lấy tổng nợ trên hóa đơn.
+    /// Công nợ hiện tại: trả về tổng nợ hiện tại thực tế (đã tính cả KiotViet và nội bộ).
     /// </summary>
-    public decimal TongCongNo =>
-        SoLanGhiCongNo > 0
-            ? TongCongNoLichSu
-            : TongConNoHoaDon;
+    public decimal TongCongNo => TongConNoHienTai;
 }

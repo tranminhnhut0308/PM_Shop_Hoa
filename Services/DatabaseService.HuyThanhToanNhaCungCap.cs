@@ -433,6 +433,16 @@ public sealed partial class DatabaseService
                     },
                     transaction);
 
+                // 9. Đồng bộ và tính lại công nợ, số dư trả trước NCC theo các giao dịch còn hiệu lực (Issue #122)
+                var (congNoDongBo, soDuTraTruocDongBo) = await DongBoVaTinhLaiCongNoNhaCungCapTrongGiaoDichAsync(
+                    connection,
+                    transaction,
+                    record.NhaCungCapId,
+                    userId);
+
+                congNoSauKhiHuy = congNoDongBo;
+                soDuTraTruocSau = soDuTraTruocDongBo;
+
                 await LogSubAccountActivityAsync(
                     "Hủy thanh toán NCC",
                     "NHA_CUNG_CAP",

@@ -3259,7 +3259,7 @@ public sealed partial class DatabaseService
         var tienNoiBo = $"""
             COALESCE(
                 (
-                    SELECT GREATEST(0, SUM(ls.ghi_no - ls.ghi_co))
+                    SELECT SUM(ls.ghi_no - ls.ghi_co)
                     FROM lich_su_cong_no_khach_hang ls
                     WHERE ls.khach_hang_id = {idExpression}
                 ),
@@ -3295,9 +3295,9 @@ public sealed partial class DatabaseService
             return ($"GREATEST(0, {tienNoiBo})", tienBanNoiBo, tienBanTruTraNoiBo);
 
         return (
-            $"GREATEST(0, CASE WHEN kh.co_du_lieu_kiotviet = 1 THEN (COALESCE(kh.no_can_thu_hien_tai, 0) + {tienNoiBo}) ELSE {tienNoiBo} END)",
-            $"CASE WHEN kh.co_du_lieu_kiotviet = 1 THEN (COALESCE(kh.tong_ban, 0) + {tienBanNoiBo}) ELSE {tienBanNoiBo} END",
-            $"CASE WHEN kh.co_du_lieu_kiotviet = 1 THEN (COALESCE(kh.tong_ban_tru_tra_hang, 0) + {tienBanTruTraNoiBo}) ELSE {tienBanTruTraNoiBo} END");
+            $"GREATEST(0, CASE WHEN (kh.co_du_lieu_kiotviet = 1 OR COALESCE(kh.no_can_thu_hien_tai, 0) > 0) THEN (COALESCE(kh.no_can_thu_hien_tai, 0) + {tienNoiBo}) ELSE {tienNoiBo} END)",
+            $"CASE WHEN (kh.co_du_lieu_kiotviet = 1 OR COALESCE(kh.tong_ban, 0) > 0) THEN (COALESCE(kh.tong_ban, 0) + {tienBanNoiBo}) ELSE {tienBanNoiBo} END",
+            $"CASE WHEN (kh.co_du_lieu_kiotviet = 1 OR COALESCE(kh.tong_ban_tru_tra_hang, 0) > 0) THEN (COALESCE(kh.tong_ban_tru_tra_hang, 0) + {tienBanTruTraNoiBo}) ELSE {tienBanTruTraNoiBo} END");
     }
 
     /// <summary>
@@ -3458,7 +3458,7 @@ public sealed partial class DatabaseService
         var tienNoiBo = $"""
             COALESCE(
                 (
-                    SELECT GREATEST(0, SUM(ls.ghi_no - ls.ghi_co))
+                    SELECT SUM(ls.ghi_no - ls.ghi_co)
                     FROM lich_su_cong_no_nha_cung_cap ls
                     WHERE ls.nha_cung_cap_id = {idExpression}
                 ),
@@ -3886,6 +3886,17 @@ public sealed partial class DatabaseService
 
         await using var connection = await OpenAsync();
 
+        if (customerId > 0)
+        {
+            var coPhieuHuy = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM lich_su_thanh_toan_cong_no_khach_hang WHERE khach_hang_id = @Id AND trang_thai = 'HUY';",
+                new { Id = customerId }) > 0;
+            if (coPhieuHuy)
+            {
+                await DongBoVaTinhLaiCongNoKhachHangAsync(customerId);
+            }
+        }
+
         var thongKe = await connection.QueryFirstOrDefaultAsync<ThongKeMuaHangKhachHang>(
                           sql,
                           new { Id = customerId })
@@ -4182,6 +4193,17 @@ public sealed partial class DatabaseService
         var tien = TaoBieuThucTienKhachHang(coBangTraHang, "kh.id", coCotKiotViet);
 
         await using var connection = await OpenAsync();
+
+        if (customerId > 0)
+        {
+            var coPhieuHuy = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM lich_su_thanh_toan_cong_no_khach_hang WHERE khach_hang_id = @Id AND trang_thai = 'HUY';",
+                new { Id = customerId }) > 0;
+            if (coPhieuHuy)
+            {
+                await DongBoVaTinhLaiCongNoKhachHangAsync(customerId);
+            }
+        }
 
         // 1. Lấy công nợ hiện tại thực tế và số dư trả trước của khách hàng (A - Single Source of Truth)
         var thongTinKhach = await connection.QueryFirstOrDefaultAsync<(decimal? NoHienTai, decimal? SoDuTraTruoc)>(
@@ -7014,6 +7036,18 @@ public sealed partial class DatabaseService
                     transaction)
             ).AsList();
 
+            if (khachHangId > 0)
+            {
+                var coPhieuHuy = await connection.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM lich_su_thanh_toan_cong_no_khach_hang WHERE khach_hang_id = @Id AND trang_thai = 'HUY';",
+                    new { Id = khachHangId },
+                    transaction) > 0;
+                if (coPhieuHuy)
+                {
+                    await DongBoVaTinhLaiCongNoKhachHangTrongGiaoDichAsync(connection, transaction, khachHangId, userId);
+                }
+            }
+
             var bieuThucConNo = TaoBieuThucTienKhachHang(false, "kh.id", coCotKiotViet).NoHienTai;
             var conNoHienTai = await connection.ExecuteScalarAsync<decimal>(
                 $"""
@@ -7389,6 +7423,7 @@ public sealed partial class DatabaseService
         public decimal KhachDaThanhToan { get; set; }
         public decimal ConNo { get; set; }
         public string TrangThaiHoaDon { get; set; } = "";
+        public string TrangThaiThanhToan { get; set; } = "";
     }
 
     private async Task EnsureBangLichSuThanhToanKhachHangAsync()
@@ -7996,6 +8031,18 @@ public sealed partial class DatabaseService
 
                     await EnsureTraTruocSchemaAsync(connection, transaction);
 
+                    if (nhaCungCapId > 0)
+                    {
+                        var coPhieuHuy = await connection.ExecuteScalarAsync<int>(
+                            "SELECT COUNT(*) FROM lich_su_thanh_toan_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id AND trang_thai = 'HUY';",
+                            new { Id = nhaCungCapId },
+                            transaction) > 0;
+                        if (coPhieuHuy)
+                        {
+                            await DongBoVaTinhLaiCongNoNhaCungCapTrongGiaoDichAsync(connection, transaction, nhaCungCapId, userId);
+                        }
+                    }
+
                     var debtExpression = TaoBieuThucTienNhaCungCap("ncc.id", coCotKiotViet).NoHienTai;
                     var debtBefore = await connection.ExecuteScalarAsync<decimal>(
                         $"""
@@ -8350,6 +8397,17 @@ public sealed partial class DatabaseService
                 var tien = TaoBieuThucTienNhaCungCap("ncc.id", coCotKiotViet);
 
                 await using var connection = await OpenAsync();
+
+                if (nhaCungCapId.HasValue && nhaCungCapId.Value > 0)
+                {
+                    var coPhieuHuy = await connection.ExecuteScalarAsync<int>(
+                        "SELECT COUNT(*) FROM lich_su_thanh_toan_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id AND trang_thai = 'HUY';",
+                        new { Id = nhaCungCapId.Value }) > 0;
+                    if (coPhieuHuy)
+                    {
+                        await DongBoVaTinhLaiCongNoNhaCungCapAsync(nhaCungCapId.Value);
+                    }
+                }
 
                 // 1. Lấy công nợ hiện tại thực tế và số dư trả trước của nhà cung cấp (A - Single Source of Truth)
                 decimal congNoHienTai;
@@ -9587,6 +9645,17 @@ public sealed partial class DatabaseService
 
         await EnsurePhieuNhapTrackingColumnsAsync();
         await using var connection = await OpenAsync();
+
+        if (supplierId > 0)
+        {
+            var coPhieuHuy = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM lich_su_thanh_toan_cong_no_nha_cung_cap WHERE nha_cung_cap_id = @Id AND trang_thai = 'HUY';",
+                new { Id = supplierId }) > 0;
+            if (coPhieuHuy)
+            {
+                await DongBoVaTinhLaiCongNoNhaCungCapAsync(supplierId);
+            }
+        }
 
         var thamSo = new { Id = supplierId };
 

@@ -63,8 +63,8 @@ public sealed class ThongKeTaiChinhNhaCungCap
     /// (ưu tiên sổ cái công nợ, không có thì lấy số nợ đã được ghi nhận trên phiếu).
     /// </summary>
     public decimal TongCongNoHienTai =>
-        (CoDuLieuKiotViet && NoCanTraHienTaiExcel.HasValue ? NoCanTraHienTaiExcel.Value : 0m)
-        + (SoLanGhiCongNo > 0 ? TongCongNoLichSu : TongConNoPhieuNhapDaGhiCongNo);
+        Math.Max(0m, (CoDuLieuKiotViet && NoCanTraHienTaiExcel.HasValue ? NoCanTraHienTaiExcel.Value : 0m)
+        + (SoLanGhiCongNo > 0 ? TongCongNoLichSu : TongConNoPhieuNhapDaGhiCongNo));
 
     /// <summary>
     /// Tổng tiền đã mua: bao gồm tổng mua từ file danh sách (nếu có)

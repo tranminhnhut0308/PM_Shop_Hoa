@@ -830,6 +830,12 @@ public sealed partial class DatabaseService
                                 """,
                                 new { Id = lstt.Id, Now = now, UserId = userHuyId, LyDoHuy = lyDoHuy.Trim() },
                                 transaction);
+
+                            await DongBoVaTinhLaiCongNoKhachHangTrongGiaoDichAsync(
+                                connection,
+                                transaction,
+                                lstt.KhachHangId,
+                                userHuyId);
                         }
                     }
                 }
@@ -1057,6 +1063,12 @@ public sealed partial class DatabaseService
                                 """,
                                 new { Id = lstt.Id, Now = now, UserId = userHuyId, LyDoHuy = lyDoHuy.Trim() },
                                 transaction);
+
+                            await DongBoVaTinhLaiCongNoNhaCungCapTrongGiaoDichAsync(
+                                connection,
+                                transaction,
+                                lstt.NhaCungCapId,
+                                userHuyId);
                         }
                     }
                 }

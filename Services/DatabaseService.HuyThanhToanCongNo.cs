@@ -369,6 +369,16 @@ public sealed partial class DatabaseService
                     },
                     transaction);
 
+                // 8. Đồng bộ và tính lại công nợ, số dư trả trước theo các giao dịch còn hiệu lực (Issue #122)
+                var (congNoDongBo, soDuTraTruocDongBo) = await DongBoVaTinhLaiCongNoKhachHangTrongGiaoDichAsync(
+                    connection,
+                    transaction,
+                    record.KhachHangId,
+                    userId);
+
+                congNoSauKhiHuy = congNoDongBo;
+                soDuTraTruocSau = soDuTraTruocDongBo;
+
                 await LogSubAccountActivityAsync(
                     "Hủy thu nợ",
                     "KHACH_HANG",
