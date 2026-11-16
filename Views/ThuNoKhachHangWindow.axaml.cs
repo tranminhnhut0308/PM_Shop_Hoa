@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using ShopHoa.Helpers;
 using ShopHoa.Models;
 
 namespace ShopHoa.Views;
@@ -21,6 +22,8 @@ public partial class ThuNoKhachHangWindow : Window
     private readonly decimal _conNo;
     private readonly decimal _soDuTraTruoc;
     private readonly uint? _nguoiThucHienIdMacDinh;
+    private bool _dangDinhDangSoTien;
+    private string _soTienHopLeCuoi = string.Empty;
 
     public ThuNoKhachHangWindow()
         : this("", "Khách hàng", 0m, 0m, Array.Empty<SoQuyLuaChonItem>(), null)
@@ -152,17 +155,11 @@ public partial class ThuNoKhachHangWindow : Window
     private static bool TryDocSoTien(string? text, out decimal amount)
     {
         amount = 0m;
-        if (string.IsNullOrWhiteSpace(text))
+        if (string.IsNullOrWhiteSpace(text) || text.Contains(','))
             return false;
 
-        var digits = new string(text.Where(char.IsDigit).ToArray());
-        var chiCoKyTuHopLe = text.All(c =>
-            char.IsDigit(c) || char.IsWhiteSpace(c) ||
-            c == '.' || c == ',' || c == '\'');
-
-        return chiCoKyTuHopLe
-               && digits.Length > 0
-               && decimal.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out amount);
+        return text.Any(char.IsDigit)
+               && MoneyInput.TryParse(text, false, out amount, out _);
     }
 
     private void HienLoi(string thongDiep)
@@ -173,65 +170,49 @@ public partial class ThuNoKhachHangWindow : Window
 
     private void TxtSoTienThu_TextChanged(object? sender, TextChangedEventArgs e)
     {
-        if (sender is not TextBox tb) return;
-
-        var oldText = tb.Text ?? "";
-        var digits = LayChuSo(oldText);
-
-        if (digits.Length == 0)
-        {
-            if (tb.Text != "")
-                tb.Text = "";
-            CapNhatConNoSauThu();
+        if (_dangDinhDangSoTien || sender is not TextBox tb)
             return;
-        }
 
-        var formatted = FormatSoTien(digits);
+        var source = tb.Text ?? string.Empty;
+        var transient = MoneyInput.IsTransientComposition(source, tb.CaretIndex);
 
-        // Đã đúng format rồi thì không làm gì
-        if (tb.Text == formatted)
+        if (!MoneyInput.TryFormatEditingText(
+                source,
+                tb.CaretIndex,
+                MoneyInput.GiaTienToiDa,
+                out var formatted,
+                out var caret,
+                allowDecimal: false))
         {
-            CapNhatConNoSauThu();
-            return;
-        }
-
-        // Giữ vị trí con trỏ theo số chữ số
-        int caret = tb.CaretIndex;
-        int digitsBeforeCaret = LayChuSo(oldText.Substring(0, Math.Min(caret, oldText.Length))).Length;
-
-        tb.Text = formatted;
-
-        int newCaret = 0;
-        int digitCount = 0;
-        for (int i = 0; i < formatted.Length; i++)
-        {
-            if (char.IsDigit(formatted[i]))
-                digitCount++;
-
-            if (digitCount >= digitsBeforeCaret)
+            _dangDinhDangSoTien = true;
+            try
             {
-                newCaret = i + 1;
-                break;
+                tb.Text = _soTienHopLeCuoi;
+                tb.CaretIndex = _soTienHopLeCuoi.Length;
             }
+            finally
+            {
+                _dangDinhDangSoTien = false;
+            }
+
+            CapNhatConNoSauThu();
+            return;
         }
 
-        tb.CaretIndex = Math.Min(newCaret, formatted.Length);
+        _dangDinhDangSoTien = true;
+        try
+        {
+            if (tb.Text != formatted)
+                tb.Text = formatted;
+            tb.CaretIndex = caret;
+            if (!transient)
+                _soTienHopLeCuoi = formatted;
+        }
+        finally
+        {
+            _dangDinhDangSoTien = false;
+        }
+
         CapNhatConNoSauThu();
-    }
-
-    private static string LayChuSo(string? text)
-    {
-        if (string.IsNullOrEmpty(text)) return "";
-        return new string(text.Where(char.IsDigit).ToArray());
-    }
-
-    private static string FormatSoTien(string digits)
-    {
-        if (string.IsNullOrEmpty(digits)) return "";
-
-        if (!decimal.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var number))
-            return digits;
-
-        return number.ToString("N0", new CultureInfo("vi-VN")); // → 3.000
     }
 }

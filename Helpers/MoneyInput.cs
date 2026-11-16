@@ -11,6 +11,7 @@ namespace ShopHoa.Helpers;
 public static class MoneyInput
 {
     private static readonly CultureInfo VietnameseCulture = CultureInfo.GetCultureInfo("vi-VN");
+    private static readonly char[] NegativeSigns = { '-', '\u2212', '\u2013', '\u2014' };
 
     /// <summary>
     /// Định dạng tiền Việt Nam có dấu phân cách hàng nghìn.
@@ -36,17 +37,37 @@ public static class MoneyInput
         int caret,
         decimal maximum,
         out string formatted,
-        out int formattedCaret)
+        out int formattedCaret,
+        bool allowDecimal = true)
     {
         var source = text ?? string.Empty;
-        if (ContainsUnsupportedInput(source))
+        caret = Math.Clamp(caret, 0, source.Length);
+
+        if (ContainsNegativeSign(source))
         {
             formatted = string.Empty;
             formattedCaret = 0;
             return false;
         }
 
-        caret = Math.Clamp(caret, 0, source.Length);
+        if (!allowDecimal && source.Contains(','))
+        {
+            formatted = string.Empty;
+            formattedCaret = 0;
+            return false;
+        }
+
+        // Bộ gõ tiếng Việt (Telex/VNI) tạm thời đặt một chữ cái ASCII ngay trước
+        // con trỏ rồi mới biến đổi thành ký tự có dấu (ví dụ "dd" -> "đ").
+        // Giữ nguyên chuỗi trong lúc chờ IME hoàn tất để không ghi đè/backspace
+        // làm mất chữ số người dùng vừa nhập.
+        if (IsTransientComposition(source, caret))
+        {
+            formatted = source;
+            formattedCaret = caret;
+            return true;
+        }
+
         var parts = ExtractEditingParts(source, caret);
         var integer = NormalizeLeadingZeros(parts.Integer, out var removedLeadingZeros);
         var digitsBeforeCaret = Math.Max(0, parts.DigitsBeforeCaret - removedLeadingZeros);
@@ -90,12 +111,15 @@ public static class MoneyInput
 
         var raw = (text ?? "").Trim();
 
-        // Bỏ ký hiệu tiền và mọi dấu phân cách kiểu Việt Nam rồi kiểm tra lại.
-        var normalized = raw
-            .Replace(" ", string.Empty)
-            .Replace("\u00A0", string.Empty)
-            .Replace("đ", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("₫", string.Empty, StringComparison.OrdinalIgnoreCase);
+        if (ContainsNegativeSign(raw))
+        {
+            loi = "Giá bán không được âm.";
+            return false;
+        }
+
+        // Bỏ ký hiệu tiền, chữ cái và mọi ký tự không phải số/dấu phân cách.
+        // Nhờ vậy chuỗi tạm của bộ gõ tiếng Việt vẫn đọc được đúng phần số.
+        var normalized = KeepNumericCharacters(raw);
 
         if (normalized.Length == 0)
         {
@@ -146,14 +170,10 @@ public static class MoneyInput
     /// </summary>
     public static decimal Parse(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        if (string.IsNullOrWhiteSpace(text) || ContainsNegativeSign(text))
             return 0m;
 
-        var normalized = text
-            .Replace(" ", string.Empty)
-            .Replace(" ", string.Empty)
-            .Replace("đ", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("₫", string.Empty, StringComparison.OrdinalIgnoreCase);
+        var normalized = KeepNumericCharacters(text);
 
         if (normalized.Length == 0)
             return 0m;
@@ -178,12 +198,28 @@ public static class MoneyInput
             : 0m;
     }
 
-    private static bool ContainsUnsupportedInput(string source)
-        => source.Any(character =>
-            character is < '0' or > '9'
-            && character is not '.' and not ','
-            && !char.IsWhiteSpace(character)
-            && character is not 'đ' and not 'Đ' and not '₫');
+    private static bool ContainsNegativeSign(string source)
+        => source.IndexOfAny(NegativeSigns) >= 0;
+
+    internal static bool IsTransientComposition(string source, int caret)
+        => caret > 0
+           && caret <= source.Length
+           && source[caret - 1] is >= 'a' and <= 'z' or >= 'A' and <= 'Z';
+
+    private static string KeepNumericCharacters(string source)
+    {
+        if (source.Length == 0)
+            return string.Empty;
+
+        var builder = new StringBuilder(source.Length);
+        foreach (var character in source)
+        {
+            if (character is >= '0' and <= '9' or '.' or ',')
+                builder.Append(character);
+        }
+
+        return builder.ToString();
+    }
 
     private static EditingParts ExtractEditingParts(string source, int caret)
     {

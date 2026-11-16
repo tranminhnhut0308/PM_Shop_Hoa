@@ -11,6 +11,7 @@ internal static class MoneyInputVerifier
             || !VerifyExcelPaste()
             || !VerifyCaret()
             || !VerifyDecimalInput()
+            || !VerifyVietnameseKeyboard()
             || !VerifyEmptyAndInvalidInput())
         {
             return 1;
@@ -91,6 +92,44 @@ internal static class MoneyInputVerifier
         return true;
     }
 
+    private static bool VerifyVietnameseKeyboard()
+    {
+        // "d" là ký tự tạm của bộ gõ Telex trước khi thành "đ": phải giữ nguyên.
+        if (!MoneyInput.TryFormatEditingText(
+                "200000d", 7, MoneyInput.GiaTienToiDa, out var composing, out var composingCaret)
+            || composing != "200000d"
+            || composingCaret != 7
+            || !MoneyInput.TryParse("200000d", true, out var composingValue, out _)
+            || composingValue != 200000m)
+        {
+            return Fail("Sai xử lý ký tự tạm của bộ gõ tiếng Việt.");
+        }
+
+        if (!MoneyInput.TryFormatEditingText(
+                "200000đ", 7, MoneyInput.GiaTienToiDa, out var withMark, out var withMarkCaret)
+            || withMark != "200.000"
+            || withMarkCaret != 7
+            || !MoneyInput.TryParse("200000đ", true, out var markedValue, out _)
+            || markedValue != 200000m)
+        {
+            return Fail("Sai xử lý số có ký hiệu đ sau khi bộ gõ hoàn tất.");
+        }
+
+        if (!MoneyInput.TryFormatEditingText(
+                "50a000", 6, MoneyInput.GiaTienToiDa, out var letters, out _)
+            || letters != "50.000"
+            || !MoneyInput.TryFormatEditingText(
+                "200000,5", 8, MoneyInput.GiaTienToiDa, out var decimalText, out _)
+            || decimalText != "200.000,5"
+            || MoneyInput.TryFormatEditingText(
+                "200000,5", 8, MoneyInput.GiaTienToiDa, out _, out _, allowDecimal: false))
+        {
+            return Fail("Sai xử lý chữ cái hoặc số thập phân theo từng loại ô nhập.");
+        }
+
+        return true;
+    }
+
     private static bool VerifyEmptyAndInvalidInput()
     {
         if (!MoneyInput.TryFormatEditingText(
@@ -99,9 +138,12 @@ internal static class MoneyInputVerifier
             || MoneyInput.TryFormatEditingText(
                 "-50000", 6, MoneyInput.GiaTienToiDa, out _, out _)
             || MoneyInput.TryFormatEditingText(
-                "50a000", 6, MoneyInput.GiaTienToiDa, out _, out _))
+                "−50000", 6, MoneyInput.GiaTienToiDa, out _, out _)
+            || MoneyInput.TryParse("-50000", false, out _, out _)
+            || MoneyInput.TryParse("−50000", false, out _, out _)
+            || MoneyInput.Parse("-50000") != 0m)
         {
-            return Fail("Sai xử lý nội dung trống hoặc ký tự không hợp lệ.");
+            return Fail("Sai xử lý nội dung trống hoặc số âm.");
         }
 
         return true;

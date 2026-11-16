@@ -2150,12 +2150,10 @@
                                      ToolTip.Tip="{Binding SanPham.TenSanPham}" />
                           <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                             <TextBlock Text="Đơn giá:" FontSize="11.5" Foreground="#667A74" VerticalAlignment="Center" />
-                            <TextBox Width="92" Height="24" Padding="6,2"
+                            <controls:MoneyTextBox Width="92" Height="24"
                                      FontSize="11.5" FontWeight="SemiBold" Foreground="#087F6E"
-                                     HorizontalContentAlignment="Right" VerticalContentAlignment="Center"
-                                     CornerRadius="5" BorderBrush="#CFE6E1" BorderThickness="1"
-                                     Background="White"
-                                     Text="{Binding DonGia, Mode=TwoWay, StringFormat={}{0:N0}}" />
+                                     Watermark="0"
+                                     Value="{Binding DonGia, Mode=TwoWay}" />
                             <TextBlock FontSize="11.5" Foreground="#667A74" VerticalAlignment="Center">
                               <Run Text="đ / " />
                               <Run Text="{Binding DonViTinh}" FontWeight="SemiBold" />

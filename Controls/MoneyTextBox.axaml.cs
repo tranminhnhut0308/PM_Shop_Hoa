@@ -149,6 +149,7 @@ public partial class MoneyTextBox : UserControl
 
         var source = Input.Text ?? string.Empty;
         var sourceCaret = Input.CaretIndex;
+        var transient = MoneyInput.IsTransientComposition(source, sourceCaret);
         if (!MoneyInput.TryFormatEditingText(
                 source,
                 sourceCaret,
@@ -178,7 +179,8 @@ public partial class MoneyTextBox : UserControl
                 Value = value;
             }
 
-            _lastAcceptedText = formatted;
+            if (!transient)
+                _lastAcceptedText = formatted;
         }
         finally
         {
