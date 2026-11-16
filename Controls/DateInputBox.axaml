@@ -36,7 +36,7 @@
     Padding="8,0"
     VerticalAlignment="Stretch">
 
-    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*"
+    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*"
       VerticalAlignment="Center">
 
       <!-- Ô NGÀY -->
@@ -77,6 +77,36 @@
         Width="46"
         MaxLength="4"
         Watermark="yyyy" />
+
+      <!-- KHOẢNG TRỐNG GIỮA NGÀY VÀ GIỜ -->
+      <TextBlock Grid.Column="5"
+        Text=" "
+        FontSize="13"
+        VerticalAlignment="Center"
+        Margin="2,0" />
+
+      <!-- Ô GIỜ -->
+      <TextBox x:Name="TxtHour"
+        Grid.Column="6"
+        Width="30"
+        MaxLength="2"
+        Watermark="HH" />
+
+      <!-- PHÂN CÁCH : -->
+      <TextBlock Grid.Column="7"
+        Text=":"
+        FontSize="13"
+        FontWeight="Medium"
+        Foreground="#94A3B8"
+        VerticalAlignment="Center"
+        Margin="1,0" />
+
+      <!-- Ô PHÚT -->
+      <TextBox x:Name="TxtMinute"
+        Grid.Column="8"
+        Width="30"
+        MaxLength="2"
+        Watermark="mm" />
 
     </Grid>
   </Border>

@@ -5875,8 +5875,14 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         var text = (PhieuNhapNgayNhapText ?? string.Empty).Trim();
-        if (text.Length > 0 && NgayNhapInput.TryParse(text, PhieuNhapNgayNhap, out var ngayGio))
+        if (text.Length > 0)
         {
+            if (!NgayNhapInput.TryParse(text, PhieuNhapNgayNhap, out var ngayGio))
+            {
+                StatusMessage = "Ngày nhập không hợp lệ. Vui lòng nhập theo định dạng dd/MM/yyyy HH:mm.";
+                return false;
+            }
+
             if (PhieuNhapNgayNhap != ngayGio)
             {
                 PhieuNhapNgayNhap = ngayGio;

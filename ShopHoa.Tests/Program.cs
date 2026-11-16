@@ -4778,15 +4778,16 @@ internal class Program
             MaVaiTro = Quyen.QuanTri
         });
 
-        // Khởi tạo control DateInputBox phân đoạn 3 ô: Ngày / Tháng / Năm
+        // Khởi tạo control DateInputBox phân đoạn 5 ô: Ngày / Tháng / Năm / Giờ / Phút
         var initialDt = new DateTime(2026, 11, 10, 8, 11, 0);
         var dateBox = new DateInputBox();
         dateBox.Value = initialDt;
 
-        if (dateBox.DayBox.Text != "10" || dateBox.MonthBox.Text != "11" || dateBox.YearBox.Text != "2026")
-            throw new Exception($"Phân đoạn Ngày/Tháng/Năm ban đầu sai: {dateBox.Text}");
+        if (dateBox.DayBox.Text != "10" || dateBox.MonthBox.Text != "11" || dateBox.YearBox.Text != "2026" ||
+            dateBox.HourBox.Text != "08" || dateBox.MinuteBox.Text != "11")
+            throw new Exception($"Phân đoạn Ngày/Tháng/Năm/Giờ/Phút ban đầu sai: {dateBox.DateTimeText}");
 
-        Console.WriteLine($"Khởi tạo DateInputBox 3 ô riêng biệt: Ngày={dateBox.DayBox.Text}, Tháng={dateBox.MonthBox.Text}, Năm={dateBox.YearBox.Text} ({dateBox.Text}) ✓");
+        Console.WriteLine($"Khởi tạo DateInputBox 5 ô riêng biệt: Ngày={dateBox.DayBox.Text}, Tháng={dateBox.MonthBox.Text}, Năm={dateBox.YearBox.Text}, Giờ={dateBox.HourBox.Text}, Phút={dateBox.MinuteBox.Text} ({dateBox.DateTimeText}) ✓");
 
         // BƯỚC 1: Sửa ngày 10 thành 20 bằng bàn phím
         Console.Write("1. Sửa ngày 10 thành 20 bằng bàn phím: ");
@@ -4807,9 +4808,9 @@ internal class Program
         dateBox.YearBox.Text = "2025";
         if (dateBox.YearBox.Text != "2025" || dateBox.Value?.Year != 2025)
             throw new Exception($"Sửa năm thất bại: {dateBox.Text}");
-        if (dateBox.Text != "20/12/2025")
-            throw new Exception($"Định dạng DateInputBox sau khi sửa ngày/tháng/năm sai: {dateBox.Text}");
-        Console.WriteLine("PASSED ✓ (Kết quả: " + dateBox.Text + ")");
+        if (dateBox.DateTimeText != "20/12/2025 08:11")
+            throw new Exception($"Định dạng DateInputBox sau khi sửa ngày/tháng/năm sai: {dateBox.DateTimeText}");
+        Console.WriteLine("PASSED ✓ (Kết quả: " + dateBox.DateTimeText + ")");
 
         // Khởi tạo control DateTimeBox cho backward-compatibility
         var dtBox = new DateTimeBox();
@@ -4823,27 +4824,23 @@ internal class Program
 
         // BƯỚC 5: Sửa giờ 08 thành 15
         Console.Write("5. Sửa giờ 08 thành 15: ");
-        dtBox.SelectSegment(3); // Giờ
-        dtBox.ProcessDigit('1');
-        dtBox.ProcessDigit('5');
-        if (dtBox.Text != "20/12/2025 15:11")
-            throw new Exception($"Sửa giờ thất bại: {dtBox.Text}");
-        if (dtBox.Value?.Day != 20 || dtBox.Value?.Month != 12 || dtBox.Value?.Year != 2025
-            || dtBox.Value?.Hour != 15 || dtBox.Value?.Minute != 11)
-            throw new Exception($"Giá trị Value sau khi sửa giờ không đúng: {dtBox.Value}");
-        Console.WriteLine("PASSED ✓ (Kết quả: " + dtBox.Text + ")");
+        dateBox.HourBox.Text = "15";
+        if (dateBox.DateTimeText != "20/12/2025 15:11")
+            throw new Exception($"Sửa giờ thất bại: {dateBox.DateTimeText}");
+        if (dateBox.Value?.Day != 20 || dateBox.Value?.Month != 12 || dateBox.Value?.Year != 2025
+            || dateBox.Value?.Hour != 15 || dateBox.Value?.Minute != 11)
+            throw new Exception($"Giá trị Value sau khi sửa giờ không đúng: {dateBox.Value}");
+        Console.WriteLine("PASSED ✓ (Kết quả: " + dateBox.DateTimeText + ")");
 
         // BƯỚC 6: Sửa phút 11 thành 30
         Console.Write("6. Sửa phút 11 thành 30: ");
-        dtBox.SelectSegment(4); // Phút
-        dtBox.ProcessDigit('3');
-        dtBox.ProcessDigit('0');
-        if (dtBox.Text != "20/12/2025 15:30")
-            throw new Exception($"Sửa phút thất bại: {dtBox.Text}");
-        if (dtBox.Value?.Day != 20 || dtBox.Value?.Month != 12 || dtBox.Value?.Year != 2025
-            || dtBox.Value?.Hour != 15 || dtBox.Value?.Minute != 30)
-            throw new Exception($"Giá trị Value sau khi sửa phút không đúng: {dtBox.Value}");
-        Console.WriteLine("PASSED ✓ (Kết quả: " + dtBox.Text + ")");
+        dateBox.MinuteBox.Text = "30";
+        if (dateBox.DateTimeText != "20/12/2025 15:30")
+            throw new Exception($"Sửa phút thất bại: {dateBox.DateTimeText}");
+        if (dateBox.Value?.Day != 20 || dateBox.Value?.Month != 12 || dateBox.Value?.Year != 2025
+            || dateBox.Value?.Hour != 15 || dateBox.Value?.Minute != 30)
+            throw new Exception($"Giá trị Value sau khi sửa phút không đúng: {dateBox.Value}");
+        Console.WriteLine("PASSED ✓ (Kết quả: " + dateBox.DateTimeText + ")");
 
         // BƯỚC 7: Xóa và nhập lại nhiều lần
         Console.Write("7. Xóa và nhập lại nhiều lần (không nhân đôi số, không hỏng phân đoạn khác): ");
@@ -4935,8 +4932,9 @@ internal class Program
         // Đồng bộ DateInputBox với ViewModel
         var dateBoxSync = new DateInputBox();
         dateBoxSync.Value = vm.PhieuNhapNgayNhap;
-        if (dateBoxSync.DayBox.Text != "25" || dateBoxSync.MonthBox.Text != "12" || dateBoxSync.YearBox.Text != "2025")
-            throw new Exception($"DateInputBox không đồng bộ với Calendar: {dateBoxSync.Text}");
+        if (dateBoxSync.DayBox.Text != "25" || dateBoxSync.MonthBox.Text != "12" || dateBoxSync.YearBox.Text != "2025" ||
+            dateBoxSync.HourBox.Text != "15" || dateBoxSync.MinuteBox.Text != "30")
+            throw new Exception($"DateInputBox không đồng bộ với Calendar: {dateBoxSync.DateTimeText}");
         Console.WriteLine("PASSED ✓");
 
         // BƯỚC 11: Lưu phiếu nhập vào database và đọc lại để xác nhận
@@ -4978,8 +4976,9 @@ internal class Program
             // Mô phỏng mở lại phiếu nhập: hiển thị lên DateInputBox và DateTimeBox
             var loadedDateBox = new DateInputBox();
             loadedDateBox.Value = savedTime;
-            if (loadedDateBox.DayBox.Text != "20" || loadedDateBox.MonthBox.Text != "12" || loadedDateBox.YearBox.Text != "2025")
-                throw new Exception($"Đọc lại phiếu nhập lên DateInputBox hiển thị sai: {loadedDateBox.Text}");
+            if (loadedDateBox.DayBox.Text != "20" || loadedDateBox.MonthBox.Text != "12" || loadedDateBox.YearBox.Text != "2025" ||
+                loadedDateBox.HourBox.Text != "15" || loadedDateBox.MinuteBox.Text != "30")
+                throw new Exception($"Đọc lại phiếu nhập lên DateInputBox hiển thị sai: {loadedDateBox.DateTimeText}");
 
             var loadedBox = new DateTimeBox();
             loadedBox.Value = savedTime;

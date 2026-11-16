@@ -6123,7 +6123,7 @@
 
                         <controls:DateInputBox Name="PhieuNhapNgayNhapBox"
                           Value="{Binding PhieuNhapNgayNhap, Mode=TwoWay}"
-                          ToolTip.Tip="Nhập ngày tháng năm (dd/MM/yyyy) hoặc bấm 📅 để chọn"
+                          ToolTip.Tip="Nhập ngày giờ (dd/MM/yyyy HH:mm) hoặc bấm 📅 để chọn"
                           Height="38"
                           Margin="0" />
 
