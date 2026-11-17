@@ -11,6 +11,7 @@
     <Authors>ShopHoa</Authors>
     <Product>Phần mềm Quản lý Shop Hoa</Product>
     <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
+    <NoWarn>$(NoWarn);NU1902</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.12" />

@@ -33,7 +33,7 @@ public partial class LoginWindow : Window
         object? sender,
         RoutedEventArgs e)
     {
-        // Yêu cầu nhập mật khẩu xác thực mặc định (123456)
+        // Yêu cầu nhập mật khẩu xác thực mặc định (123456@@)
         var passwordWindow = new SettingsPasswordWindow(this);
         var result = await passwordWindow.ShowDialog<bool>(this);
 
@@ -41,7 +41,7 @@ public partial class LoginWindow : Window
         if (!result)
             return;
 
-        // Đúng mật khẩu 123456 -> Mở cài đặt Database để điền thông số
+        // Đúng mật khẩu 123456@@ -> Mở cài đặt Database để điền thông số
         var settingsWindow = new DatabaseSettingsWindow(this);
         await settingsWindow.ShowDialog(this);
 

@@ -6,12 +6,12 @@ namespace ShopHoa.Views;
 
 /// <summary>
 /// Cổng xác thực trước khi mở cấu hình database.
-/// Dùng mật khẩu kỹ thuật mặc định (123456) độc lập với database,
+/// Dùng mật khẩu kỹ thuật mặc định (123456@@) độc lập với database,
 /// giúp luôn mở được cấu hình để sửa kết nối kể cả khi chưa có mạng/database.
 /// </summary>
 public partial class SettingsPasswordWindow : Window
 {
-    private const string DefaultSettingsPassword = "123456";
+    private const string DefaultSettingsPassword = "123456@@";
 
     public SettingsPasswordWindow() : this(null)
     {
