@@ -72,6 +72,59 @@ public class WindowsImeTextInputFix
     /// </summary>
     internal static Func<IntPtr, uint, string?>? TestCompositionStringReader { get; set; }
 
+    /// <summary>
+    /// Phát ra khi nội dung hiệu dụng của TextBox (bao gồm cả chuỗi IME composition/preedit đang gõ dở)
+    /// có sự thay đổi. Giúp các ô tìm kiếm realtime cập nhật kết quả ngay theo từng ký tự gõ tiếng Việt.
+    /// </summary>
+    public static event Action<TextBox, string>? EffectiveTextChanged;
+
+    /// <summary>
+    /// Lấy nội dung văn bản hiệu dụng của TextBox, bao gồm cả chuỗi composition/preedit đang gõ dở
+    /// của IME (chưa nhấn Space/Enter để commit).
+    /// </summary>
+    public static string GetEffectiveText(TextBox textBox)
+    {
+        var currentText = textBox.Text ?? string.Empty;
+        var topLevel = TopLevel.GetTopLevel(textBox);
+        string? preedit = null;
+
+        if (topLevel is not null && s_states.TryGetValue(topLevel, out var state) && state.InComposition)
+        {
+            preedit = state.LastNonEmptyCompStr;
+        }
+
+        if (string.IsNullOrEmpty(preedit))
+        {
+            preedit = GetPreeditText(textBox);
+        }
+
+        if (string.IsNullOrEmpty(preedit) && topLevel is not null)
+        {
+            preedit = GetComposition(topLevel);
+        }
+
+        if (string.IsNullOrEmpty(preedit))
+            return currentText;
+
+        var start = Math.Clamp(Math.Min(textBox.SelectionStart, textBox.SelectionEnd), 0, currentText.Length);
+        var end = Math.Clamp(Math.Max(textBox.SelectionStart, textBox.SelectionEnd), start, currentText.Length);
+
+        return currentText.Remove(start, end - start).Insert(start, preedit);
+    }
+
+    private static void FireEffectiveTextChanged(TextBox textBox)
+    {
+        try
+        {
+            var text = GetEffectiveText(textBox);
+            EffectiveTextChanged?.Invoke(textBox, text);
+        }
+        catch
+        {
+            // Không để lỗi từ subscriber làm gián đoạn luồng xử lý WndProc của IME
+        }
+    }
+
     public static readonly AttachedProperty<bool> EnabledProperty =
         AvaloniaProperty.RegisterAttached<WindowsImeTextInputFix, TopLevel, bool>("Enabled");
 
@@ -199,6 +252,11 @@ public class WindowsImeTextInputFix
 
         state.CanceledInCurrentComposition = state.InComposition && isCancelKey;
 
+        if (state.CanceledInCurrentComposition && topLevel.FocusManager?.GetFocusedElement() is TextBox canceledTb)
+        {
+            FireEffectiveTextChanged(canceledTb);
+        }
+
         if (!state.InComposition)
         {
             if (GetIsComposing(topLevel) && string.IsNullOrEmpty(GetComposition(topLevel)))
@@ -296,6 +354,11 @@ public class WindowsImeTextInputFix
             state.InComposition = false;
         }
 
+        if (focusedTb is not null)
+        {
+            FireEffectiveTextChanged(focusedTb);
+        }
+
         // Chặn rơi xuống DefWindowProc(hWnd, WM_IME_COMPOSITION, ...) để Windows không phát
         // sinh WM_IME_CHAR -> WM_CHAR trùng lặp với GCS_RESULTSTR.
         handled = true;
@@ -335,6 +398,11 @@ public class WindowsImeTextInputFix
         state.CommittedInCurrentComposition = false;
         state.CanceledInCurrentComposition = false;
         state.LastNonEmptyCompStr = null;
+
+        if (topLevel.FocusManager?.GetFocusedElement() is TextBox endTb)
+        {
+            FireEffectiveTextChanged(endTb);
+        }
     }
 
     private static bool HandleChar(TopLevel topLevel, HookState state, IntPtr wParam)
@@ -413,6 +481,8 @@ public class WindowsImeTextInputFix
 
         if (!string.IsNullOrEmpty(uncommitted) && textBox.IsEnabled && !textBox.IsReadOnly)
             InsertTextAtCaret(textBox, uncommitted);
+
+        FireEffectiveTextChanged(textBox);
     }
 
     private static void ApplyCompositionInTestMode(

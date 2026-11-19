@@ -2020,7 +2020,7 @@
             </Grid>
             <Button Grid.Column="1" Classes="toolbar-primary" Content="Tìm"
                     Command="{Binding MoLaiVaTimKiemHoaBanCommand}"
-                    CommandParameter="{Binding SaleSearchText}" />
+                    CommandParameter="{Binding EffectiveSaleSearchKeyword}" />
           </Grid>
 
           <ComboBox Grid.Row="1"

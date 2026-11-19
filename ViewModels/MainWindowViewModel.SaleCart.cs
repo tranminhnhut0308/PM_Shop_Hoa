@@ -481,6 +481,9 @@ public sealed partial class MainWindowViewModel
         if (!SaleCartTabs.Contains(tab))
             return;
 
+        // Hủy an toàn lượt tìm kiếm trước đó nếu còn đang chạy dở
+        HuyTimKiemHoaBan();
+
         // Chụp đồng bộ dữ liệu của đơn hiện tại trước khi chuyển đổi
         if (ActiveSaleCartTab is { } oldTab)
         {

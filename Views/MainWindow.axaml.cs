@@ -119,6 +119,24 @@ public partial class MainWindow : Window
                 catch { }
             });
         };
+
+        WindowsImeTextInputFix.EffectiveTextChanged += OnWindowsImeEffectiveTextChanged;
+        Closed += (_, _) =>
+        {
+            WindowsImeTextInputFix.EffectiveTextChanged -= OnWindowsImeEffectiveTextChanged;
+        };
+    }
+
+    private void OnWindowsImeEffectiveTextChanged(TextBox textBox, string text)
+    {
+        if (SaleSearchBox is not null && ReferenceEquals(textBox, SaleSearchBox))
+        {
+            if (DataContext is MainWindowViewModel viewModel)
+            {
+                viewModel.MoLaiKetQuaTimKiemBanHang();
+                viewModel.XuLyThayDoiTuKhoaTimKiemBanHang(text);
+            }
+        }
     }
     private async void OpenSettingsButton_OnClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -196,6 +214,8 @@ public partial class MainWindow : Window
         // Không gọi TimKiemHoaBanCommand lần 2 để tránh nhân đôi tìm kiếm realtime trên mỗi phím gõ.
         if (!string.Equals(viewModel.SaleSearchText, text, StringComparison.Ordinal))
             viewModel.SaleSearchText = text;
+        else
+            viewModel.XuLyThayDoiTuKhoaTimKiemBanHang(text);
     }
 
     private void OnSaleCustomerSearchTextChanged(
@@ -1292,10 +1312,11 @@ public partial class MainWindow : Window
                     viewModel.DongKetQuaTimKiemBanHang();
                     e.Handled = true;
                 }
-                else if (!string.IsNullOrWhiteSpace(textBox.Text))
+                else if (!string.IsNullOrWhiteSpace(textBox.Text) || !string.IsNullOrWhiteSpace(viewModel.EffectiveSaleSearchKeyword))
                 {
                     textBox.Text = string.Empty;
                     viewModel.SaleSearchText = string.Empty;
+                    viewModel.XuLyThayDoiTuKhoaTimKiemBanHang(string.Empty);
                     _ = viewModel.TimKiemHoaBanNgayAsync(string.Empty);
                     e.Handled = true;
                 }
@@ -1314,7 +1335,9 @@ public partial class MainWindow : Window
         if (_dangThemSanPhamBanHang)
             return;
 
-        var keyword = (textBox.Text ?? string.Empty).Trim();
+        var keyword = (!string.IsNullOrWhiteSpace(viewModel.EffectiveSaleSearchKeyword)
+            ? viewModel.EffectiveSaleSearchKeyword
+            : textBox.Text ?? string.Empty).Trim();
         if (keyword.Length == 0)
             return;
 

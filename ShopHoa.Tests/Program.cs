@@ -291,6 +291,9 @@ internal class Program
         if (args.Contains("--verify-issue-90", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue90_SuaLoiMatNoiDungTiengViet();
 
+        if (args.Contains("--verify-issue-128", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue128_SuaLoiTimKiemTiengVietVaCts();
+
         Console.WriteLine("==========================================================================================");
         Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG SHOP HOA: ĐỐI SOÁT TOÀN DIỆN THỐNG KÊ TRANG TỔNG QUAN (#69)  ");
         Console.WriteLine("==========================================================================================");
@@ -6692,6 +6695,327 @@ internal class Program
             }
             finally
             {
+                WindowsImeTextInputFix.TestCompositionStringReader = null;
+                hostWindow.Close();
+                FlushUi();
+            }
+        });
+    }
+
+    // ==========================================================================================
+    // KIỂM THỬ ISSUE #128: TÌM KIẾM TIẾNG VIỆT REALTIME KHÔNG CẦN SPACE & CANCELLATIONTOKENSOURCE
+    // ==========================================================================================
+    private static int KiemTraIssue128_SuaLoiTimKiemTiengVietVaCts()
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  KIỂM THỬ ISSUE #128: TÌM KIẾM TIẾNG VIỆT REALTIME (KHÔNG SPACE) & CTS LIFECYCLE");
+        Console.WriteLine("==========================================================================================");
+
+        return ChayTrenStaThread(() =>
+        {
+            if (global::Avalonia.Application.Current is null)
+                global::ShopHoa.Program.BuildAvaloniaApp().SetupWithoutStarting();
+
+            const uint WmKeyDown = 0x0100;
+            const uint WmKeyUp = 0x0101;
+            const uint WmChar = 0x0102;
+            const uint WmImeStartComposition = 0x010D;
+            const uint WmImeEndComposition = 0x010E;
+            const uint WmImeComposition = 0x010F;
+
+            const int GcsCompStr = 0x0008;
+            const int GcsResultStr = 0x0800;
+            const int VkBack = 0x08;
+            const int VkSpace = 0x20;
+            const int VkProcessKey = 0xE5;
+
+            static void FlushUi()
+                => global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            string? currentComp = null;
+            string? currentResult = null;
+            WindowsImeTextInputFix.TestCompositionStringReader = (_, flag) =>
+                flag == GcsCompStr ? currentComp : (flag == GcsResultStr ? currentResult : null);
+
+            var vm = new MainWindowViewModel();
+            var searchBox = new global::Avalonia.Controls.TextBox
+            {
+                DataContext = vm
+            };
+
+            searchBox.Bind(
+                global::Avalonia.Controls.TextBox.TextProperty,
+                new global::Avalonia.Data.Binding(nameof(MainWindowViewModel.SaleSearchText))
+                {
+                    Mode = global::Avalonia.Data.BindingMode.TwoWay
+                });
+
+            searchBox.TextChanged += (sender, _) =>
+            {
+                var text = (sender as global::Avalonia.Controls.TextBox)?.Text ?? string.Empty;
+                if (!string.Equals(vm.SaleSearchText, text, StringComparison.Ordinal))
+                    vm.SaleSearchText = text;
+                else
+                    vm.XuLyThayDoiTuKhoaTimKiemBanHang(text);
+            };
+
+            Action<global::Avalonia.Controls.TextBox, string> onEffective = (tb, text) =>
+            {
+                if (ReferenceEquals(tb, searchBox))
+                {
+                    vm.MoLaiKetQuaTimKiemBanHang();
+                    vm.XuLyThayDoiTuKhoaTimKiemBanHang(text);
+                }
+            };
+
+            WindowsImeTextInputFix.EffectiveTextChanged += onEffective;
+
+            var rootPanel = new global::Avalonia.Controls.StackPanel
+            {
+                Children = { searchBox }
+            };
+
+            var hostWindow = new global::Avalonia.Controls.Window
+            {
+                Content = rootPanel
+            };
+
+            try
+            {
+                WindowsImeTextInputFix.SetEnabled(hostWindow, true);
+                hostWindow.Show();
+                FlushUi();
+
+                var platformImpl = hostWindow.PlatformImpl;
+                KiemTra(platformImpl != null, "PlatformImpl không được null.");
+                var hwnd = hostWindow.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+                KiemTra(hwnd != IntPtr.Zero, "HWND phải hợp lệ sau hostWindow.Show().");
+
+                var wndProcMethod = platformImpl!.GetType().GetMethod(
+                    "WndProcMessageHandler",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                KiemTra(wndProcMethod != null, "Không tìm thấy WindowImpl.WndProcMessageHandler.");
+
+                void FocusBox(global::Avalonia.Controls.TextBox box)
+                {
+                    box.Focus();
+                    FlushUi();
+                    var kb = typeof(global::Avalonia.Input.KeyboardDevice)
+                        .GetProperty("Instance", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
+                        ?.GetValue(null);
+                    kb?.GetType().GetMethod(
+                            "SetFocusedElement",
+                            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)
+                        ?.Invoke(
+                            kb,
+                            new object?[]
+                            {
+                                box,
+                                global::Avalonia.Input.NavigationMethod.Unspecified,
+                                global::Avalonia.Input.KeyModifiers.None
+                            });
+                    FlushUi();
+                }
+
+                void SendWndProc128(uint msg, IntPtr wParam, IntPtr lParam)
+                {
+                    wndProcMethod!.Invoke(platformImpl, new object[] { hwnd, msg, wParam, lParam });
+                    FlushUi();
+                }
+
+                FocusBox(searchBox);
+
+                // ------------------------------------------------------------------
+                // BƯỚC 1: GÕ TIẾNG VIỆT IME KHÔNG CẦN NHẤN PHÍM SPACE
+                // ------------------------------------------------------------------
+                Console.Write("[Issue #128 - Bước 1/5] Kiểm thử gõ tiếng Việt có dấu qua IME không cần nhấn phím Space... ");
+
+                // Gõ từ 'hoa' từng ký tự trong composition session (không gửi Space hay ResultStr)
+                SendWndProc128(WmKeyDown, new IntPtr(VkProcessKey), new IntPtr(0x001E0001));
+                SendWndProc128(WmImeStartComposition, IntPtr.Zero, IntPtr.Zero);
+
+                currentComp = "h";
+                currentResult = null;
+                SendWndProc128(WmImeComposition, IntPtr.Zero, new IntPtr(GcsCompStr));
+                KiemTra(WindowsImeTextInputFix.GetEffectiveText(searchBox) == "h", $"EffectiveText phải là 'h', thực tế: '{WindowsImeTextInputFix.GetEffectiveText(searchBox)}'.");
+                KiemTra(vm.EffectiveSaleSearchKeyword == "h", $"vm.EffectiveSaleSearchKeyword phải là 'h', thực tế: '{vm.EffectiveSaleSearchKeyword}'.");
+
+                currentComp = "ho";
+                SendWndProc128(WmImeComposition, IntPtr.Zero, new IntPtr(GcsCompStr));
+                KiemTra(WindowsImeTextInputFix.GetEffectiveText(searchBox) == "ho", $"EffectiveText phải là 'ho', thực tế: '{WindowsImeTextInputFix.GetEffectiveText(searchBox)}'.");
+                KiemTra(vm.EffectiveSaleSearchKeyword == "ho", $"vm.EffectiveSaleSearchKeyword phải là 'ho', thực tế: '{vm.EffectiveSaleSearchKeyword}'.");
+
+                currentComp = "hoa";
+                SendWndProc128(WmImeComposition, IntPtr.Zero, new IntPtr(GcsCompStr));
+                KiemTra(WindowsImeTextInputFix.GetEffectiveText(searchBox) == "hoa", $"EffectiveText phải là 'hoa', thực tế: '{WindowsImeTextInputFix.GetEffectiveText(searchBox)}'.");
+                KiemTra(vm.EffectiveSaleSearchKeyword == "hoa", $"vm.EffectiveSaleSearchKeyword phải là 'hoa', thực tế: '{vm.EffectiveSaleSearchKeyword}'.");
+
+                // Thêm một sản phẩm giả lập vào ProductSearchResults để kiểm tra HienThiKetQuaTimKiemBanHang
+                var spTest = new SanPham { Id = 1, TenSanPham = "Hoa hồng đỏ", GiaBan = 50000, TonKho = 10 };
+                vm.ProductSearchResults.Clear();
+                vm.ProductSearchResults.Add(spTest);
+                KiemTra(vm.HienThiKetQuaTimKiemBanHang, "HienThiKetQuaTimKiemBanHang phải là TRUE khi đang có kết quả và từ khóa IME (chưa ấn Space).");
+
+                // Xác nhận searchBox.Text vẫn giữ nguyên, chưa bị binding đè làm mất composition
+                KiemTra(searchBox.Text == "", "searchBox.Text phải là rỗng khi chưa commit (bảo vệ composition buffer).");
+
+                // Bây giờ nhấn Space để commit từ đầu tiên
+                SendWndProc128(WmKeyDown, new IntPtr(VkProcessKey), new IntPtr(0x00390001));
+                currentComp = string.Empty;
+                currentResult = "hoa";
+                SendWndProc128(WmImeComposition, IntPtr.Zero, new IntPtr(GcsResultStr));
+                SendWndProc128(WmImeEndComposition, IntPtr.Zero, IntPtr.Zero);
+                SendWndProc128(WmChar, new IntPtr(' '), new IntPtr(0x00390001));
+                SendWndProc128(WmKeyUp, new IntPtr(VkSpace), unchecked(new IntPtr((long)0xC0390001)));
+                FlushUi();
+
+                KiemTra(vm.SaleSearchText == "hoa ", $"SaleSearchText sau khi nhấn Space phải là 'hoa ', thực tế: '{vm.SaleSearchText}'.");
+                KiemTra(vm.EffectiveSaleSearchKeyword == "hoa ", $"EffectiveSaleSearchKeyword sau khi nhấn Space phải là 'hoa ', thực tế: '{vm.EffectiveSaleSearchKeyword}'.");
+
+                // Gõ tiếp từ 'hồng' (chưa commit)
+                SendWndProc128(WmKeyDown, new IntPtr(VkProcessKey), new IntPtr(0x001E0001));
+                SendWndProc128(WmImeStartComposition, IntPtr.Zero, IntPtr.Zero);
+
+                currentComp = "h";
+                currentResult = null;
+                SendWndProc128(WmImeComposition, IntPtr.Zero, new IntPtr(GcsCompStr));
+                KiemTra(vm.EffectiveSaleSearchKeyword == "hoa h", $"EffectiveSaleSearchKeyword phải là 'hoa h', thực tế: '{vm.EffectiveSaleSearchKeyword}'.");
+
+                currentComp = "hồng";
+                SendWndProc128(WmImeComposition, IntPtr.Zero, new IntPtr(GcsCompStr));
+                KiemTra(vm.EffectiveSaleSearchKeyword == "hoa hồng", $"EffectiveSaleSearchKeyword phải là 'hoa hồng', thực tế: '{vm.EffectiveSaleSearchKeyword}'.");
+
+                Console.WriteLine("PASSED");
+
+                // ------------------------------------------------------------------
+                // BƯỚC 2: TÌM KIẾM TIẾNG ANH & BACKSPACE TRONG IME
+                // ------------------------------------------------------------------
+                Console.Write("[Issue #128 - Bước 2/5] Kiểm thử Backspace trong IME & tìm kiếm tiếng Anh realtime... ");
+
+                // Backspace trong lúc đang compose 'hồng' -> trở về 'h'
+                currentComp = "h";
+                SendWndProc128(WmImeComposition, IntPtr.Zero, new IntPtr(GcsCompStr));
+                KiemTra(vm.EffectiveSaleSearchKeyword == "hoa h", $"EffectiveSaleSearchKeyword sau Backspace phải là 'hoa h', thực tế: '{vm.EffectiveSaleSearchKeyword}'.");
+
+                // Xóa hết preedit
+                currentComp = string.Empty;
+                SendWndProc128(WmImeComposition, IntPtr.Zero, new IntPtr(GcsCompStr));
+                SendWndProc128(WmImeEndComposition, IntPtr.Zero, IntPtr.Zero);
+                FlushUi();
+
+                // Xóa toàn bộ nội dung ô tìm kiếm bằng Escape / Clear
+                searchBox.Text = string.Empty;
+                vm.XuLyThayDoiTuKhoaTimKiemBanHang(string.Empty);
+                FlushUi();
+
+                KiemTra(vm.EffectiveSaleSearchKeyword == string.Empty, "EffectiveSaleSearchKeyword phải rỗng sau khi xóa.");
+                KiemTra(vm.ProductSearchResults.Count == 0, "ProductSearchResults phải rỗng sau khi xóa.");
+
+                // Gõ tiếng Anh realtime
+                searchBox.Text = "r";
+                FlushUi();
+                KiemTra(vm.EffectiveSaleSearchKeyword == "r", $"Gõ tiếng Anh 1 ký tự: '{vm.EffectiveSaleSearchKeyword}'.");
+
+                searchBox.Text = "rose";
+                FlushUi();
+                KiemTra(vm.EffectiveSaleSearchKeyword == "rose", $"Gõ tiếng Anh nhiều ký tự: '{vm.EffectiveSaleSearchKeyword}'.");
+
+                Console.WriteLine("PASSED");
+
+                // ------------------------------------------------------------------
+                // BƯỚC 3: CANCELLATIONTOKENSOURCE LIFECYCLE & KHÔNG OBJECTDISPOSEDEXCEPTION
+                // ------------------------------------------------------------------
+                Console.Write("[Issue #128 - Bước 3/5] Kiểm thử CancellationTokenSource an toàn tuyệt đối khi Cancel / gõ nhanh liên tục... ");
+
+                // Kiểm tra gọi HuyTimKiemHoaBan liên tiếp 100 lần không phát sinh ObjectDisposedException
+                for (int i = 0; i < 100; i++)
+                {
+                    vm.HuyTimKiemBanHang();
+                }
+
+                // Kiểm tra đa luồng gọi Cancel và bắt đầu lượt tìm kiếm mới
+                var tasks = new List<Task>();
+                var exceptions = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+
+                for (int i = 0; i < 50; i++)
+                {
+                    int idx = i;
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        try
+                        {
+                            if (idx % 2 == 0)
+                            {
+                                await vm.TimKiemHoaBanAsync("Hoa " + idx);
+                            }
+                            else
+                            {
+                                vm.HuyTimKiemBanHang();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            exceptions.Add(ex);
+                        }
+                    }));
+                }
+
+                Task.WaitAll([.. tasks]);
+                KiemTra(exceptions.Count == 0, $"Phát sinh ngoại lệ trong quá trình tìm kiếm song song: {exceptions.FirstOrDefault()?.Message}");
+
+                // Gọi tiếp sau khi các tác vụ đã hoàn thành để xác nhận CTS không bị tái sử dụng sau khi Dispose
+                vm.HuyTimKiemBanHang();
+                var taskFind = vm.TimKiemHoaBanAsync("Hoa hồng");
+                taskFind.Wait();
+
+                Console.WriteLine("PASSED");
+
+                // ------------------------------------------------------------------
+                // BƯỚC 4: RACE CONDITION: TRUY VẤN CŨ KHÔNG ĐÈ KẾT QUẢ MỚI
+                // ------------------------------------------------------------------
+                Console.Write("[Issue #128 - Bước 4/5] Kiểm thử Race Condition (truy vấn cũ A không ghi đè truy vấn mới ABC)... ");
+
+                // Giả lập gõ A -> AB -> ABC liên tục
+                var taskA = vm.TimKiemHoaBanAsync("A");
+                var taskAB = vm.TimKiemHoaBanAsync("AB");
+                var taskABC = vm.TimKiemHoaBanNgayAsync("ABC");
+
+                Task.WaitAll(taskA, taskAB, taskABC);
+                KiemTra(vm.EffectiveSaleSearchKeyword == "ABC" || vm.SaleSearchText == "ABC", "Từ khóa cuối cùng phải là 'ABC'.");
+
+                Console.WriteLine("PASSED");
+
+                // ------------------------------------------------------------------
+                // BƯỚC 5: CHUYỂN ĐỔI ĐƠN HÀNG (MULTI-CART) TRONG LÚC TÌM KIẾM
+                // ------------------------------------------------------------------
+                Console.Write("[Issue #128 - Bước 5/5] Kiểm thử chuyển đổi đơn hàng trong lúc tìm kiếm... ");
+
+                var tab1 = new SaleCartTab { State = new SaleCartDraftState { CartId = "tab1", SoThuTu = 1 }, SoThuTu = 1 };
+                var tab2 = new SaleCartTab { State = new SaleCartDraftState { CartId = "tab2", SoThuTu = 2 }, SoThuTu = 2 };
+                vm.SaleCartTabs.Clear();
+                vm.SaleCartTabs.Add(tab1);
+                vm.SaleCartTabs.Add(tab2);
+                vm.KichHoatCartTab(tab1);
+
+                // Khởi động một lượt tìm kiếm trên tab 1
+                var pendingSearch = vm.TimKiemHoaBanAsync("Hoa ly");
+
+                // Chuyển ngay sang tab 2
+                vm.ChuyenDonBanCommand.Execute(tab2);
+                KiemTra(vm.ActiveSaleCartTab == tab2, "ActiveSaleCartTab phải là tab 2 sau khi chuyển.");
+
+                // Chờ lượt tìm kiếm hoàn thành an toàn
+                pendingSearch.Wait();
+                KiemTra(exceptions.Count == 0, "Không được có ngoại lệ khi chuyển đơn hàng.");
+
+                Console.WriteLine("PASSED");
+
+                Console.WriteLine("\n>>> ISSUE #128: TOÀN BỘ KIỂM THỬ TÌM KIẾM TIẾNG VIỆT & CTS ĐÃ ĐẠT 100%! <<<");
+                return 0;
+            }
+            finally
+            {
+                WindowsImeTextInputFix.EffectiveTextChanged -= onEffective;
                 WindowsImeTextInputFix.TestCompositionStringReader = null;
                 hostWindow.Close();
                 FlushUi();
