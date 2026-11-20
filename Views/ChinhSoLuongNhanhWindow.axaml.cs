@@ -66,6 +66,7 @@ public partial class ChinhSoLuongNhanhWindow : Window
         base.OnKeyDown(e);
         if (e.Key == Key.Enter)
         {
+            WindowsImeTextInputFix.CommitComposition(SoLuongTextBox);
             LuuClicked();
             e.Handled = true;
         }
@@ -89,6 +90,7 @@ public partial class ChinhSoLuongNhanhWindow : Window
 
     private void LuuClicked(object? sender = null, RoutedEventArgs? e = null)
     {
+        WindowsImeTextInputFix.CommitComposition(SoLuongTextBox);
         var text = SoLuongTextBox.Text?.Trim();
 
         if (string.IsNullOrWhiteSpace(text))

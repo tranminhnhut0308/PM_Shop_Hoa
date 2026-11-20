@@ -36,4 +36,50 @@ public static class SoLuongFormat
             ? value.ToString("N0", VietnameseCulture)
             : value.ToString("#,0.###", VietnameseCulture);
     }
+
+    /// <summary>
+    /// Đọc số lượng an toàn từ chuỗi người dùng nhập (hỗ trợ cả số nguyên, dấu phẩy và dấu chấm thập phân,
+    /// ví dụ: "5", "10", "1.5", "1,5", "100.5", "1.000").
+    /// </summary>
+    public static bool TryParse(string? text, out decimal value)
+    {
+        value = 0m;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var raw = text.Trim();
+
+        // Nếu có cả . và , (ví dụ "1.000,5") -> . là phân cách nghìn, , là thập phân
+        if (raw.Contains('.') && raw.Contains(','))
+        {
+            raw = raw.Replace(".", string.Empty).Replace(',', '.');
+            return decimal.TryParse(raw, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out value);
+        }
+
+        // Nếu chỉ có dấu phẩy -> coi là dấu thập phân (kiểu VN: 1,5)
+        if (raw.Contains(','))
+        {
+            raw = raw.Replace(',', '.');
+            return decimal.TryParse(raw, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out value);
+        }
+
+        // Nếu chỉ có dấu chấm:
+        // Với số lượng hàng hóa hoa (bó, cành, giỏ, kg), số lượng thường là số thực (ví dụ 1.5, 0.5, 2.5)
+        // hoặc số nguyên có dấu chấm phân cách nghìn (ví dụ 1.000).
+        if (raw.Contains('.'))
+        {
+            var parts = raw.Split('.');
+            if (parts.Length == 2 && parts[1].Length == 3 && int.TryParse(parts[0], out var p0) && p0 >= 1)
+            {
+                if (decimal.TryParse(raw.Replace(".", string.Empty), NumberStyles.Integer | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out value))
+                    return true;
+            }
+
+            if (decimal.TryParse(raw, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out value))
+                return true;
+        }
+
+        return decimal.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out value)
+               || decimal.TryParse(raw, NumberStyles.Any, CultureInfo.CurrentCulture, out value);
+    }
 }

@@ -2,14 +2,28 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   x:Class="ShopHoa.Controls.MoneyTextBox"
   x:Name="Root"
-  Height="38"
+  Focusable="False"
   Background="Transparent">
+
+  <UserControl.Styles>
+    <Style Selector="TextBox#Input /template/ DataValidationErrors">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+  </UserControl.Styles>
 
   <TextBox x:Name="Input"
     TextAlignment="Right"
     Watermark="{Binding Watermark, ElementName=Root}"
-    CornerRadius="8"
-    Padding="6,4"
+    Foreground="{Binding Foreground, ElementName=Root}"
+    FontSize="{Binding FontSize, ElementName=Root}"
+    FontWeight="{Binding FontWeight, ElementName=Root}"
+    CornerRadius="6"
+    Padding="6,2"
+    MinHeight="0"
     VerticalAlignment="Stretch"
-    VerticalContentAlignment="Center" />
+    VerticalContentAlignment="Center">
+    <DataValidationErrors.Errors>
+      <x:Null />
+    </DataValidationErrors.Errors>
+  </TextBox>
 </UserControl>

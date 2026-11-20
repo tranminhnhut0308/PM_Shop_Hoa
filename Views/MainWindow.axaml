@@ -81,6 +81,20 @@
       <Setter Property="Foreground" Value="#263B35" />
     </Style>
 
+    <!-- Ẩn DataValidationErrors trên ô số lượng để tránh hiện System.Exception chồng lên giao diện -->
+    <Style Selector="TextBox.cartQuantityBox">
+      <Setter Property="DataValidationErrors.Errors" Value="{x:Null}" />
+    </Style>
+    <Style Selector="TextBox.cartQuantityBox /template/ DataValidationErrors">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="TextBox.importQuantityBox">
+      <Setter Property="DataValidationErrors.Errors" Value="{x:Null}" />
+    </Style>
+    <Style Selector="TextBox.importQuantityBox /template/ DataValidationErrors">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
     <!-- MENU CHÍNH BÊN TRÁI -->
     <Style Selector="Button.menu">
       <Setter Property="Background" Value="Transparent" />
@@ -2150,7 +2164,7 @@
                                      ToolTip.Tip="{Binding SanPham.TenSanPham}" />
                           <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                             <TextBlock Text="Đơn giá:" FontSize="11.5" Foreground="#667A74" VerticalAlignment="Center" />
-                            <controls:MoneyTextBox Width="92" Height="24"
+                            <controls:MoneyTextBox Width="105" Height="26"
                                      FontSize="11.5" FontWeight="SemiBold" Foreground="#087F6E"
                                      Watermark="0"
                                      Value="{Binding DonGia, Mode=TwoWay}" />
@@ -2188,7 +2202,7 @@
                                       TextAlignment="Center" BorderThickness="0" Background="Transparent"
                                       HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                       FontSize="13" FontWeight="SemiBold"
-                                      Text="{Binding SoLuong, Mode=TwoWay}"
+                                      Text="{Binding SoLuong, Mode=OneWay}"
                                       KeyDown="OnCartQuantityKeyDown"
                                       LostFocus="OnCartQuantityLostFocus" />
                               <Button Grid.Column="2" Content="+" Width="28" Height="28" Padding="0"
@@ -5949,7 +5963,7 @@
                                          Background="#F8FBFA"
                                          BorderBrush="#CFE6E1"
                                          BorderThickness="1"
-                                         Text="{Binding SoLuong, Mode=TwoWay}"
+                                         Text="{Binding SoLuong, Mode=OneWay}"
                                          KeyDown="OnImportQuantityKeyDown"
                                          LostFocus="OnImportQuantityLostFocus" />
 

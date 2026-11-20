@@ -38,21 +38,9 @@ public partial class MainWindow : Window
 
         AddHandler(KeyDownEvent, OnGlobalKeyDown, RoutingStrategies.Tunnel);
 
-        AddHandler(InputElement.PointerReleasedEvent, (sender, e) =>
-        {
-            if (e.InitialPressMouseButton == MouseButton.Left && e.Source is TextBox tb && tb.Classes.Contains("cartQuantityBox"))
-            {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    if (!string.IsNullOrEmpty(tb.Text))
-                        tb.SelectAll();
-                }, Avalonia.Threading.DispatcherPriority.Input);
-            }
-        }, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
-
         AddHandler(InputElement.GotFocusEvent, (sender, e) =>
         {
-            if (e.Source is TextBox tb && tb.Classes.Contains("cartQuantityBox"))
+            if (e.Source is TextBox tb && (tb.Classes.Contains("cartQuantityBox") || tb.Classes.Contains("importQuantityBox")))
             {
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
@@ -1873,12 +1861,15 @@ public partial class MainWindow : Window
 
         e.Handled = true;
 
+        WindowsImeTextInputFix.CommitComposition(tb);
+
         if (tb.DataContext is not SaleCartItem item || DataContext is not MainWindowViewModel viewModel)
             return;
 
         var rawText = (tb.Text ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(rawText)
-            || (!MoneyInput.TryParse(rawText, false, out var soLuong, out _)
+            || (!SoLuongFormat.TryParse(rawText, out var soLuong)
+                && !MoneyInput.TryParse(rawText, false, out soLuong, out _)
                 && !decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out soLuong)
                 && !decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.CurrentCulture, out soLuong)))
         {
@@ -1902,6 +1893,7 @@ public partial class MainWindow : Window
         }
 
         item.SoLuong = soLuong;
+        tb.Text = SoLuongFormat.Raw(item.SoLuong);
         viewModel.CapNhatTongTienBanHangCommand.Execute(null);
 
         // Sau khi xác nhận số lượng: tự động đưa con trỏ trở lại ô tìm kiếm và bôi đen nội dung cũ
@@ -1921,11 +1913,14 @@ public partial class MainWindow : Window
         if (sender is not TextBox tb)
             return;
 
+        WindowsImeTextInputFix.CommitComposition(tb);
+
         if (tb.DataContext is not SaleCartItem item || DataContext is not MainWindowViewModel viewModel)
             return;
 
         var rawText = (tb.Text ?? string.Empty).Trim();
-        if (MoneyInput.TryParse(rawText, false, out var parsed, out _)
+        if (SoLuongFormat.TryParse(rawText, out var parsed)
+            || MoneyInput.TryParse(rawText, false, out parsed, out _)
             || decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out parsed)
             || decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.CurrentCulture, out parsed))
         {
@@ -1937,10 +1932,7 @@ public partial class MainWindow : Window
         }
 
         // Ép chữ trên ô = số thật trong model (đã clamp)
-        var v = item.SoLuong;
-        tb.Text = v == Math.Truncate(v)
-            ? ((long)v).ToString()
-            : v.ToString("0.##");
+        tb.Text = SoLuongFormat.Raw(item.SoLuong);
     }
 
     private void OnImportQuantityKeyDown(object? sender, KeyEventArgs e)
@@ -1962,12 +1954,15 @@ public partial class MainWindow : Window
 
         e.Handled = true;
 
+        WindowsImeTextInputFix.CommitComposition(tb);
+
         if (tb.DataContext is not ChiTietPhieuNhapHang item || DataContext is not MainWindowViewModel viewModel)
             return;
 
         var rawText = (tb.Text ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(rawText)
-            || (!MoneyInput.TryParse(rawText, false, out var soLuong, out _)
+            || (!SoLuongFormat.TryParse(rawText, out var soLuong)
+                && !MoneyInput.TryParse(rawText, false, out soLuong, out _)
                 && !decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out soLuong)
                 && !decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.CurrentCulture, out soLuong)))
         {
@@ -1984,6 +1979,7 @@ public partial class MainWindow : Window
         }
 
         item.SoLuong = soLuong;
+        tb.Text = SoLuongFormat.Raw(item.SoLuong);
         viewModel.RecalculatePhieuNhapTongTienHang();
 
         // Sau khi xác nhận số lượng: tự động đưa con trỏ trở lại ô tìm kiếm và bôi đen nội dung cũ
@@ -2003,11 +1999,14 @@ public partial class MainWindow : Window
         if (sender is not TextBox tb)
             return;
 
+        WindowsImeTextInputFix.CommitComposition(tb);
+
         if (tb.DataContext is not ChiTietPhieuNhapHang item || DataContext is not MainWindowViewModel viewModel)
             return;
 
         var rawText = (tb.Text ?? string.Empty).Trim();
-        if (MoneyInput.TryParse(rawText, false, out var parsed, out _)
+        if (SoLuongFormat.TryParse(rawText, out var parsed)
+            || MoneyInput.TryParse(rawText, false, out parsed, out _)
             || decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.InvariantCulture, out parsed)
             || decimal.TryParse(rawText, NumberStyles.Any, CultureInfo.CurrentCulture, out parsed))
         {
@@ -2018,10 +2017,7 @@ public partial class MainWindow : Window
             }
         }
 
-        var v = item.SoLuong;
-        tb.Text = v == Math.Truncate(v)
-            ? ((long)v).ToString()
-            : v.ToString("0.##");
+        tb.Text = SoLuongFormat.Raw(item.SoLuong);
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)

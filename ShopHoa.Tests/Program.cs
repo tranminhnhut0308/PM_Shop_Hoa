@@ -294,6 +294,9 @@ internal class Program
         if (args.Contains("--verify-issue-128", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue128_SuaLoiTimKiemTiengVietVaCts();
 
+        if (args.Contains("--verify-issue-134", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue134_SuaLoiNhapSoLuongVaDonGia();
+
         Console.WriteLine("==========================================================================================");
         Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG SHOP HOA: ĐỐI SOÁT TOÀN DIỆN THỐNG KÊ TRANG TỔNG QUAN (#69)  ");
         Console.WriteLine("==========================================================================================");
@@ -7206,5 +7209,96 @@ internal class Program
             else
                 Session.Clear();
         }
+    }
+
+    private static int KiemTraIssue134_SuaLoiNhapSoLuongVaDonGia()
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  KIỂM THỬ BUG #134: LỖI NHẬP SỐ LƯỢNG (VIE/IME) & CHỈNH SỬA ĐƠN GIÁ BÁN HÀNG / NHẬP HÀNG");
+        Console.WriteLine("==========================================================================================");
+
+        // 1. Kiểm tra SoLuongFormat.TryParse
+        Console.WriteLine("\n--- Bước 1: Kiểm thử SoLuongFormat.TryParse (Số nguyên, số thập phân, phân cách ngàn) ---");
+        KiemTra(SoLuongFormat.TryParse("5", out var v1) && v1 == 5m, "TryParse '5' thất bại");
+        KiemTra(SoLuongFormat.TryParse("100", out var v2) && v2 == 100m, "TryParse '100' thất bại");
+        KiemTra(SoLuongFormat.TryParse("1.5", out var v3) && v3 == 1.5m, "TryParse '1.5' thất bại (kỳ vọng 1.5m)");
+        KiemTra(SoLuongFormat.TryParse("1,5", out var v4) && v4 == 1.5m, "TryParse '1,5' thất bại (kỳ vọng 1.5m)");
+        KiemTra(SoLuongFormat.TryParse("10.50", out var v5) && v5 == 10.5m, "TryParse '10.50' thất bại");
+        KiemTra(SoLuongFormat.TryParse("1.000", out var v6) && v6 == 1000m, "TryParse '1.000' thất bại");
+        KiemTra(SoLuongFormat.TryParse("1,000", out var v7) && v7 == 1m, "TryParse '1,000' (dấu phẩy thập phân kiểu VN) thất bại");
+        KiemTra(SoLuongFormat.TryParse("10.500", out var v8) && v8 == 10500m, "TryParse '10.500' thất bại");
+        KiemTra(SoLuongFormat.TryParse("0.75", out var v9) && v9 == 0.75m, "TryParse '0.75' thất bại");
+        KiemTra(!SoLuongFormat.TryParse("", out _), "TryParse '' phải trả về false");
+        KiemTra(!SoLuongFormat.TryParse("   ", out _), "TryParse khoảng trắng phải trả về false");
+        KiemTra(!SoLuongFormat.TryParse("abc", out _), "TryParse 'abc' phải trả về false");
+        Console.WriteLine("[PASS] SoLuongFormat.TryParse xử lý chính xác tất cả định dạng.");
+
+        // 2. Kiểm thử logic SaleCartItem (Số lượng x Đơn giá = Thành tiền, Giảm giá)
+        Console.WriteLine("\n--- Bước 2: Kiểm thử SaleCartItem tính toán Thành tiền khi đổi Số lượng & Đơn giá ---");
+        var cartItem = new SaleCartItem
+        {
+            SanPham = new SanPham { Id = 1, TenSanPham = "Hoa hồng", GiaBan = 50000m, TonKho = 999m },
+            SoLuong = 2,
+            DonGia = 50000m,
+            GiamGia = 0m
+        };
+        KiemTra(cartItem.ThanhTien == 100000m, $"ThanhTien ban đầu kỳ vọng 100000, thực tế: {cartItem.ThanhTien}");
+
+        cartItem.SoLuong = 3.5m;
+        KiemTra(cartItem.ThanhTien == 175000m, $"ThanhTien sau khi đổi số lượng kỳ vọng 175000, thực tế: {cartItem.ThanhTien}");
+
+        cartItem.DonGia = 80000m;
+        KiemTra(cartItem.ThanhTien == 280000m, $"ThanhTien sau khi đổi đơn giá kỳ vọng 280000, thực tế: {cartItem.ThanhTien}");
+
+        cartItem.GiamGia = 10000m;
+        KiemTra(cartItem.ThanhTien == 270000m, $"ThanhTien sau khi đổi giảm giá kỳ vọng 270000, thực tế: {cartItem.ThanhTien}");
+        Console.WriteLine("[PASS] SaleCartItem cập nhật Thành tiền tự động khi thay đổi Số lượng và Đơn giá.");
+
+        // 3. Kiểm thử logic ChiTietPhieuNhapHang (Số lượng x Đơn giá = Thành tiền)
+        Console.WriteLine("\n--- Bước 3: Kiểm thử ChiTietPhieuNhapHang tính toán Thành tiền khi đổi Số lượng & Đơn giá ---");
+        var nhapItem = new ChiTietPhieuNhapHang
+        {
+            SoLuong = 5,
+            DonGiaNhap = 20000m
+        };
+        KiemTra(nhapItem.ThanhTien == 100000m, $"ChiTietPhieuNhapHang ThanhTien ban đầu kỳ vọng 100000, thực tế: {nhapItem.ThanhTien}");
+
+        nhapItem.SoLuong = 12;
+        KiemTra(nhapItem.ThanhTien == 240000m, $"ChiTietPhieuNhapHang ThanhTien kỳ vọng 240000, thực tế: {nhapItem.ThanhTien}");
+
+        nhapItem.DonGiaNhap = 35000m;
+        KiemTra(nhapItem.ThanhTien == 420000m, $"ChiTietPhieuNhapHang ThanhTien kỳ vọng 420000, thực tế: {nhapItem.ThanhTien}");
+        Console.WriteLine("[PASS] ChiTietPhieuNhapHang cập nhật Thành tiền tự động khi thay đổi Số lượng và Đơn giá.");
+
+        // 4. Kiểm thử STA UI (WindowsImeTextInputFix.CommitComposition & MoneyTextBox Value/Commit)
+        Console.WriteLine("\n--- Bước 4: Kiểm thử STA UI (CommitComposition và MoneyTextBox) ---");
+        return ChayTrenStaThread(() =>
+        {
+            if (global::Avalonia.Application.Current is null)
+                global::ShopHoa.Program.BuildAvaloniaApp().SetupWithoutStarting();
+
+            // Test WindowsImeTextInputFix.CommitComposition
+            const int GcsCompStr = 0x0008;
+            WindowsImeTextInputFix.TestCompositionStringReader = (_, flag) => flag == GcsCompStr ? "5" : null;
+
+            var tb = new global::Avalonia.Controls.TextBox();
+            tb.Text = "12";
+            tb.CaretIndex = tb.Text.Length;
+            WindowsImeTextInputFix.CommitComposition(tb);
+            KiemTra(tb.Text == "125", $"CommitComposition kỳ vọng '125', thực tế: '{tb.Text}'");
+            WindowsImeTextInputFix.TestCompositionStringReader = null;
+
+            // Test MoneyTextBox
+            var moneyBox = new MoneyTextBox();
+            moneyBox.Value = 150000m;
+            KiemTra(moneyBox.Value == 150000m, "MoneyTextBox Value kỳ vọng 150000");
+
+            Console.WriteLine("[PASS] CommitComposition và MoneyTextBox kiểm thử giao diện thành công.");
+
+            Console.WriteLine("\n==========================================================================================");
+            Console.WriteLine(">>> TOÀN BỘ CÁC BƯỚC KIỂM THỬ BUG #134 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+            Console.WriteLine("==========================================================================================");
+            return 0;
+        });
     }
 }

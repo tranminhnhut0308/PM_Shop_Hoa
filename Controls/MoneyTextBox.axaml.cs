@@ -79,11 +79,18 @@ public partial class MoneyTextBox : UserControl
                     control.Input.IsReadOnly = control.IsReadOnly;
             });
 
+        AddHandler(InputElement.PointerPressedEvent, (s, e) =>
+        {
+            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && Input is not null && !Input.IsFocused)
+            {
+                Input.Focus();
+            }
+        }, RoutingStrategies.Tunnel);
+
         Input.GotFocus += OnInputGotFocus;
         Input.LostFocus += OnInputLostFocus;
         Input.TextChanged += OnInputTextChanged;
-        Input.AddHandler(InputElement.PointerPressedEvent, OnInputPointerPressed, RoutingStrategies.Tunnel);
-        Input.AddHandler(InputElement.PointerReleasedEvent, OnInputPointerReleased, RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
+        Input.KeyDown += OnInputKeyDown;
         Input.IsReadOnly = IsReadOnly;
 
         SyncFromValue();
@@ -93,22 +100,6 @@ public partial class MoneyTextBox : UserControl
     {
         Input.Focus();
         SelectAllWhenHasContent();
-    }
-
-    private void OnInputPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (e.GetCurrentPoint(Input).Properties.IsLeftButtonPressed)
-        {
-            SelectAllWhenHasContent();
-        }
-    }
-
-    private void OnInputPointerReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        if (e.InitialPressMouseButton == MouseButton.Left)
-        {
-            SelectAllWhenHasContent();
-        }
     }
 
     private void OnInputGotFocus(object? sender, RoutedEventArgs e)
@@ -128,18 +119,50 @@ public partial class MoneyTextBox : UserControl
         }, DispatcherPriority.Input);
     }
 
+    private void OnInputKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+
+            WindowsImeTextInputFix.CommitComposition(Input);
+
+            CommitFromInputText();
+
+            TopLevel.GetTopLevel(this)?.FocusManager?.ClearFocus();
+        }
+    }
+
     private void OnInputLostFocus(object? sender, RoutedEventArgs e)
     {
         _hasFocus = false;
 
-        if (_userClearedValue)
-            return;
+        WindowsImeTextInputFix.CommitComposition(Input);
+
+        CommitFromInputText();
+    }
+
+    private void CommitFromInputText()
+    {
+        var raw = (Input.Text ?? string.Empty).Trim();
+        if (MoneyInput.TryParse(raw, false, out var parsed, out _))
+        {
+            Value = parsed;
+        }
 
         var formatted = MoneyInput.Format(Value);
-
-        if (Input.Text != formatted)
-            Input.Text = formatted;
-        _lastAcceptedText = formatted;
+        _updatingValue = true;
+        try
+        {
+            if (Input.Text != formatted)
+                Input.Text = formatted;
+            _lastAcceptedText = formatted;
+            _userClearedValue = false;
+        }
+        finally
+        {
+            _updatingValue = false;
+        }
     }
 
     private void OnInputTextChanged(object? sender, TextChangedEventArgs e)

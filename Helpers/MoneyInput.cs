@@ -202,9 +202,17 @@ public static class MoneyInput
         => source.IndexOfAny(NegativeSigns) >= 0;
 
     internal static bool IsTransientComposition(string source, int caret)
-        => caret > 0
-           && caret <= source.Length
-           && source[caret - 1] is >= 'a' and <= 'z' or >= 'A' and <= 'Z';
+    {
+        if (caret <= 0 || caret > source.Length)
+            return false;
+
+        var ch = source[caret - 1];
+        if (ch is 'đ' or 'Đ' or '₫')
+            return false;
+
+        return ch is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z')
+               or '^' or '`' or '~' or '?';
+    }
 
     private static string KeepNumericCharacters(string source)
     {

@@ -448,21 +448,25 @@ public class WindowsImeTextInputFix
         return false;
     }
 
-    private static void OnTextBoxLostFocus(TextBox textBox, RoutedEventArgs e)
+    /// <summary>
+    /// Chốt ngay phần preedit/composition đang gõ dở của IME vào TextBox.
+    /// Dùng khi người dùng nhấn Enter hoặc trước khi đọc giá trị để lưu/tính toán.
+    /// </summary>
+    public static void CommitComposition(TextBox textBox)
     {
         var topLevel = TopLevel.GetTopLevel(textBox);
-        if (topLevel is null || !GetEnabled(topLevel))
-            return;
-
-        s_states.TryGetValue(topLevel, out var state);
+        HookState? state = null;
+        if (topLevel is not null)
+            s_states.TryGetValue(topLevel, out state);
 
         string? uncommitted = null;
         if (state is null || (!state.CommittedInCurrentComposition && !state.CanceledInCurrentComposition))
         {
             uncommitted = FirstNonEmpty(
-                GetComposition(topLevel),
+                topLevel is not null ? GetComposition(topLevel) : null,
                 state?.LastNonEmptyCompStr,
-                GetPreeditText(textBox));
+                GetPreeditText(textBox),
+                TestCompositionStringReader?.Invoke(IntPtr.Zero, 0x0008));
         }
 
         if (state is not null)
@@ -476,13 +480,21 @@ public class WindowsImeTextInputFix
         }
 
         ClearPreedit(textBox, topLevel);
-        ClearCompositionState(topLevel);
-        CancelNativeComposition(topLevel);
+        if (topLevel is not null)
+        {
+            ClearCompositionState(topLevel);
+            CancelNativeComposition(topLevel);
+        }
 
         if (!string.IsNullOrEmpty(uncommitted) && textBox.IsEnabled && !textBox.IsReadOnly)
             InsertTextAtCaret(textBox, uncommitted);
 
         FireEffectiveTextChanged(textBox);
+    }
+
+    private static void OnTextBoxLostFocus(TextBox textBox, RoutedEventArgs e)
+    {
+        CommitComposition(textBox);
     }
 
     private static void ApplyCompositionInTestMode(
