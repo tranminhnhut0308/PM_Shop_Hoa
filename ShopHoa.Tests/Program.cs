@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Threading.Tasks;
 using Dapper;
 using MySqlConnector;
@@ -299,6 +300,23 @@ internal class Program
 
         if (args.Contains("--verify-issue-139", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue139_SuaLoiKhongNhapDuocSoLuongBanHang();
+
+        if (args.Contains("--verify-issue-143", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue143_CongNoTrenHoaDonAsync(csb.ConnectionString);
+        }
 
         if (args.Contains("--verify-issue-144", StringComparer.OrdinalIgnoreCase))
         {
@@ -7487,6 +7505,211 @@ internal class Program
             kyVongTienDu: 500000m);
 
         Console.WriteLine("\n>>> TOÀN BỘ 4 TRƯỜNG HỢP KIỂM THỬ BẮT BUỘC CỦA ISSUE #144 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+        return 0;
+    }
+
+    private static async Task<int> KiemTraIssue143_CongNoTrenHoaDonAsync(string connectionString)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #143: BỎ XÁC NHẬN VÀ HIỂN THỊ CÔNG NỢ TRÊN HÓA ĐƠN             ");
+        Console.WriteLine("==========================================================================================");
+
+        var db = new DatabaseService();
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "tester",
+            HoTen = "Kiem Thu Vien #143",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        });
+
+        var spDb = await conn.QueryFirstOrDefaultAsync<dynamic>(
+            "SELECT id, ma_san_pham, ten_san_pham, gia_ban, COALESCE(ton_kho_excel, 0) AS TonKho FROM san_pham ORDER BY id LIMIT 1;");
+        if (spDb is null)
+            throw new Exception("Không tìm thấy sản phẩm để kiểm thử issue #143.");
+
+        var spId = (uint)spDb.id;
+        var spMa = (string)spDb.ma_san_pham;
+        var spTen = (string)spDb.ten_san_pham;
+        var spGia = (decimal)spDb.gia_ban;
+        if (spGia <= 0)
+            spGia = 275000m;
+        var tonKhoGoc = (decimal)spDb.TonKho;
+        var khachIds = new List<uint>();
+        var hoaDonIds = new List<uint>();
+        var hoaDonMa = new List<string>();
+
+        async Task DatLaiTonKhoAsync(decimal soLuong)
+        {
+            await conn.ExecuteAsync(
+                "UPDATE san_pham SET ton_kho_excel = @Ton WHERE id = @Id;",
+                new { Ton = soLuong, Id = spId });
+            await conn.ExecuteAsync(
+                "UPDATE ton_kho SET so_luong_ton = @Ton WHERE san_pham_id = @Id AND chi_nhanh_id = 1;",
+                new { Ton = soLuong, Id = spId });
+        }
+
+        async Task ChayKichBanAsync(
+            string ten,
+            decimal noCuBanDau,
+            decimal tienKhachDua,
+            decimal kyVongConNo,
+            decimal kyVongTongNo,
+            decimal kyVongTienThoi)
+        {
+            Console.Write($"{ten}... ");
+
+            var suffix = Guid.NewGuid().ToString("N")[..8];
+            var maKh = $"KH_143_{suffix}";
+            var tenKh = $"Khách Hàng Test 143 ({suffix})";
+            uint khId;
+
+            await DatLaiTonKhoAsync(20m);
+
+            await conn.ExecuteAsync(
+                """
+                INSERT INTO khach_hang (ma_khach_hang, ten_khach_hang, so_dien_thoai, trang_thai, so_du_tra_truoc, ngay_tao, ngay_cap_nhat)
+                VALUES (@Ma, @Ten, '0988143143', 1, 0.00, NOW(), NOW());
+                """,
+                new { Ma = maKh, Ten = tenKh });
+            khId = await conn.ExecuteScalarAsync<uint>(
+                "SELECT id FROM khach_hang WHERE ma_khach_hang = @Ma;",
+                new { Ma = maKh });
+            khachIds.Add(khId);
+
+            if (noCuBanDau > 0)
+            {
+                await conn.ExecuteAsync(
+                    """
+                    INSERT INTO lich_su_cong_no_khach_hang
+                    (khach_hang_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu, ghi_no, ghi_co, so_du, thoi_gian, ghi_chu)
+                    VALUES (@KhId, 1, 'GHI_NO', 'HOA_DON', @Ma, @No, 0, @No, NOW(), 'Nợ cũ test 143');
+                    """,
+                    new { KhId = khId, Ma = $"HD_NO_CU_{suffix}", No = noCuBanDau });
+            }
+
+            var cart = new List<SaleCartItem>
+            {
+                new()
+                {
+                    SanPham = new SanPham
+                    {
+                        Id = spId,
+                        MaSanPham = spMa,
+                        TenSanPham = spTen,
+                        GiaBan = spGia,
+                        TonKho = 20m
+                    },
+                    SoLuong = 1,
+                    DonGia = 275000m
+                }
+            };
+
+            var receipt = await db.TaoHoaDonBanHangAsync(
+                cart,
+                customer: new KhachHang { Id = khId, MaKhachHang = maKh, TenKhachHang = tenKh },
+                discount: 0m,
+                tienKhachDua: tienKhachDua,
+                phuongThucThanhToan: "TIEN_MAT");
+
+            hoaDonIds.Add(receipt.HoaDonId);
+            hoaDonMa.Add(receipt.MaHoaDon);
+
+            if (receipt.KhachCanTra != 275000m)
+                throw new Exception($"Tổng thanh toán kỳ vọng 275.000đ, thực tế {receipt.KhachCanTra:N0}đ");
+            if (receipt.ConNo != kyVongConNo)
+                throw new Exception($"Nợ phát sinh kỳ vọng {kyVongConNo:N0}đ, thực tế {receipt.ConNo:N0}đ");
+            if (receipt.TienThoi != kyVongTienThoi)
+                throw new Exception($"Tiền thừa kỳ vọng {kyVongTienThoi:N0}đ, thực tế {receipt.TienThoi:N0}đ");
+            if (!receipt.HienThiCongNo)
+                throw new Exception("Hóa đơn khách có hồ sơ phải bật dòng công nợ.");
+            if (receipt.NoCu != noCuBanDau)
+                throw new Exception($"Nợ cũ kỳ vọng {noCuBanDau:N0}đ, thực tế {receipt.NoCu:N0}đ");
+            if (receipt.TongNo != kyVongTongNo)
+                throw new Exception($"Tổng nợ kỳ vọng {kyVongTongNo:N0}đ, thực tế {receipt.TongNo:N0}đ");
+
+            var dbSnapshot = await conn.QueryFirstAsync(
+                "SELECT no_cu, tong_no FROM hoa_don_ban_hang WHERE id = @Id;",
+                new { Id = receipt.HoaDonId });
+            if ((decimal)dbSnapshot.no_cu != noCuBanDau || (decimal)dbSnapshot.tong_no != kyVongTongNo)
+                throw new Exception("Ảnh công nợ lưu trong database không khớp hóa đơn.");
+
+            var congNoThucTe = await conn.ExecuteScalarAsync<decimal>(
+                """
+                SELECT COALESCE(SUM(ghi_no - ghi_co), 0)
+                FROM lich_su_cong_no_khach_hang
+                WHERE khach_hang_id = @KhId;
+                """,
+                new { KhId = khId });
+            if (congNoThucTe != kyVongTongNo)
+                throw new Exception($"Công nợ thực tế trong DB {congNoThucTe:N0}đ không khớp tổng nợ in {kyVongTongNo:N0}đ");
+
+            var html = HoaDonPrintService.TaoHtml(receipt);
+            if (!html.Contains("Nợ cũ") || !html.Contains("Tổng nợ"))
+                throw new Exception("Nội dung in thiếu dòng Nợ cũ hoặc Tổng nợ.");
+            var vi = CultureInfo.GetCultureInfo("vi-VN");
+            var noCuText = noCuBanDau.ToString("N0", vi) + " đ";
+            var tongNoText = kyVongTongNo.ToString("N0", vi) + " đ";
+            if (!html.Contains(noCuText) || !html.Contains(tongNoText))
+                throw new Exception($"Số tiền công nợ trên bản in không đúng. Cần '{noCuText}' và '{tongNoText}'.");
+
+            Console.WriteLine($"PASSED (Nợ cũ {noCuBanDau:N0}đ, Còn lại {receipt.ConNo:N0}đ, Tổng nợ {receipt.TongNo:N0}đ) ✓");
+        }
+
+        try
+        {
+            await ChayKichBanAsync("A. Chưa trả tiền", 6098000m, 0m, 275000m, 6373000m, 0m);
+            await ChayKichBanAsync("B. Trả một phần", 6098000m, 100000m, 175000m, 6273000m, 0m);
+            await ChayKichBanAsync("C. Trả đủ", 6098000m, 275000m, 0m, 6098000m, 0m);
+            await ChayKichBanAsync("D. Không có nợ cũ", 0m, 0m, 275000m, 275000m, 0m);
+            await ChayKichBanAsync("E. Trả nhiều hơn hóa đơn", 6098000m, 300000m, 0m, 6098000m, 25000m);
+
+            var htmlKhachLe = HoaDonPrintService.TaoHtml(new HoaDonBanHangReceipt
+            {
+                MaHoaDon = "HD_KHACH_LE_143",
+                KhachHangId = null,
+                TenKhachHang = "Khách lẻ",
+                TongTienHang = 275000m,
+                KhachCanTra = 275000m,
+                KhachDaThanhToan = 275000m,
+                TienKhachDua = 275000m
+            });
+            if (htmlKhachLe.Contains("Nợ cũ") || htmlKhachLe.Contains("Tổng nợ"))
+                throw new Exception("Khách lẻ không được hiển thị dòng công nợ.");
+            Console.WriteLine("F. Khách vãng lai ẩn dòng công nợ... PASSED ✓");
+        }
+        finally
+        {
+            try
+            {
+                if (hoaDonIds.Count > 0)
+                {
+                    await conn.ExecuteAsync("DELETE FROM chi_tiet_hoa_don_ban_hang WHERE hoa_don_id IN @Ids;", new { Ids = hoaDonIds });
+                    await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE hoa_don_ban_hang_id IN @Ids;", new { Ids = hoaDonIds });
+                    await conn.ExecuteAsync("DELETE FROM thanh_toan WHERE hoa_don_id IN @Ids;", new { Ids = hoaDonIds });
+                    if (hoaDonMa.Count > 0)
+                        await conn.ExecuteAsync("DELETE FROM lich_su_nhap_xuat_kho WHERE ma_chung_tu IN @Ma;", new { Ma = hoaDonMa });
+                    await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id IN @Ids;", new { Ids = hoaDonIds });
+                }
+
+                if (khachIds.Count > 0)
+                {
+                    await conn.ExecuteAsync("DELETE FROM lich_su_tra_truoc_khach_hang WHERE khach_hang_id IN @Ids;", new { Ids = khachIds });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_thanh_toan_cong_no_khach_hang WHERE khach_hang_id IN @Ids;", new { Ids = khachIds });
+                    await conn.ExecuteAsync("DELETE FROM lich_su_cong_no_khach_hang WHERE khach_hang_id IN @Ids;", new { Ids = khachIds });
+                    await conn.ExecuteAsync("DELETE FROM khach_hang WHERE id IN @Ids;", new { Ids = khachIds });
+                }
+
+                await DatLaiTonKhoAsync(tonKhoGoc);
+            }
+            catch { }
+        }
+
+        Console.WriteLine("\n>>> TOÀN BỘ 5 TRƯỜNG HỢP KIỂM THỬ BẮT BUỘC CỦA ISSUE #143 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
         return 0;
     }
 

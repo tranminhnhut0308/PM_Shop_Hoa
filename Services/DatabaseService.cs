@@ -46,6 +46,7 @@ public sealed partial class DatabaseService
     private bool? _hasPhieuNhapNhaCungCapNullable;
     private readonly SemaphoreSlim _ensurePhieuNhapNhaCungCapNullable = new(1, 1);
     private bool? _hasHoaDonContactColumns;
+    private bool? _hasHoaDonCongNoSnapshotColumns;
     private bool _daBackfillNhomSoQuy;
     private bool _daDamBaoBangLichSuThanhToanKhachHang;
     private readonly SemaphoreSlim _khoaDamBaoBangLichSuThanhToanKhachHang = new(1, 1);
@@ -2848,6 +2849,9 @@ public sealed partial class DatabaseService
             return 0m;
         }
     }
+
+    private static decimal? ToDecimalOrNull(object? value)
+        => value is null or DBNull ? null : ToDecimal(value);
 
     private static decimal ParseDecimal(string? value, decimal defaultValue)
     {
@@ -5885,8 +5889,13 @@ public sealed partial class DatabaseService
 
         var coCotContact = await EnsureHoaDonContactColumnsAsync();
         var coCotHuy = await EnsureHuyHoaDonSchemaAsync();
+        var coCotCongNo = await EnsureHoaDonCongNoSnapshotColumnsAsync();
 
         await using var connection = await OpenAsync();
+
+        var congNoCols = coCotCongNo
+            ? "hd.no_cu AS NoCu, hd.tong_no AS TongNo,"
+            : "CAST(NULL AS DECIMAL(15,2)) AS NoCu, CAST(NULL AS DECIMAL(15,2)) AS TongNo,";
 
         var contactCols = coCotContact
             ? """
@@ -5932,6 +5941,8 @@ public sealed partial class DatabaseService
             hd.khach_can_tra            AS KhachCanTra,
             hd.khach_da_thanh_toan      AS KhachDaThanhToan,
             hd.con_no                   AS ConNo,
+            hd.khach_hang_id            AS KhachHangId,
+            {congNoCols}
             hd.trang_thai_hoa_don       AS TrangThaiHoaDon,
             hd.ghi_chu                  AS GhiChu,
             {contactCols}{huyCols}
@@ -5997,6 +6008,9 @@ public sealed partial class DatabaseService
                 "TONG_HOP",
                 StringComparison.OrdinalIgnoreCase),
             ThoiGianBan = header.ThoiGianBan,
+            KhachHangId = header.KhachHangId is null
+                ? null
+                : Convert.ToUInt32(header.KhachHangId),
             TenKhachHang = header.TenKhachHang ?? "Khách lẻ",
             TenNhanVien = header.TenNhanVien ?? "",
             SoDienThoai = header.SoDienThoai?.ToString(),
@@ -6009,6 +6023,8 @@ public sealed partial class DatabaseService
             KhachCanTra = ToDecimal(header.KhachCanTra),
             KhachDaThanhToan = daThanhToan,
             ConNo = conNo,
+            NoCu = ToDecimalOrNull(header.NoCu),
+            TongNo = ToDecimalOrNull(header.TongNo),
 
             // "Tiền khách đưa" = số tiền đã trả + tiền thối
             TienKhachDua = daThanhToan + thuKhac,
@@ -6141,6 +6157,7 @@ public sealed partial class DatabaseService
         // "Table definition has changed" và huỷ cả giao dịch.
         var coCotPhieuThuLienKet = await EnsurePhieuQuyHoaDonColumnsAsync();
         var coCotContactHoaDon = await EnsureHoaDonContactColumnsAsync();
+        var coCotCongNoSnapshot = await EnsureHoaDonCongNoSnapshotColumnsAsync();
         var coLienKetHoaDonGoc = (hoaDonGocId is > 0 || !string.IsNullOrWhiteSpace(maHoaDonGoc))
                                  && await EnsureHuyHoaDonSchemaAsync();
         await EnsureAuditTableAsync();
@@ -6163,6 +6180,30 @@ public sealed partial class DatabaseService
                 debtAmount -= tienCanTruTraTruoc;
                 paymentStatus = debtAmount > 0 ? "CONG_NO" : "DA_THANH_TOAN";
             }
+        }
+
+        var khachHangId = customer?.Id ?? 0;
+        var noCuTruocGiaoDich = 0m;
+        var tongNoSauGiaoDich = 0m;
+
+        if (khachHangId > 0)
+        {
+            const string currentDebtSql = """
+            SELECT COALESCE(
+                SUM(ghi_no - ghi_co),
+                0
+            )
+            FROM lich_su_cong_no_khach_hang
+            WHERE khach_hang_id = @KhachHangId
+            FOR UPDATE;
+            """;
+
+            noCuTruocGiaoDich = await connection.ExecuteScalarAsync<decimal>(
+                currentDebtSql,
+                new { KhachHangId = khachHangId },
+                transaction);
+
+            tongNoSauGiaoDich = noCuTruocGiaoDich + debtAmount;
         }
 
         // Mã phiếu thu sổ quỹ sinh ra từ hóa đơn này (rỗng nếu khách trả 0 đồng).
@@ -6335,6 +6376,23 @@ public sealed partial class DatabaseService
                 throw new InvalidOperationException(
                     "Không tạo được hóa đơn trong database. Giao dịch đã hủy, dữ liệu bán hàng không bị thay đổi.");
 
+            if (coCotCongNoSnapshot && khachHangId > 0)
+            {
+                await connection.ExecuteAsync(
+                    """
+                    UPDATE hoa_don_ban_hang
+                    SET no_cu = @NoCu, tong_no = @TongNo
+                    WHERE id = @HoaDonId;
+                    """,
+                    new
+                    {
+                        NoCu = noCuTruocGiaoDich,
+                        TongNo = tongNoSauGiaoDich,
+                        HoaDonId = invoiceId
+                    },
+                    transaction);
+            }
+
             if (coLienKetHoaDonGoc)
             {
                 await GhiLienKetHoaDonThayTheTrongGiaoDichAsync(
@@ -6463,31 +6521,8 @@ public sealed partial class DatabaseService
             // 4. NẾU CÓ CÔNG NỢ -> LƯU VÀO LỊCH SỬ CÔNG NỢ KHÁCH HÀNG
             // ============================================================
 
-            if (customer is not null && customer.Id > 0 && debtAmount > 0)
+            if (khachHangId > 0 && debtAmount > 0)
             {
-                // Lấy công nợ hiện tại của khách
-                const string currentDebtSql = """
-                SELECT COALESCE(
-                    SUM(ghi_no - ghi_co),
-                    0
-                )
-                FROM lich_su_cong_no_khach_hang
-                WHERE khach_hang_id = @KhachHangId
-                FOR UPDATE;
-                """;
-
-                var currentDebt = await connection.ExecuteScalarAsync<decimal>(
-                    currentDebtSql,
-                    new
-                    {
-                        KhachHangId = customer.Id
-                    },
-                    transaction);
-
-                // Công nợ mới sau khi phát sinh hóa đơn
-                var newDebtBalance = currentDebt + debtAmount;
-
-                // Ghi lịch sử công nợ
                 const string debtSql = """
                 INSERT INTO lich_su_cong_no_khach_hang
                 (
@@ -6506,16 +6541,13 @@ public sealed partial class DatabaseService
                     debtSql,
                     new
                     {
-                        KhachHangId = customer.Id,
+                        KhachHangId = khachHangId,
                         ChiNhanhId = branchId,
 
                         MaChungTu = invoiceCode,
 
-                        // Khoản nợ phát sinh
                         GhiNo = debtAmount,
-
-                        // Số dư công nợ mới
-                        SoDu = newDebtBalance,
+                        SoDu = tongNoSauGiaoDich,
 
                         ThoiGian = now,
                         NguoiThucHienId = userId,
@@ -13313,6 +13345,49 @@ public sealed partial class DatabaseService
         }
 
         return _hasHoaDonContactColumns.Value;
+    }
+
+    private async Task<bool> EnsureHoaDonCongNoSnapshotColumnsAsync()
+    {
+        if (_hasHoaDonCongNoSnapshotColumns.HasValue)
+            return _hasHoaDonCongNoSnapshotColumns.Value;
+
+        await using var connection = await OpenAsync();
+
+        try
+        {
+            var coCot = (await connection.QueryAsync<string>(
+                """
+                SELECT COLUMN_NAME FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'hoa_don_ban_hang'
+                  AND COLUMN_NAME IN ('no_cu', 'tong_no');
+                """)).AsList();
+
+            var daCoNoCu = coCot.Any(c =>
+                string.Equals(c, "no_cu", StringComparison.OrdinalIgnoreCase));
+            var daCoTongNo = coCot.Any(c =>
+                string.Equals(c, "tong_no", StringComparison.OrdinalIgnoreCase));
+
+            if (!daCoNoCu)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE hoa_don_ban_hang ADD COLUMN no_cu decimal(15,2) DEFAULT NULL AFTER con_no;");
+            }
+
+            if (!daCoTongNo)
+            {
+                await connection.ExecuteAsync(
+                    "ALTER TABLE hoa_don_ban_hang ADD COLUMN tong_no decimal(15,2) DEFAULT NULL AFTER no_cu;");
+            }
+
+            _hasHoaDonCongNoSnapshotColumns = true;
+        }
+        catch
+        {
+            _hasHoaDonCongNoSnapshotColumns = false;
+        }
+
+        return _hasHoaDonCongNoSnapshotColumns.Value;
     }
 
     // ================================================================

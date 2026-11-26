@@ -14,6 +14,7 @@ public sealed class HoaDonBanHangReceipt
         || string.Equals(TrangThaiHoaDon, "HUY", StringComparison.OrdinalIgnoreCase);
 
     public DateTime ThoiGianBan { get; set; }
+    public uint? KhachHangId { get; set; }
     public string TenKhachHang { get; set; } = "Khách lẻ";
     public string TenNhanVien { get; set; } = "";
     public List<HoaDonBanHangReceiptItem> Items { get; set; } = [];
@@ -26,6 +27,20 @@ public sealed class HoaDonBanHangReceipt
     public decimal TienThoi { get; set; }
     public decimal ConNo { get; set; }
     public string TrangThaiThanhToan { get; set; } = "";
+
+    /// <summary>
+    /// Ảnh công nợ của khách hàng ngay trước khi giao dịch này được ghi nhận.
+    /// Chỉ có giá trị với hóa đơn gắn hồ sơ khách hàng trong database.
+    /// </summary>
+    public decimal? NoCu { get; set; }
+
+    /// <summary>
+    /// Tổng công nợ của khách hàng ngay sau khi giao dịch này được ghi nhận.
+    /// </summary>
+    public decimal? TongNo { get; set; }
+
+    public bool HienThiCongNo =>
+        KhachHangId is > 0 && NoCu.HasValue && TongNo.HasValue;
 
     public string? SoDienThoai { get; set; }
     public string? DiaChi { get; set; }

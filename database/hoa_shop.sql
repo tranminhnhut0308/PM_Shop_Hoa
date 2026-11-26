@@ -217,6 +217,8 @@ CREATE TABLE `hoa_don_ban_hang` (
   `khach_can_tra` decimal(15,2) NOT NULL DEFAULT '0.00',
   `khach_da_thanh_toan` decimal(15,2) NOT NULL DEFAULT '0.00',
   `con_no` decimal(15,2) NOT NULL DEFAULT '0.00',
+  `no_cu` decimal(15,2) DEFAULT NULL,
+  `tong_no` decimal(15,2) DEFAULT NULL,
   `cong_no_da_ghi_nhan` tinyint(1) NOT NULL DEFAULT '1',
   `doanh_so_da_ghi_nhan` tinyint(1) NOT NULL DEFAULT '1',
   `trang_thai_thanh_toan` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'DA_THANH_TOAN',

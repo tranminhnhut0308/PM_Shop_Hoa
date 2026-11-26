@@ -357,6 +357,28 @@
               Foreground="#087F6E" />
           </Grid>
 
+          <!-- Nợ cũ / Tổng nợ (chỉ có khi hóa đơn gắn khách hàng trong database) -->
+          <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HienThiCongNo}">
+            <TextBlock Text="Nợ cũ"
+              Foreground="#61736E" />
+            <TextBlock Grid.Column="1"
+              Text="{Binding NoCu, StringFormat={}{0:N0} đ}"
+              Foreground="#263B35" />
+          </Grid>
+
+          <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HienThiCongNo}"
+            Margin="0,3,0,3">
+            <TextBlock Text="TỔNG NỢ"
+              FontSize="15"
+              FontWeight="Bold"
+              Foreground="#163F38" />
+            <TextBlock Grid.Column="1"
+              Text="{Binding TongNo, StringFormat={}{0:N0} đ}"
+              FontSize="15"
+              FontWeight="Bold"
+              Foreground="#D64545" />
+          </Grid>
+
           <!-- Tiền khách đưa -->
           <Grid ColumnDefinitions="*,Auto">
             <TextBlock Text="Tiền khách đưa"

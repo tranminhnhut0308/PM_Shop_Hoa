@@ -275,17 +275,30 @@ public static class HoaDonPrintService
 
         DongTien(sb, "Tổng thanh toán", receipt.KhachCanTra, "total");
 
-        if (receipt.TienKhachDua > 0)
-            DongTien(sb, "Tiền khách đưa", receipt.TienKhachDua);
+        if (receipt.HienThiCongNo)
+        {
+            DongTien(sb, "Nợ cũ", receipt.NoCu!.Value);
+            DongTien(sb, "Khách thanh toán", receipt.KhachDaThanhToan);
+            DongTien(sb, "Còn lại", receipt.ConNo, "debt");
+            DongTien(sb, "Tổng nợ", receipt.TongNo!.Value, "debt");
 
-        if (receipt.KhachDaThanhToan > 0 && receipt.KhachDaThanhToan != receipt.TienKhachDua)
-            DongTien(sb, "Khách đã trả", receipt.KhachDaThanhToan);
+            if (receipt.TienThoi > 0)
+                DongTien(sb, "Tiền thừa", receipt.TienThoi);
+        }
+        else
+        {
+            if (receipt.TienKhachDua > 0)
+                DongTien(sb, "Tiền khách đưa", receipt.TienKhachDua);
 
-        if (receipt.TienThoi > 0)
-            DongTien(sb, "Tiền thừa", receipt.TienThoi);
+            if (receipt.KhachDaThanhToan > 0 && receipt.KhachDaThanhToan != receipt.TienKhachDua)
+                DongTien(sb, "Khách đã trả", receipt.KhachDaThanhToan);
 
-        if (receipt.ConNo > 0)
-            DongTien(sb, "Công nợ còn lại", receipt.ConNo, "debt");
+            if (receipt.TienThoi > 0)
+                DongTien(sb, "Tiền thừa", receipt.TienThoi);
+
+            if (receipt.ConNo > 0)
+                DongTien(sb, "Công nợ còn lại", receipt.ConNo, "debt");
+        }
 
         sb.Append("</div>");
 

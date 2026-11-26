@@ -119,7 +119,7 @@ public sealed partial class MainWindowViewModel
                     await LoadPhieuNhapDonViTinhOptionsAsync();
                     if (!string.IsNullOrWhiteSpace(ImportProductSearch))
                     {
-                        await LoadPhieuNhapProductSuggestionsAsync();
+                        await TimKiemSanPhamNhapNgayAsync();
                     }
                     StatusMessage = "Đã làm mới dữ liệu gợi ý của phiếu nhập.";
                 }

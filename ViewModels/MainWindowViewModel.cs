@@ -7470,26 +7470,36 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// Thanh toán đơn hàng đang bán.
     /// <para>
-    /// Thứ tự bắt buộc: khoá chống bấm hai lần → kiểm tra dữ liệu → xác nhận
-    /// người dùng → LƯU VÀO DATABASE (hóa đơn + chi tiết + tồn kho + công nợ
-    /// trong một transaction) → chỉ khi lưu thành công mới mở hóa đơn và báo
-    /// "thanh toán thành công" → cuối cùng xoá sạch đơn cũ để bán đơn tiếp theo.
-    /// Nếu database lỗi thì rollback toàn bộ, giữ nguyên đơn hàng và báo lỗi
-    /// thật, tuyệt đối không báo thành công giả.
+    /// Thứ tự bắt buộc: khoá chống bấm hai lần → kiểm tra dữ liệu → LƯU VÀO
+    /// DATABASE (hóa đơn + chi tiết + tồn kho + công nợ trong một transaction)
+    /// → chỉ khi lưu thành công mới mở hóa đơn và báo "thanh toán thành công"
+    /// → cuối cùng xoá sạch đơn cũ để bán đơn tiếp theo. Nếu database lỗi thì
+    /// rollback toàn bộ, giữ nguyên đơn hàng và báo lỗi thật.
     /// </para>
     /// </summary>
     [RelayCommand]
     private async Task ThanhToanAsync()
     {
         if (!await KiemTraQuyenAsync(PermissionKeys.SalesPayment, "Bạn không có quyền bán hàng."))
-        {
             return;
-        }
 
-        // 1. Chống bấm nút nhiều lần / gọi lệnh chồng nhau
         if (IsThanhToanDangXuLy)
             return;
 
+        IsThanhToanDangXuLy = true;
+
+        try
+        {
+            await ThanhToanDuocKhoaAsync();
+        }
+        finally
+        {
+            IsThanhToanDangXuLy = false;
+        }
+    }
+
+    private async Task ThanhToanDuocKhoaAsync()
+    {
         (OwnerWindow as MainWindow)?.CommitActiveSaleInputs();
 
         // 2. Kiểm tra dữ liệu
@@ -7568,7 +7578,6 @@ public partial class MainWindowViewModel : ObservableObject
         // dùng sửa giỏ hàng lúc đang xác nhận làm lệch số liệu.
         var cartSnapshot = SaleCart.ToList();
         var customer = SelectedSaleCustomer;
-        var customerName = customer?.TenKhachHang ?? "Khách lẻ";
         var discountSnapshot = SaleDiscountAmount;
         var hoaDonGocIdSnapshot = _hoaDonGocBiHuyId;
         var maHoaDonGocSnapshot = _maHoaDonGocBiHuy;
@@ -7643,38 +7652,11 @@ public partial class MainWindowViewModel : ObservableObject
             }
         }
 
-        // 3. Xác nhận thanh toán
-        // Bỏ cửa sổ xác nhận thanh toán trung gian đối với khách lẻ và khách thanh toán đủ (công nợ = 0).
-        // Chỉ hiển thị hộp thoại xác nhận khi có công nợ / thanh toán một phần (Trường hợp 3).
-        if (TienCongNo > 0)
-        {
-            var confirmWindow = new ThanhToanConfirmWindow(
-                customerName,
-                SaleTotal,
-                cashSnapshot,
-                TienThoi,
-                TienCongNo,
-                SelectedSalePaymentMethod?.Ma);
-
-            if (!await confirmWindow.ShowDialog<bool>(owner))
-            {
-                StatusMessage = "Đã hủy thanh toán.";
-                return;
-            }
-
-            var phuongThucDaChon = confirmWindow.PhuongThucThanhToan;
-            if (!string.IsNullOrWhiteSpace(phuongThucDaChon))
-            {
-                var match = SalePaymentMethods.FirstOrDefault(p => p.Ma == phuongThucDaChon);
-                if (match is not null)
-                    SelectedSalePaymentMethod = match;
-            }
-        }
-
-        // 4. Lưu vào database
+        // 3. Lưu vào database
+        // Issue #143: bỏ hộp thoại xác nhận trung gian. Khách có hồ sơ thanh toán
+        // ngay; khách lẻ vẫn giữ nguyên cơ chế tự thu đủ, không ghi nợ như cũ.
         HoaDonBanHangReceipt? receipt = null;
 
-        IsThanhToanDangXuLy = true;
         StatusMessage = "Đang lưu hóa đơn...";
 
 
@@ -7713,10 +7695,6 @@ public partial class MainWindowViewModel : ObservableObject
             SafeLog.WriteError("Loi thanh toan ban hang", ex);
 
             return;
-        }
-        finally
-        {
-            IsThanhToanDangXuLy = false;
         }
 
         // 5. Lưu thành công: đóng đúng giỏ hàng vừa thanh toán, các giỏ hàng khác giữ nguyên 100%
