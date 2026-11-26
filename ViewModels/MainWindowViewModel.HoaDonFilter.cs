@@ -12,8 +12,6 @@ using ShopHoa.Models;
 
 namespace ShopHoa.ViewModels;
 
-public sealed record InvoiceFilterChip(string Key, string Text);
-
 public sealed partial class MainWindowViewModel
 {
     // =========================================================
@@ -28,26 +26,15 @@ public sealed partial class MainWindowViewModel
     private string _invoiceDatePresetBeforeCustom = "Mọi ngày";
     private bool _dangCapNhatPresetNgay;
     private bool _dangHuyChonNgayTuyChon;
-    private bool _dangSuaKhoangNgayTuyChon;
 
     private string _selectedInvoicePaymentStatus = "Tất cả";
     private string _selectedInvoiceStatus = "Tất cả";
-    private KhachHangFilterOption? _selectedInvoiceCustomer;
-    private HoaDonNhanVienFilterOption? _selectedInvoiceEmployee;
     private int _invoiceSearchVersion;
     private CancellationTokenSource? _invoiceSearchDebounce;
 
     private int _invoicePage = 1;
     private int _invoicePageSize = 20;
     private int _invoiceTotalCount;
-
-    [ObservableProperty]
-    private bool isInvoiceAdvancedFiltersExpanded;
-    [ObservableProperty]
-    private string invoiceCustomerSearch = "";
-
-    [ObservableProperty]
-    private bool isInvoiceCustomDatePickerOpen;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasNoInvoices))]
@@ -81,7 +68,6 @@ public sealed partial class MainWindowViewModel
                     var homNay = NgayVietNamHomNay();
                     InvoiceCustomStartDateDraft = (InvoiceFilterStartDate ?? InvoiceFilterEndDate ?? homNay).Date;
                     InvoiceCustomEndDateDraft = (InvoiceFilterEndDate ?? InvoiceFilterStartDate ?? homNay).Date;
-                    IsInvoiceCustomDatePickerOpen = true;
                 }
                 else if (!_dangCapNhatPresetNgay && !_dangHuyChonNgayTuyChon
                     && !string.IsNullOrWhiteSpace(value))
@@ -90,10 +76,7 @@ public sealed partial class MainWindowViewModel
                 }
                 OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
                 ThongBaoPresetNgayHoaDon();
-                OnPropertyChanged(nameof(InvoiceDateFilterText));
                 OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
-                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-                OnPropertyChanged(nameof(InvoiceDateCompactText));
                 OnPropertyChanged(nameof(HasInvoiceDateFilter));
             }
         }
@@ -127,10 +110,7 @@ public sealed partial class MainWindowViewModel
                 value.HasValue ? VietnameseCalendar.FromCalendarDate(value.Value) : null))
             {
                 OnPropertyChanged(nameof(InvoiceFilterStartDateText));
-                OnPropertyChanged(nameof(InvoiceDateFilterText));
                 OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
-                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-                OnPropertyChanged(nameof(InvoiceDateCompactText));
                 OnPropertyChanged(nameof(HasInvoiceDateFilter));
                 if (!_dangCapNhatPresetNgay)
                 {
@@ -158,10 +138,7 @@ public sealed partial class MainWindowViewModel
                 value.HasValue ? VietnameseCalendar.FromCalendarDate(value.Value) : null))
             {
                 OnPropertyChanged(nameof(InvoiceFilterEndDateText));
-                OnPropertyChanged(nameof(InvoiceDateFilterText));
                 OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
-                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-                OnPropertyChanged(nameof(InvoiceDateCompactText));
                 OnPropertyChanged(nameof(HasInvoiceDateFilter));
                 if (!_dangCapNhatPresetNgay)
                 {
@@ -238,12 +215,8 @@ public sealed partial class MainWindowViewModel
         _selectedInvoiceDatePreset = "Tùy chỉnh";
         _dangCapNhatPresetNgay = false;
         OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
-        OnPropertyChanged(nameof(InvoiceDateFilterText));
         OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
-        OnPropertyChanged(nameof(InvoiceDateCompactText));
 
-        _dangSuaKhoangNgayTuyChon = false;
-        IsInvoiceCustomDatePickerOpen = false;
         HuyTimHoaDonDebounce();
         InvoicePage = 1;
         await SearchInvoicesAsync(giuTrang: true);
@@ -262,12 +235,8 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
         OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
         ThongBaoPresetNgayHoaDon();
-        OnPropertyChanged(nameof(InvoiceDateFilterText));
         OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
-        OnPropertyChanged(nameof(InvoiceDateCompactText));
 
-        _dangSuaKhoangNgayTuyChon = false;
-        IsInvoiceCustomDatePickerOpen = false;
         HuyTimHoaDonDebounce();
         InvoicePage = 1;
         await SearchInvoicesAsync(giuTrang: true);
@@ -276,44 +245,9 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private void HuyChonKhoangNgayHoaDon()
     {
-        if (!_dangSuaKhoangNgayTuyChon)
-        {
-            _dangHuyChonNgayTuyChon = true;
-            SelectedInvoiceDatePreset = _invoiceDatePresetBeforeCustom;
-            _dangHuyChonNgayTuyChon = false;
-        }
-
-        _dangSuaKhoangNgayTuyChon = false;
-        IsInvoiceCustomDatePickerOpen = false;
-    }
-
-    [RelayCommand]
-    private void MoChonKhoangNgayHoaDon()
-    {
-        if (!IsInvoiceCustomDatePreset)
-            return;
-
-        InvoiceCustomStartDateDraft = InvoiceFilterStartDate?.Date;
-        InvoiceCustomEndDateDraft = InvoiceFilterEndDate?.Date;
-        _dangSuaKhoangNgayTuyChon = true;
-        IsInvoiceCustomDatePickerOpen = true;
-    }
-
-    public string InvoiceDateFilterText
-    {
-        get
-        {
-            if (IsInvoiceCustomDatePreset
-                && (InvoiceFilterStartDate is null || InvoiceFilterEndDate is null))
-                return "Khoảng thời gian tùy chỉnh chưa đầy đủ";
-
-            if (InvoiceFilterStartDate is null && InvoiceFilterEndDate is null)
-                return "Khoảng thời gian: Mọi ngày";
-
-            var start = InvoiceFilterStartDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "không giới hạn";
-            var end = InvoiceFilterEndDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "không giới hạn";
-            return $"Khoảng thời gian đang lọc: {start} – {end}";
-        }
+        _dangHuyChonNgayTuyChon = true;
+        SelectedInvoiceDatePreset = _invoiceDatePresetBeforeCustom;
+        _dangHuyChonNgayTuyChon = false;
     }
 
     public string InvoiceDateFilterDisplayText
@@ -360,12 +294,10 @@ public sealed partial class MainWindowViewModel
         {
             if (SetProperty(ref _selectedInvoicePaymentStatus, value))
             {
-                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
                 OnPropertyChanged(nameof(IsInvoicePaymentAll));
                 OnPropertyChanged(nameof(IsInvoicePaymentPaid));
                 OnPropertyChanged(nameof(IsInvoicePaymentUnpaid));
                 OnPropertyChanged(nameof(IsInvoicePaymentPartial));
-                CapNhatInvoiceActiveFilterChips();
             }
         }
     }
@@ -387,9 +319,7 @@ public sealed partial class MainWindowViewModel
         {
             if (SetProperty(ref _selectedInvoiceStatus, value))
             {
-                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
                 ThongBaoTrangThaiHoaDon();
-                CapNhatInvoiceActiveFilterChips();
             }
         }
     }
@@ -416,171 +346,6 @@ public sealed partial class MainWindowViewModel
         await SearchInvoicesAsync();
     }
 
-    // --- 3. BỘ LỌC KHÁCH HÀNG ---
-    public ObservableCollection<KhachHangFilterOption> InvoiceCustomerOptions { get; } = [];
-    public ObservableCollection<KhachHangFilterOption> InvoiceCustomerFilterOptions { get; } = [];
-
-    public KhachHangFilterOption? SelectedInvoiceCustomer
-    {
-        get => _selectedInvoiceCustomer;
-        set
-        {
-            if (SetProperty(ref _selectedInvoiceCustomer, value))
-            {
-                OnPropertyChanged(nameof(HasSelectedInvoiceCustomer));
-                OnPropertyChanged(nameof(SelectedInvoiceCustomerDisplayText));
-                OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
-                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-                CapNhatInvoiceCustomerFilterOptions();
-                CapNhatInvoiceActiveFilterChips();
-            }
-        }
-    }
-
-    private int _invoiceCustomerSelectedIndex = -1;
-    public int InvoiceCustomerSelectedIndex
-    {
-        get => _invoiceCustomerSelectedIndex;
-        set
-        {
-            if (SetProperty(ref _invoiceCustomerSelectedIndex, value))
-            {
-                OnPropertyChanged(nameof(SelectedInvoiceCustomerInList));
-            }
-        }
-    }
-
-    public KhachHangFilterOption? SelectedInvoiceCustomerInList =>
-        InvoiceCustomerSelectedIndex >= 0 && InvoiceCustomerSelectedIndex < InvoiceCustomerFilterOptions.Count
-            ? InvoiceCustomerFilterOptions[InvoiceCustomerSelectedIndex]
-            : null;
-
-    private bool _isInvoiceCustomerSuggestionsClosed;
-    public bool IsInvoiceCustomerSuggestionsClosed
-    {
-        get => _isInvoiceCustomerSuggestionsClosed;
-        set
-        {
-            if (SetProperty(ref _isInvoiceCustomerSuggestionsClosed, value))
-            {
-                OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
-            }
-        }
-    }
-
-    private bool _isInvoiceCustomerSearchFocused;
-    public bool IsInvoiceCustomerSearchFocused
-    {
-        get => _isInvoiceCustomerSearchFocused;
-        set
-        {
-            if (SetProperty(ref _isInvoiceCustomerSearchFocused, value))
-            {
-                OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
-            }
-        }
-    }
-
-    public bool HasSelectedInvoiceCustomer =>
-        SelectedInvoiceCustomer != null && (SelectedInvoiceCustomer.Id != null || SelectedInvoiceCustomer.IsWalkIn);
-
-    public string SelectedInvoiceCustomerDisplayText
-    {
-        get
-        {
-            if (SelectedInvoiceCustomer is null)
-                return "";
-            if (SelectedInvoiceCustomer.IsWalkIn)
-                return "Khách lẻ";
-            return SelectedInvoiceCustomer.DisplayText;
-        }
-    }
-
-    public bool HienThiGoiYKhachHangLoc =>
-        !HasSelectedInvoiceCustomer
-        && !IsInvoiceCustomerSuggestionsClosed
-        && (!string.IsNullOrWhiteSpace(InvoiceCustomerSearch) || _isInvoiceCustomerSearchFocused)
-        && InvoiceCustomerFilterOptions.Count > 0;
-
-    [RelayCommand]
-    public void ChonKhachHangHoaDon(KhachHangFilterOption? option)
-    {
-        if (option is null) return;
-        SelectedInvoiceCustomer = option;
-        InvoiceCustomerSearch = "";
-        IsInvoiceCustomerSuggestionsClosed = true;
-        InvoiceCustomerSelectedIndex = -1;
-        OnPropertyChanged(nameof(HasSelectedInvoiceCustomer));
-        OnPropertyChanged(nameof(SelectedInvoiceCustomerDisplayText));
-        OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
-    }
-
-    [RelayCommand]
-    public void BoChonKhachHangHoaDon()
-    {
-        SelectedInvoiceCustomer = InvoiceCustomerOptions.FirstOrDefault();
-        InvoiceCustomerSearch = "";
-        IsInvoiceCustomerSuggestionsClosed = true;
-        InvoiceCustomerSelectedIndex = -1;
-        CapNhatInvoiceCustomerFilterOptions();
-        OnPropertyChanged(nameof(HasSelectedInvoiceCustomer));
-        OnPropertyChanged(nameof(SelectedInvoiceCustomerDisplayText));
-        OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
-    }
-
-    public void DiChuyenChonKhachHang(int delta)
-    {
-        if (InvoiceCustomerFilterOptions.Count == 0)
-            return;
-
-        var current = InvoiceCustomerSelectedIndex;
-        if (current < 0)
-            current = delta > 0 ? -1 : InvoiceCustomerFilterOptions.Count;
-
-        InvoiceCustomerSelectedIndex = Math.Clamp(current + delta, 0, InvoiceCustomerFilterOptions.Count - 1);
-        IsInvoiceCustomerSuggestionsClosed = false;
-        OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
-    }
-
-    public void DongGoiYKhachHangHoaDon()
-    {
-        IsInvoiceCustomerSuggestionsClosed = true;
-        InvoiceCustomerSelectedIndex = -1;
-        OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
-    }
-
-    public ObservableCollection<HoaDonNhanVienFilterOption> InvoiceEmployeeOptions { get; } = [];
-    public ObservableCollection<InvoiceFilterChip> InvoiceActiveFilterChips { get; } = [];
-    public bool HasAppliedInvoiceFilters => InvoiceActiveFilterChips.Count > 0;
-    public string InvoiceAdvancedFilterCountText =>
-        InvoiceAdvancedFilterCount > 0
-            ? $"Bộ lọc nâng cao ({InvoiceAdvancedFilterCount})"
-            : "Bộ lọc nâng cao";
-
-    public string InvoiceDateCompactText
-    {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(SelectedInvoiceDatePreset)
-                || SelectedInvoiceDatePreset == "Mọi ngày")
-                return "📅 Mọi ngày";
-
-            var start = InvoiceFilterStartDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "…";
-            var end = InvoiceFilterEndDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "…";
-            return InvoiceFilterStartDate == InvoiceFilterEndDate
-                ? $"📅 {start} | {SelectedInvoiceDatePreset}"
-                : $"📅 {start} – {end} | {SelectedInvoiceDatePreset}";
-        }
-    }
-
-    public int InvoiceAdvancedFilterCount =>
-        (SelectedInvoiceCustomer?.Id is not null || SelectedInvoiceCustomer?.IsWalkIn == true ? 1 : 0)
-        + (SelectedInvoiceEmployee?.Id is not null ? 1 : 0)
-        + (!string.IsNullOrWhiteSpace(InvoiceFilterMinTotal) ? 1 : 0)
-        + (!string.IsNullOrWhiteSpace(InvoiceFilterMaxTotal) ? 1 : 0);
-
-    public bool HasInvoiceAdvancedFilters => InvoiceAdvancedFilterCount > 0;
-
     public bool IsInvoicePaymentAll => SelectedInvoicePaymentStatus == "Tất cả";
     public bool IsInvoicePaymentPaid => SelectedInvoicePaymentStatus == "Đã thanh toán";
     public bool IsInvoicePaymentUnpaid =>
@@ -595,159 +360,11 @@ public sealed partial class MainWindowViewModel
     }
 
     [RelayCommand]
-    private async Task ApDungBoLocHoaDonAsync()
-    {
-        IsInvoiceAdvancedFiltersExpanded = false;
-        await SearchInvoicesAsync();
-    }
-
-    [RelayCommand]
-    private void DongBoLocHoaDon()
-        => IsInvoiceAdvancedFiltersExpanded = false;
-
-    [RelayCommand]
     private async Task XoaNoiDungTimHoaDonAsync()
     {
         InvoiceSearch = "";
         HuyTimHoaDonDebounce();
         await SearchInvoicesAsync();
-    }
-
-    [RelayCommand]
-    private void ToggleBoLocHoaDon()
-    {
-        IsInvoiceAdvancedFiltersExpanded = !IsInvoiceAdvancedFiltersExpanded;
-    }
-
-    [RelayCommand]
-    private async Task XoaChipLocHoaDonAsync(string? key)
-    {
-        switch (key)
-        {
-            case "search":
-                InvoiceSearch = "";
-                HuyTimHoaDonDebounce();
-                break;
-            case "date":
-                _dangCapNhatPresetNgay = true;
-                _selectedInvoiceDatePreset = "Mọi ngày";
-                InvoiceFilterStartDate = null;
-                InvoiceFilterEndDate = null;
-                _dangCapNhatPresetNgay = false;
-                InvoiceCustomStartDateDraft = null;
-                InvoiceCustomEndDateDraft = null;
-                IsInvoiceCustomDatePickerOpen = false;
-                OnPropertyChanged(nameof(SelectedInvoiceDatePreset));
-                OnPropertyChanged(nameof(IsInvoiceCustomDatePreset));
-                ThongBaoPresetNgayHoaDon();
-                break;
-            case "invoice-status":
-                SelectedInvoiceStatus = "Tất cả";
-                break;
-            case "payment-status":
-                SelectedInvoicePaymentStatus = "Tất cả";
-                break;
-            case "customer":
-                SelectedInvoiceCustomer = InvoiceCustomerOptions.FirstOrDefault();
-                break;
-            case "employee":
-                SelectedInvoiceEmployee = InvoiceEmployeeOptions.FirstOrDefault();
-                break;
-            case "min-total":
-                InvoiceFilterMinTotal = "";
-                break;
-            case "max-total":
-                InvoiceFilterMaxTotal = "";
-                break;
-            default:
-                return;
-        }
-
-        await SearchInvoicesAsync();
-    }
-
-    private void CapNhatInvoiceActiveFilterChips()
-    {
-        InvoiceActiveFilterChips.Clear();
-        if (SelectedInvoiceStatus != "Tất cả")
-            InvoiceActiveFilterChips.Add(new("invoice-status", $"Hóa đơn: {SelectedInvoiceStatus}"));
-
-        if (SelectedInvoiceCustomer is { IsWalkIn: true })
-            InvoiceActiveFilterChips.Add(new("customer", "Khách hàng: Khách lẻ"));
-        else if (SelectedInvoiceCustomer?.Id is not null)
-            InvoiceActiveFilterChips.Add(new("customer", $"Khách hàng: {SelectedInvoiceCustomer.DisplayText}"));
-
-        if (SelectedInvoiceEmployee?.Id is not null)
-            InvoiceActiveFilterChips.Add(new("employee", $"Nhân viên: {SelectedInvoiceEmployee.DisplayText}"));
-        if (!string.IsNullOrWhiteSpace(InvoiceFilterMinTotal))
-            InvoiceActiveFilterChips.Add(new("min-total", $"Từ: {InvoiceFilterMinTotal.Trim()} đ"));
-        if (!string.IsNullOrWhiteSpace(InvoiceFilterMaxTotal))
-            InvoiceActiveFilterChips.Add(new("max-total", $"Đến: {InvoiceFilterMaxTotal.Trim()} đ"));
-        if (SelectedInvoicePaymentStatus != "Tất cả")
-            InvoiceActiveFilterChips.Add(new("payment-status", $"Thanh toán: {SelectedInvoicePaymentStatus}"));
-
-        OnPropertyChanged(nameof(InvoiceAdvancedFilterCount));
-        OnPropertyChanged(nameof(HasInvoiceAdvancedFilters));
-        OnPropertyChanged(nameof(HasAppliedInvoiceFilters));
-        OnPropertyChanged(nameof(InvoiceAdvancedFilterCountText));
-        OnPropertyChanged(nameof(InvoiceDateCompactText));
-        OnPropertyChanged(nameof(IsInvoicePaymentAll));
-        OnPropertyChanged(nameof(IsInvoicePaymentPaid));
-        OnPropertyChanged(nameof(IsInvoicePaymentUnpaid));
-        OnPropertyChanged(nameof(IsInvoicePaymentPartial));
-    }
-
-    public HoaDonNhanVienFilterOption? SelectedInvoiceEmployee
-    {
-        get => _selectedInvoiceEmployee;
-        set
-        {
-            if (SetProperty(ref _selectedInvoiceEmployee, value))
-            {
-                OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-                CapNhatInvoiceActiveFilterChips();
-            }
-        }
-    }
-
-    public string InvoiceAdvancedFiltersToggleText =>
-        IsInvoiceAdvancedFiltersExpanded ? "Ẩn bộ lọc nâng cao" : "Bộ lọc nâng cao";
-
-    public string InvoiceActiveFiltersText
-    {
-        get
-        {
-            var filters = new List<string>();
-            if (!string.IsNullOrWhiteSpace(InvoiceSearch))
-                filters.Add($"Từ khóa: {InvoiceSearch.Trim()}");
-            if (InvoiceFilterStartDate.HasValue || InvoiceFilterEndDate.HasValue)
-            {
-                var start = InvoiceFilterStartDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "…";
-                var end = InvoiceFilterEndDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "…";
-                filters.Add($"Thời gian: {start} – {end}");
-            }
-            if (!string.IsNullOrWhiteSpace(InvoiceFilterMinTotal))
-                filters.Add($"Từ tiền: {InvoiceFilterMinTotal.Trim()}");
-            if (!string.IsNullOrWhiteSpace(InvoiceFilterMaxTotal))
-                filters.Add($"Đến tiền: {InvoiceFilterMaxTotal.Trim()}");
-            if (SelectedInvoiceStatus != "Tất cả")
-                filters.Add($"Hóa đơn: {SelectedInvoiceStatus}");
-            if (SelectedInvoicePaymentStatus != "Tất cả")
-                filters.Add($"Thanh toán: {SelectedInvoicePaymentStatus}");
-            if (SelectedInvoiceCustomer is { IsWalkIn: true })
-                filters.Add("Khách hàng: Khách lẻ");
-            else if (SelectedInvoiceCustomer?.Id is not null)
-                filters.Add($"Khách hàng: {SelectedInvoiceCustomer.DisplayText}");
-            if (SelectedInvoiceEmployee is { Id: not null })
-                filters.Add($"Nhân viên: {SelectedInvoiceEmployee.DisplayText}");
-
-            return filters.Count == 0 ? "Không áp dụng bộ lọc" : string.Join("  •  ", filters);
-        }
-    }
-
-    partial void OnIsInvoiceAdvancedFiltersExpandedChanged(bool value)
-    {
-        OnPropertyChanged(nameof(InvoiceAdvancedFiltersToggleText));
     }
 
     public string EffectiveInvoiceSearchKeyword =>
@@ -759,7 +376,6 @@ public sealed partial class MainWindowViewModel
     {
         _invoiceSearchCompositionText = string.Empty;
         OnPropertyChanged(nameof(EffectiveInvoiceSearchKeyword));
-        OnPropertyChanged(nameof(InvoiceActiveFiltersText));
         DatLichTimHoaDon();
     }
 
@@ -771,20 +387,7 @@ public sealed partial class MainWindowViewModel
 
         _invoiceSearchCompositionText = current;
         OnPropertyChanged(nameof(EffectiveInvoiceSearchKeyword));
-        OnPropertyChanged(nameof(InvoiceActiveFiltersText));
         DatLichTimHoaDon();
-    }
-
-    partial void OnInvoiceFilterMinTotalChanged(string value)
-    {
-        OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-        CapNhatInvoiceActiveFilterChips();
-    }
-
-    partial void OnInvoiceFilterMaxTotalChanged(string value)
-    {
-        OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-        CapNhatInvoiceActiveFilterChips();
     }
 
     private void DatLichTimHoaDon()
@@ -814,109 +417,6 @@ public sealed partial class MainWindowViewModel
         finally
         {
             ThuHoiVaDisposeCts(ref _invoiceSearchDebounce, source);
-        }
-    }
-
-    partial void OnInvoiceCustomerSearchChanged(string value)
-    {
-        IsInvoiceCustomerSuggestionsClosed = false;
-        CapNhatInvoiceCustomerFilterOptions();
-    }
-
-    public async Task TaiDanhSachKhachHangLocHoaDonAsync()
-    {
-        try
-        {
-            var customers = await _db.GetKhachHangAsync("");
-            InvoiceCustomerOptions.Clear();
-            InvoiceCustomerOptions.Add(new KhachHangFilterOption
-            {
-                Id = null,
-                DisplayText = "-- Tất cả khách hàng --"
-            });
-            InvoiceCustomerOptions.Add(new KhachHangFilterOption
-            {
-                Id = null,
-                IsWalkIn = true,
-                TenKhachHang = "Khách lẻ",
-                DisplayText = "Khách lẻ"
-            });
-
-            foreach (var kh in customers.OrderBy(c => c.TenKhachHang))
-            {
-                var code = string.IsNullOrWhiteSpace(kh.MaKhachHang) ? "" : $"[{kh.MaKhachHang}] ";
-                var phone = string.IsNullOrWhiteSpace(kh.SoDienThoai) ? "" : $" · {kh.SoDienThoai}";
-                InvoiceCustomerOptions.Add(new KhachHangFilterOption
-                {
-                    Id = kh.Id,
-                    TenKhachHang = kh.TenKhachHang ?? "",
-                    MaKhachHang = kh.MaKhachHang ?? "",
-                    SoDienThoai = kh.SoDienThoai ?? "",
-                    DisplayText = $"{code}{kh.TenKhachHang}{phone}"
-                });
-            }
-
-            _selectedInvoiceCustomer = InvoiceCustomerOptions.FirstOrDefault();
-            OnPropertyChanged(nameof(SelectedInvoiceCustomer));
-            OnPropertyChanged(nameof(HasSelectedInvoiceCustomer));
-            OnPropertyChanged(nameof(SelectedInvoiceCustomerDisplayText));
-            CapNhatInvoiceCustomerFilterOptions();
-            await TaiDanhSachNhanVienLocHoaDonAsync();
-        }
-        catch (Exception ex)
-        {
-            SafeLog.WriteError("TaiDanhSachKhachHangLocHoaDonAsync error", ex);
-        }
-    }
-
-    public void CapNhatInvoiceCustomerFilterOptions()
-    {
-        var query = ProductSearchHelper.ChuanHoa(InvoiceCustomerSearch);
-        InvoiceCustomerFilterOptions.Clear();
-
-        foreach (var option in InvoiceCustomerOptions)
-        {
-            var matches = string.IsNullOrWhiteSpace(query)
-                || ProductSearchHelper.ChuanHoa(option.DisplayText).Contains(query, StringComparison.Ordinal)
-                || ProductSearchHelper.ChuanHoa(option.TenKhachHang).Contains(query, StringComparison.Ordinal)
-                || ProductSearchHelper.ChuanHoa(option.MaKhachHang).Contains(query, StringComparison.Ordinal)
-                || ProductSearchHelper.ChuanHoa(option.SoDienThoai).Contains(query, StringComparison.Ordinal);
-
-            if (matches || option.Id is null)
-                InvoiceCustomerFilterOptions.Add(option);
-        }
-
-        InvoiceCustomerSelectedIndex = InvoiceCustomerFilterOptions.Count > 0 ? 0 : -1;
-        OnPropertyChanged(nameof(HienThiGoiYKhachHangLoc));
-    }
-
-    private async Task TaiDanhSachNhanVienLocHoaDonAsync()
-    {
-        try
-        {
-            var employees = await _db.GetUsersAsync();
-            InvoiceEmployeeOptions.Clear();
-            InvoiceEmployeeOptions.Add(new HoaDonNhanVienFilterOption
-            {
-                DisplayText = "-- Tất cả nhân viên --"
-            });
-
-            foreach (var employee in employees.OrderBy(user => user.HoTen))
-            {
-                InvoiceEmployeeOptions.Add(new HoaDonNhanVienFilterOption
-                {
-                    Id = employee.Id,
-                    DisplayText = employee.HoTen
-                });
-            }
-
-            _selectedInvoiceEmployee = InvoiceEmployeeOptions.FirstOrDefault();
-            OnPropertyChanged(nameof(SelectedInvoiceEmployee));
-            OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-        }
-        catch (Exception ex)
-        {
-            SafeLog.WriteError("TaiDanhSachNhanVienLocHoaDonAsync error", ex);
         }
     }
 
@@ -1133,8 +633,6 @@ public sealed partial class MainWindowViewModel
             _ = SearchInvoicesAsync(giuTrang: true);
         }
 
-        OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-        OnPropertyChanged(nameof(InvoiceDateFilterText));
         OnPropertyChanged(nameof(InvoiceDateFilterDisplayText));
     }
 
@@ -1258,10 +756,6 @@ public sealed partial class MainWindowViewModel
                 _ => null
             };
 
-            var khId = SelectedInvoiceCustomer?.Id;
-            var khachLe = SelectedInvoiceCustomer?.IsWalkIn == true;
-            var nhanVienId = SelectedInvoiceEmployee?.Id;
-
             var searchKeyword = EffectiveInvoiceSearchKeyword;
 
             var result = await _db.GetHoaDonPagedAsync(
@@ -1270,9 +764,9 @@ public sealed partial class MainWindowViewModel
                 denNgay: denNgay,
                 trangThaiThanhToan: ttThanhToan,
                 trangThaiHoaDon: ttHoaDon,
-                khachHangId: khId,
-                nhanVienId: nhanVienId,
-                khachLe: khachLe,
+                khachHangId: null,
+                nhanVienId: null,
+                khachLe: false,
                 page: InvoicePage,
                 pageSize: InvoicePageSize,
                 tongTienTu: tongTienTu,
@@ -1293,9 +787,9 @@ public sealed partial class MainWindowViewModel
                     denNgay: denNgay,
                     trangThaiThanhToan: ttThanhToan,
                     trangThaiHoaDon: ttHoaDon,
-                    khachHangId: khId,
-                    nhanVienId: nhanVienId,
-                    khachLe: khachLe,
+                    khachHangId: null,
+                    nhanVienId: null,
+                    khachLe: false,
                     page: 1,
                     pageSize: InvoicePageSize,
                     tongTienTu: tongTienTu,
@@ -1317,7 +811,6 @@ public sealed partial class MainWindowViewModel
             OnPropertyChanged(nameof(InvoiceTongSoLuongText));
             OnPropertyChanged(nameof(InvoiceSummaryText));
             CapNhatPhanTrangHoaDon();
-            CapNhatInvoiceActiveFilterChips();
 
             StatusMessage = $"Tìm thấy {result.TongSoLuong:N0} hóa đơn phù hợp.";
         }
@@ -1495,8 +988,6 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     public async Task ClearInvoiceSearchAsync()
     {
-        IsInvoiceAdvancedFiltersExpanded = false;
-        IsInvoiceCustomDatePickerOpen = false;
         HuyTimHoaDonDebounce();
         InvoiceSearch = "";
         HuyTimHoaDonDebounce();
@@ -1521,20 +1012,6 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(SelectedInvoiceStatus));
         ThongBaoTrangThaiHoaDon();
 
-        _selectedInvoiceCustomer = InvoiceCustomerOptions.FirstOrDefault();
-        OnPropertyChanged(nameof(SelectedInvoiceCustomer));
-        OnPropertyChanged(nameof(HasSelectedInvoiceCustomer));
-        OnPropertyChanged(nameof(SelectedInvoiceCustomerDisplayText));
-        InvoiceCustomerSearch = "";
-        IsInvoiceCustomerSuggestionsClosed = true;
-        InvoiceCustomerSelectedIndex = -1;
-        CapNhatInvoiceCustomerFilterOptions();
-
-        _selectedInvoiceEmployee = InvoiceEmployeeOptions.FirstOrDefault();
-        OnPropertyChanged(nameof(SelectedInvoiceEmployee));
-
-        OnPropertyChanged(nameof(InvoiceActiveFiltersText));
-        CapNhatInvoiceActiveFilterChips();
         InvoicePage = 1;
 
         await SearchInvoicesAsync(giuTrang: true);

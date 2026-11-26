@@ -2159,7 +2159,6 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task LoadInvoicesAsync()
     {
-        if (InvoiceCustomerOptions.Count == 0) await TaiDanhSachKhachHangLocHoaDonAsync();
         await SearchInvoicesAsync(giuTrang: true);
     }
 

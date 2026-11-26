@@ -581,8 +581,6 @@ public sealed partial class MainWindowViewModel
         var moTaLoc = new List<string>();
         if (!string.IsNullOrWhiteSpace(InvoiceSearch))
             moTaLoc.Add($"Từ khóa: \"{InvoiceSearch.Trim()}\"");
-        if (SelectedInvoiceCustomer?.Id != null)
-            moTaLoc.Add($"Khách hàng: {SelectedInvoiceCustomer.DisplayText}");
         if (!string.IsNullOrWhiteSpace(SelectedInvoicePaymentStatus) && SelectedInvoicePaymentStatus != "Tất cả")
             moTaLoc.Add($"Thanh toán: {SelectedInvoicePaymentStatus}");
         if (!string.IsNullOrWhiteSpace(SelectedInvoiceStatus) && SelectedInvoiceStatus != "Tất cả")
@@ -612,11 +610,11 @@ public sealed partial class MainWindowViewModel
             var (tongQuans, chiTiets, tongHops) = await _db.GetHoaDonXuatExcelDataAsync(
                 yeuCau,
                 searchKeyword: InvoiceSearch,
-                khachHangId: SelectedInvoiceCustomer?.Id,
+                khachHangId: null,
                 trangThaiThanhToan: SelectedInvoicePaymentStatus,
                 trangThaiHoaDon: SelectedInvoiceStatus,
-                nhanVienId: SelectedInvoiceEmployee?.Id,
-                khachLe: SelectedInvoiceCustomer?.IsWalkIn == true);
+                nhanVienId: null,
+                khachLe: false);
 
             var tongSoBanGhi = yeuCau.LoaiBaoCao switch
             {

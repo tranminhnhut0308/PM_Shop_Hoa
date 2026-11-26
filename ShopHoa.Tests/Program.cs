@@ -56,7 +56,7 @@ internal class Program
                 SslMode = MySqlSslMode.None,
                 CharacterSet = "utf8mb4"
             };
-            return await KiemTraIssue92_BoLocHoaDonNangCaoAsync(csb.ConnectionString);
+            return await KiemTraIssue92_BoLocChinhHoaDonAsync(csb.ConnectionString);
         }
         if (args.Contains("--verify-issue-113", StringComparer.OrdinalIgnoreCase))
         {
@@ -309,6 +309,9 @@ internal class Program
 
         if (args.Contains("--verify-issue-139", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue139_SuaLoiKhongNhapDuocSoLuongBanHang();
+
+        if (args.Contains("--verify-issue-132", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue132_BoLocChinhHoaDon();
 
         if (args.Contains("--verify-issue-135", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue135_NhapGiaBanVaDongBoGia();
@@ -5995,10 +5998,10 @@ internal class Program
         return string.Join(", ", heights);
     }
 
-    private static async Task<int> KiemTraIssue92_BoLocHoaDonNangCaoAsync(string connectionString)
+    private static async Task<int> KiemTraIssue92_BoLocChinhHoaDonAsync(string connectionString)
     {
         Console.WriteLine("\n==========================================================================================");
-        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #92: THIẾT KẾ LẠI BỘ LỌC NÂNG CAO TRANG QUẢN LÝ HÓA ĐƠN          ");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #92: BỘ LỌC CHÍNH TRANG QUẢN LÝ HÓA ĐƠN                           ");
         Console.WriteLine("==========================================================================================");
 
         var db = new DatabaseService();
@@ -6036,12 +6039,8 @@ internal class Program
         KiemTra(vm.InvoiceDateFilterDisplayText == "Tất cả thời gian", "Mặc định badge thời gian phải là 'Tất cả thời gian'.");
         KiemTra(vm.SelectedInvoiceStatus == "Tất cả", "Mặc định trạng thái hóa đơn phải là 'Tất cả'.");
         KiemTra(vm.SelectedInvoicePaymentStatus == "Tất cả", "Mặc định trạng thái thanh toán phải là 'Tất cả'.");
-        KiemTra(vm.SelectedInvoiceEmployee == null, "Mặc định nhân viên phải là null (tất cả).");
-        KiemTra(vm.SelectedInvoiceCustomer == null, "Mặc định khách hàng phải là null (tất cả).");
         KiemTra(string.IsNullOrEmpty(vm.InvoiceFilterMinTotal), "Mặc định Từ tiền phải rỗng.");
         KiemTra(string.IsNullOrEmpty(vm.InvoiceFilterMaxTotal), "Mặc định Đến tiền phải rỗng.");
-        KiemTra(!vm.HasInvoiceAdvancedFilters, "Mặc định không có bộ lọc nâng cao nào hoạt động.");
-        KiemTra(vm.InvoiceAdvancedFilterCount == 0, "Mặc định đếm bộ lọc nâng cao phải bằng 0.");
         Console.WriteLine("  -> Trạng thái khởi tạo bộ lọc: ĐẠT");
 
         // 3. KIỂM THỬ LỌC THỜI GIAN VÀ BADGE HIỂN THỊ
@@ -6111,43 +6110,6 @@ internal class Program
         KiemTra(vm.SelectedInvoicePaymentStatus == "Tất cả" && vm.IsInvoicePaymentAll, "Chọn Tất cả thanh toán thất bại.");
         Console.WriteLine("  -> Chips trạng thái thanh toán (Tất cả, Đã thanh toán, Còn công nợ, Thanh toán một phần): ĐẠT");
 
-        // 6. KIỂM THỬ TÌM KIẾM VÀ CHỌN KHÁCH HÀNG (Dropdown gắn liền, bàn phím, chuột, unselect)
-        Console.WriteLine("\n--- [6] Kiểm thử bộ lọc Khách hàng (gợi ý gắn liền, bàn phím, chọn chuột, bỏ chọn) ---");
-        await vm.TaiDanhSachKhachHangLocHoaDonAsync();
-        KiemTra(vm.InvoiceCustomerOptions.Count > 0, "Danh sách khách hàng lọc rỗng.");
-
-        // Giả lập gõ tìm kiếm
-        var firstCustomer = vm.InvoiceCustomerOptions.FirstOrDefault(c => c.Id > 0 && !string.IsNullOrWhiteSpace(c.TenKhachHang));
-        if (firstCustomer != null)
-        {
-            var searchKeyword = firstCustomer.TenKhachHang.Length >= 3 ? firstCustomer.TenKhachHang.Substring(0, 3) : firstCustomer.TenKhachHang;
-            vm.InvoiceCustomerSearch = searchKeyword;
-            vm.CapNhatInvoiceCustomerFilterOptions();
-            KiemTra(vm.InvoiceCustomerFilterOptions.Count > 0, "Không tìm thấy khách hàng theo từ khóa.");
-            KiemTra(vm.InvoiceCustomerFilterOptions.Any(c => c.Id == firstCustomer.Id), "Khách hàng mẫu phải nằm trong danh sách gợi ý.");
-
-            // Điều hướng bàn phím (Phím mũi tên xuống / lên)
-            vm.InvoiceCustomerSelectedIndex = 0;
-            vm.DiChuyenChonKhachHang(1);
-            KiemTra(vm.InvoiceCustomerSelectedIndex == Math.Min(1, vm.InvoiceCustomerFilterOptions.Count - 1), "Di chuyển mũi tên xuống sai index.");
-            vm.DiChuyenChonKhachHang(-1);
-            KiemTra(vm.InvoiceCustomerSelectedIndex == 0, "Di chuyển mũi tên lên sai index.");
-
-            // Chọn khách hàng bằng chuột / lệnh ChonKhachHangHoaDon
-            vm.ChonKhachHangHoaDonCommand.Execute(firstCustomer);
-            KiemTra(vm.SelectedInvoiceCustomer?.Id == firstCustomer.Id, "Chọn khách hàng thất bại.");
-            KiemTra(vm.HasSelectedInvoiceCustomer, "Cờ HasSelectedInvoiceCustomer phải là true.");
-            KiemTra(!string.IsNullOrEmpty(vm.SelectedInvoiceCustomerDisplayText), "SelectedInvoiceCustomerDisplayText không được rỗng.");
-            KiemTra(vm.IsInvoiceCustomerSuggestionsClosed, "Sau khi chọn phải đóng gợi ý.");
-            KiemTra(string.IsNullOrEmpty(vm.InvoiceCustomerSearch), "Sau khi chọn phải xóa search text.");
-
-            // Bỏ chọn khách hàng qua nút x
-            vm.BoChonKhachHangHoaDonCommand.Execute(null);
-            KiemTra(vm.SelectedInvoiceCustomer == vm.InvoiceCustomerOptions.FirstOrDefault(), "Bỏ chọn khách hàng thất bại.");
-            KiemTra(!vm.HasSelectedInvoiceCustomer, "Cờ HasSelectedInvoiceCustomer phải là false sau khi bỏ chọn.");
-        }
-        Console.WriteLine("  -> Tìm kiếm, gợi ý gắn liền, phím mũi tên, Enter, click và bỏ chọn khách hàng: ĐẠT");
-
         // 7. KIỂM THỬ KHOẢNG TIỀN (Từ tiền, Đến tiền) VÀ RÀNG BUỘC TỪ <= ĐẾN
         Console.WriteLine("\n--- [7] Kiểm thử khoảng tiền (Từ tiền - Đến tiền) ---");
         vm.InvoiceFilterMinTotal = "100.000";
@@ -6168,18 +6130,6 @@ internal class Program
         vm.StatusMessage = "";
         Console.WriteLine("  -> Khoảng tiền và kiểm tra ràng buộc Từ <= Đến: ĐẠT");
 
-        // 8. KIỂM THỬ ĐÓNG/MỞ BỘ LỌC NÂNG CAO (Bảo toàn điều kiện)
-        Console.WriteLine("\n--- [8] Kiểm thử đóng/mở bộ lọc nâng cao (bảo toàn điều kiện) ---");
-        vm.InvoiceFilterMinTotal = "200.000";
-        vm.DongBoLocHoaDonCommand.Execute(null);
-        KiemTra(!vm.IsInvoiceAdvancedFiltersExpanded, "Đóng bộ lọc nâng cao thất bại.");
-        KiemTra(vm.InvoiceFilterMinTotal == "200.000", "Đóng bộ lọc không được làm mất điều kiện đã nhập.");
-
-        vm.ToggleBoLocHoaDonCommand.Execute(null);
-        KiemTra(vm.IsInvoiceAdvancedFiltersExpanded, "Mở lại bộ lọc nâng cao thất bại.");
-        KiemTra(vm.InvoiceFilterMinTotal == "200.000", "Điều kiện vẫn phải được bảo toàn khi mở lại.");
-        Console.WriteLine("  -> Đóng/mở bộ lọc nâng cao bảo toàn đầy đủ các tiêu chí: ĐẠT");
-
         // 9. KIỂM THỬ XÓA BỘ LỌC (ClearInvoiceSearchAsync)
         Console.WriteLine("\n--- [9] Kiểm thử nút Xóa bộ lọc (ClearInvoiceSearchAsync) ---");
         vm.InvoiceSearch = "HD123";
@@ -6195,11 +6145,8 @@ internal class Program
         KiemTra(vm.InvoiceDateFilterDisplayText == "Tất cả thời gian", "Xóa bộ lọc phải đưa badge date về 'Tất cả thời gian'.");
         KiemTra(vm.SelectedInvoiceStatus == "Tất cả", "Xóa bộ lọc phải đưa status về Tất cả.");
         KiemTra(vm.SelectedInvoicePaymentStatus == "Tất cả", "Xóa bộ lọc phải đưa payment status về Tất cả.");
-        KiemTra(!vm.HasSelectedInvoiceCustomer, "Xóa bộ lọc phải xóa khách hàng.");
-        KiemTra(vm.SelectedInvoiceEmployee == vm.InvoiceEmployeeOptions.FirstOrDefault(), "Xóa bộ lọc phải xóa nhân viên.");
         KiemTra(string.IsNullOrEmpty(vm.InvoiceFilterMinTotal), "Xóa bộ lọc phải xóa Từ tiền.");
         KiemTra(string.IsNullOrEmpty(vm.InvoiceFilterMaxTotal), "Xóa bộ lọc phải xóa Đến tiền.");
-        KiemTra(!vm.HasInvoiceAdvancedFilters, "Xóa bộ lọc xong không được còn active advanced filters.");
         Console.WriteLine("  -> Xóa bộ lọc đưa toàn bộ điều kiện về trạng thái mặc định: ĐẠT");
 
         // 10. KIỂM THỬ TRUY VẤN VỚI TỪNG TIÊU CHÍ TRÊN DỮ LIỆU THỰC
@@ -6248,7 +6195,97 @@ internal class Program
             "Tất cả kết quả kết hợp phải thỏa mãn đồng thời các điều kiện.");
         Console.WriteLine("  -> Kết hợp đồng thời nhiều tiêu chí lọc chính xác: ĐẠT");
 
-        Console.WriteLine("\n>>> ISSUE #92: TOÀN BỘ KIỂM THỬ BỘ LỌC NÂNG CAO TRANG QUẢN LÝ HÓA ĐƠN ĐÃ VƯỢT QUA! <<<");
+        Console.WriteLine("\n>>> ISSUE #92: TOÀN BỘ KIỂM THỬ BỘ LỌC CHÍNH TRANG QUẢN LÝ HÓA ĐƠN ĐÃ VƯỢT QUA! <<<");
+        return 0;
+    }
+
+    private static int KiemTraIssue132_BoLocChinhHoaDon()
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #132: LOẠI BỎ BỘ LỌC NÂNG CAO TRANG QUẢN LÝ HÓA ĐƠN            ");
+        Console.WriteLine("==========================================================================================");
+
+        var root = TimThuMucGocRepo();
+        var xaml = File.ReadAllText(Path.Combine(root, "Views", "MainWindow.axaml"));
+        var codeBehind = File.ReadAllText(Path.Combine(root, "Views", "MainWindow.axaml.cs"));
+        var filterSource = File.ReadAllText(Path.Combine(root, "ViewModels", "MainWindowViewModel.HoaDonFilter.cs"));
+
+        string[] removedXamlMarkers =
+        [
+            "Bộ lọc nâng cao",
+            "AdvancedFilter",
+            "ToggleBoLocHoaDon",
+            "ApDungBoLocHoaDon",
+            "DongBoLocHoaDon",
+            "InvoiceCustomerFilter",
+            "InvoiceEmployeeOptions",
+            "InvoiceActiveFilterChips",
+            "XoaChipLocHoaDon",
+            "IsInvoiceAdvancedFiltersExpanded"
+        ];
+        foreach (var marker in removedXamlMarkers)
+            KiemTra(!xaml.Contains(marker, StringComparison.OrdinalIgnoreCase), $"MainWindow.axaml không được còn '{marker}'.");
+
+        KiemTra(!codeBehind.Contains("OnInvoiceCustomerFilter", StringComparison.OrdinalIgnoreCase),
+            "MainWindow.axaml.cs không được còn handler lọc khách hàng của hóa đơn.");
+
+        string[] removedSourceMarkers =
+        [
+            "InvoiceAdvancedFilter",
+            "IsInvoiceAdvancedFiltersExpanded",
+            "InvoiceCustomerOptions",
+            "InvoiceCustomerFilterOptions",
+            "InvoiceCustomerSearch",
+            "SelectedInvoiceCustomer",
+            "InvoiceEmployeeOptions",
+            "SelectedInvoiceEmployee",
+            "InvoiceActiveFilterChips",
+            "InvoiceActiveFiltersText",
+            "IsInvoiceCustomDatePickerOpen"
+        ];
+        foreach (var marker in removedSourceMarkers)
+            KiemTra(!filterSource.Contains(marker, StringComparison.OrdinalIgnoreCase), $"ViewModel không được còn '{marker}'.");
+
+        var propertyNames = typeof(MainWindowViewModel).GetProperties().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        string[] removedProperties =
+        [
+            "IsInvoiceAdvancedFiltersExpanded",
+            "InvoiceAdvancedFilterCountText",
+            "InvoiceAdvancedFilterCount",
+            "HasInvoiceAdvancedFilters",
+            "InvoiceAdvancedFiltersToggleText",
+            "InvoiceCustomerOptions",
+            "InvoiceCustomerFilterOptions",
+            "InvoiceCustomerSearch",
+            "SelectedInvoiceCustomer",
+            "HasSelectedInvoiceCustomer",
+            "SelectedInvoiceCustomerDisplayText",
+            "InvoiceEmployeeOptions",
+            "SelectedInvoiceEmployee",
+            "InvoiceActiveFilterChips",
+            "HasAppliedInvoiceFilters",
+            "InvoiceActiveFiltersText",
+            "InvoiceDateCompactText",
+            "InvoiceDateFilterText",
+            "IsInvoiceCustomDatePickerOpen",
+            "ToggleBoLocHoaDonCommand",
+            "ApDungBoLocHoaDonCommand",
+            "DongBoLocHoaDonCommand",
+            "XoaChipLocHoaDonCommand"
+        ];
+        foreach (var name in removedProperties)
+            KiemTra(!propertyNames.Contains(name), $"MainWindowViewModel không được còn property/command '{name}'.");
+
+        KiemTra(xaml.Contains("Content=\"↺  Xóa bộ lọc\""), "Nút Xóa bộ lọc phải nằm trên thanh công cụ hóa đơn.");
+        KiemTra(xaml.Contains("Command=\"{Binding ClearInvoiceSearchCommand}\""), "Nút Xóa bộ lọc phải bind ClearInvoiceSearchCommand.");
+        KiemTra(xaml.Contains("Text=\"{Binding InvoiceFilterMinTotal, Mode=TwoWay}\""), "Bộ lọc chính phải bind ô Từ tiền.");
+        KiemTra(xaml.Contains("Text=\"{Binding InvoiceFilterMaxTotal, Mode=TwoWay}\""), "Bộ lọc chính phải bind ô Đến tiền.");
+        KiemTra(xaml.Contains("Width=\"220\" MinWidth=\"160\""), "Ô khoảng tiền phải đủ rộng để nhập tiền Việt Nam.");
+        KiemTra(propertyNames.Contains("ClearInvoiceSearchCommand"), "Phải giữ lại ClearInvoiceSearchCommand.");
+        KiemTra(propertyNames.Contains("InvoiceFilterMinTotal") && propertyNames.Contains("InvoiceFilterMaxTotal"), "Phải giữ lại bộ lọc khoảng tiền.");
+        KiemTra(propertyNames.Contains("SelectedInvoiceDatePreset") && propertyNames.Contains("SelectedInvoiceStatus"), "Phải giữ lại bộ lọc thời gian và trạng thái.");
+
+        Console.WriteLine("\n>>> ISSUE #132: ĐÃ LOẠI BỎ BỘ LỘC NÂNG CAO, GIỮ LẠI BỘ LỌC CHÍNH: ĐẠT <<<");
         return 0;
     }
 
