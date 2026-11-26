@@ -63,11 +63,11 @@
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="24,3,8,3">
                           <CheckBox Grid.Column="0"
                                     IsChecked="{Binding IsChecked, Mode=TwoWay}"
-                                    IsEnabled="{Binding IsSelectable}" />
-                          <StackPanel Grid.Column="1">
-                            <TextBlock Text="{Binding TenQuyen}" />
-                            <TextBlock Text="{Binding MaQuyen}" FontSize="11" Foreground="#9CA3AF" />
-                          </StackPanel>
+                                    IsEnabled="{Binding IsSelectable}"
+                                    VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="1"
+                                     Text="{Binding TenQuyen}"
+                                     VerticalAlignment="Center" />
                         </Grid>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
