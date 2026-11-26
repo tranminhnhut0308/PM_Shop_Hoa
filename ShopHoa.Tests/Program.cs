@@ -297,6 +297,9 @@ internal class Program
         if (args.Contains("--verify-issue-134", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue134_SuaLoiNhapSoLuongVaDonGia();
 
+        if (args.Contains("--verify-issue-139", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue139_SuaLoiKhongNhapDuocSoLuongBanHang();
+
         if (args.Contains("--verify-issue-144", StringComparer.OrdinalIgnoreCase))
         {
             var configService = new DatabaseConfigService();
@@ -7485,5 +7488,299 @@ internal class Program
 
         Console.WriteLine("\n>>> TOÀN BỘ 4 TRƯỜNG HỢP KIỂM THỬ BẮT BUỘC CỦA ISSUE #144 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
         return 0;
+    }
+
+    private static int KiemTraIssue139_SuaLoiKhongNhapDuocSoLuongBanHang()
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  KIỂM THỬ ISSUE #139: KHẮC PHỤC LỖI KHÔNG NHẬP ĐƯỢC SỐ LƯỢNG KHI BÁN HÀNG (& ISSUE #135)");
+        Console.WriteLine("==========================================================================================");
+
+        return ChayTrenStaThread(() =>
+        {
+            if (global::Avalonia.Application.Current is null)
+                global::ShopHoa.Program.BuildAvaloniaApp().SetupWithoutStarting();
+
+            static void FlushUi()
+                => global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            void GoChuVaoO(global::Avalonia.Controls.TextBox tb, string text)
+            {
+                tb.SetCurrentValue(global::Avalonia.Controls.TextBox.TextProperty, text);
+                FlushUi();
+            }
+
+            var mainWindow = new global::ShopHoa.Views.MainWindow();
+            var vm = (MainWindowViewModel)mainWindow.DataContext!;
+            vm.IsSalesPanelVisible = true;
+
+            var tab1 = new SaleCartTab { State = new SaleCartDraftState { SoThuTu = 1 }, IsActive = true };
+            var tab2 = new SaleCartTab { State = new SaleCartDraftState { SoThuTu = 2 }, IsActive = false };
+            vm.SaleCartTabs.Clear();
+            vm.SaleCartTabs.Add(tab1);
+            vm.SaleCartTabs.Add(tab2);
+            vm.KichHoatCartTab(tab1);
+
+            void CapNhatCayGiaoDien(global::Avalonia.Controls.Control root)
+            {
+                mainWindow.ApplyTemplate();
+                var content = mainWindow.Content as global::Avalonia.Controls.Control ?? root;
+                void ApplyAll(global::Avalonia.Visual v)
+                {
+                    if (v is global::Avalonia.Controls.Primitives.TemplatedControl tc)
+                        tc.ApplyTemplate();
+                    if (v is global::Avalonia.Controls.Presenters.ContentPresenter cp)
+                        cp.UpdateChild();
+                    foreach (var child in global::Avalonia.VisualTree.VisualExtensions.GetVisualChildren(v).ToList())
+                        ApplyAll(child);
+                }
+                for (int pass = 0; pass < 3; pass++)
+                {
+                    ApplyAll(mainWindow);
+                    content.Measure(new global::Avalonia.Size(1500, 900));
+                    content.Arrange(new global::Avalonia.Rect(0, 0, 1500, 900));
+                    mainWindow.UpdateLayout();
+                }
+            }
+
+            CapNhatCayGiaoDien(mainWindow);
+
+            var itemsControl = global::Avalonia.Controls.NameScopeExtensions.Find<global::Avalonia.Controls.ItemsControl>(mainWindow, "SaleCartItemsControl");
+            KiemTra(itemsControl is not null, "Không tìm thấy SaleCartItemsControl trên MainWindow");
+
+            global::Avalonia.Controls.TextBox LayQuantityBox(SaleCartItem cartItem)
+            {
+                CapNhatCayGiaoDien(itemsControl!);
+
+                var box = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(itemsControl!)
+                    .OfType<global::Avalonia.Controls.TextBox>()
+                    .FirstOrDefault(t => ReferenceEquals(t.DataContext, cartItem) && t.Classes.Contains("cartQuantityBox"));
+                KiemTra(box is not null, $"Không tìm thấy TextBox.cartQuantityBox cho sản phẩm '{cartItem.SanPham.TenSanPham}'");
+                box!.ApplyTemplate();
+                CapNhatCayGiaoDien(box);
+                return box;
+            }
+
+            // ------------------------------------------------------------------
+            // KỊCH BẢN 1: Chọn sản phẩm 1 -> kiểm tra hiển thị template & nhập số lượng 5
+            // ------------------------------------------------------------------
+            Console.WriteLine("\n--- Kịch bản 1: Chọn sản phẩm 1 và nhập số lượng 5 ---");
+            var sp1 = new SanPham
+            {
+                Id = 101,
+                MaSanPham = "SP101",
+                TenSanPham = "Hoa Hồng Đỏ Đà Lạt",
+                DonViTinh = "Bó",
+                GiaBan = 50000m,
+                TonKho = 100m
+            };
+
+            var added1 = vm.ThemSanPhamVaoGioHangVoiKetQuaAsync(sp1).GetAwaiter().GetResult();
+            KiemTra(added1 && vm.SaleCart.Count == 1, "Thêm sản phẩm 1 vào giỏ thất bại");
+
+            var item1 = vm.SaleCart[0];
+            var tb1 = LayQuantityBox(item1);
+
+            var dvo1 = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tb1)
+                .OfType<global::Avalonia.Controls.DataValidationErrors>()
+                .FirstOrDefault();
+            KiemTra(dvo1 is not null && dvo1.IsVisible, "DataValidationErrors bên trong TextBox.cartQuantityBox bị ẩn (IsVisible=False) làm mất toàn bộ giao diện ô số lượng!");
+
+            var presenter1 = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tb1)
+                .OfType<global::Avalonia.Controls.Presenters.TextPresenter>()
+                .FirstOrDefault();
+            KiemTra(presenter1 is not null && presenter1.IsVisible, "TextPresenter của ô số lượng không hiển thị!");
+            KiemTra(!tb1.IsReadOnly && tb1.IsEnabled && tb1.Focusable, "Ô số lượng phải ở trạng thái cho phép nhập (IsEnabled=true, IsReadOnly=false, Focusable=true)");
+            KiemTra(tb1.Text == "1", $"Ô số lượng ban đầu kỳ vọng '1', thực tế: '{tb1.Text}'");
+
+            // Nhập số lượng 5 trực tiếp
+            GoChuVaoO(tb1, "5");
+            KiemTra(item1.SoLuong == 5m, $"Sau khi gõ '5', item1.SoLuong kỳ vọng 5, thực tế: {item1.SoLuong}");
+            KiemTra(item1.ThanhTien == 250000m, $"Thành tiền SP1 kỳ vọng 250.000, thực tế: {item1.ThanhTien}");
+            KiemTra(vm.SaleSubtotal == 250000m && vm.SaleTotal == 250000m, $"Tổng tiền hóa đơn kỳ vọng 250.000, thực tế: {vm.SaleTotal}");
+
+            // Nhấn Enter xác nhận
+            tb1.RaiseEvent(new global::Avalonia.Input.KeyEventArgs
+            {
+                RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent,
+                Key = global::Avalonia.Input.Key.Enter,
+                Source = tb1
+            });
+            FlushUi();
+            KiemTra(item1.SoLuong == 5m && tb1.Text == "5", $"Sau khi nhấn Enter, số lượng kỳ vọng 5, thực tế: {item1.SoLuong} (Text='{tb1.Text}')");
+            Console.WriteLine("[PASS] Chọn sản phẩm 1 và nhập số lượng 5: Thành tiền = 250.000 đ, Tổng đơn = 250.000 đ.");
+
+            // ------------------------------------------------------------------
+            // KỊCH BẢN 2: Chọn sản phẩm 2 -> nhập số lượng 10 (gõ từng chữ số '1' rồi '0')
+            // ------------------------------------------------------------------
+            Console.WriteLine("\n--- Kịch bản 2: Chọn sản phẩm 2 và nhập số lượng 10 ---");
+            var sp2 = new SanPham
+            {
+                Id = 102,
+                MaSanPham = "SP102",
+                TenSanPham = "Hoa Hướng Dương",
+                DonViTinh = "Cành",
+                GiaBan = 35000m,
+                TonKho = 50m
+            };
+
+            var added2 = vm.ThemSanPhamVaoGioHangVoiKetQuaAsync(sp2).GetAwaiter().GetResult();
+            KiemTra(added2 && vm.SaleCart.Count == 2, "Thêm sản phẩm 2 vào giỏ thất bại");
+
+            var item2 = vm.SaleCart[1];
+            var tb2 = LayQuantityBox(item2);
+            KiemTra(tb2.Text == "1", $"Ô số lượng SP2 ban đầu kỳ vọng '1', thực tế: '{tb2.Text}'");
+
+            // Gõ '1' rồi gõ tiếp '0' -> '10'
+            GoChuVaoO(tb2, "1");
+            GoChuVaoO(tb2, "10");
+            KiemTra(tb2.Text == "10", $"Ô số lượng SP2 phải giữ đúng '10', thực tế: '{tb2.Text}'");
+            KiemTra(item2.SoLuong == 10m, $"item2.SoLuong kỳ vọng 10, thực tế: {item2.SoLuong}");
+            KiemTra(item2.ThanhTien == 350000m, $"Thành tiền SP2 kỳ vọng 350.000, thực tế: {item2.ThanhTien}");
+            KiemTra(vm.SaleTotal == 600000m, $"Tổng tiền hóa đơn kỳ vọng 600.000 (250k + 350k), thực tế: {vm.SaleTotal}");
+            Console.WriteLine("[PASS] Chọn sản phẩm 2 và nhập số lượng 10: Thành tiền = 350.000 đ, Tổng đơn = 600.000 đ.");
+
+            // ------------------------------------------------------------------
+            // KỊCH BẢN 3: Sửa số lượng từ 10 về 2 (xóa hết nội dung bằng Backspace/Ctrl+A rồi nhập 2)
+            // ------------------------------------------------------------------
+            Console.WriteLine("\n--- Kịch bản 3: Sửa số lượng từ 10 về 2 (xóa trắng trong lúc sửa rồi nhập 2) ---");
+            tb2.SelectAll();
+            // Xóa hết nội dung ô trong lúc đang chỉnh sửa
+            GoChuVaoO(tb2, "");
+            KiemTra(tb2.Text == "", $"Khi xóa trắng ô trong lúc sửa, Text phải giữ nguyên '' (không được tự ý ghi đè về '1'), thực tế: '{tb2.Text}'");
+
+            // Nhập số mới '2'
+            GoChuVaoO(tb2, "2");
+            KiemTra(tb2.Text == "2" && item2.SoLuong == 2m, $"Sau khi sửa về 2, kỳ vọng SoLuong=2, thực tế: {item2.SoLuong} (Text='{tb2.Text}')");
+            KiemTra(item2.ThanhTien == 70000m, $"Thành tiền SP2 kỳ vọng 70.000, thực tế: {item2.ThanhTien}");
+            KiemTra(vm.SaleTotal == 320000m, $"Tổng tiền hóa đơn kỳ vọng 320.000 (250k + 70k), thực tế: {vm.SaleTotal}");
+            Console.WriteLine("[PASS] Sửa số lượng từ 10 về 2 thành công: Thành tiền = 70.000 đ, Tổng đơn = 320.000 đ.");
+
+            // ------------------------------------------------------------------
+            // KỊCH BẢN 4: Click/Focus vào ô số lượng + Nút Tăng (+) và Giảm (−) sau khi đã nhập tay
+            // ------------------------------------------------------------------
+            Console.WriteLine("\n--- Kịch bản 4: Kiểm tra nút Tăng (+) và Giảm (−) hoạt động đồng bộ sau khi nhập phím ---");
+            tb1.RaiseEvent(new global::Avalonia.Input.GotFocusEventArgs
+            {
+                RoutedEvent = global::Avalonia.Input.InputElement.GotFocusEvent,
+                Source = tb1
+            });
+            FlushUi();
+            KiemTra(tb1.SelectionStart == 0 && tb1.SelectionEnd == tb1.Text!.Length, "Khi focus vào ô số lượng, toàn bộ số cũ phải được bôi đen (SelectAll)");
+
+            // Nhập 4 rồi rời ô (LostFocus)
+            GoChuVaoO(tb1, "4");
+            tb1.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Input.InputElement.LostFocusEvent, tb1));
+            FlushUi();
+            KiemTra(item1.SoLuong == 4m && tb1.Text == "4", $"Sau LostFocus, item1.SoLuong kỳ vọng 4, thực tế: {item1.SoLuong} (Text='{tb1.Text}')");
+
+            // Bấm nút + (TangSoLuongCommand) -> phải tăng lên 5 và Text trên ô phải tự động cập nhật thành "5"
+            vm.TangSoLuongCommand.Execute(item1);
+            FlushUi();
+            KiemTra(item1.SoLuong == 5m, $"Sau khi bấm (+), item1.SoLuong kỳ vọng 5, thực tế: {item1.SoLuong}");
+            KiemTra(tb1.Text == "5", $"Sau khi bấm (+), Text của ô số lượng phải tự cập nhật lên '5' (OneWay binding không bị đứt), thực tế: '{tb1.Text}'");
+            KiemTra(vm.SaleTotal == 320000m, $"Tổng tiền hóa đơn sau khi bấm (+) kỳ vọng 320.000, thực tế: {vm.SaleTotal}");
+
+            // Bấm nút − (GiamSoLuongCommand) -> phải giảm về 4 và Text trên ô phải tự động cập nhật thành "4"
+            vm.GiamSoLuongCommand.Execute(item1);
+            FlushUi();
+            KiemTra(item1.SoLuong == 4m && tb1.Text == "4", $"Sau khi bấm (−), kỳ vọng SoLuong=4 và Text='4', thực tế: SoLuong={item1.SoLuong}, Text='{tb1.Text}'");
+            KiemTra(vm.SaleTotal == 270000m, $"Tổng tiền hóa đơn sau khi bấm (−) kỳ vọng 270.000, thực tế: {vm.SaleTotal}");
+            Console.WriteLine("[PASS] Nút Tăng (+) và Giảm (−) đồng bộ hai chiều với ô nhập số lượng.");
+
+            // ------------------------------------------------------------------
+            // KỊCH BẢN 5: Kiểm tra quy tắc dữ liệu (không nhận số âm, số 0, chữ cái, xóa trắng rời ô)
+            // ------------------------------------------------------------------
+            Console.WriteLine("\n--- Kịch bản 5: Kiểm tra quy tắc chặn số âm, số 0, ký tự không hợp lệ và vượt tồn kho ---");
+            // Nhập 0 rồi rời ô -> không cho lưu 0, khôi phục về 4
+            GoChuVaoO(tb1, "0");
+            tb1.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Input.InputElement.LostFocusEvent, tb1));
+            FlushUi();
+            KiemTra(item1.SoLuong == 4m && tb1.Text == "4", $"Nhập 0 khi rời ô phải giữ nguyên số lượng hợp lệ 4, thực tế: SoLuong={item1.SoLuong}, Text='{tb1.Text}'");
+
+            // Nhập số âm -5 rồi rời ô -> không cho phép số âm, khôi phục về 4
+            GoChuVaoO(tb1, "-5");
+            tb1.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Input.InputElement.LostFocusEvent, tb1));
+            FlushUi();
+            KiemTra(item1.SoLuong == 4m && tb1.Text == "4", $"Nhập -5 khi rời ô phải giữ nguyên số lượng hợp lệ 4, thực tế: SoLuong={item1.SoLuong}, Text='{tb1.Text}'");
+
+            // Nhập chữ 'abc' rồi nhấn Enter -> báo lỗi định dạng, giữ nguyên số lượng 4
+            GoChuVaoO(tb1, "abc");
+            tb1.RaiseEvent(new global::Avalonia.Input.KeyEventArgs
+            {
+                RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent,
+                Key = global::Avalonia.Input.Key.Enter,
+                Source = tb1
+            });
+            FlushUi();
+            KiemTra(item1.SoLuong == 4m, $"Nhập 'abc' không được làm hỏng SoLuong=4, thực tế: {item1.SoLuong}");
+            tb1.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Input.InputElement.LostFocusEvent, tb1));
+            FlushUi();
+            KiemTra(tb1.Text == "4", $"Sau khi rời ô có chữ 'abc', Text phải khôi phục về '4', thực tế: '{tb1.Text}'");
+
+            // Xóa trắng ô rồi rời ô -> khôi phục về 4
+            GoChuVaoO(tb1, "");
+            tb1.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Input.InputElement.LostFocusEvent, tb1));
+            FlushUi();
+            KiemTra(item1.SoLuong == 4m && tb1.Text == "4", $"Xóa trắng rồi rời ô phải khôi phục về '4', thực tế: SoLuong={item1.SoLuong}, Text='{tb1.Text}'");
+            Console.WriteLine("[PASS] Quy tắc dữ liệu số hợp lệ (chặn số 0, số âm, ký tự chữ, xóa trắng rời ô) hoạt động chính xác.");
+
+            // ------------------------------------------------------------------
+            // KỊCH BẢN 6: Chuyển đổi qua lại giữa các đơn hàng + Giảm giá & Thanh toán
+            // ------------------------------------------------------------------
+            Console.WriteLine("\n--- Kịch bản 6: Chuyển qua lại giữa các đơn hàng và kiểm tra Giảm giá / Thanh toán ---");
+            vm.ChuyenDonBanCommand.Execute(tab2);
+            FlushUi();
+            KiemTra(ReferenceEquals(vm.ActiveSaleCartTab, tab2) && vm.SaleCart.Count == 0, "Chuyển sang Đơn 2 phải trống");
+
+            // Thêm 1 sản phẩm vào Đơn 2 và nhập số lượng 3
+            vm.ThemSanPhamVaoGioHangVoiKetQuaAsync(sp1).GetAwaiter().GetResult();
+            var tab2Item = vm.SaleCart[0];
+            var tab2Tb = LayQuantityBox(tab2Item);
+            GoChuVaoO(tab2Tb, "3");
+            KiemTra(tab2Item.SoLuong == 3m && vm.SaleTotal == 150000m, "Đơn 2 cập nhật số lượng 3 thất bại");
+
+            // Chuyển ngược về Đơn 1
+            vm.ChuyenDonBanCommand.Execute(tab1);
+            KiemTra(ReferenceEquals(vm.ActiveSaleCartTab, tab1) && vm.SaleCart.Count == 2, "Quay về Đơn 1 phải giữ nguyên 2 sản phẩm");
+            KiemTra(vm.SaleCart[0].SoLuong == 4m && vm.SaleCart[1].SoLuong == 2m, "Số lượng các sản phẩm ở Đơn 1 phải giữ nguyên (4 và 2)");
+            KiemTra(vm.SaleTotal == 270000m, $"Tổng tiền Đơn 1 phải giữ nguyên 270.000, thực tế: {vm.SaleTotal}");
+
+            // Kiểm tra giảm giá và tiền khách đưa trên Đơn 1
+            vm.SaleDiscountMode = "Số tiền";
+            vm.SaleDiscountInput = 20000m;
+            KiemTra(vm.SaleTotal == 250000m && vm.TienKhachDua == 250000m, $"Sau khi giảm giá 20.000, tổng thanh toán kỳ vọng 250.000, thực tế: {vm.SaleTotal}");
+            Console.WriteLine("[PASS] Chuyển qua lại giữa các đơn hàng giữ nguyên dữ liệu, giảm giá và thanh toán chính xác.");
+
+            // ------------------------------------------------------------------
+            // KỊCH BẢN 7: Kiểm tra bổ sung Issue #135 (Cửa sổ Nhập giá bán & MoneyTextBox)
+            // ------------------------------------------------------------------
+            Console.WriteLine("\n--- Kịch bản 7: Kiểm tra cửa sổ Nhập giá bán (Issue #135 - MoneyTextBox hiển thị đầy đủ) ---");
+            var nhapGiaWindow = new global::ShopHoa.Views.NhapGiaBanWindow();
+            nhapGiaWindow.ApplyTemplate();
+            var nhapGiaContent = (global::Avalonia.Controls.Control)nhapGiaWindow.Content!;
+            nhapGiaContent.Measure(new global::Avalonia.Size(480, 300));
+            nhapGiaContent.Arrange(new global::Avalonia.Rect(0, 0, 480, 300));
+            nhapGiaWindow.UpdateLayout();
+
+            var giaBanMoneyBox = global::Avalonia.Controls.NameScopeExtensions.Find<MoneyTextBox>(nhapGiaWindow, "GiaBanTextBox");
+            KiemTra(giaBanMoneyBox is not null && giaBanMoneyBox.IsVisible, "Không tìm thấy GiaBanTextBox trên NhapGiaBanWindow");
+
+            var innerInput = global::Avalonia.Controls.NameScopeExtensions.Find<global::Avalonia.Controls.TextBox>(giaBanMoneyBox!, "Input");
+            KiemTra(innerInput is not null && innerInput.IsVisible, "TextBox#Input bên trong MoneyTextBox không hiển thị");
+            innerInput!.ApplyTemplate();
+            nhapGiaWindow.UpdateLayout();
+
+            var moneyDvo = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(innerInput)
+                .OfType<global::Avalonia.Controls.DataValidationErrors>()
+                .FirstOrDefault();
+            KiemTra(moneyDvo is not null && moneyDvo.IsVisible, "DataValidationErrors bên trong MoneyTextBox không được ẩn (IsVisible phải là True)!");
+            Console.WriteLine("[PASS] Cửa sổ Nhập giá bán (Issue #135) và MoneyTextBox hiển thị ô nhập rõ ràng, đầy đủ.");
+
+            Console.WriteLine("\n==========================================================================================");
+            Console.WriteLine(">>> TOÀN BỘ 7 KỊCH BẢN KIỂM THỬ ISSUE #139 (& #135) ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+            Console.WriteLine("==========================================================================================");
+            return 0;
+        });
     }
 }

@@ -139,6 +139,21 @@ public class WindowsImeTextInputFix
             OnTextBoxLostFocus,
             RoutingStrategies.Direct | RoutingStrategies.Bubble,
             handledEventsToo: true);
+        TextPresenter.PreeditTextProperty.Changed.AddClassHandler<TextPresenter>(OnTextPresenterPreeditTextChanged);
+    }
+
+    private static void OnTextPresenterPreeditTextChanged(TextPresenter presenter, AvaloniaPropertyChangedEventArgs args)
+    {
+        var current = presenter.Parent as StyledElement;
+        while (current is not null)
+        {
+            if (current is TextBox textBox)
+            {
+                FireEffectiveTextChanged(textBox);
+                return;
+            }
+            current = current.Parent as StyledElement;
+        }
     }
 
     public static void SetEnabled(TopLevel topLevel, bool value) => topLevel.SetValue(EnabledProperty, value);

@@ -174,6 +174,8 @@ public sealed partial class MainWindowViewModel
 
     private SaleCartDraftState ChupDonBanDangMo(SaleCartTab tab)
     {
+        (OwnerWindow as MainWindow)?.CommitActiveSaleInputs();
+
         var state = tab.State;
         state.KhachHangId = SelectedSaleCustomer?.Id;
         state.MaKhachHang = SelectedSaleCustomer?.MaKhachHang;

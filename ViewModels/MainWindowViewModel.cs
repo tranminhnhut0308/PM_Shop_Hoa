@@ -24,15 +24,68 @@ public partial class MainWindowViewModel : ObservableObject
     private int _customerLoadVersion;
     private Task? _customerLoadTask;
     private CancellationTokenSource? _productSearchCts;
+    private string _productSearchCompositionText = string.Empty;
+    private string _customerSearchCompositionText = string.Empty;
+    private string _supplierSearchCompositionText = string.Empty;
+    private string _invoiceSearchCompositionText = string.Empty;
+    private string _baoCaoPhieuNhapSearchCompositionText = string.Empty;
+    private string _soQuySearchCompositionText = string.Empty;
     private readonly object _saleSearchCtsLock = new();
     private CancellationTokenSource? _saleSearchCts;
     private string _saleSearchCompositionText = string.Empty;
+    private string _lastScheduledSaleSearchKeyword = string.Empty;
+    private readonly object _phieuNhapProductSearchCtsLock = new();
     private CancellationTokenSource? _phieuNhapProductSearchCts;
+    private long _phieuNhapProductSearchSeq;
+    private string _importProductSearchCompositionText = string.Empty;
+    private string _lastScheduledImportProductSearchKeyword = string.Empty;
     private CancellationTokenSource? _phieuNhapSupplierSearchCts;
     private int _phieuNhapSupplierSearchVersion;
+    private string _importSupplierSearchCompositionText = string.Empty;
     private string _saleSearchKeywordDaTim = string.Empty;
     private string _phieuNhapKeywordDaTim = string.Empty;
     private int _productLoadVersion;
+
+    internal static void HuyAnToan(CancellationTokenSource? cts)
+    {
+        if (cts is null)
+            return;
+
+        try
+        {
+            if (!cts.IsCancellationRequested)
+                cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    internal static CancellationTokenSource ThayTheVaHuyCts(ref CancellationTokenSource? field)
+    {
+        var next = new CancellationTokenSource();
+        var previous = Interlocked.Exchange(ref field, next);
+        HuyAnToan(previous);
+        return next;
+    }
+
+    internal static void HuyTruongCts(ref CancellationTokenSource? field)
+    {
+        var previous = Interlocked.Exchange(ref field, null);
+        HuyAnToan(previous);
+    }
+
+    internal static void ThuHoiVaDisposeCts(ref CancellationTokenSource? field, CancellationTokenSource cts)
+    {
+        Interlocked.CompareExchange(ref field, null, cts);
+        try
+        {
+            cts.Dispose();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
     private Window? _ownerWindow;
     public Window? OwnerWindow
     {
@@ -219,16 +272,21 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     [ObservableProperty] private int productTotalCount;
 
+    public string EffectiveProductSearchKeyword =>
+        !string.IsNullOrEmpty(_productSearchCompositionText)
+            ? _productSearchCompositionText
+            : ProductSearch;
+
     public bool IsSanPhamListEmpty => SanPhams.Count == 0;
 
     /// <summary>Dòng tiêu đề hiển thị khi bảng hàng hóa rỗng, đổi theo từ khóa đang tìm.</summary>
     public string SanPhamEmptyText =>
-        string.IsNullOrWhiteSpace(ProductSearch)
+        string.IsNullOrWhiteSpace(EffectiveProductSearchKeyword)
             ? "Chưa có hàng hóa nào trong hệ thống"
-            : $"Không tìm thấy hàng hóa với từ khóa \"{ProductSearch.Trim()}\"";
+            : $"Không tìm thấy hàng hóa với từ khóa \"{EffectiveProductSearchKeyword.Trim()}\"";
 
     public string SanPhamEmptyHint =>
-        string.IsNullOrWhiteSpace(ProductSearch)
+        string.IsNullOrWhiteSpace(EffectiveProductSearchKeyword)
             ? "Bấm “＋ Nhập hàng” hoặc “⇩ Nhập file” để thêm hàng hóa."
             : "Thử từ khóa khác hoặc xóa nội dung ô tìm kiếm.";
 
@@ -238,6 +296,22 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     partial void OnProductSearchChanged(string value)
     {
+        _productSearchCompositionText = string.Empty;
+        OnPropertyChanged(nameof(EffectiveProductSearchKeyword));
+        OnPropertyChanged(nameof(SanPhamEmptyText));
+        OnPropertyChanged(nameof(SanPhamEmptyHint));
+
+        TimKiemSanPhamTuDong();
+    }
+
+    public void XuLyThayDoiTuKhoaTimKiemSanPham(string text)
+    {
+        var current = text ?? string.Empty;
+        if (string.Equals(EffectiveProductSearchKeyword, current, StringComparison.Ordinal))
+            return;
+
+        _productSearchCompositionText = current;
+        OnPropertyChanged(nameof(EffectiveProductSearchKeyword));
         OnPropertyChanged(nameof(SanPhamEmptyText));
         OnPropertyChanged(nameof(SanPhamEmptyHint));
 
@@ -270,13 +344,15 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnSaleSearchTextChanged(string value)
     {
+        var current = value ?? string.Empty;
         _saleSearchCompositionText = string.Empty;
-        if (string.IsNullOrWhiteSpace(value))
+        if (string.IsNullOrWhiteSpace(current))
         {
             HuyTimKiemHoaBan();
             IsSearchingSaleProducts = false;
             ProductSearchResults.Clear();
             _saleSearchKeywordDaTim = string.Empty;
+            _lastScheduledSaleSearchKeyword = string.Empty;
             SaleSearchSelectedIndex = -1;
         }
 
@@ -285,7 +361,15 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HienThiKetQuaTimKiemBanHang));
         OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayBanHang));
         OnPropertyChanged(nameof(SaleSearchSelectedProduct));
-        _ = TimKiemHoaBanAsync(value);
+
+        if (!string.IsNullOrWhiteSpace(current)
+            && string.Equals(_lastScheduledSaleSearchKeyword, current, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastScheduledSaleSearchKeyword = current;
+        _ = TimKiemHoaBanAsync(current);
     }
 
     /// <summary>
@@ -294,15 +378,16 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public void XuLyThayDoiTuKhoaTimKiemBanHang(string text)
     {
-        var trimmed = text ?? string.Empty;
-        _saleSearchCompositionText = trimmed;
+        var current = text ?? string.Empty;
+        _saleSearchCompositionText = current;
 
-        if (string.IsNullOrWhiteSpace(trimmed))
+        if (string.IsNullOrWhiteSpace(current))
         {
             HuyTimKiemHoaBan();
             IsSearchingSaleProducts = false;
             ProductSearchResults.Clear();
             _saleSearchKeywordDaTim = string.Empty;
+            _lastScheduledSaleSearchKeyword = string.Empty;
             SaleSearchSelectedIndex = -1;
         }
 
@@ -311,7 +396,15 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HienThiKetQuaTimKiemBanHang));
         OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayBanHang));
         OnPropertyChanged(nameof(SaleSearchSelectedProduct));
-        _ = TimKiemHoaBanAsync(trimmed);
+
+        if (!string.IsNullOrWhiteSpace(current)
+            && string.Equals(_lastScheduledSaleSearchKeyword, current, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastScheduledSaleSearchKeyword = current;
+        _ = TimKiemHoaBanAsync(current);
     }
 
     partial void OnIsSearchingSaleProductsChanged(bool value)
@@ -614,6 +707,11 @@ public partial class MainWindowViewModel : ObservableObject
             ? 0
             : (int)Math.Ceiling(CustomerTotalCount / (double)CustomerPageSize);
 
+    public string EffectiveCustomerSearchKeyword =>
+        !string.IsNullOrEmpty(_customerSearchCompositionText)
+            ? _customerSearchCompositionText
+            : CustomerSearch;
+
     /// <summary>
     /// Ví dụ không tìm kiếm: "1 - 20 trong 850 khách hàng".
     /// Khi đang tìm kiếm: "1 - 20 trong 29 khách hàng tìm theo \"Thủy\" (tổng 850)".
@@ -622,18 +720,18 @@ public partial class MainWindowViewModel : ObservableObject
     {
         get
         {
-            var dangTimKiem = !string.IsNullOrWhiteSpace(CustomerSearch);
+            var dangTimKiem = !string.IsNullOrWhiteSpace(EffectiveCustomerSearchKeyword);
 
             if (CustomerTotalCount == 0)
                 return dangTimKiem
-                    ? $"0 khách hàng tìm theo \"{CustomerSearch.Trim()}\" (tổng {CustomerAllCount:N0})"
+                    ? $"0 khách hàng tìm theo \"{EffectiveCustomerSearchKeyword.Trim()}\" (tổng {CustomerAllCount:N0})"
                     : "0 khách hàng";
 
             var from = (CustomerPage - 1) * CustomerPageSize + 1;
             var to = Math.Min(from + CustomerPageSize - 1, CustomerTotalCount);
 
             if (dangTimKiem)
-                return $"{from} - {to} trong {CustomerTotalCount:N0} khách hàng tìm theo \"{CustomerSearch.Trim()}\" (tổng {CustomerAllCount:N0})";
+                return $"{from} - {to} trong {CustomerTotalCount:N0} khách hàng tìm theo \"{EffectiveCustomerSearchKeyword.Trim()}\" (tổng {CustomerAllCount:N0})";
 
             return $"{from} - {to} trong {CustomerTotalCount:N0} khách hàng";
         }
@@ -645,19 +743,35 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Thông báo khi danh sách rỗng, thay đổi theo từ khóa đang tìm.</summary>
     public string CustomerEmptyText =>
-        string.IsNullOrWhiteSpace(CustomerSearch)
+        string.IsNullOrWhiteSpace(EffectiveCustomerSearchKeyword)
             ? "Chưa có khách hàng nào trong hệ thống"
-            : $"Không tìm thấy khách hàng với từ khóa \"{CustomerSearch.Trim()}\"";
+            : $"Không tìm thấy khách hàng với từ khóa \"{EffectiveCustomerSearchKeyword.Trim()}\"";
 
     public string CustomerEmptyHint =>
-        string.IsNullOrWhiteSpace(CustomerSearch)
+        string.IsNullOrWhiteSpace(EffectiveCustomerSearchKeyword)
             ? "Bấm “＋ Thêm mới” để tạo khách hàng đầu tiên."
             : "Thử từ khóa khác hoặc xóa nội dung ô tìm kiếm.";
 
     partial void OnCustomerSearchChanged(string value)
     {
+        _customerSearchCompositionText = string.Empty;
+        OnPropertyChanged(nameof(EffectiveCustomerSearchKeyword));
         OnPropertyChanged(nameof(CustomerEmptyText));
         OnPropertyChanged(nameof(CustomerEmptyHint));
+    }
+
+    public void XuLyThayDoiTuKhoaTimKiemKhachHang(string text)
+    {
+        var current = text ?? string.Empty;
+        if (string.Equals(EffectiveCustomerSearchKeyword, current, StringComparison.Ordinal))
+            return;
+
+        _customerSearchCompositionText = current;
+        OnPropertyChanged(nameof(EffectiveCustomerSearchKeyword));
+        OnPropertyChanged(nameof(CustomerEmptyText));
+        OnPropertyChanged(nameof(CustomerEmptyHint));
+
+        TimKiemKhachHangTuDong();
     }
 
     public bool CanCustomerTrangTruoc => CustomerPage > 1;
@@ -874,16 +988,13 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public void TimKiemKhachHangTuDong()
     {
-        _customerSearchCts?.Cancel();
-        _customerSearchCts?.Dispose();
-        _customerSearchCts = new CancellationTokenSource();
-        var token = _customerSearchCts.Token;
-
-        _ = DebounceCustomerSearchAsync(token);
+        var cts = ThayTheVaHuyCts(ref _customerSearchCts);
+        _ = DebounceCustomerSearchAsync(cts);
     }
 
-    private async Task DebounceCustomerSearchAsync(CancellationToken token)
+    private async Task DebounceCustomerSearchAsync(CancellationTokenSource cts)
     {
+        var token = cts.Token;
         try
         {
             await Task.Delay(350, token);
@@ -896,6 +1007,10 @@ public partial class MainWindowViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             // Người dùng gõ tiếp -> huỷ lần tìm kiếm cũ
+        }
+        finally
+        {
+            ThuHoiVaDisposeCts(ref _customerSearchCts, cts);
         }
     }
 
@@ -1843,7 +1958,7 @@ public partial class MainWindowViewModel : ObservableObject
         var version = ++_productLoadVersion;
 
         var (products, tongSoKhop) = await _db.GetSanPhamPagedAsync(
-            ProductSearch,
+            EffectiveProductSearchKeyword,
             1,
             DatabaseService.SoDongSanPhamToiDa);
 
@@ -1936,7 +2051,7 @@ public partial class MainWindowViewModel : ObservableObject
             };
 
             var (items, tongSoBanGhi) = await _db.GetKhachHangPagedAsync(
-                CustomerSearch,
+                EffectiveCustomerSearchKeyword,
                 page,
                 CustomerPageSize,
                 false,
@@ -2003,7 +2118,7 @@ public partial class MainWindowViewModel : ObservableObject
             _customersLoaded = true;
 
             StatusMessage = CustomerRows.Count == 0
-                ? (string.IsNullOrWhiteSpace(CustomerSearch)
+                ? (string.IsNullOrWhiteSpace(EffectiveCustomerSearchKeyword)
                     ? "Chưa có khách hàng nào trong hệ thống"
                     : "Không tìm thấy khách hàng phù hợp")
                 : $"{CustomerRangeText} - trang {CustomerPage}/{Math.Max(1, totalPages)}";
@@ -2073,16 +2188,13 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public void TimKiemSanPhamTuDong()
     {
-        HuyDongTimKiemSanPham();
-
-        var cts = new CancellationTokenSource();
-        _productSearchCts = cts;
-
-        _ = TimKiemSanPhamSauDebounceAsync(cts.Token);
+        var cts = ThayTheVaHuyCts(ref _productSearchCts);
+        _ = TimKiemSanPhamSauDebounceAsync(cts);
     }
 
-    private async Task TimKiemSanPhamSauDebounceAsync(CancellationToken token)
+    private async Task TimKiemSanPhamSauDebounceAsync(CancellationTokenSource cts)
     {
+        var token = cts.Token;
         try
         {
             await Task.Delay(300, token);
@@ -2096,16 +2208,15 @@ public partial class MainWindowViewModel : ObservableObject
         {
             // Người dùng gõ tiếp: huỷ lần tìm kiếm trước, không cần báo lỗi.
         }
+        finally
+        {
+            ThuHoiVaDisposeCts(ref _productSearchCts, cts);
+        }
     }
 
     private void HuyDongTimKiemSanPham()
     {
-        if (_productSearchCts is null)
-            return;
-
-        _productSearchCts.Cancel();
-        _productSearchCts.Dispose();
-        _productSearchCts = null;
+        HuyTruongCts(ref _productSearchCts);
     }
     // 1. Khai báo các thuộc tính
     [ObservableProperty]
@@ -3066,8 +3177,9 @@ public partial class MainWindowViewModel : ObservableObject
 
         try
         {
+            var searchKeyword = EffectiveProductSearchKeyword;
             var (products, tongSoKhop) = await _db.GetSanPhamPagedAsync(
-                ProductSearch,
+                searchKeyword,
                 1,
                 DatabaseService.SoDongSanPhamToiDa);
 
@@ -3091,9 +3203,9 @@ public partial class MainWindowViewModel : ObservableObject
             // Nếu Id == 0 (Tất cả sản phẩm) thì bỏ qua, giữ nguyên danh sách.
             // -------------------------------------------
 
-            if (!string.IsNullOrWhiteSpace(ProductSearch))
+            if (!string.IsNullOrWhiteSpace(searchKeyword))
             {
-                var kw = ProductSearch.Trim();
+                var kw = searchKeyword.Trim();
                 products = products
                     .OrderBy(p => ProductSearchHelper.TinhDiemUuTien(kw, p.MaSanPham, p.MaVach, p.TenSanPham))
                     .ThenBy(p => p.TenSanPham)
@@ -3119,13 +3231,13 @@ public partial class MainWindowViewModel : ObservableObject
 
             OnPropertyChanged(nameof(IsSanPhamListEmpty));
 
-            var dangTimKiem = !string.IsNullOrWhiteSpace(ProductSearch);
+            var dangTimKiem = !string.IsNullOrWhiteSpace(searchKeyword);
             var tenNhomDangChon = SelectedNhomSanPham?.Id > 0 && SelectedNhomSanPham.Id != 999999 ? SelectedNhomSanPham.Name : null;
 
             StatusMessage = SanPhams.Count == 0
                 ? SanPhamEmptyText
                 : (dangTimKiem
-                    ? $"Tìm thấy {SanPhams.Count:N0} sản phẩm theo \"{ProductSearch.Trim()}\""
+                    ? $"Tìm thấy {SanPhams.Count:N0} sản phẩm theo \"{searchKeyword.Trim()}\""
                     : (tenNhomDangChon != null
                         ? $"Lọc theo nhóm \"{tenNhomDangChon}\": {SanPhams.Count:N0} sản phẩm"
                         : $"Đã tải {SanPhams.Count:N0} sản phẩm"));
@@ -4171,6 +4283,8 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    public event Action<SaleCartItem>? SaleCartItemAddedOrUpdated;
+
     [RelayCommand]
     private async Task ThemVaoGioHangAsync(SanPham? product)
     {
@@ -4185,6 +4299,8 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (product is null)
             return false;
+
+        (OwnerWindow as MainWindow)?.CommitActiveSaleInputs();
 
         StatusMessage = string.Empty;
 
@@ -4241,10 +4357,13 @@ public partial class MainWindowViewModel : ObservableObject
             }
         }
 
+        SaleCartItem targetItem;
+
         // 4. Thêm vào giỏ
         if (existing is not null)
         {
             existing.SoLuong += 1;   // setter đã tự clamp
+            targetItem = existing;
         }
         else
         {
@@ -4257,10 +4376,12 @@ public partial class MainWindowViewModel : ObservableObject
             item.QuantityChanged += RecalculateSaleTotal;
             item.QuantityExceeded += OnQuantityExceeded;   // đăng ký sự kiện vượt tồn
             SaleCart.Add(item);
+            targetItem = item;
         }
 
         RecalculateSaleTotal();
         StatusMessage = $"Đã thêm '{product.TenSanPham}' vào giỏ hàng.";
+        SaleCartItemAddedOrUpdated?.Invoke(targetItem);
         return true;
     }
 
@@ -4280,6 +4401,8 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (item?.SanPham is null) return;
 
+        (OwnerWindow as MainWindow)?.CommitActiveSaleInputs();
+
         if (item.SoLuong + 1 > item.SanPham.TonKho)
         {
             StatusMessage = $"⚠️ Sản phẩm '{item.SanPham.TenSanPham}' chỉ còn tồn kho {item.SanPham.TonKho:N0}!";
@@ -4295,6 +4418,8 @@ public partial class MainWindowViewModel : ObservableObject
     private void GiamSoLuong(SaleCartItem? item)
     {
         if (item is null) return;
+
+        (OwnerWindow as MainWindow)?.CommitActiveSaleInputs();
 
         item.SoLuong = Math.Max(1, item.SoLuong - 1);
         RecalculateSaleTotal();
@@ -5811,28 +5936,86 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private ProductOption? selectedPhieuNhapNhom;
     [ObservableProperty] private bool isSearchingPhieuNhapProducts;
 
+    /// <summary>
+    /// Từ khóa tìm kiếm sản phẩm nhập hàng thực tế đang hiển thị, bao gồm cả chuỗi composition/preedit
+    /// tiếng Việt khi đang gõ bằng IME chưa nhấn Space.
+    /// </summary>
+    public string EffectiveImportProductSearchKeyword =>
+        !string.IsNullOrEmpty(_importProductSearchCompositionText)
+            ? _importProductSearchCompositionText
+            : ImportProductSearch;
+
+    public string EffectiveImportSupplierSearchKeyword =>
+        !string.IsNullOrEmpty(_importSupplierSearchCompositionText)
+            ? _importSupplierSearchCompositionText
+            : ImportSupplierSearch;
+
     partial void OnImportProductSearchChanged(string value)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        var current = value ?? string.Empty;
+        _importProductSearchCompositionText = string.Empty;
+        if (string.IsNullOrWhiteSpace(current))
         {
-            _phieuNhapProductSearchCts?.Cancel();
+            HuyTimKiemSanPhamNhap();
             IsSearchingPhieuNhapProducts = false;
             PhieuNhapProductSuggestions.Clear();
             _phieuNhapKeywordDaTim = string.Empty;
+            _lastScheduledImportProductSearchKeyword = string.Empty;
             PhieuNhapSearchSelectedIndex = -1;
         }
 
+        OnPropertyChanged(nameof(EffectiveImportProductSearchKeyword));
         OnPropertyChanged(nameof(HasPhieuNhapSuggestions));
         OnPropertyChanged(nameof(HienThiGoiYPhieuNhap));
         OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhapHang));
         OnPropertyChanged(nameof(PhieuNhapSelectedProduct));
+
+        if (!string.IsNullOrWhiteSpace(current)
+            && string.Equals(_lastScheduledImportProductSearchKeyword, current, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastScheduledImportProductSearchKeyword = current;
+        _ = TimKiemSanPhamNhapAsync(current);
+    }
+
+    public void XuLyThayDoiTuKhoaTimKiemNhapHang(string text)
+    {
+        var current = text ?? string.Empty;
+        _importProductSearchCompositionText = current;
+
+        if (string.IsNullOrWhiteSpace(current))
+        {
+            HuyTimKiemSanPhamNhap();
+            IsSearchingPhieuNhapProducts = false;
+            PhieuNhapProductSuggestions.Clear();
+            _phieuNhapKeywordDaTim = string.Empty;
+            _lastScheduledImportProductSearchKeyword = string.Empty;
+            PhieuNhapSearchSelectedIndex = -1;
+        }
+
+        OnPropertyChanged(nameof(EffectiveImportProductSearchKeyword));
+        OnPropertyChanged(nameof(HasPhieuNhapSuggestions));
+        OnPropertyChanged(nameof(HienThiGoiYPhieuNhap));
+        OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhapHang));
+        OnPropertyChanged(nameof(PhieuNhapSelectedProduct));
+
+        if (!string.IsNullOrWhiteSpace(current)
+            && string.Equals(_lastScheduledImportProductSearchKeyword, current, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastScheduledImportProductSearchKeyword = current;
+        _ = TimKiemSanPhamNhapAsync(current);
     }
 
     partial void OnSelectedPhieuNhapNhomChanged(ProductOption? value)
     {
-        if (!string.IsNullOrWhiteSpace(ImportProductSearch))
+        if (!string.IsNullOrWhiteSpace(EffectiveImportProductSearchKeyword))
         {
-            _ = TimKiemSanPhamNhapNgayAsync(ImportProductSearch);
+            _ = TimKiemSanPhamNhapNgayAsync(EffectiveImportProductSearchKeyword);
         }
     }
 
@@ -5859,8 +6042,25 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
     }
 
-    partial void OnImportSupplierSearchChanged(string value) =>
+    partial void OnImportSupplierSearchChanged(string value)
+    {
+        _importSupplierSearchCompositionText = string.Empty;
+        OnPropertyChanged(nameof(EffectiveImportSupplierSearchKeyword));
         OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
+    }
+
+    public void XuLyThayDoiTuKhoaTimKiemNhaCungCapNhap(string text)
+    {
+        var current = text ?? string.Empty;
+        if (string.Equals(EffectiveImportSupplierSearchKeyword, current, StringComparison.Ordinal))
+            return;
+
+        _importSupplierSearchCompositionText = current;
+        OnPropertyChanged(nameof(EffectiveImportSupplierSearchKeyword));
+        OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
+
+        _ = TimKiemNhaCungCapNhapCoreAsync(null, coDoTre: true);
+    }
 
     partial void OnIsSearchingPhieuNhapSuppliersChanged(bool value) =>
         OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
@@ -6000,14 +6200,14 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool HienThiGoiYPhieuNhap =>
         !IsPhieuNhapSuggestionsClosed
-        && !string.IsNullOrWhiteSpace(ImportProductSearch)
+        && !string.IsNullOrWhiteSpace(EffectiveImportProductSearchKeyword)
         && PhieuNhapProductSuggestions.Count > 0;
 
     public bool HienThiThongBaoKhongTimThayNhapHang =>
         !IsSearchingPhieuNhapProducts
         && !IsPhieuNhapSuggestionsClosed
         && PhieuNhapProductSuggestions.Count == 0
-        && !string.IsNullOrWhiteSpace(ImportProductSearch);
+        && !string.IsNullOrWhiteSpace(EffectiveImportProductSearchKeyword);
 
     public bool KetQuaGoiYNhapKhopTuKhoa(string? keyword) =>
         string.Equals(_phieuNhapKeywordDaTim, (keyword ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
@@ -6040,7 +6240,14 @@ public partial class MainWindowViewModel : ObservableObject
 
     public void HuyTimKiemSanPhamNhap()
     {
-        _phieuNhapProductSearchCts?.Cancel();
+        CancellationTokenSource? ctsToCancel = null;
+        lock (_phieuNhapProductSearchCtsLock)
+        {
+            ctsToCancel = _phieuNhapProductSearchCts;
+            _phieuNhapProductSearchCts = null;
+        }
+
+        HuyAnToan(ctsToCancel);
     }
 
     public bool HasPhieuNhapSupplierSuggestions =>
@@ -6051,7 +6258,7 @@ public partial class MainWindowViewModel : ObservableObject
     public bool HienThiThongBaoKhongTimThayNhaCungCap =>
         !IsSearchingPhieuNhapSuppliers
         && !IsPhieuNhapSupplierSuggestionsClosed
-        && !string.IsNullOrWhiteSpace(ImportSupplierSearch)
+        && !string.IsNullOrWhiteSpace(EffectiveImportSupplierSearchKeyword)
         && PhieuNhapSupplierSuggestions.Count == 0
         && !DaChonNhaCungCapNhap;
 
@@ -6080,7 +6287,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     public void DongGoiYNhaCungCap()
     {
-        _phieuNhapSupplierSearchCts?.Cancel();
+        HuyTruongCts(ref _phieuNhapSupplierSearchCts);
         IsPhieuNhapSupplierSuggestionsClosed = true;
         PhieuNhapSupplierSelectedIndex = -1;
         if (_lastConfirmedPhieuNhapNcc is not null)
@@ -6255,9 +6462,9 @@ public partial class MainWindowViewModel : ObservableObject
         IsNhapHangFormVisible = true;
 
         await EnsurePhieuNhapSessionAsync();
-        if (!string.IsNullOrWhiteSpace(ImportProductSearch))
+        if (!string.IsNullOrWhiteSpace(EffectiveImportProductSearchKeyword))
         {
-            await LoadPhieuNhapProductSuggestionsAsync();
+            await TimKiemSanPhamNhapNgayAsync(EffectiveImportProductSearchKeyword);
         }
         else
         {
@@ -6285,11 +6492,12 @@ public partial class MainWindowViewModel : ObservableObject
         PhieuNhapItems.Clear();
         PhieuNhapProductSuggestions.Clear();
         PhieuNhapSupplierSuggestions.Clear();
-        _phieuNhapSupplierSearchCts?.Cancel();
+        HuyTruongCts(ref _phieuNhapSupplierSearchCts);
         IsPhieuNhapSupplierSuggestionsClosed = true;
         PhieuNhapSupplierSelectedIndex = -1;
         HuyTimKiemSanPhamNhap();
         _phieuNhapKeywordDaTim = string.Empty;
+        _lastScheduledImportProductSearchKeyword = string.Empty;
         PhieuNhapSearchSelectedIndex = -1;
         IsPhieuNhapSuggestionsClosed = false;
         OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
@@ -6304,7 +6512,9 @@ public partial class MainWindowViewModel : ObservableObject
         PhieuNhapDaThanhToan = 0;
         PhieuNhapPhuongThuc = "Tiền mặt";
         ImportProductSearch = "";
+        _importProductSearchCompositionText = string.Empty;
         ImportSupplierSearch = "";
+        _importSupplierSearchCompositionText = string.Empty;
         SelectedPhieuNhapNcc = null;
         _lastConfirmedPhieuNhapNcc = null;
 
@@ -6333,9 +6543,9 @@ public partial class MainWindowViewModel : ObservableObject
         RecalculatePhieuNhapTongTienHang();
 
         await LoadPhieuNhapDonViTinhOptionsAsync();
-        if (!string.IsNullOrWhiteSpace(ImportProductSearch))
+        if (!string.IsNullOrWhiteSpace(EffectiveImportProductSearchKeyword))
         {
-            await LoadPhieuNhapProductSuggestionsAsync();
+            await TimKiemSanPhamNhapNgayAsync(EffectiveImportProductSearchKeyword);
         }
         else
         {
@@ -6392,82 +6602,28 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task TimKiemSanPhamNhapAsync(string? keyword)
+    public async Task TimKiemSanPhamNhapAsync(string? keyword = null)
     {
-        if (keyword is not null && keyword != ImportProductSearch)
-            ImportProductSearch = keyword;
-
-        var search = (keyword ?? ImportProductSearch ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(search))
-        {
-            _phieuNhapProductSearchCts?.Cancel();
-            IsSearchingPhieuNhapProducts = false;
-            PhieuNhapProductSuggestions.Clear();
-            _phieuNhapKeywordDaTim = string.Empty;
-            PhieuNhapSearchSelectedIndex = -1;
-            OnPropertyChanged(nameof(HasPhieuNhapSuggestions));
-            OnPropertyChanged(nameof(HienThiGoiYPhieuNhap));
-            OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhapHang));
-            OnPropertyChanged(nameof(PhieuNhapSelectedProduct));
-            return;
-        }
-
-        _phieuNhapProductSearchCts?.Cancel();
-        _phieuNhapProductSearchCts?.Dispose();
-        var cts = new CancellationTokenSource();
-        _phieuNhapProductSearchCts = cts;
-
-        try
-        {
-            // Debounce 250ms
-            await Task.Delay(250, cts.Token);
-            if (cts.Token.IsCancellationRequested || IsPhieuNhapSuggestionsClosed)
-                return;
-
-            await LoadPhieuNhapProductSuggestionsAsync(cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            // Bị hủy khi người dùng gõ tiếp
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = "Không thể tìm hàng hóa: " + ex.Message;
-        }
+        await ThucHienTimKiemSanPhamNhapAsync(keyword, debounceMs: 250);
     }
 
-    /// <summary>Tìm ngay, bỏ qua debounce, dùng khi nhấn Enter trong ô tìm hàng nhập.</summary>
+    /// <summary>Tìm ngay, bỏ qua debounce, dùng khi nhấn Enter hoặc bấm nút Tìm trong ô tìm hàng nhập.</summary>
     [RelayCommand]
     public async Task TimKiemSanPhamNhapNgayAsync(string? keyword = null)
     {
-        if (keyword is not null && keyword != ImportProductSearch)
-            ImportProductSearch = keyword;
-
-        var search = (keyword ?? ImportProductSearch ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(search))
-        {
-            _phieuNhapProductSearchCts?.Cancel();
-            IsSearchingPhieuNhapProducts = false;
-            PhieuNhapProductSuggestions.Clear();
-            _phieuNhapKeywordDaTim = string.Empty;
-            PhieuNhapSearchSelectedIndex = -1;
-            OnPropertyChanged(nameof(HasPhieuNhapSuggestions));
-            OnPropertyChanged(nameof(HienThiGoiYPhieuNhap));
-            OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhapHang));
-            OnPropertyChanged(nameof(PhieuNhapSelectedProduct));
-            return;
-        }
-
-        _phieuNhapProductSearchCts?.Cancel();
-        await LoadPhieuNhapProductSuggestionsAsync();
+        await ThucHienTimKiemSanPhamNhapAsync(keyword, debounceMs: 0);
     }
 
-    private async Task LoadPhieuNhapProductSuggestionsAsync(CancellationToken token = default)
+    private async Task ThucHienTimKiemSanPhamNhapAsync(string? keyword, int debounceMs)
     {
-        var keyword = ImportProductSearch.Trim();
-        if (string.IsNullOrWhiteSpace(keyword))
+        var seq = ++_phieuNhapProductSearchSeq;
+
+        // Hủy an toàn lượt tìm kiếm trước đó nếu còn đang chạy dở
+        HuyTimKiemSanPhamNhap();
+
+        var search = (keyword ?? EffectiveImportProductSearchKeyword ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(search))
         {
-            _phieuNhapProductSearchCts?.Cancel();
             IsSearchingPhieuNhapProducts = false;
             PhieuNhapProductSuggestions.Clear();
             _phieuNhapKeywordDaTim = string.Empty;
@@ -6479,45 +6635,96 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        IsPhieuNhapSuggestionsClosed = false;
-
-        IsSearchingPhieuNhapProducts = true;
-        OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhapHang));
+        var cts = new CancellationTokenSource();
+        lock (_phieuNhapProductSearchCtsLock)
+        {
+            if (seq != _phieuNhapProductSearchSeq)
+            {
+                cts.Dispose();
+                return;
+            }
+            _phieuNhapProductSearchCts = cts;
+        }
+        var token = cts.Token;
 
         try
         {
-            var nhomId = SelectedPhieuNhapNhom?.Id > 0 ? (uint?)SelectedPhieuNhapNhom.Id : null;
-            var products = await _db.GetSanPhamAsync(keyword, nhomId);
+            if (debounceMs > 0)
+            {
+                await Task.Delay(debounceMs, token);
+                if (token.IsCancellationRequested || seq != _phieuNhapProductSearchSeq || IsPhieuNhapSuggestionsClosed)
+                    return;
+            }
 
-            if (token.IsCancellationRequested)
+            IsPhieuNhapSuggestionsClosed = false;
+            IsSearchingPhieuNhapProducts = true;
+            OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhapHang));
+
+            var nhomId = SelectedPhieuNhapNhom?.Id > 0 ? (uint?)SelectedPhieuNhapNhom.Id : null;
+            var products = await _db.TimKiemSanPhamBanHangAsync(search, nhomId, limit: 100, cancellationToken: token);
+
+            if (token.IsCancellationRequested || seq != _phieuNhapProductSearchSeq)
                 return;
 
-            if (!string.IsNullOrWhiteSpace(keyword))
+            if (nhomId.HasValue)
+            {
+                if (nhomId.Value == 999999)
+                {
+                    products = products.Where(p => p.NhomSanPhamId == null || p.NhomSanPhamId == 0).ToList();
+                }
+                else
+                {
+                    products = products.Where(p => p.NhomSanPhamId == nhomId.Value).ToList();
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
             {
                 products = products
-                    .Where(p => ProductSearchHelper.KhopTimKiem(keyword, p.MaSanPham, p.MaVach, p.TenSanPham))
-                    .OrderBy(p => ProductSearchHelper.TinhDiemUuTien(keyword, p.MaSanPham, p.MaVach, p.TenSanPham))
+                    .Where(p => ProductSearchHelper.KhopTimKiem(search, p.MaSanPham, p.MaVach, p.TenSanPham))
+                    .OrderBy(p => ProductSearchHelper.TinhDiemUuTien(search, p.MaSanPham, p.MaVach, p.TenSanPham))
                     .ThenBy(p => p.TenSanPham)
                     .ToList();
             }
 
             PhieuNhapProductSuggestions.Clear();
-
             foreach (var product in products.Take(100))
             {
                 PhieuNhapProductSuggestions.Add(product);
             }
 
-            _phieuNhapKeywordDaTim = keyword;
+            _phieuNhapKeywordDaTim = search;
             PhieuNhapSearchSelectedIndex = PhieuNhapProductSuggestions.Count > 0 ? 0 : -1;
             IsPhieuNhapSuggestionsClosed = false;
             OnPropertyChanged(nameof(HasPhieuNhapSuggestions));
             OnPropertyChanged(nameof(HienThiGoiYPhieuNhap));
+            OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhapHang));
+        }
+        catch (OperationCanceledException)
+        {
+            // Bị hủy an toàn khi người dùng gõ tiếp
+        }
+        catch (Exception ex)
+        {
+            if (seq == _phieuNhapProductSearchSeq)
+                StatusMessage = "Không thể tìm hàng hóa: " + ex.Message;
         }
         finally
         {
-            IsSearchingPhieuNhapProducts = false;
-            OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhapHang));
+            if (seq == _phieuNhapProductSearchSeq)
+            {
+                IsSearchingPhieuNhapProducts = false;
+                OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhapHang));
+            }
+
+            lock (_phieuNhapProductSearchCtsLock)
+            {
+                if (ReferenceEquals(_phieuNhapProductSearchCts, cts))
+                {
+                    _phieuNhapProductSearchCts = null;
+                }
+            }
+            cts.Dispose();
         }
     }
 
@@ -6646,7 +6853,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private bool DaChonNhaCungCapNhap =>
         SelectedPhieuNhapNcc is not null &&
-        ImportSupplierSearch.Trim()
+        EffectiveImportSupplierSearchKeyword.Trim()
             .Equals(SelectedPhieuNhapNcc.TenNhaCungCap, StringComparison.OrdinalIgnoreCase);
 
     [RelayCommand]
@@ -6661,7 +6868,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         // Không gán đè khi lệnh được gọi không có tham số,
         // nếu không TextBox sẽ bị xoá ngay khi vừa gõ ký tự đầu tiên.
-        if (keyword is not null && keyword != ImportSupplierSearch)
+        if (keyword is not null && keyword != ImportSupplierSearch && string.IsNullOrEmpty(_importSupplierSearchCompositionText))
             ImportSupplierSearch = keyword;
 
         // Người dùng sửa từ khóa khác tên NCC đã chọn thì bỏ lựa chọn cũ,
@@ -6672,7 +6879,7 @@ public partial class MainWindowViewModel : ObservableObject
         // Đã chọn xong NCC thì không tìm lại, tránh mở lại danh sách gợi ý.
         if (DaChonNhaCungCapNhap)
         {
-            _phieuNhapSupplierSearchCts?.Cancel();
+            HuyTruongCts(ref _phieuNhapSupplierSearchCts);
             IsPhieuNhapSupplierSuggestionsClosed = true;
             PhieuNhapSupplierSelectedIndex = -1;
             PhieuNhapSupplierSuggestions.Clear();
@@ -6681,13 +6888,10 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        _phieuNhapSupplierSearchCts?.Cancel();
-        _phieuNhapSupplierSearchCts?.Dispose();
-        var cts = new CancellationTokenSource();
-        _phieuNhapSupplierSearchCts = cts;
+        var cts = ThayTheVaHuyCts(ref _phieuNhapSupplierSearchCts);
         var version = ++_phieuNhapSupplierSearchVersion;
 
-        var tuKhoa = ImportSupplierSearch;
+        var tuKhoa = keyword ?? EffectiveImportSupplierSearchKeyword;
         IsPhieuNhapSupplierSuggestionsClosed = false;
         PhieuNhapSupplierSelectedIndex = -1;
         IsSearchingPhieuNhapSuppliers = true;
@@ -6739,6 +6943,7 @@ public partial class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
                 OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhaCungCap));
             }
+            ThuHoiVaDisposeCts(ref _phieuNhapSupplierSearchCts, cts);
         }
     }
 
@@ -6756,8 +6961,9 @@ public partial class MainWindowViewModel : ObservableObject
             SelectedPhieuNhapNcc = supplier;
         }
         _lastConfirmedPhieuNhapNcc = SelectedPhieuNhapNcc;
+        _importSupplierSearchCompositionText = string.Empty;
         ImportSupplierSearch = supplier.TenNhaCungCap;
-        _phieuNhapSupplierSearchCts?.Cancel();
+        HuyTruongCts(ref _phieuNhapSupplierSearchCts);
         IsPhieuNhapSupplierSuggestionsClosed = true;
         PhieuNhapSupplierSelectedIndex = -1;
         PhieuNhapSupplierSuggestions.Clear();
@@ -7283,6 +7489,8 @@ public partial class MainWindowViewModel : ObservableObject
         // 1. Chống bấm nút nhiều lần / gọi lệnh chồng nhau
         if (IsThanhToanDangXuLy)
             return;
+
+        (OwnerWindow as MainWindow)?.CommitActiveSaleInputs();
 
         // 2. Kiểm tra dữ liệu
         if (SaleCart.Count == 0)

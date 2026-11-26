@@ -23,7 +23,7 @@ public partial class SaleCartItem : ObservableObject
             var safeValue = value <= 0 ? 1 : value;
             var biGioiHan = false;
 
-            if (SanPham != null && safeValue > SanPham.TonKho)
+            if (SanPham != null && SanPham.TonKho > 0 && safeValue > SanPham.TonKho)
             {
                 safeValue = SanPham.TonKho;
                 biGioiHan = true;
@@ -38,12 +38,11 @@ public partial class SaleCartItem : ObservableObject
             if (biGioiHan)
             {
                 QuantityExceeded?.Invoke(this);
-                // Ép TextBox cập nhật dù giá trị field không đổi so với lần trước
-                OnPropertyChanged(nameof(SoLuong));
-            }
-            else if (changed)
-            {
-                OnPropertyChanged(nameof(SoLuong));
+                if (!changed)
+                {
+                    // Ép TextBox cập nhật dù giá trị field không đổi so với lần trước
+                    OnPropertyChanged(nameof(SoLuong));
+                }
             }
 
             OnPropertyChanged(nameof(ThanhTien));

@@ -81,18 +81,20 @@
       <Setter Property="Foreground" Value="#263B35" />
     </Style>
 
-    <!-- Ẩn DataValidationErrors trên ô số lượng để tránh hiện System.Exception chồng lên giao diện -->
+    <!-- Ẩn ErrorTemplate của DataValidationErrors trên ô số lượng (KHÔNG ẩn bản thân DataValidationErrors vì đó là root template chứa TextPresenter của TextBox) -->
     <Style Selector="TextBox.cartQuantityBox">
       <Setter Property="DataValidationErrors.Errors" Value="{x:Null}" />
-    </Style>
-    <Style Selector="TextBox.cartQuantityBox /template/ DataValidationErrors">
-      <Setter Property="IsVisible" Value="False" />
+      <Setter Property="DataValidationErrors.ErrorTemplate" Value="{x:Null}" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="CaretBrush" Value="#087F6E" />
     </Style>
     <Style Selector="TextBox.importQuantityBox">
       <Setter Property="DataValidationErrors.Errors" Value="{x:Null}" />
-    </Style>
-    <Style Selector="TextBox.importQuantityBox /template/ DataValidationErrors">
-      <Setter Property="IsVisible" Value="False" />
+      <Setter Property="DataValidationErrors.ErrorTemplate" Value="{x:Null}" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="CaretBrush" Value="#087F6E" />
     </Style>
 
     <!-- MENU CHÍNH BÊN TRÁI -->
@@ -2191,18 +2193,19 @@
                           <!-- Tăng giảm -->
                           <Border Background="White" CornerRadius="6"
                                   BorderBrush="#CFE6E1" BorderThickness="1">
-                            <Grid ColumnDefinitions="28,38,28">
+                            <Grid ColumnDefinitions="28,44,28">
                               <Button Content="−" Width="28" Height="28" Padding="0"
                                       Background="Transparent" Foreground="#0C756A" BorderThickness="0"
                                       HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                       Command="{Binding ElementName=RootWindow, Path=DataContext.GiamSoLuongCommand}"
                                       CommandParameter="{Binding}" />
-                              <TextBox Grid.Column="1" Width="42" Height="28" Padding="0"
+                              <TextBox Grid.Column="1" Width="44" Height="28" Padding="2,0"
                                       Classes="cartQuantityBox"
                                       TextAlignment="Center" BorderThickness="0" Background="Transparent"
                                       HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                       FontSize="13" FontWeight="SemiBold"
-                                      Text="{Binding SoLuong, Mode=OneWay}"
+                                      Text="{Binding SoLuong, Mode=OneWay, Converter={x:Static converters:SoLuongRawConverter.Instance}}"
+                                      TextChanged="OnCartQuantityTextChanged"
                                       KeyDown="OnCartQuantityKeyDown"
                                       LostFocus="OnCartQuantityLostFocus" />
                               <Button Grid.Column="2" Content="+" Width="28" Height="28" Padding="0"
@@ -5656,7 +5659,7 @@
                             Content="Tìm"
                             Padding="10,6"
                             Command="{Binding TimKiemSanPhamNhapNgayCommand}"
-                            CommandParameter="{Binding ImportProductSearch}" />
+                            CommandParameter="{Binding EffectiveImportProductSearchKeyword}" />
 
                     <Button Grid.Column="2"
                             Classes="toolbar-action"
@@ -5664,7 +5667,7 @@
                             ToolTip.Tip="Thêm hàng hóa mới vào danh mục"
                             Padding="8,6"
                             Command="{Binding ThemSanPhamCommand}"
-                            CommandParameter="{Binding ImportProductSearch}"
+                            CommandParameter="{Binding EffectiveImportProductSearchKeyword}"
                             IsVisible="{Binding CanCreateProduct}" />
                   </Grid>
 
@@ -5963,7 +5966,8 @@
                                          Background="#F8FBFA"
                                          BorderBrush="#CFE6E1"
                                          BorderThickness="1"
-                                         Text="{Binding SoLuong, Mode=OneWay}"
+                                         Text="{Binding SoLuong, Mode=OneWay, Converter={x:Static converters:SoLuongRawConverter.Instance}}"
+                                         TextChanged="OnImportQuantityTextChanged"
                                          KeyDown="OnImportQuantityKeyDown"
                                          LostFocus="OnImportQuantityLostFocus" />
 

@@ -6,8 +6,8 @@
   Background="Transparent">
 
   <UserControl.Styles>
-    <Style Selector="TextBox#Input /template/ DataValidationErrors">
-      <Setter Property="IsVisible" Value="False" />
+    <Style Selector="TextBox#Input">
+      <Setter Property="DataValidationErrors.ErrorTemplate" Value="{x:Null}" />
     </Style>
   </UserControl.Styles>
 
