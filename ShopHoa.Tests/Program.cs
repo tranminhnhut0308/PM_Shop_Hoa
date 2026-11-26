@@ -295,6 +295,9 @@ internal class Program
         if (args.Contains("--verify-issue-128", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue128_SuaLoiTimKiemTiengVietVaCts();
 
+        if (args.Contains("--verify-issue-138", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue138_DieuHuongBanPhimNhapHang();
+
         if (args.Contains("--verify-issue-134", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue134_SuaLoiNhapSoLuongVaDonGia();
 
@@ -7247,6 +7250,81 @@ internal class Program
             else
                 Session.Clear();
         }
+    }
+
+    private static int KiemTraIssue138_DieuHuongBanPhimNhapHang()
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  KIỂM THỬ ISSUE #138: ĐIỀU HƯỚNG BÀN PHÍM TÌM → SỐ LƯỢNG → GIÁ NHẬP → SẢN PHẨM MỚI      ");
+        Console.WriteLine("==========================================================================================");
+
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        KiemTra(typeof(global::ShopHoa.Views.MainWindow).GetMethod("FocusImportItemQuantity", flags) is not null,
+            "MainWindow thiếu FocusImportItemQuantity.");
+        KiemTra(typeof(global::ShopHoa.Views.MainWindow).GetMethod("FocusImportItemPrice", flags) is not null,
+            "MainWindow thiếu FocusImportItemPrice.");
+        KiemTra(typeof(MoneyTextBox).GetMethod("CommitInput",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public) is not null,
+            "MoneyTextBox thiếu CommitInput để xác nhận giá nhập bằng Enter.");
+
+        var vm = new MainWindowViewModel();
+        var sp = new SanPham
+        {
+            Id = 999938,
+            MaSanPham = "SP_TEST_138",
+            TenSanPham = "Hoa test 138",
+            GiaBan = 50000m,
+            GiaVon = 25000m,
+            TonKho = 100m,
+            DonViTinh = "Bông",
+            DangKinhDoanh = true
+        };
+
+        vm.PhieuNhapItems.Clear();
+        vm.ThemSanPhamVaoPhieuNhapCommand.Execute(sp);
+        KiemTra(vm.PhieuNhapItems.Count == 1, "Enter thêm sản phẩm vào phiếu nhập thất bại.");
+
+        var item = vm.PhieuNhapItems[0];
+        KiemTra(item.SoLuong == 1m && item.DonGiaNhap == 25000m,
+            "Giá nhập cũ/số lượng ban đầu không đúng.");
+        KiemTra(item.ThanhTien == 25000m && vm.PhieuNhapTongTienHang == 25000m,
+            "Thành tiền/tổng tiền ban đầu không đúng.");
+
+        item.SoLuong = 4m;
+        item.DonGiaNhap = 30000m;
+        vm.RecalculatePhieuNhapTongTienHang();
+        KiemTra(item.ThanhTien == 120000m && vm.PhieuNhapTongTienHang == 120000m,
+            "Thành tiền/tổng tiền sau khi đổi số lượng và giá nhập không đúng.");
+
+        item.DonGiaNhap = 0m;
+        vm.RecalculatePhieuNhapTongTienHang();
+        KiemTra(item.ThanhTien == 0m && vm.PhieuNhapTongTienHang == 0m,
+            "Giá nhập bằng 0 phải cho thành tiền và tổng tiền bằng 0.");
+
+        return ChayTrenStaThread(() =>
+        {
+            if (global::Avalonia.Application.Current is null)
+                global::ShopHoa.Program.BuildAvaloniaApp().SetupWithoutStarting();
+
+            var moneyBox = new MoneyTextBox();
+            var inputField = typeof(MoneyTextBox).GetField("Input",
+                System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Public);
+            var input = inputField?.GetValue(moneyBox) as global::Avalonia.Controls.TextBox;
+            KiemTra(input is not null, "MoneyTextBox không có ô nhập bên trong.");
+
+            if (input is not null)
+            {
+                input.Text = "175.000";
+                moneyBox.CommitInput();
+                KiemTra(moneyBox.Value == 175000m,
+                    $"CommitInput kỳ vọng 175000, thực tế {moneyBox.Value}.");
+            }
+
+            Console.WriteLine("\n>>> TOÀN BỘ KIỂM THỬ ISSUE #138 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+            return 0;
+        });
     }
 
     private static int KiemTraIssue134_SuaLoiNhapSoLuongVaDonGia()

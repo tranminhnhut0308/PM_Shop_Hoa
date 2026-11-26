@@ -1203,6 +1203,38 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (e.Key == Key.Enter
+            && !control
+            && viewModel.SelectedMenu == "Nhập hàng"
+            && viewModel.IsNhapHangFormVisible)
+        {
+            var focusedControl =
+                TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control
+                ?? e.Source as Control;
+
+            var priceBox = focusedControl is null ? null : FindMoneyTextBoxAncestor(focusedControl);
+            if (priceBox is not null
+                && GridPhieuNhapItems is not null
+                && priceBox.DataContext is ChiTietPhieuNhapHang
+                && GridPhieuNhapItems.GetVisualDescendants().Contains(priceBox))
+            {
+                priceBox.CommitInput();
+                e.Handled = true;
+
+                Dispatcher.UIThread.Post(() =>
+                {
+                    var searchBox = this.FindControl<TextBox>("ImportProductSearchBox");
+                    if (searchBox is not null)
+                    {
+                        searchBox.Focus();
+                        searchBox.SelectAll();
+                    }
+                }, DispatcherPriority.Input);
+
+                return;
+            }
+        }
+
         if (e.Key == Key.Escape && viewModel.IsSalesPanelVisible)
         {
             // Ô tìm kiếm đang mở danh sách gợi ý: Escape chỉ đóng danh sách,
@@ -1335,6 +1367,20 @@ public partial class MainWindow : Window
         control.SelectAll();
 
         return true;
+    }
+
+    private static MoneyTextBox? FindMoneyTextBoxAncestor(Control control)
+    {
+        Visual? current = control;
+        while (current is not null)
+        {
+            if (current is MoneyTextBox moneyTextBox)
+                return moneyTextBox;
+
+            current = current.GetVisualParent();
+        }
+
+        return null;
     }
 
     private async void OnSaleSearchKeyDown(object? sender, KeyEventArgs e)
@@ -1767,6 +1813,44 @@ public partial class MainWindow : Window
                     retryBox.BringIntoView();
                     retryBox.Focus();
                     retryBox.SelectAll();
+                }
+            }, DispatcherPriority.Loaded);
+        }
+
+        Dispatcher.UIThread.Post(TryFocus, DispatcherPriority.Input);
+    }
+
+    private void FocusImportItemPrice(ChiTietPhieuNhapHang importItem)
+    {
+        if (GridPhieuNhapItems is null)
+            return;
+
+        GridPhieuNhapItems.SelectedItem = importItem;
+        GridPhieuNhapItems.ScrollIntoView(importItem, null);
+
+        void TryFocus()
+        {
+            var targetBox = GridPhieuNhapItems.GetVisualDescendants()
+                .OfType<MoneyTextBox>()
+                .FirstOrDefault(t => ReferenceEquals(t.DataContext, importItem));
+
+            if (targetBox is not null)
+            {
+                targetBox.BringIntoView();
+                targetBox.FocusInput();
+                return;
+            }
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                var retryBox = GridPhieuNhapItems.GetVisualDescendants()
+                    .OfType<MoneyTextBox>()
+                    .FirstOrDefault(t => ReferenceEquals(t.DataContext, importItem));
+
+                if (retryBox is not null)
+                {
+                    retryBox.BringIntoView();
+                    retryBox.FocusInput();
                 }
             }, DispatcherPriority.Loaded);
         }
@@ -2268,16 +2352,7 @@ public partial class MainWindow : Window
 
         viewModel.RecalculatePhieuNhapTongTienHang();
 
-        // Sau khi xác nhận số lượng: tự động đưa con trỏ trở lại ô tìm kiếm và bôi đen nội dung cũ
-        Dispatcher.UIThread.Post(() =>
-        {
-            var searchBox = this.FindControl<TextBox>("ImportProductSearchBox");
-            if (searchBox is not null)
-            {
-                searchBox.Focus();
-                searchBox.SelectAll();
-            }
-        }, DispatcherPriority.Input);
+        FocusImportItemPrice(item);
     }
 
     private void OnImportQuantityLostFocus(object? sender, RoutedEventArgs e)

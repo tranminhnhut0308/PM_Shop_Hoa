@@ -102,6 +102,12 @@ public partial class MoneyTextBox : UserControl
         SelectAllWhenHasContent();
     }
 
+    public void CommitInput()
+    {
+        WindowsImeTextInputFix.CommitComposition(Input);
+        CommitFromInputText();
+    }
+
     private void OnInputGotFocus(object? sender, RoutedEventArgs e)
     {
         _hasFocus = true;
@@ -125,9 +131,7 @@ public partial class MoneyTextBox : UserControl
         {
             e.Handled = true;
 
-            WindowsImeTextInputFix.CommitComposition(Input);
-
-            CommitFromInputText();
+            CommitInput();
 
             TopLevel.GetTopLevel(this)?.FocusManager?.ClearFocus();
         }
