@@ -140,7 +140,7 @@ public partial class ThuNoKhachHangWindow : Window
 
         var congNoDuocThanhToan = Math.Min(soTien, _conNo);
         var tienDu = Math.Max(0m, soTien - _conNo);
-        var conNoSauThu = Math.Max(0m, _conNo - soTien);
+        var conNoSauThu = _conNo - soTien;
         var soDuTraTruocSau = _soDuTraTruoc + tienDu;
 
         TxtCongNoDuocThanhToan.Text = $"{congNoDuocThanhToan:N0} đ";

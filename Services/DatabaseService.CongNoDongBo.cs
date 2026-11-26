@@ -157,10 +157,10 @@ public sealed partial class DatabaseService
             decimal newCongNoTruoc = runningDebt;
             decimal tienTraNo = Math.Min(slip.SoTien, runningDebt);
             decimal tienDu = Math.Max(0m, slip.SoTien - runningDebt);
+            decimal newCongNoSau = newCongNoTruoc - slip.SoTien;
 
             runningDebt -= tienTraNo;
             runningPrepaid += tienDu;
-            decimal newCongNoSau = runningDebt;
 
             // Cập nhật công nợ trước/sau của phiếu hợp lệ nếu thay đổi
             if (slip.CongNoTruoc != newCongNoTruoc || slip.CongNoSau != newCongNoSau)

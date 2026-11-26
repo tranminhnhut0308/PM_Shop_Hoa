@@ -297,6 +297,23 @@ internal class Program
         if (args.Contains("--verify-issue-134", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue134_SuaLoiNhapSoLuongVaDonGia();
 
+        if (args.Contains("--verify-issue-144", StringComparer.OrdinalIgnoreCase))
+        {
+            var configService = new DatabaseConfigService();
+            var config = configService.Load();
+            var csb = new MySqlConnectionStringBuilder
+            {
+                Server = config.Server,
+                Port = (uint)config.Port,
+                Database = config.Database,
+                UserID = config.User,
+                Password = config.Password,
+                SslMode = MySqlSslMode.None,
+                CharacterSet = "utf8mb4"
+            };
+            return await KiemTraIssue144_CongNoSauThanhToanDuAsync(csb.ConnectionString);
+        }
+
         Console.WriteLine("==========================================================================================");
         Console.WriteLine("  BẮT ĐẦU KIỂM THỬ HỆ THỐNG SHOP HOA: ĐỐI SOÁT TOÀN DIỆN THỐNG KÊ TRANG TỔNG QUAN (#69)  ");
         Console.WriteLine("==========================================================================================");
@@ -7300,5 +7317,173 @@ internal class Program
             Console.WriteLine("==========================================================================================");
             return 0;
         });
+    }
+
+    private static async Task<int> KiemTraIssue144_CongNoSauThanhToanDuAsync(string connectionString)
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  BẮT ĐẦU KIỂM THỬ ISSUE #144: HIỂN THỊ CÔNG NỢ SAU KHI KHÁCH HÀNG THANH TOÁN DƯ          ");
+        Console.WriteLine("==========================================================================================");
+
+        var db = new DatabaseService();
+        await using var conn = new MySqlConnection(connectionString);
+        await conn.OpenAsync();
+        await DatabaseService.EnsureTraTruocSchemaAsync(conn);
+
+        Session.SetCurrentUser(new NguoiDung
+        {
+            Id = 1,
+            TenDangNhap = "tester",
+            HoTen = "Kiem Thu Vien #144",
+            ChiNhanhId = 1,
+            MaVaiTro = Quyen.QuanTri
+        });
+
+        async Task ChayMotKichBanAsync(
+            string tenKichBan,
+            decimal noBanDau,
+            decimal soTienTra,
+            decimal kyVongCongNoSau,
+            decimal kyVongTienCanTru,
+            decimal kyVongTienDu)
+        {
+            Console.Write($"{tenKichBan}... ");
+            var suffix = Guid.NewGuid().ToString("N")[..8];
+            var maKhTest = $"KH_144_{suffix}";
+            var hdTestCode = $"HD_144_{suffix}";
+            uint khId = 0;
+            uint hdId = 0;
+            var createdSlips = new List<string>();
+
+            try
+            {
+                await conn.ExecuteAsync(
+                    """
+                    INSERT INTO khach_hang (ma_khach_hang, ten_khach_hang, so_dien_thoai, trang_thai, so_du_tra_truoc, ngay_tao, ngay_cap_nhat)
+                    VALUES (@Ma, @Ten, '0988144144', 1, 0.00, NOW(), NOW());
+                    """,
+                    new { Ma = maKhTest, Ten = $"Khách Hàng Test 144 ({suffix})" });
+                khId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM khach_hang WHERE ma_khach_hang = @Ma;", new { Ma = maKhTest });
+
+                if (noBanDau > 0)
+                {
+                    await conn.ExecuteAsync(
+                        """
+                        INSERT INTO hoa_don_ban_hang (ma_hoa_don, khach_hang_id, chi_nhanh_id, nguoi_ban_id, thoi_gian_ban,
+                            tong_tien_hang, giam_gia, khach_can_tra, khach_da_thanh_toan, con_no,
+                            trang_thai_thanh_toan, trang_thai_hoa_don, ghi_chu)
+                        VALUES (@MaHd, @KhId, 1, 1, NOW(),
+                            @No, 0, @No, 0, @No,
+                            'CHUA_THANH_TOAN', 'HOAN_THANH', 'Hóa đơn nợ ban đầu test 144');
+                        """,
+                        new { MaHd = hdTestCode, KhId = khId, No = noBanDau });
+                    hdId = await conn.ExecuteScalarAsync<uint>("SELECT id FROM hoa_don_ban_hang WHERE ma_hoa_don = @MaHd;", new { MaHd = hdTestCode });
+
+                    await conn.ExecuteAsync(
+                        """
+                        INSERT INTO lich_su_cong_no_khach_hang (khach_hang_id, chi_nhanh_id, loai_giao_dich, loai_chung_tu, ma_chung_tu, ghi_no, ghi_co, so_du, thoi_gian, ghi_chu)
+                        VALUES (@KhId, 1, 'GHI_NO', 'HOA_DON', @MaHd, @No, 0, @No, NOW(), 'Ghi nợ hóa đơn ban đầu test 144');
+                        """,
+                        new { KhId = khId, MaHd = hdTestCode, No = noBanDau });
+                }
+
+                var ketQua = await db.ThuNoKhachHangAsync(khId, soTienTra, "CHUYEN_KHOAN", null, $"Test 144 ({suffix})");
+                createdSlips.Add(ketQua.MaGiaoDich);
+
+                if (ketQua.CongNoTruoc != noBanDau)
+                    throw new Exception($"CongNoTruoc kỳ vọng {noBanDau:N0}, thực tế={ketQua.CongNoTruoc:N0}");
+                if (ketQua.TongDaThu != soTienTra)
+                    throw new Exception($"TongDaThu kỳ vọng {soTienTra:N0}, thực tế={ketQua.TongDaThu:N0}");
+                if (ketQua.ConNoConLai != kyVongCongNoSau || ketQua.CongNoSau != kyVongCongNoSau)
+                    throw new Exception($"CongNoSau kỳ vọng {kyVongCongNoSau:N0}, thực tế={ketQua.CongNoSau:N0}");
+                if (ketQua.TienCanTru != kyVongTienCanTru)
+                    throw new Exception($"TienCanTru kỳ vọng {kyVongTienCanTru:N0}, thực tế={ketQua.TienCanTru:N0}");
+                if (ketQua.TienDu != kyVongTienDu)
+                    throw new Exception($"TienDu kỳ vọng {kyVongTienDu:N0}, thực tế={ketQua.TienDu:N0}");
+
+                // Kiểm tra bản ghi trong DB lich_su_thanh_toan_cong_no_khach_hang
+                var lichSu = await db.GetLichSuThanhToanCongNoKhachHangAsync(khId);
+                if (lichSu.Count != 1)
+                    throw new Exception($"Phải có đúng 1 dòng lịch sử, thực tế={lichSu.Count}");
+                var row = lichSu[0];
+                if (row.CongNoTruoc != noBanDau || row.SoTien != soTienTra || row.CongNoSau != kyVongCongNoSau)
+                    throw new Exception($"Bản ghi lịch sử sai: Trước={row.CongNoTruoc:N0}, Tiền={row.SoTien:N0}, Sau={row.CongNoSau:N0}");
+
+                // Kiểm tra ChiTietThanhToanKhachHang (dùng cho màn hình Xem chi tiết công nợ)
+                var chiTiet = await db.GetChiTietThanhToanKhachHangTheoMaAsync(ketQua.MaGiaoDich, khId);
+                if (chiTiet is null)
+                    throw new Exception("Không đọc được ChiTietThanhToanKhachHang");
+                if (chiTiet.CongNoTruoc != noBanDau || chiTiet.SoTien != soTienTra || chiTiet.CongNoSau != kyVongCongNoSau)
+                    throw new Exception($"ChiTietThanhToanKhachHang sai: Trước={chiTiet.CongNoTruoc:N0}, Tiền={chiTiet.SoTien:N0}, Sau={chiTiet.CongNoSau:N0}");
+                if (chiTiet.CongNoSauText != $"{kyVongCongNoSau:N0} đ")
+                    throw new Exception($"CongNoSauText kỳ vọng '{kyVongCongNoSau:N0} đ', thực tế='{chiTiet.CongNoSauText}'");
+
+                // Kiểm tra Thống kê lịch sử thanh toán công nợ khách hàng
+                var thongKe = await db.GetThongKeLichSuThanhToanCongNoKhachHangAsync(khId);
+                if (thongKe.CongNoTruocThanhToan != noBanDau || thongKe.CongNoSauThanhToan != kyVongCongNoSau)
+                    throw new Exception($"Thống kê lịch sử sai: Trước={thongKe.CongNoTruocThanhToan:N0}, Sau={thongKe.CongNoSauThanhToan:N0}");
+
+                Console.WriteLine($"PASSED (Trước: {chiTiet.CongNoTruocText}, Trả: {chiTiet.SoTienText}, Sau: {chiTiet.CongNoSauText}) ✓");
+            }
+            finally
+            {
+                try
+                {
+                    if (khId > 0)
+                    {
+                        await conn.ExecuteAsync("DELETE FROM lich_su_tra_truoc_khach_hang WHERE khach_hang_id = @Id;", new { Id = khId });
+                        if (hdId > 0)
+                            await conn.ExecuteAsync("DELETE FROM thanh_toan WHERE hoa_don_id = @HdId;", new { HdId = hdId });
+                        await conn.ExecuteAsync("DELETE FROM lich_su_thanh_toan_cong_no_khach_hang WHERE khach_hang_id = @Id;", new { Id = khId });
+                        await conn.ExecuteAsync("DELETE FROM lich_su_cong_no_khach_hang WHERE khach_hang_id = @Id;", new { Id = khId });
+                        if (createdSlips.Count > 0)
+                            await conn.ExecuteAsync("DELETE FROM phieu_chi WHERE ma_phieu_chi IN @Slips;", new { Slips = createdSlips });
+                        if (hdId > 0)
+                            await conn.ExecuteAsync("DELETE FROM hoa_don_ban_hang WHERE id = @HdId;", new { HdId = hdId });
+                        await conn.ExecuteAsync("DELETE FROM khach_hang WHERE id = @Id;", new { Id = khId });
+                    }
+                }
+                catch { }
+            }
+        }
+
+        // Trường hợp 1: Nợ 2.000.000đ, trả 1.000.000đ -> Công nợ sau = 1.000.000đ
+        await ChayMotKichBanAsync(
+            "1. Trường hợp 1: Nợ 2.000.000đ, trả 1.000.000đ -> Công nợ sau = 1.000.000đ",
+            noBanDau: 2000000m,
+            soTienTra: 1000000m,
+            kyVongCongNoSau: 1000000m,
+            kyVongTienCanTru: 1000000m,
+            kyVongTienDu: 0m);
+
+        // Trường hợp 2: Nợ 2.000.000đ, trả 2.000.000đ -> Công nợ sau = 0đ
+        await ChayMotKichBanAsync(
+            "2. Trường hợp 2: Nợ 2.000.000đ, trả 2.000.000đ -> Công nợ sau = 0đ",
+            noBanDau: 2000000m,
+            soTienTra: 2000000m,
+            kyVongCongNoSau: 0m,
+            kyVongTienCanTru: 2000000m,
+            kyVongTienDu: 0m);
+
+        // Trường hợp 3: Nợ 2.774.000đ, trả 3.000.000đ -> Công nợ sau = -226.000đ
+        await ChayMotKichBanAsync(
+            "3. Trường hợp 3: Nợ 2.774.000đ, trả 3.000.000đ -> Công nợ sau = -226.000đ",
+            noBanDau: 2774000m,
+            soTienTra: 3000000m,
+            kyVongCongNoSau: -226000m,
+            kyVongTienCanTru: 2774000m,
+            kyVongTienDu: 226000m);
+
+        // Trường hợp 4: Nợ 0đ, khách hàng chuyển 500.000đ -> Công nợ sau = -500.000đ
+        await ChayMotKichBanAsync(
+            "4. Trường hợp 4: Nợ 0đ, khách hàng chuyển 500.000đ -> Công nợ sau = -500.000đ",
+            noBanDau: 0m,
+            soTienTra: 500000m,
+            kyVongCongNoSau: -500000m,
+            kyVongTienCanTru: 0m,
+            kyVongTienDu: 500000m);
+
+        Console.WriteLine("\n>>> TOÀN BỘ 4 TRƯỜNG HỢP KIỂM THỬ BẮT BUỘC CỦA ISSUE #144 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+        return 0;
     }
 }

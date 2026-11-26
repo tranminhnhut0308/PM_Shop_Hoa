@@ -7205,6 +7205,8 @@ public sealed partial class DatabaseService
                         : $"Khách hàng thanh toán dư {tienThanhToanDu:N0} đ qua phiếu thu {maPhieuThu}. {ghiChu.Trim()}");
             }
 
+            var congNoSau = conNoHienTai - soTien;
+
             const string insertPaymentHistorySql = """
             INSERT INTO lich_su_thanh_toan_cong_no_khach_hang
             (khach_hang_id, ma_giao_dich, so_tien, cong_no_truoc, cong_no_sau,
@@ -7222,7 +7224,7 @@ public sealed partial class DatabaseService
                     MaGiaoDich = maPhieuThu,
                     SoTien = soTien,
                     CongNoTruoc = conNoHienTai,
-                    CongNoSau = Math.Max(0m, conNoHienTai - soTien),
+                    CongNoSau = congNoSau,
                     ThoiGian = now,
                     PhuongThuc = ChuanHoaPhuongThuc(phuongThucThanhToan),
                     MaThamChieu = BlankToNull(maThamChieu),
@@ -7240,7 +7242,7 @@ public sealed partial class DatabaseService
                 soTien,
                 truongThayDoi: "Công nợ khách hàng",
                 giaTriTruoc: $"Công nợ cũ: {conNoHienTai:N0} đ",
-                giaTriSau: $"Công nợ mới: {Math.Max(0m, conNoHienTai - soTien):N0} đ",
+                giaTriSau: $"Công nợ mới: {congNoSau:N0} đ",
                 connection: connection,
                 transaction: transaction);
 
@@ -7254,7 +7256,7 @@ public sealed partial class DatabaseService
                 TenKhachHang = tenKhach ?? "",
                 TongDaThu = soTien,
                 CongNoTruoc = conNoHienTai,
-                ConNoConLai = Math.Max(0m, conNoHienTai - soTien),
+                ConNoConLai = congNoSau,
                 TienCanTru = tienThanhToanCongNo,
                 TienDu = tienThanhToanDu,
                 SoDuTraTruocTruoc = soDuTraTruocTruoc,

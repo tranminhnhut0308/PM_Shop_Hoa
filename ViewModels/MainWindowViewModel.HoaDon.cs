@@ -90,7 +90,7 @@ public sealed partial class MainWindowViewModel
             return;
         }
 
-        var conNoDuKien = Math.Max(0m, conNo - ketQua.SoTien);
+        var conNoDuKien = conNo - ketQua.SoTien;
         var tienDuDuKien = Math.Max(0m, ketQua.SoTien - Math.Max(0m, conNo));
         var soDuSauDuKien = soDuTraTruoc + tienDuDuKien;
         var thongBaoDu = tienDuDuKien > 0
