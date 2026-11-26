@@ -157,6 +157,8 @@ public sealed partial class MainWindowViewModel
                 line.TenSanPham = product.TenSanPham;
                 line.DonViTinh = string.IsNullOrWhiteSpace(line.DonViTinh) ? product.DonViTinh : line.DonViTinh;
                 line.DonViTinhId = product.DonViTinhId;
+                line.MaDvtCoBan = product.MaDvtCoBan;
+                line.QuyDoi = product.QuyDoi;
                 line.GiaVon = product.GiaVon;
                 line.GiaBan = product.GiaBan;
                 line.TonKho = product.TonKho;
@@ -204,7 +206,9 @@ public sealed partial class MainWindowViewModel
             MaSanPham = item.SanPham.MaSanPham,
             TenSanPham = item.SanPham.TenSanPham,
             DonViTinh = item.DonViTinh,
-            DonViTinhId = item.SanPham.DonViTinhId,
+            DonViTinhId = item.SelectedDonViTinh is { Id: > 0 } option ? option.Id : item.SanPham.DonViTinhId,
+            MaDvtCoBan = item.SanPham.MaDvtCoBan,
+            QuyDoi = item.SanPham.QuyDoi,
             GiaVon = item.SanPham.GiaVon,
             GiaBan = item.SanPham.GiaBan,
             DonGia = item.DonGia,
@@ -240,6 +244,8 @@ public sealed partial class MainWindowViewModel
                     TenSanPham = line.TenSanPham,
                     DonViTinh = line.DonViTinh,
                     DonViTinhId = line.DonViTinhId,
+                    MaDvtCoBan = line.MaDvtCoBan,
+                    QuyDoi = line.QuyDoi ?? 1m,
                     GiaVon = line.GiaVon,
                     GiaBan = line.GiaBan,
                     TonKho = line.TonKho
@@ -249,11 +255,14 @@ public sealed partial class MainWindowViewModel
                 {
                     SanPham = product,
                     DonGia = line.DonGia > 0 ? line.DonGia : line.GiaBan,
-                    DonViTinh = string.IsNullOrWhiteSpace(line.DonViTinh) ? "Bó" : line.DonViTinh,
-                    GiamGia = line.GiamGia,
-                    SoLuong = line.SoLuong > 0 ? line.SoLuong : 1
+                    GiamGia = line.GiamGia
                 };
 
+                var donViTinhOption = TimSaleDonViTinhOption(product, line.DonViTinh, line.DonViTinhId);
+                if (donViTinhOption is not null)
+                    cartItem.SelectedDonViTinh = donViTinhOption;
+
+                cartItem.SoLuong = line.SoLuong > 0 ? line.SoLuong : 1;
                 cartItem.QuantityChanged += RecalculateSaleTotal;
                 cartItem.QuantityExceeded += OnQuantityExceeded;
                 SaleCart.Add(cartItem);

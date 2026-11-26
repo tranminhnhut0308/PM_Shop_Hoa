@@ -52,6 +52,8 @@ public sealed partial class DatabaseService
     private readonly SemaphoreSlim _khoaDamBaoBangLichSuThanhToanKhachHang = new(1, 1);
     private bool _daDamBaoBangLichSuThanhToanNhaCungCap;
     private readonly SemaphoreSlim _khoaDamBaoBangLichSuThanhToanNhaCungCap = new(1, 1);
+    private static bool _daDamBaoCotQuyDoiSanPham;
+    private static readonly SemaphoreSlim _khoaDamBaoCotQuyDoiSanPham = new(1, 1);
 
     public DatabaseService()
     {
@@ -69,6 +71,7 @@ public sealed partial class DatabaseService
         await EnsureHoaDonTrackingColumnsAsync();
         await EnsurePhieuNhapExtraColumnsAsync();
         await EnsureChiTietPhieuNhapDonViTinhExcelAsync();
+        await DamBaoCotQuyDoiSanPhamAsync();
 
         var connection = new MySqlConnection(GetConnectionString());
 
@@ -98,6 +101,7 @@ public sealed partial class DatabaseService
         await EnsureHoaDonTrackingColumnsAsync();
         await EnsurePhieuNhapExtraColumnsAsync();
         await EnsureChiTietPhieuNhapDonViTinhExcelAsync();
+        await DamBaoCotQuyDoiSanPhamAsync();
 
         var connection = new MySqlConnection(GetConnectionString());
 
@@ -355,6 +359,8 @@ public sealed partial class DatabaseService
                 COALESCE(NULLIF(TRIM(sp.ten_san_pham), ''), sp.ma_san_pham) AS TenSanPham,
                 sp.nhom_san_pham_id AS NhomSanPhamId,
                 sp.don_vi_tinh_id AS DonViTinhId,
+                sp.ma_dvt_co_ban AS MaDvtCoBan,
+                sp.quy_doi AS QuyDoi,
                 sp.thuong_hieu_id AS ThuongHieuId,
                 sp.gia_ban AS GiaBan,
                 sp.gia_von AS GiaVon,
@@ -476,6 +482,8 @@ public sealed partial class DatabaseService
                 COALESCE(NULLIF(TRIM(sp.ten_san_pham), ''), sp.ma_san_pham) AS TenSanPham,
                 sp.nhom_san_pham_id AS NhomSanPhamId,
                 sp.don_vi_tinh_id AS DonViTinhId,
+                sp.ma_dvt_co_ban AS MaDvtCoBan,
+                sp.quy_doi AS QuyDoi,
                 sp.thuong_hieu_id AS ThuongHieuId,
                 sp.gia_ban AS GiaBan,
                 sp.gia_von AS GiaVon,
@@ -551,6 +559,8 @@ public sealed partial class DatabaseService
                 COALESCE(NULLIF(TRIM(sp.ten_san_pham), ''), sp.ma_san_pham) AS TenSanPham,
                 sp.nhom_san_pham_id AS NhomSanPhamId,
                 sp.don_vi_tinh_id AS DonViTinhId,
+                sp.ma_dvt_co_ban AS MaDvtCoBan,
+                sp.quy_doi AS QuyDoi,
                 sp.thuong_hieu_id AS ThuongHieuId,
                 sp.gia_ban AS GiaBan,
                 sp.gia_von AS GiaVon,
@@ -889,7 +899,7 @@ public sealed partial class DatabaseService
     {
         await using var connection = await OpenAsync();
         return (await connection.QueryAsync<ProductOption>(
-            "SELECT id AS Id, ten_don_vi AS Name FROM don_vi_tinh WHERE trang_thai = 1 ORDER BY ten_don_vi;"
+            "SELECT id AS Id, ma_don_vi AS Ma, ten_don_vi AS Name FROM don_vi_tinh WHERE trang_thai = 1 ORDER BY ten_don_vi;"
         )).AsList();
     }
 
@@ -974,7 +984,7 @@ public sealed partial class DatabaseService
         await using var connection = await OpenAsync();
 
         var existing = await connection.QueryFirstOrDefaultAsync<ProductOption>(
-            "SELECT id AS Id, ten_don_vi AS Name FROM don_vi_tinh WHERE LOWER(TRIM(ten_don_vi)) = LOWER(@Ten) LIMIT 1;",
+            "SELECT id AS Id, ma_don_vi AS Ma, ten_don_vi AS Name FROM don_vi_tinh WHERE LOWER(TRIM(ten_don_vi)) = LOWER(@Ten) LIMIT 1;",
             new { Ten = ten });
 
         if (existing != null)
@@ -991,7 +1001,7 @@ public sealed partial class DatabaseService
                 truongThayDoi: "Đơn vị tính",
                 giaTriTruoc: "Ngừng hoạt động",
                 giaTriSau: existing.Name);
-            return new ProductOption { Id = existing.Id, Name = existing.Name };
+            return new ProductOption { Id = existing.Id, Ma = existing.Ma, Name = existing.Name };
         }
 
         bool hasMaDvt = false;
@@ -1002,10 +1012,11 @@ public sealed partial class DatabaseService
         }
         catch { }
 
+        var ma = !string.IsNullOrWhiteSpace(maDonVi) ? maDonVi.Trim() : ("DVT" + DateTime.Now.ToString("yyMMddHHmmss"));
+
         uint newId;
         if (hasMaDvt)
         {
-            var ma = !string.IsNullOrWhiteSpace(maDonVi) ? maDonVi.Trim() : ("DVT" + DateTime.Now.ToString("yyMMddHHmmss"));
             await connection.ExecuteAsync(
                 "INSERT INTO don_vi_tinh (ma_don_vi, ten_don_vi, trang_thai) VALUES (@Ma, @Ten, 1);",
                 new { Ma = ma, Ten = ten });
@@ -1034,7 +1045,7 @@ public sealed partial class DatabaseService
             truongThayDoi: "Tên đơn vị tính",
             giaTriSau: ten);
 
-        return new ProductOption { Id = newId, Name = ten };
+        return new ProductOption { Id = newId, Ma = hasMaDvt ? ma : "", Name = ten };
     }
 
     /// <summary>
@@ -1139,7 +1150,7 @@ public sealed partial class DatabaseService
 
             var dvt = await connection.QueryFirstOrDefaultAsync<ProductOption>(
                 """
-                SELECT id AS Id, ten_don_vi AS Name
+                SELECT id AS Id, ma_don_vi AS Ma, ten_don_vi AS Name
                 FROM don_vi_tinh
                 WHERE LOWER(TRIM(ten_don_vi)) = LOWER(@Ten)
                 LIMIT 1;
@@ -1425,6 +1436,8 @@ public sealed partial class DatabaseService
             "ten_san_pham = @TenSanPham",
             "nhom_san_pham_id = @NhomSanPhamId",
             "don_vi_tinh_id = @DonViTinhId",
+            "ma_dvt_co_ban = @MaDvtCoBan",
+            "quy_doi = @QuyDoi",
             "thuong_hieu_id = @ThuongHieuId",
             "ton_toi_thieu = @TonToiThieu",
             "ton_toi_da = @TonToiDa",
@@ -1538,6 +1551,27 @@ public sealed partial class DatabaseService
             giaTriTruoc: truocLines.Count > 0 ? string.Join("\n", truocLines) : null,
             giaTriSau: sauLines.Count > 0 ? string.Join("\n", sauLines) : null);
     }
+
+    public async Task<bool> CapNhatDonViTinhSanPhamAsync(uint sanPhamId, uint donViTinhId)
+    {
+        Quyen.RequirePermission(Session.CurrentUser, PermissionKeys.ProductsEdit, "Bạn không có quyền cập nhật đơn vị tính của hàng hóa.");
+        if (sanPhamId == 0 || donViTinhId == 0)
+            return false;
+
+        await using var connection = await OpenAsync();
+
+        var affected = await connection.ExecuteAsync(
+            """
+            UPDATE san_pham
+            SET don_vi_tinh_id = @DonViTinhId,
+                ngay_cap_nhat = NOW()
+            WHERE id = @SanPhamId;
+            """,
+            new { SanPhamId = sanPhamId, DonViTinhId = donViTinhId });
+
+        return affected > 0;
+    }
+
     /// <summary>
     /// Chỉ cập nhật đúng cột <c>san_pham.gia_ban</c> của một sản phẩm.
     /// Không đụng tới mã hàng, tồn kho, giá vốn hay các cột khác.
@@ -2448,6 +2482,51 @@ public sealed partial class DatabaseService
         }
 
         return _cotNgayTaoSanPhamChoPhepNull.Value;
+    }
+
+    private async Task DamBaoCotQuyDoiSanPhamAsync()
+    {
+        if (_daDamBaoCotQuyDoiSanPham)
+            return;
+
+        await _khoaDamBaoCotQuyDoiSanPham.WaitAsync();
+        try
+        {
+            if (_daDamBaoCotQuyDoiSanPham)
+                return;
+
+            try
+            {
+                await using var connection = new MySqlConnection(GetConnectionString());
+                await connection.OpenAsync();
+
+                var columns = (await connection.QueryAsync<string>(
+                    """
+                    SELECT COLUMN_NAME
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'san_pham'
+                      AND COLUMN_NAME IN ('ma_dvt_co_ban', 'quy_doi');
+                    """)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                if (!columns.Contains("ma_dvt_co_ban"))
+                    await connection.ExecuteAsync(
+                        "ALTER TABLE san_pham ADD COLUMN ma_dvt_co_ban VARCHAR(50) NULL DEFAULT NULL AFTER don_vi_tinh_id;");
+
+                if (!columns.Contains("quy_doi"))
+                    await connection.ExecuteAsync(
+                        "ALTER TABLE san_pham ADD COLUMN quy_doi DECIMAL(15,4) NULL DEFAULT NULL AFTER ma_dvt_co_ban;");
+            }
+            catch
+            {
+            }
+
+            _daDamBaoCotQuyDoiSanPham = true;
+        }
+        finally
+        {
+            _khoaDamBaoCotQuyDoiSanPham.Release();
+        }
     }
 
     public List<SanPham> ParseProductsFromFile(string filePath)
@@ -6102,10 +6181,10 @@ public sealed partial class DatabaseService
                 throw new InvalidOperationException(
                     $"Sản phẩm \"{item.SanPham.TenSanPham}\" chưa được lưu vào hệ thống nên không thể bán.");
 
-            if (item.SoLuong > item.SanPham.TonKho)
+            if (item.SoLuongQuyDoi > item.SanPham.TonKho)
                 throw new InvalidOperationException(
                     $"Sản phẩm \"{item.SanPham.TenSanPham}\" chỉ còn tồn kho {item.SanPham.TonKho:N0}, " +
-                    $"không thể bán {item.SoLuong:N0}.");
+                    $"không thể bán {item.SoLuong:N0} {item.DonViTinh}.");
 
             if (item.SanPham.GiaBan <= 0)
                 throw new InvalidOperationException(
@@ -8979,14 +9058,15 @@ public sealed partial class DatabaseService
             }
         }
 
-        var tonSau = tonTruoc - item.SoLuong;
+        var soLuongXuatKho = item.SoLuongQuyDoi > 0 ? item.SoLuongQuyDoi : item.SoLuong;
+        var tonSau = tonTruoc - soLuongXuatKho;
 
         if (!coBanGhiTon)
             canhBao.Add(
                 $"\"{item.SanPham.TenSanPham}\" chưa có số tồn trong kho, tồn sau khi bán = {tonSau:N0}.");
         else if (tonSau < 0)
             throw new InvalidOperationException(
-                $"Sản phẩm \"{item.SanPham.TenSanPham}\" không đủ tồn kho để thanh toán (tồn kho thực tế: {tonTruoc:N0}, yêu cầu bán: {item.SoLuong:N0}). Giao dịch đã hủy.");
+                $"Sản phẩm \"{item.SanPham.TenSanPham}\" không đủ tồn kho để thanh toán (tồn kho thực tế: {tonTruoc:N0}, yêu cầu bán: {soLuongXuatKho:N0}). Giao dịch đã hủy.");
 
         await connection.ExecuteAsync(
             upsertTonSql,
@@ -9020,7 +9100,7 @@ public sealed partial class DatabaseService
                 ChiNhanhId = branchId,
                 SanPhamId = item.SanPham.Id,
                 MaChungTu = invoiceCode,
-                item.SoLuong,
+                SoLuong = soLuongXuatKho,
                 TonTruoc = tonTruoc,
                 TonSau = tonSau,
                 GiaVon = item.SanPham.GiaVon,

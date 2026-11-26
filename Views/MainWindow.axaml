@@ -2170,10 +2170,33 @@
                                      FontSize="11.5" FontWeight="SemiBold" Foreground="#087F6E"
                                      Watermark="0"
                                      Value="{Binding DonGia, Mode=TwoWay}" />
-                            <TextBlock FontSize="11.5" Foreground="#667A74" VerticalAlignment="Center">
-                              <Run Text="đ / " />
-                              <Run Text="{Binding DonViTinh}" FontWeight="SemiBold" />
-                            </TextBlock>
+                             <TextBlock Text="đ /" FontSize="11.5" Foreground="#667A74" VerticalAlignment="Center" />
+                             <ComboBox ItemsSource="{Binding ElementName=RootWindow, Path=DataContext.SaleDonViTinhOptions}"
+                                       SelectedItem="{Binding SelectedDonViTinh, Mode=TwoWay}"
+                                       SelectionChanged="OnSaleCartDonViTinhSelectionChanged"
+                                       Width="82" Height="26" MinHeight="26"
+                                       Padding="6,2"
+                                       FontSize="11.5"
+                                       MaxDropDownHeight="220"
+                                       CornerRadius="6"
+                                       Background="#F8FBFA"
+                                       BorderBrush="#CFE6E1"
+                                       BorderThickness="1"
+                                       VerticalAlignment="Center"
+                                       ToolTip.Tip="Chọn đơn vị tính cho dòng hàng này. Đơn giá và tồn kho sẽ đổi theo đơn vị đã chọn.">
+                               <ComboBox.ItemTemplate>
+                                 <DataTemplate x:DataType="models:ProductOption">
+                                   <TextBlock Text="{Binding Name}" FontSize="11.5" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                 </DataTemplate>
+                               </ComboBox.ItemTemplate>
+                             </ComboBox>
+                             <Button Content="+" Width="22" Height="24" Padding="0"
+                                     CornerRadius="6" Background="#EEF7F4" Foreground="#0C756A"
+                                     BorderBrush="#CFE6E1" BorderThickness="1"
+                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                     ToolTip.Tip="Thêm đơn vị tính mới"
+                                     Command="{Binding ElementName=RootWindow, Path=DataContext.ThemDonViTinhBanCommand}"
+                                     CommandParameter="{Binding}" />
                           </StackPanel>
                         </StackPanel>
 
@@ -5853,7 +5876,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- ĐVT: hiển thị sẵn nếu hàng đã có ĐVT, hoặc cho chọn/thêm trực tiếp nếu hàng chưa có ĐVT -->
-                        <DataGridTemplateColumn Header="ĐVT" Width="95" MinWidth="85">
+                        <DataGridTemplateColumn Header="ĐVT" Width="160" MinWidth="140">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate x:DataType="models:ChiTietPhieuNhapHang">
                               <Grid VerticalAlignment="Center" Margin="0,0,8,0">
@@ -5872,22 +5895,26 @@
                                             ItemsSource="{Binding DonViTinhOptions}"
                                             SelectedItem="{Binding SelectedDonViTinh, Mode=TwoWay}"
                                             PlaceholderText="Chọn ĐVT"
-                                            Height="30"
-                                            MinHeight="30"
-                                            Padding="8,3"
-                                            FontSize="12.5"
-                                            CornerRadius="6"
-                                            Background="#F8FBFA"
-                                            BorderBrush="#087F6E"
-                                            BorderThickness="1"
-                                            HorizontalAlignment="Stretch"
-                                            VerticalAlignment="Center"
-                                            ToolTip.Tip="Hàng hóa này chưa có ĐVT — chọn ĐVT tại đây để tự động cập nhật vào danh sách hàng hóa sau khi hoàn thành phiếu nhập">
-                                    <ComboBox.ItemTemplate>
-                                      <DataTemplate x:DataType="models:ProductOption">
-                                        <TextBlock Text="{Binding Name}" FontSize="12.5" VerticalAlignment="Center" />
-                                      </DataTemplate>
-                                    </ComboBox.ItemTemplate>
+                                             Height="30"
+                                             MinHeight="30"
+                                             Padding="8,3"
+                                             FontSize="12.5"
+                                             MaxDropDownHeight="220"
+                                             CornerRadius="6"
+                                             Background="#F8FBFA"
+                                             BorderBrush="#087F6E"
+                                             BorderThickness="1"
+                                             HorizontalAlignment="Stretch"
+                                             VerticalAlignment="Center"
+                                             ToolTip.Tip="Hàng hóa này chưa có ĐVT — chọn ĐVT tại đây để tự động cập nhật vào danh sách hàng hóa sau khi hoàn thành phiếu nhập">
+                                     <ComboBox.ItemTemplate>
+                                       <DataTemplate x:DataType="models:ProductOption">
+                                         <TextBlock Text="{Binding Name}"
+                                                    FontSize="12.5"
+                                                    VerticalAlignment="Center"
+                                                    TextWrapping="Wrap" />
+                                       </DataTemplate>
+                                     </ComboBox.ItemTemplate>
                                   </ComboBox>
 
                                   <Button Grid.Column="1"

@@ -155,6 +155,20 @@
 
       <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
         <StackPanel>
+          <TextBlock Classes="label" Text="Mã ĐVT cơ bản" />
+          <TextBox x:Name="MaDvtCoBanTextBox" Watermark="Ví dụ: CAI" />
+        </StackPanel>
+        <StackPanel Grid.Column="1">
+          <TextBlock Classes="label" Text="Hệ số quy đổi" />
+          <TextBox x:Name="QuyDoiTextBox" Text="1" />
+        </StackPanel>
+      </Grid>
+
+      <TextBlock Foreground="#6B7D77" FontSize="12" TextWrapping="Wrap" Margin="0,-8,0,12"
+        Text="Để trống mã ĐVT cơ bản nếu không quy đổi. Hệ số quy đổi phải lớn hơn 0; ví dụ 1 bó = 10 cành thì chọn ĐVT bó, mã cơ bản CAI, hệ số 10." />
+
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+        <StackPanel>
           <TextBlock Classes="label" Text="Giá bán" />
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
             <controls:MoneyTextBox x:Name="GiaBanTextBox"

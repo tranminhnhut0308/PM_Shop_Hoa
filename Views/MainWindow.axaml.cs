@@ -2016,6 +2016,22 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void OnSaleCartDonViTinhSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (e.AddedItems.Count == 0
+            || sender is not ComboBox comboBox
+            || comboBox.DataContext is not SaleCartItem item
+            || DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        if (!viewModel.SaleCart.Contains(item))
+            return;
+
+        await viewModel.CapNhatDonViTinhBanHangAsync(item);
+    }
+
     private void OnCartQuantityTextChanged(object? sender, TextChangedEventArgs e)
     {
         if (sender is not TextBox tb)
@@ -2055,7 +2071,8 @@ public partial class MainWindow : Window
             return;
 
         // Nếu vượt tồn kho: chưa cắt số ngay lúc đang gõ dở, sẽ kiểm tra và thông báo khi Enter/LostFocus
-        if (item.SanPham is not null && item.SanPham.TonKho > 0 && soLuong > item.SanPham.TonKho)
+        var heSoQuyDoi = item.HeSoQuyDoi > 0 ? item.HeSoQuyDoi : 1m;
+        if (item.SanPham is not null && item.SanPham.TonKho > 0 && soLuong > item.SanPham.TonKho / heSoQuyDoi)
             return;
 
         var caret = tb.CaretIndex;
@@ -2142,7 +2159,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (item.SanPham is not null && item.SanPham.TonKho > 0 && soLuong > item.SanPham.TonKho)
+        var heSoQuyDoi = item.HeSoQuyDoi > 0 ? item.HeSoQuyDoi : 1m;
+        if (item.SanPham is not null && item.SanPham.TonKho > 0 && soLuong > item.SanPham.TonKho / heSoQuyDoi)
         {
             viewModel.StatusMessage = $"⚠️ Sản phẩm '{item.SanPham.TenSanPham}' chỉ còn tồn kho {item.SanPham.TonKho:N0}!";
             tb.SelectAll();
@@ -2207,20 +2225,28 @@ public partial class MainWindow : Window
                     if (isItemInActiveCart)
                         viewModel.StatusMessage = "⚠️ Số lượng sản phẩm phải lớn hơn 0.";
                 }
-                else if (item.SanPham is not null && item.SanPham.TonKho > 0 && parsed > item.SanPham.TonKho)
-                {
-                    item.SoLuong = item.SanPham.TonKho;
-                    if (isItemInActiveCart)
-                    {
-                        viewModel.StatusMessage = $"⚠️ Sản phẩm '{item.SanPham.TenSanPham}' chỉ còn tồn kho {item.SanPham.TonKho:N0}. Đã điều chỉnh về mức tối đa.";
-                        viewModel.CapNhatTongTienBanHangCommand.Execute(null);
-                    }
-                }
                 else
                 {
-                    item.SoLuong = parsed;
-                    if (isItemInActiveCart)
-                        viewModel.CapNhatTongTienBanHangCommand.Execute(null);
+                    var heSoQuyDoi = item.HeSoQuyDoi > 0 ? item.HeSoQuyDoi : 1m;
+                    var tonTheoDonVi = item.SanPham is not null && item.SanPham.TonKho > 0
+                        ? item.SanPham.TonKho / heSoQuyDoi
+                        : parsed;
+
+                    if (item.SanPham is not null && item.SanPham.TonKho > 0 && parsed > tonTheoDonVi)
+                    {
+                        item.SoLuong = tonTheoDonVi;
+                        if (isItemInActiveCart)
+                        {
+                            viewModel.StatusMessage = $"⚠️ Sản phẩm '{item.SanPham.TenSanPham}' chỉ còn tồn kho {item.SanPham.TonKho:N0}. Đã điều chỉnh về mức tối đa.";
+                            viewModel.CapNhatTongTienBanHangCommand.Execute(null);
+                        }
+                    }
+                    else
+                    {
+                        item.SoLuong = parsed;
+                        if (isItemInActiveCart)
+                            viewModel.CapNhatTongTienBanHangCommand.Execute(null);
+                    }
                 }
             }
 

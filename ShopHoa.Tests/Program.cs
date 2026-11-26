@@ -298,6 +298,9 @@ internal class Program
         if (args.Contains("--verify-issue-138", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue138_DieuHuongBanPhimNhapHang();
 
+        if (args.Contains("--verify-issue-136", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue136_DonViTinhVaQuyDoi();
+
         if (args.Contains("--verify-issue-134", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue134_SuaLoiNhapSoLuongVaDonGia();
 
@@ -7331,6 +7334,96 @@ internal class Program
             Console.WriteLine("\n>>> TOÀN BỘ KIỂM THỬ ISSUE #138 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
             return 0;
         });
+    }
+
+    private static int KiemTraIssue136_DonViTinhVaQuyDoi()
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  KIỂM THỬ ISSUE #136: CHỌN ĐƠN VỊ TÍNH NHẬP/BÁN HÀNG VÀ QUY ĐỔI TỒN KHO                ");
+        Console.WriteLine("==========================================================================================");
+
+        var root = TimThuMucGocRepo();
+        var mainXaml = File.ReadAllText(Path.Combine(root, "Views", "MainWindow.axaml"));
+        KiemTra(mainXaml.Contains("Header=\"ĐVT\" Width=\"160\" MinWidth=\"140\""),
+            "Cột ĐVT của phiếu nhập phải đủ rộng để đọc tên đơn vị tính.");
+        KiemTra(mainXaml.Contains("MaxDropDownHeight=\"220\""),
+            "ComboBox đơn vị tính phải có MaxDropDownHeight để hiển thị đủ danh sách.");
+        KiemTra(mainXaml.Contains("{Binding ElementName=RootWindow, Path=DataContext.SaleDonViTinhOptions}"),
+            "Giỏ hàng bán phải bind danh sách SaleDonViTinhOptions.");
+        KiemTra(mainXaml.Contains("SelectionChanged=\"OnSaleCartDonViTinhSelectionChanged\""),
+            "Giỏ hàng bán thiếu sự kiện đổi đơn vị tính.");
+        KiemTra(mainXaml.Contains("{Binding ElementName=RootWindow, Path=DataContext.ThemDonViTinhBanCommand}"),
+            "Giỏ hàng bán thiếu nút thêm đơn vị tính.");
+
+        var saleCartItemSource = File.ReadAllText(Path.Combine(root, "Models", "SaleCartItem.cs"));
+        KiemTra(!saleCartItemSource.Contains("? \"Bó\""),
+            "SaleCartItem không được tự gán đơn vị tính mặc định \"Bó\".");
+
+        var dbSource = File.ReadAllText(Path.Combine(root, "Services", "DatabaseService.cs"));
+        KiemTra(dbSource.Contains("ma_dvt_co_ban AS MaDvtCoBan") && dbSource.Contains("sp.quy_doi AS QuyDoi"),
+            "DatabaseService phải đọc ma_dvt_co_ban/quy_doi của sản phẩm.");
+        KiemTra(dbSource.Contains("ma_dvt_co_ban = @MaDvtCoBan") && dbSource.Contains("quy_doi = @QuyDoi"),
+            "DatabaseService phải lưu ma_dvt_co_ban/quy_doi khi sửa sản phẩm.");
+        KiemTra(dbSource.Contains("item.SoLuongQuyDoi > item.SanPham.TonKho")
+            && dbSource.Contains("tonTruoc - soLuongXuatKho"),
+            "DatabaseService phải trừ tồn kho theo số lượng đã quy đổi.");
+        KiemTra(File.Exists(Path.Combine(root, "database", "migration_issue136_don_vi_tinh_quy_doi.sql")),
+            "Thiếu file migration issue 136.");
+
+        var productEditorXaml = File.ReadAllText(Path.Combine(root, "Views", "ProductEditorWindow.axaml"));
+        KiemTra(productEditorXaml.Contains("MaDvtCoBanTextBox") && productEditorXaml.Contains("QuyDoiTextBox"),
+            "ProductEditorWindow phải cho nhập mã ĐVT cơ bản và hệ số quy đổi.");
+
+        var vmType = typeof(MainWindowViewModel);
+        KiemTra(vmType.GetProperty("SaleDonViTinhOptions") is not null,
+            "MainWindowViewModel thiếu SaleDonViTinhOptions.");
+        KiemTra(vmType.GetProperty("ThemDonViTinhBanCommand") is not null,
+            "MainWindowViewModel thiếu ThemDonViTinhBanCommand.");
+        KiemTra(vmType.GetMethod("CapNhatDonViTinhBanHangAsync") is not null,
+            "MainWindowViewModel thiếu CapNhatDonViTinhBanHangAsync.");
+        KiemTra(typeof(global::ShopHoa.Views.MainWindow).GetMethod("OnSaleCartDonViTinhSelectionChanged",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic) is not null,
+            "MainWindow thiếu OnSaleCartDonViTinhSelectionChanged.");
+        KiemTra(typeof(SaleCartDraftLine).GetProperty("MaDvtCoBan") is not null
+            && typeof(SaleCartDraftLine).GetProperty("QuyDoi") is not null,
+            "SaleCartDraftLine phải lưu thông tin quy đổi để nạp lại giỏ hàng nháp.");
+
+        var donViCoBan = new ProductOption { Id = 1, Ma = "CAI", Name = "Cành" };
+        var donViBo = new ProductOption { Id = 2, Ma = "BO", Name = "Bó" };
+        var sanPham = new SanPham
+        {
+            Id = 136,
+            MaSanPham = "SP_TEST_136",
+            TenSanPham = "Hoa test 136",
+            GiaBan = 10000m,
+            TonKho = 100m,
+            DonViTinh = "Bó",
+            DonViTinhId = 2,
+            MaDvtCoBan = "CAI",
+            QuyDoi = 10m
+        };
+
+        var cartItem = new SaleCartItem { SanPham = sanPham };
+        cartItem.SelectedDonViTinh = donViBo;
+        cartItem.DonGia = 100000m;
+        cartItem.SoLuong = 5m;
+
+        KiemTra(cartItem.HeSoQuyDoi == 10m, $"HeSoQuyDoi kỳ vọng 10, thực tế {cartItem.HeSoQuyDoi}.");
+        KiemTra(cartItem.DonGia == 100000m, $"DonGia theo đơn vị bó kỳ vọng 100000, thực tế {cartItem.DonGia}.");
+        KiemTra(cartItem.SoLuongQuyDoi == 50m, $"SoLuongQuyDoi kỳ vọng 50, thực tế {cartItem.SoLuongQuyDoi}.");
+        KiemTra(cartItem.TonConLai == 5m, $"TonConLai kỳ vọng 5, thực tế {cartItem.TonConLai}.");
+        KiemTra(cartItem.ThanhTien == 500000m, $"ThanhTien kỳ vọng 500000, thực tế {cartItem.ThanhTien}.");
+        KiemTra(sanPham.GiaBan == 10000m, "Đổi đơn giá dòng bán không được đổi GiaBan gốc của sản phẩm.");
+
+        cartItem.DonGia = 120000m;
+        cartItem.SelectedDonViTinh = donViCoBan;
+        KiemTra(cartItem.HeSoQuyDoi == 1m, "Đơn vị cơ bản phải có hệ số quy đổi = 1.");
+        KiemTra(cartItem.DonGia == 12000m, $"DonGia khi đổi sang đơn vị cơ bản kỳ vọng 12000, thực tế {cartItem.DonGia}.");
+        KiemTra(cartItem.ThanhTien == 60000m, $"ThanhTien sau khi đổi đơn vị kỳ vọng 60000, thực tế {cartItem.ThanhTien}.");
+        KiemTra(sanPham.GiaBan == 10000m, "Đổi đơn vị tính không được làm đổi GiaBan gốc.");
+
+        Console.WriteLine("\n>>> TOÀN BỘ KIỂM THỬ ISSUE #136 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+        return 0;
     }
 
     private static int KiemTraIssue134_SuaLoiNhapSoLuongVaDonGia()

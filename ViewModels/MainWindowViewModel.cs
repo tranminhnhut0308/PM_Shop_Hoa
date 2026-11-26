@@ -322,6 +322,7 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<HoaDon> HoaDons { get; } = new();
     public ObservableCollection<SanPham> ProductSearchResults { get; } = new();
     public ObservableCollection<SaleCartItem> SaleCart { get; } = new();
+    public ObservableCollection<ProductOption> SaleDonViTinhOptions { get; } = new();
     public ObservableCollection<KhachHang> SaleCustomerSuggestions { get; } = new();
     public IReadOnlyList<string> DiscountModes { get; } = ["Số tiền", "Phần trăm"];
 
@@ -1821,6 +1822,8 @@ public partial class MainWindowViewModel : ObservableObject
         {
             _ = LoadSafelyAsync("sản phẩm", LoadProductsAsync);
         }
+
+        _ = LoadSafelyAsync("đơn vị tính bán hàng", () => EnsureSaleDonViTinhOptionsAsync());
 
         StatusMessage = error is null
             ? "Sẵn sàng"
@@ -4285,9 +4288,11 @@ public partial class MainWindowViewModel : ObservableObject
 
         // 2. Kiểm tra số lượng hiện có trong giỏ
         var existing = SaleCart.FirstOrDefault(item => item.SanPham.Id == product.Id);
-        var currentQuantityInCart = existing?.SoLuong ?? 0;
+        var donViTinhMacDinh = TimSaleDonViTinhOption(product);
+        var currentQuantityInCart = existing?.SoLuongQuyDoi ?? 0m;
+        var heSoThem = existing?.HeSoQuyDoi ?? TinhHeSoQuyDoi(product, donViTinhMacDinh);
 
-        if (currentQuantityInCart + 1 > product.TonKho)
+        if (currentQuantityInCart + heSoThem > product.TonKho)
         {
             StatusMessage = $"⚠️ Sản phẩm '{product.TenSanPham}' chỉ còn tồn kho {product.TonKho:N0}!";
             return false;
@@ -4334,17 +4339,23 @@ public partial class MainWindowViewModel : ObservableObject
         // 4. Thêm vào giỏ
         if (existing is not null)
         {
-            existing.SoLuong += 1;   // setter đã tự clamp
+            if (existing.SelectedDonViTinh is null && donViTinhMacDinh is not null)
+                existing.SelectedDonViTinh = donViTinhMacDinh;
+
+            existing.SoLuong += 1;   // setter đã tự clamp theo hệ số quy đổi
             targetItem = existing;
         }
         else
         {
             var item = new SaleCartItem
             {
-                SanPham = product,
-                SoLuong = 1
+                SanPham = product
             };
 
+            if (donViTinhMacDinh is not null)
+                item.SelectedDonViTinh = donViTinhMacDinh;
+
+            item.SoLuong = 1;
             item.QuantityChanged += RecalculateSaleTotal;
             item.QuantityExceeded += OnQuantityExceeded;   // đăng ký sự kiện vượt tồn
             SaleCart.Add(item);
@@ -4375,7 +4386,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         (OwnerWindow as MainWindow)?.CommitActiveSaleInputs();
 
-        if (item.SoLuong + 1 > item.SanPham.TonKho)
+        if (item.SoLuongQuyDoi + item.HeSoQuyDoi > item.SanPham.TonKho)
         {
             StatusMessage = $"⚠️ Sản phẩm '{item.SanPham.TenSanPham}' chỉ còn tồn kho {item.SanPham.TonKho:N0}!";
             return;
@@ -4406,6 +4417,158 @@ public partial class MainWindowViewModel : ObservableObject
         item.QuantityExceeded -= OnQuantityExceeded;
         SaleCart.Remove(item);
         RecalculateSaleTotal();
+    }
+
+    private bool _saleDonViTinhOptionsLoaded;
+    private readonly SemaphoreSlim _khoaSaleDonViTinhOptions = new(1, 1);
+
+    private async Task EnsureSaleDonViTinhOptionsAsync(bool force = false)
+    {
+        if (_saleDonViTinhOptionsLoaded && !force)
+            return;
+
+        await _khoaSaleDonViTinhOptions.WaitAsync();
+        try
+        {
+            if (_saleDonViTinhOptionsLoaded && !force)
+                return;
+
+            var options = await _db.GetDonViTinhAsync();
+            SaleDonViTinhOptions.Clear();
+            foreach (var option in options)
+                SaleDonViTinhOptions.Add(option);
+
+            _saleDonViTinhOptionsLoaded = true;
+        }
+        finally
+        {
+            _khoaSaleDonViTinhOptions.Release();
+        }
+    }
+
+    private ProductOption? TimSaleDonViTinhOption(SanPham product, string? tenDonVi = null, uint? donViTinhId = null)
+    {
+        ProductOption? option = null;
+
+        if (donViTinhId is > 0)
+            option = SaleDonViTinhOptions.FirstOrDefault(x => x.Id == donViTinhId.Value);
+
+        var ten = !string.IsNullOrWhiteSpace(tenDonVi)
+            ? tenDonVi
+            : !string.IsNullOrWhiteSpace(product.DonViTinh)
+                ? product.DonViTinh
+                : product.TenDonViTinh;
+
+        if (option is null && !string.IsNullOrWhiteSpace(ten))
+            option = SaleDonViTinhOptions.FirstOrDefault(x =>
+                string.Equals(x.Name, ten, StringComparison.OrdinalIgnoreCase));
+
+        if (option is null && !string.IsNullOrWhiteSpace(product.MaDvtCoBan))
+            option = SaleDonViTinhOptions.FirstOrDefault(x =>
+                string.Equals(x.Ma, product.MaDvtCoBan, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(x.Name, product.MaDvtCoBan, StringComparison.OrdinalIgnoreCase));
+
+        if (option is null && !string.IsNullOrWhiteSpace(ten))
+        {
+            option = new ProductOption
+            {
+                Id = donViTinhId ?? product.DonViTinhId ?? 0,
+                Ma = product.MaDvtCoBan ?? "",
+                Name = ten.Trim()
+            };
+            SaleDonViTinhOptions.Add(option);
+        }
+
+        return option;
+    }
+
+    private static decimal TinhHeSoQuyDoi(SanPham product, ProductOption? option)
+    {
+        if (string.IsNullOrWhiteSpace(product.MaDvtCoBan) || product.QuyDoi <= 0)
+            return 1m;
+
+        var maDangChon = option?.Ma ?? option?.Name ?? product.DonViTinh ?? "";
+        return string.Equals(maDangChon, product.MaDvtCoBan, StringComparison.OrdinalIgnoreCase)
+            ? 1m
+            : product.QuyDoi;
+    }
+
+    public async Task CapNhatDonViTinhBanHangAsync(SaleCartItem? item)
+    {
+        if (item is null || !SaleCart.Contains(item))
+            return;
+
+        var option = item.SelectedDonViTinh;
+        if (option is null)
+        {
+            item.CapNhatThanhTien();
+            RecalculateSaleTotal();
+            return;
+        }
+
+        try
+        {
+            if (option.Id > 0 && item.SanPham.Id > 0)
+            {
+                var updated = await _db.CapNhatDonViTinhSanPhamAsync(item.SanPham.Id, option.Id);
+                if (!updated)
+                    StatusMessage = "Không lưu được đơn vị tính cho hàng hóa. Vui lòng thử lại.";
+            }
+
+            item.DatDonViTinh(option, item.SanPham.MaDvtCoBan, item.SanPham.QuyDoi);
+            RecalculateSaleTotal();
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Cập nhật đơn vị tính trong giỏ hàng", ex);
+            StatusMessage = "Không lưu được đơn vị tính cho hàng hóa: " + SafeLog.Redact(ex.Message);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ThemDonViTinhBanAsync(SaleCartItem? item)
+    {
+        if (item is null || OwnerWindow is null)
+            return;
+
+        if (!CoQuyen(PermissionKeys.ProductsEdit))
+        {
+            StatusMessage = "Bạn không có quyền cập nhật đơn vị tính của hàng hóa.";
+            return;
+        }
+
+        try
+        {
+            await EnsureSaleDonViTinhOptionsAsync();
+            var (groups, _) = await LoadProductOptionsAsync();
+
+            var editor = new ProductEditorWindow(
+                item.SanPham,
+                groups,
+                SaleDonViTinhOptions.ToList(),
+                duocSuaGiaBan: DuocSuaGiaBan,
+                duocSuaGiaVon: CoQuyen(PermissionKeys.ProductsUpdateCost),
+                duocDieuChinhTonKho: CoQuyen(PermissionKeys.ProductsAdjustStock),
+                cheDoXem: false);
+
+            var saved = await editor.ShowDialog<bool>(OwnerWindow);
+            if (!saved)
+                return;
+
+            await _db.CapNhatSanPhamAsync(item.SanPham);
+            await EnsureSaleDonViTinhOptionsAsync(force: true);
+
+            var option = TimSaleDonViTinhOption(item.SanPham);
+            item.DatDonViTinh(option, item.SanPham.MaDvtCoBan, item.SanPham.QuyDoi);
+            RecalculateSaleTotal();
+
+            StatusMessage = $"Đã cập nhật đơn vị tính cho '{item.SanPham.TenSanPham}'.";
+        }
+        catch (Exception ex)
+        {
+            SafeLog.WriteError("Thêm đơn vị tính từ bán hàng", ex);
+            StatusMessage = "Không thể cập nhật đơn vị tính: " + SafeLog.Redact(ex.Message);
+        }
     }
 
     private void RecalculateSaleTotal()
@@ -7503,9 +7666,9 @@ public partial class MainWindowViewModel : ObservableObject
             item.SanPham.TonKho = tonThucTe;
             item.SanPham.TonKhoExcel = tonThucTe;
 
-            if (item.SoLuong > tonThucTe)
+            if (item.SoLuongQuyDoi > tonThucTe)
             {
-                item.SoLuong = Math.Max(1, tonThucTe);
+                item.SoLuong = Math.Max(1, Math.Floor(tonThucTe / (item.HeSoQuyDoi > 0 ? item.HeSoQuyDoi : 1m)));
                 RecalculateSaleTotal();
 
                 StatusMessage =
@@ -7515,11 +7678,11 @@ public partial class MainWindowViewModel : ObservableObject
             }
         }
 
-        var vuotTon = SaleCart.FirstOrDefault(x => x.SoLuong > x.SanPham.TonKho);
+        var vuotTon = SaleCart.FirstOrDefault(x => x.SoLuongQuyDoi > x.SanPham.TonKho);
         if (vuotTon is not null)
         {
             // Ép về tồn kho tối đa
-            vuotTon.SoLuong = vuotTon.SanPham.TonKho;
+            vuotTon.SoLuong = vuotTon.SanPham.TonKho / (vuotTon.HeSoQuyDoi > 0 ? vuotTon.HeSoQuyDoi : 1m);
             RecalculateSaleTotal();
 
             StatusMessage =
@@ -7670,7 +7833,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         foreach (var cartItem in cartSnapshot)
         {
-            var tonMoi = Math.Max(0, cartItem.SanPham.TonKho - cartItem.SoLuong);
+            var tonMoi = Math.Max(0, cartItem.SanPham.TonKho - cartItem.SoLuongQuyDoi);
             DongBoTonKho(cartItem.SanPham.Id, tonMoi);
         }
 

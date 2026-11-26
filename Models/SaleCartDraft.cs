@@ -15,6 +15,8 @@ public sealed class SaleCartDraftLine
     public string TenSanPham { get; set; } = "";
     public string? DonViTinh { get; set; }
     public uint? DonViTinhId { get; set; }
+    public string? MaDvtCoBan { get; set; }
+    public decimal? QuyDoi { get; set; }
     public decimal GiaVon { get; set; }
     public decimal GiaBan { get; set; }
     public decimal DonGia { get; set; }

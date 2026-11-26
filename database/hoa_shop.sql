@@ -565,6 +565,8 @@ CREATE TABLE `san_pham` (
   `ten_san_pham` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `nhom_san_pham_id` int(10) UNSIGNED DEFAULT NULL,
   `don_vi_tinh_id` int(10) UNSIGNED DEFAULT NULL,
+  `ma_dvt_co_ban` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `quy_doi` decimal(15,4) DEFAULT NULL,
   `thuong_hieu_id` int(10) UNSIGNED DEFAULT NULL,
   `gia_ban` decimal(15,2) NOT NULL DEFAULT '0.00',
   `gia_von` decimal(15,2) NOT NULL DEFAULT '0.00',

@@ -85,9 +85,10 @@ public partial class ProductEditorWindow : Window
             // Chỉ xem: mọi ô nhập chỉ đọc, ẩn các thao tác thay đổi dữ liệu.
             foreach (var control in new Control[]
                      {
-                         TenSanPhamTextBox, GiaBanTextBox, GiaVonTextBox, TonKhoTextBox,
-                         KhachDatTextBox, ViTriKhoTextBox, LoaiHangTextBox, DuKienHetHangTextBox
-                     })
+                          TenSanPhamTextBox, GiaBanTextBox, GiaVonTextBox, TonKhoTextBox,
+                          KhachDatTextBox, ViTriKhoTextBox, LoaiHangTextBox, DuKienHetHangTextBox,
+                          MaDvtCoBanTextBox, QuyDoiTextBox
+                      })
             {
                 control.IsEnabled = true;
             }
@@ -99,6 +100,8 @@ public partial class ProductEditorWindow : Window
             ViTriKhoTextBox.IsReadOnly = true;
             LoaiHangTextBox.IsReadOnly = true;
             DuKienHetHangTextBox.IsReadOnly = true;
+            MaDvtCoBanTextBox.IsReadOnly = true;
+            QuyDoiTextBox.IsReadOnly = true;
 
             NhomSanPhamComboBox.IsEnabled = false;
             DonViTinhComboBox.IsEnabled = false;
@@ -150,6 +153,8 @@ public partial class ProductEditorWindow : Window
         TenSanPhamTextBox.Text = _product.TenSanPham;
         NhomSanPhamComboBox.SelectedItem = FindOption(NhomSanPhamComboBox.ItemsSource, _product.NhomSanPhamId);
         DonViTinhComboBox.SelectedItem = FindOption(DonViTinhComboBox.ItemsSource, _product.DonViTinhId);
+        MaDvtCoBanTextBox.Text = _product.MaDvtCoBan ?? "";
+        QuyDoiTextBox.Text = SoLuongFormat.Raw(_product.QuyDoi > 0 ? _product.QuyDoi : 1m);
 
         // Giá bán / giá vốn hiển thị kiểu tiền Việt Nam (50.000).
         // Tồn kho / KH đặt là số lượng nên dùng định dạng số lượng: bỏ các số 0
@@ -204,6 +209,30 @@ public partial class ProductEditorWindow : Window
             return;
         }
 
+        var maDvtCoBan = NullIfEmpty(MaDvtCoBanTextBox.Text);
+        if (!TryReadDecimal(QuyDoiTextBox.Text, out var quyDoi) || quyDoi <= 0)
+        {
+            ErrorTextBlock.Text = "Hệ số quy đổi phải là số lớn hơn 0.";
+            QuyDoiTextBox.Focus();
+            return;
+        }
+
+        if (quyDoi != 1m && string.IsNullOrWhiteSpace(maDvtCoBan))
+        {
+            ErrorTextBlock.Text = "Hệ số quy đổi khác 1 thì phải nhập mã ĐVT cơ bản.";
+            MaDvtCoBanTextBox.Focus();
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(maDvtCoBan) &&
+            !_unitsList.Any(x => string.Equals(x.Ma, maDvtCoBan, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(x.Name, maDvtCoBan, StringComparison.OrdinalIgnoreCase)))
+        {
+            ErrorTextBlock.Text = "Mã ĐVT cơ bản không tồn tại trong danh sách đơn vị tính.";
+            MaDvtCoBanTextBox.Focus();
+            return;
+        }
+
         // Mọi thông tin đã hợp lệ mới ghi vào đối tượng sản phẩm.
         var selectedGroup = NhomSanPhamComboBox.SelectedItem as ProductOption;
         var selectedUnit = DonViTinhComboBox.SelectedItem as ProductOption;
@@ -239,6 +268,8 @@ public partial class ProductEditorWindow : Window
             _product.TenDonViTinh = null;
         }
 
+        _product.MaDvtCoBan = maDvtCoBan;
+        _product.QuyDoi = quyDoi;
         _product.GiaBan = giaBan;
         _product.GiaVon = giaVon;
         _product.TonKhoExcel = tonKho;
