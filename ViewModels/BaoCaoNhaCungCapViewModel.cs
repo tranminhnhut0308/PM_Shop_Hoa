@@ -175,11 +175,11 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
         if (!_khoiTaoXong)
             return;
 
-        _searchCts?.Cancel();
-        _searchCts?.Dispose();
-        _searchCts = new CancellationTokenSource();
-        var token = _searchCts.Token;
+        var cts = MainWindowViewModel.ThayTheVaHuyCts(ref _searchCts);
+        var token = cts.Token;
 
+        // Không truyền token vào Task.Run: nếu bị hủy trước khi task chạy, khối
+        // finally vẫn phải chạy để giải phóng CTS.
         _ = Task.Run(async () =>
         {
             try
@@ -192,7 +192,11 @@ public partial class BaoCaoNhaCungCapViewModel : ObservableObject
                 await TaiLaiAsync(token);
             }
             catch (OperationCanceledException) { }
-        }, token);
+            finally
+            {
+                MainWindowViewModel.ThuHoiVaDisposeCts(ref _searchCts, cts);
+            }
+        });
     }
 
     // ============================================================

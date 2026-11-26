@@ -329,7 +329,7 @@ public sealed partial class MainWindowViewModel
 
             ImportSupplierSearch = state.TenNhaCungCap ?? "";
             PhieuNhapSupplierSuggestions.Clear();
-            _phieuNhapSupplierSearchCts?.Cancel();
+            HuyTruongCts(ref _phieuNhapSupplierSearchCts);
             IsPhieuNhapSupplierSuggestionsClosed = true;
             PhieuNhapSupplierSelectedIndex = -1;
             OnPropertyChanged(nameof(HasPhieuNhapSupplierSuggestions));
@@ -398,24 +398,24 @@ public sealed partial class MainWindowViewModel
 
         _phieuNhapDirty = true;
 
-        _phieuNhapAutoSaveCts?.Cancel();
-        _phieuNhapAutoSaveCts?.Dispose();
-        var cts = new CancellationTokenSource();
-        _phieuNhapAutoSaveCts = cts;
-
-        _ = ChayAutoSavePhieuNhapAsync(cts.Token);
+        var cts = ThayTheVaHuyCts(ref _phieuNhapAutoSaveCts);
+        _ = ChayAutoSavePhieuNhapAsync(cts);
     }
 
-    private async Task ChayAutoSavePhieuNhapAsync(CancellationToken token)
+    private async Task ChayAutoSavePhieuNhapAsync(CancellationTokenSource cts)
     {
         try
         {
-            await Task.Delay(PhieuNhapAutoSaveDelayMs, token);
+            await Task.Delay(PhieuNhapAutoSaveDelayMs, cts.Token);
             await FlushPhieuNhapDraftAsync();
         }
         catch (OperationCanceledException)
         {
             // Người dùng còn đang thao tác tiếp: bỏ lần lưu này, lần sau sẽ lưu bản mới nhất.
+        }
+        finally
+        {
+            ThuHoiVaDisposeCts(ref _phieuNhapAutoSaveCts, cts);
         }
     }
 
@@ -432,7 +432,7 @@ public sealed partial class MainWindowViewModel
         if (!_phieuNhapDirty && !force)
             return true;
 
-        _phieuNhapAutoSaveCts?.Cancel();
+        HuyAnToan(_phieuNhapAutoSaveCts);
         _phieuNhapDirty = false;
 
         var state = ChupPhieuNhapDangMo(tab);
@@ -483,7 +483,7 @@ public sealed partial class MainWindowViewModel
 
     private void HuyAutoSavePhieuNhap()
     {
-        _phieuNhapAutoSaveCts?.Cancel();
+        HuyAnToan(_phieuNhapAutoSaveCts);
         _phieuNhapDirty = false;
         PhieuNhapTrangThaiLuu = "Đã lưu";
         PhieuNhapTrangThaiLuuMau = "#087F6E";

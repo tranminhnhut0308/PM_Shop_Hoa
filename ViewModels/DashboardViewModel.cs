@@ -19,8 +19,7 @@ public sealed partial class DashboardViewModel : ObservableObject
 {
     private readonly DatabaseService _db;
     private readonly DashboardService _service;
-    // Khởi tạo sẵn một CTS để lần tải đầu tiên không gặp null khi hủy lượt cũ.
-    private CancellationTokenSource _cts = new();
+    private CancellationTokenSource? _cts;
     private int _loadVersion;
 
     public Avalonia.Controls.Window? OwnerWindow { get; set; }
@@ -754,12 +753,10 @@ public sealed partial class DashboardViewModel : ObservableObject
     /// </summary>
     public async Task TaiDuLieuAsync()
     {
-        // Hủy lượt tải trước nếu còn đang chạy.
-        var ctsCu = Interlocked.Exchange(ref _cts, new CancellationTokenSource());
-        ctsCu.Cancel();
-        ctsCu.Dispose();
-
-        var token = _cts.Token;
+        // Hủy lượt tải trước nếu còn đang chạy; CTS cũ do chính tác vụ của nó
+        // giải phóng trong finally nên không bao giờ bị Dispose lúc đang dùng.
+        var cts = MainWindowViewModel.ThayTheVaHuyCts(ref _cts);
+        var token = cts.Token;
         var version = ++_loadVersion;
 
         if (KhoangThoiGian == TongQuanKhoangThoiGian.TuDien &&
@@ -809,6 +806,8 @@ public sealed partial class DashboardViewModel : ObservableObject
         {
             if (version == _loadVersion)
                 DangTai = false;
+
+            MainWindowViewModel.ThuHoiVaDisposeCts(ref _cts, cts);
         }
     }
 

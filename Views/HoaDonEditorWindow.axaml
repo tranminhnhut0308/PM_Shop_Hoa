@@ -12,6 +12,16 @@
   MinHeight="620"
   WindowStartupLocation="CenterOwner"
   Background="#F8FAF9">
+  <Window.Resources>
+    <DataTemplate x:Key="HeaderCenter" x:DataType="x:String">
+      <TextBlock Text="{Binding}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding}" />
+    </DataTemplate>
+    <DataTemplate x:Key="HeaderRight" x:DataType="x:String">
+      <TextBlock Text="{Binding}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding}" />
+    </DataTemplate>
+  </Window.Resources>
   <Window.Styles>
     <Style Selector="TextBlock">
       <Setter Property="Foreground" Value="#263B35" />
@@ -89,7 +99,9 @@
       <Setter Property="Foreground" Value="#52645E" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="FontSize" Value="12" />
-      <Setter Property="Padding" Value="8,10" />
+      <Setter Property="Padding" Value="6,10" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="SeparatorBrush" Value="#E2E8E6" />
     </Style>
     <Style Selector="DataGridCell">
       <Setter Property="Padding" Value="4,6" />
@@ -221,8 +233,9 @@
                       x:DataType="models:HoaDonItemEditModel">
               <DataGrid.Columns>
                 <DataGridTextColumn Header="Mã SP" Binding="{Binding MaSanPham}" IsReadOnly="True"
-                                    Width="0.9*" MinWidth="84" x:DataType="models:HoaDonItemEditModel" />
-                <DataGridTemplateColumn Header="Tên sản phẩm" Width="2.4*" MinWidth="140">
+                                    Width="90" MinWidth="76" CanUserResize="True"
+                                    x:DataType="models:HoaDonItemEditModel" />
+                <DataGridTemplateColumn Header="Tên sản phẩm" Width="190" MinWidth="140" CanUserResize="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:HoaDonItemEditModel">
                       <TextBlock Text="{Binding TenSanPham}"
@@ -232,14 +245,16 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="ĐVT" Width="0.6*" MinWidth="54">
+                <DataGridTemplateColumn Header="ĐVT" HeaderTemplate="{StaticResource HeaderCenter}"
+                                       Width="64" MinWidth="52" CanUserResize="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:HoaDonItemEditModel">
                       <TextBlock Text="{Binding DonViTinh}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="Số lượng" Width="0.9*" MinWidth="84">
+                <DataGridTemplateColumn Header="Số lượng" HeaderTemplate="{StaticResource HeaderCenter}"
+                                       Width="100" MinWidth="84" CanUserResize="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:HoaDonItemEditModel">
                       <NumericUpDown Classes="numeric-cell"
@@ -252,7 +267,8 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="Đơn giá" Width="1.15*" MinWidth="104">
+                <DataGridTemplateColumn Header="Đơn giá" HeaderTemplate="{StaticResource HeaderRight}"
+                                       Width="110" MinWidth="92" CanUserResize="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:HoaDonItemEditModel">
                       <controls:MoneyTextBox Height="32" Maximum="999999999"
@@ -261,7 +277,8 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="Giảm giá" Width="1.0*" MinWidth="96">
+                <DataGridTemplateColumn Header="Giảm giá" HeaderTemplate="{StaticResource HeaderRight}"
+                                       Width="100" MinWidth="88" CanUserResize="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:HoaDonItemEditModel">
                       <controls:MoneyTextBox Height="32" Maximum="999999999"
@@ -270,7 +287,8 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="Thành tiền" Width="1.2*" MinWidth="112">
+                <DataGridTemplateColumn Header="Thành tiền" HeaderTemplate="{StaticResource HeaderRight}"
+                                       Width="115" MinWidth="100" CanUserResize="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:HoaDonItemEditModel">
                       <TextBlock Text="{Binding ThanhTien, StringFormat={}{0:N0} đ}"
@@ -280,7 +298,8 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="Xóa" Width="0.5*" MinWidth="46">
+                <DataGridTemplateColumn Header="Xóa" HeaderTemplate="{StaticResource HeaderCenter}"
+                                       Width="50" MinWidth="42" CanUserResize="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="models:HoaDonItemEditModel">
                       <Button Content="✕" Classes="btn-remove-item"

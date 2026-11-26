@@ -301,6 +301,9 @@ internal class Program
         if (args.Contains("--verify-issue-134", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue134_SuaLoiNhapSoLuongVaDonGia();
 
+        if (args.Contains("--verify-issue-137", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue137_DieuChinhCotBangHoaDon();
+
         if (args.Contains("--verify-issue-139", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue139_SuaLoiKhongNhapDuocSoLuongBanHang();
 
@@ -7789,6 +7792,80 @@ internal class Program
 
         Console.WriteLine("\n>>> TOÀN BỘ 5 TRƯỜNG HỢP KIỂM THỬ BẮT BUỘC CỦA ISSUE #143 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
         return 0;
+    }
+
+    private static int KiemTraIssue137_DieuChinhCotBangHoaDon()
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  KIỂM THỬ ISSUE #137: ĐIỀU CHỈNH ĐỘ RỘNG CÁC CỘT BẢNG SẢN PHẨM TRONG CHỈNH SỬA HÓA ĐƠN");
+        Console.WriteLine("==========================================================================================");
+
+        return ChayTrenStaThread(() =>
+        {
+            if (global::Avalonia.Application.Current is null)
+                global::ShopHoa.Program.BuildAvaloniaApp().SetupWithoutStarting();
+
+            var root = TimThuMucGocRepo();
+            var xamlPath = Path.Combine(root, "Views", "HoaDonEditorWindow.axaml");
+            KiemTra(File.Exists(xamlPath), $"Không tìm thấy {xamlPath}");
+            var xaml = File.ReadAllText(xamlPath);
+
+            KiemTra(xaml.Contains("CanUserResizeColumns=\"True\""),
+                "GridItems phải bật CanUserResizeColumns=\"True\".");
+            KiemTra(xaml.Contains("HorizontalScrollBarVisibility=\"Auto\""),
+                "GridItems phải bật HorizontalScrollBarVisibility=\"Auto\" để cuộn ngang khi bảng hẹp.");
+            KiemTra(xaml.Contains("x:Key=\"HeaderCenter\"") && xaml.Contains("x:Key=\"HeaderRight\""),
+                "Thiếu header template căn giữa/phải cho tiêu đề cột.");
+
+            foreach (var starWidth in new[] { "0.9*", "2.4*", "0.6*", "1.15*", "1.0*", "1.2*", "0.5*" })
+                KiemTra(!xaml.Contains($"Width=\"{starWidth}\""),
+                    $"Không được dùng Width=\"{starWidth}\" vì Avalonia chặn resize cột khi dùng star sizing.");
+
+            (string Header, string Width, string MinWidth)[] expected =
+            [
+                ("Mã SP", "90", "76"),
+                ("Tên sản phẩm", "190", "140"),
+                ("ĐVT", "64", "52"),
+                ("Số lượng", "100", "84"),
+                ("Đơn giá", "110", "92"),
+                ("Giảm giá", "100", "88"),
+                ("Thành tiền", "115", "100"),
+                ("Xóa", "50", "42")
+            ];
+
+            foreach (var (header, width, minWidth) in expected)
+            {
+                var token = $"Header=\"{header}\"";
+                var idx = xaml.IndexOf(token, StringComparison.Ordinal);
+                KiemTra(idx >= 0, $"Không tìm thấy cột '{header}' trong HoaDonEditorWindow.axaml");
+                var block = xaml.Substring(idx, Math.Min(320, xaml.Length - idx));
+                KiemTra(block.Contains($"Width=\"{width}\""), $"Cột '{header}' phải có Width=\"{width}\".");
+                KiemTra(block.Contains($"MinWidth=\"{minWidth}\""), $"Cột '{header}' phải có MinWidth=\"{minWidth}\".");
+                KiemTra(block.Contains("CanUserResize=\"True\""), $"Cột '{header}' phải có CanUserResize=\"True\".");
+            }
+
+            var receipt = new HoaDonBanHangReceipt { ThoiGianBan = DateTime.Today };
+            var window = new global::ShopHoa.Views.HoaDonEditorWindow(receipt, new DatabaseService(), []);
+            var grid = global::Avalonia.Controls.NameScopeExtensions
+                .Find<global::Avalonia.Controls.DataGrid>(window, "GridItems");
+            KiemTra(grid is not null, "Không tìm thấy DataGrid GridItems khi khởi tạo HoaDonEditorWindow.");
+            KiemTra(grid!.Columns.Count == 8, $"GridItems kỳ vọng 8 cột, thực tế {grid.Columns.Count}.");
+            KiemTra(grid.HorizontalScrollBarVisibility == global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+                "GridItems phải có HorizontalScrollBarVisibility.Auto.");
+            foreach (var column in grid.Columns)
+            {
+                KiemTra(column.CanUserResize, $"Cột '{column.Header}' không cho phép kéo resize.");
+                KiemTra(!column.Width.IsStar, $"Cột '{column.Header}' vẫn dùng star width.");
+                KiemTra(column.MinWidth >= 40, $"MinWidth của cột '{column.Header}' quá nhỏ, dễ che tiêu đề.");
+            }
+
+            var item = new HoaDonItemEditModel { SoLuong = 2m, DonGia = 50000m, GiamGia = 10000m };
+            KiemTra(item.ThanhTien == 90000m,
+                $"Thành tiền sau khi đổi cột kỳ vọng 90000, thực tế {item.ThanhTien}.");
+
+            Console.WriteLine("\n>>> TOÀN BỘ KIỂM THỬ ISSUE #137 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
+            return 0;
+        });
     }
 
     private static int KiemTraIssue139_SuaLoiKhongNhapDuocSoLuongBanHang()

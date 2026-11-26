@@ -157,6 +157,14 @@ public partial class MainWindow : Window
                 viewModel.XuLyThayDoiTuKhoaTimKiemBanHang(text);
             }
         }
+        else if (ImportProductSearchBox is not null && ReferenceEquals(textBox, ImportProductSearchBox))
+        {
+            if (DataContext is MainWindowViewModel viewModel)
+            {
+                viewModel.MoLaiGoiYPhieuNhap();
+                viewModel.XuLyThayDoiTuKhoaTimKiemNhapHang(text);
+            }
+        }
         else if (textBox.Classes.Contains("cartQuantityBox"))
         {
             ApplyLiveCartQuantityText(textBox, text);
@@ -321,15 +329,16 @@ public partial class MainWindow : Window
             return;
 
         var text = textBox.Text ?? string.Empty;
+
+        // Binding TwoWay tự chạy OnImportProductSearchChanged -> debounce tìm kiếm.
+        // Chỉ gọi trực tiếp khi TextBox đổi nhưng giá trị binding vẫn giữ nguyên
+        // (ví dụ IME vừa chốt dấu vào ô tìm kiếm).
         if (!string.Equals(viewModel.ImportProductSearch, text, StringComparison.Ordinal))
             viewModel.ImportProductSearch = text;
+        else
+            viewModel.XuLyThayDoiTuKhoaTimKiemNhapHang(text);
 
         viewModel.MoLaiGoiYPhieuNhap();
-
-        if (viewModel.TimKiemSanPhamNhapCommand.CanExecute(text))
-        {
-            _ = viewModel.TimKiemSanPhamNhapCommand.ExecuteAsync(text);
-        }
     }
 
     private void OnImportSupplierSearchTextChanged(

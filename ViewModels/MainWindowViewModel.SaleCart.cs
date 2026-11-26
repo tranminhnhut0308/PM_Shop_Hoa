@@ -332,24 +332,24 @@ public sealed partial class MainWindowViewModel
 
         _saleCartDirty = true;
 
-        _saleCartAutoSaveCts?.Cancel();
-        _saleCartAutoSaveCts?.Dispose();
-        var cts = new CancellationTokenSource();
-        _saleCartAutoSaveCts = cts;
-
-        _ = ChayAutoSaveSaleCartAsync(cts.Token);
+        var cts = ThayTheVaHuyCts(ref _saleCartAutoSaveCts);
+        _ = ChayAutoSaveSaleCartAsync(cts);
     }
 
-    private async Task ChayAutoSaveSaleCartAsync(CancellationToken token)
+    private async Task ChayAutoSaveSaleCartAsync(CancellationTokenSource cts)
     {
         try
         {
-            await Task.Delay(SaleCartAutoSaveDelayMs, token);
+            await Task.Delay(SaleCartAutoSaveDelayMs, cts.Token);
             await FlushSaleCartDraftAsync();
         }
         catch (OperationCanceledException)
         {
             // Bị hủy khi người dùng thao tác tiếp
+        }
+        finally
+        {
+            ThuHoiVaDisposeCts(ref _saleCartAutoSaveCts, cts);
         }
     }
 
@@ -362,7 +362,7 @@ public sealed partial class MainWindowViewModel
         if (!_saleCartDirty && !force)
             return true;
 
-        _saleCartAutoSaveCts?.Cancel();
+        HuyAnToan(_saleCartAutoSaveCts);
         _saleCartDirty = false;
 
         var state = ChupDonBanDangMo(tab);
@@ -435,7 +435,7 @@ public sealed partial class MainWindowViewModel
 
     public void HuyAutoSaveSaleCart()
     {
-        _saleCartAutoSaveCts?.Cancel();
+        HuyAnToan(_saleCartAutoSaveCts);
         _saleCartDirty = false;
     }
 

@@ -462,7 +462,7 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
     {
         // Bỏ lần tải đang hẹn giờ (gõ tìm kiếm / chọn ngày) — người dùng vừa
         // tự bấm tải với bộ lọc hiện tại nên bản hẹn giờ kia không cần nữa.
-        _treCts?.Cancel();
+        MainWindowViewModel.HuyAnToan(_treCts);
 
         int phien = ++_phienBan;
 
@@ -522,14 +522,13 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
         if (!_khoiTaoXong || _dangDatBoLoc)
             return;
 
-        _treCts?.Cancel();
-        _treCts?.Dispose();
-        _treCts = new CancellationTokenSource();
-        _ = TaiTreAsync(_treCts.Token);
+        var cts = MainWindowViewModel.ThayTheVaHuyCts(ref _treCts);
+        _ = TaiTreAsync(cts);
     }
 
-    private async Task TaiTreAsync(CancellationToken token)
+    private async Task TaiTreAsync(CancellationTokenSource cts)
     {
+        var token = cts.Token;
         try
         {
             await Task.Delay(400, token);
@@ -537,6 +536,10 @@ public partial class BaoCaoKhachHangViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             return;
+        }
+        finally
+        {
+            MainWindowViewModel.ThuHoiVaDisposeCts(ref _treCts, cts);
         }
 
         if (token.IsCancellationRequested)

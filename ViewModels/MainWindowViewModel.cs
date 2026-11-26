@@ -30,11 +30,9 @@ public partial class MainWindowViewModel : ObservableObject
     private string _invoiceSearchCompositionText = string.Empty;
     private string _baoCaoPhieuNhapSearchCompositionText = string.Empty;
     private string _soQuySearchCompositionText = string.Empty;
-    private readonly object _saleSearchCtsLock = new();
     private CancellationTokenSource? _saleSearchCts;
     private string _saleSearchCompositionText = string.Empty;
     private string _lastScheduledSaleSearchKeyword = string.Empty;
-    private readonly object _phieuNhapProductSearchCtsLock = new();
     private CancellationTokenSource? _phieuNhapProductSearchCts;
     private long _phieuNhapProductSearchSeq;
     private string _importProductSearchCompositionText = string.Empty;
@@ -3866,38 +3864,13 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
 
-    private void HuyTimKiemHoaBan()
-    {
-        CancellationTokenSource? ctsToCancel = null;
-        lock (_saleSearchCtsLock)
-        {
-            ctsToCancel = _saleSearchCts;
-            _saleSearchCts = null;
-        }
-
-        if (ctsToCancel is not null)
-        {
-            try
-            {
-                if (!ctsToCancel.IsCancellationRequested)
-                {
-                    ctsToCancel.Cancel();
-                }
-            }
-            catch (ObjectDisposedException)
-            {
-                // Bỏ qua nếu token source đã bị dispose từ trước
-            }
-            // Không gọi Dispose() ở đây; tác vụ async đang chạy dở sẽ tự dispose CTS
-            // trong khối finally của chính nó sau khi tác vụ hoàn toàn kết thúc.
-        }
-    }
+    private void HuyTimKiemHoaBan() => HuyTruongCts(ref _saleSearchCts);
 
     private async Task ThucHienTimKiemHoaBanAsync(string? keyword, int debounceMs)
     {
-        var seq = ++_saleSearchSeq;
+        var seq = Interlocked.Increment(ref _saleSearchSeq);
 
-        // Hủy an toàn lượt tìm kiếm trước đó nếu còn đang chạy dở
+        // Mọi từ khóa mới (kể cả xóa ô tìm kiếm) đều hủy lượt tìm trước đó.
         HuyTimKiemHoaBan();
 
         var search = (keyword ?? EffectiveSaleSearchKeyword ?? "").Trim();
@@ -3914,16 +3887,7 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        var cts = new CancellationTokenSource();
-        lock (_saleSearchCtsLock)
-        {
-            if (seq != _saleSearchSeq)
-            {
-                cts.Dispose();
-                return;
-            }
-            _saleSearchCts = cts;
-        }
+        var cts = ThayTheVaHuyCts(ref _saleSearchCts);
         var token = cts.Token;
 
         try
@@ -3931,7 +3895,7 @@ public partial class MainWindowViewModel : ObservableObject
             if (debounceMs > 0)
             {
                 await Task.Delay(debounceMs, token);
-                if (token.IsCancellationRequested || seq != _saleSearchSeq)
+                if (token.IsCancellationRequested || seq != Volatile.Read(ref _saleSearchSeq))
                     return;
             }
 
@@ -3940,37 +3904,29 @@ public partial class MainWindowViewModel : ObservableObject
 
             var products = await LaySanPhamChoBanHangAsync(search, token);
 
-            if (token.IsCancellationRequested || seq != _saleSearchSeq)
+            if (token.IsCancellationRequested || seq != Volatile.Read(ref _saleSearchSeq))
                 return;
 
             ApDungKetQuaTimKiemBanHang(products, search);
         }
         catch (OperationCanceledException)
         {
-            // Bị hủy an toàn do người dùng tiếp tục gõ từ khóa mới hoặc đổi từ khóa
+            // Lượt tìm cũ bị hủy do người dùng gõ tiếp từ khóa mới.
         }
         catch (Exception ex)
         {
-            if (seq == _saleSearchSeq)
-                StatusMessage = "Lỗi tìm kiếm sản phẩm: " + ex.Message;
+            if (seq == Volatile.Read(ref _saleSearchSeq))
+                SafeLog.WriteError("Loi tim kiem san pham ban hang", ex);
         }
         finally
         {
-            if (seq == _saleSearchSeq)
+            if (seq == Volatile.Read(ref _saleSearchSeq))
             {
                 IsSearchingSaleProducts = false;
                 OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayBanHang));
             }
 
-            // Giải phóng tham chiếu tới CTS này nếu nó vẫn là CTS đang kích hoạt
-            lock (_saleSearchCtsLock)
-            {
-                if (ReferenceEquals(_saleSearchCts, cts))
-                {
-                    _saleSearchCts = null;
-                }
-            }
-            cts.Dispose();
+            ThuHoiVaDisposeCts(ref _saleSearchCts, cts);
         }
     }
 
@@ -4125,6 +4081,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         HuyTimKiemBanHang();
         _saleSearchKeywordDaTim = string.Empty;
+        _lastScheduledSaleSearchKeyword = string.Empty;
         SaleSearchSelectedIndex = -1;
         IsSaleSearchResultsClosed = false;
 
@@ -4867,11 +4824,32 @@ public partial class MainWindowViewModel : ObservableObject
     public bool IsBaoCaoCuoiNgaySelected =>
         SelectedMenu == "Báo cáo" && SelectedReportKey == "cuoi-ngay";
 
+    public string EffectiveBaoCaoPhieuNhapSearchKeyword =>
+        !string.IsNullOrEmpty(_baoCaoPhieuNhapSearchCompositionText)
+            ? _baoCaoPhieuNhapSearchCompositionText
+            : BaoCaoPhieuNhapSearch;
+
     partial void OnBaoCaoPhieuNhapSearchChanged(string value)
     {
+        _baoCaoPhieuNhapSearchCompositionText = string.Empty;
+        OnPropertyChanged(nameof(EffectiveBaoCaoPhieuNhapSearchKeyword));
         // Mỗi lần tìm kiếm luôn quay về trang đầu
         if (BaoCaoPhieuNhapPage != 1)
             BaoCaoPhieuNhapPage = 1;
+    }
+
+    public void XuLyThayDoiTuKhoaTimKiemBaoCaoPhieuNhap(string text)
+    {
+        var current = text ?? string.Empty;
+        if (string.Equals(EffectiveBaoCaoPhieuNhapSearchKeyword, current, StringComparison.Ordinal))
+            return;
+
+        _baoCaoPhieuNhapSearchCompositionText = current;
+        OnPropertyChanged(nameof(EffectiveBaoCaoPhieuNhapSearchKeyword));
+        if (BaoCaoPhieuNhapPage != 1)
+            BaoCaoPhieuNhapPage = 1;
+
+        TimKiemBaoCaoPhieuNhapTuDong();
     }
 
     partial void OnBaoCaoPhieuNhapPageChanged(int value)
@@ -5009,7 +4987,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             var page = BaoCaoPhieuNhapPage;
             var (items, tongSoBanGhi) = await _db.GetPhieuNhapHangPagedAsync(
-                BaoCaoPhieuNhapSearch,
+                EffectiveBaoCaoPhieuNhapSearchKeyword,
                 page,
                 BaoCaoPhieuNhapPageSize,
                 BaoCaoPhieuNhapLocThanhToan,
@@ -5365,9 +5343,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             ImportStatus = "Đang hoàn tất và tải lại danh sách phiếu nhập...";
             StatusMessage = ImportStatus;
-            _baoCaoPhieuNhapSearchCts?.Cancel();
-            _baoCaoPhieuNhapSearchCts?.Dispose();
-            _baoCaoPhieuNhapSearchCts = null;
+            HuyTruongCts(ref _baoCaoPhieuNhapSearchCts);
             BaoCaoPhieuNhapPage = 1;
             BaoCaoPhieuNhapSearch = "";
             BaoCaoPhieuNhapLocThanhToan = "TAT_CA";
@@ -5736,16 +5712,13 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public void TimKiemBaoCaoPhieuNhapTuDong()
     {
-        _baoCaoPhieuNhapSearchCts?.Cancel();
-        _baoCaoPhieuNhapSearchCts?.Dispose();
-        _baoCaoPhieuNhapSearchCts = new CancellationTokenSource();
-        var token = _baoCaoPhieuNhapSearchCts.Token;
-
-        _ = DebounceBaoCaoPhieuNhapAsync(token);
+        var cts = ThayTheVaHuyCts(ref _baoCaoPhieuNhapSearchCts);
+        _ = DebounceBaoCaoPhieuNhapAsync(cts);
     }
 
-    private async Task DebounceBaoCaoPhieuNhapAsync(CancellationToken token)
+    private async Task DebounceBaoCaoPhieuNhapAsync(CancellationTokenSource cts)
     {
+        var token = cts.Token;
         try
         {
             await Task.Delay(350, token);
@@ -5758,6 +5731,10 @@ public partial class MainWindowViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             // Người dùng gõ tiếp -> huỷ lần tìm kiếm cũ
+        }
+        finally
+        {
+            ThuHoiVaDisposeCts(ref _baoCaoPhieuNhapSearchCts, cts);
         }
     }
 
@@ -6238,17 +6215,7 @@ public partial class MainWindowViewModel : ObservableObject
             PhieuNhapSearchSelectedIndex = 0;
     }
 
-    public void HuyTimKiemSanPhamNhap()
-    {
-        CancellationTokenSource? ctsToCancel = null;
-        lock (_phieuNhapProductSearchCtsLock)
-        {
-            ctsToCancel = _phieuNhapProductSearchCts;
-            _phieuNhapProductSearchCts = null;
-        }
-
-        HuyAnToan(ctsToCancel);
-    }
+    public void HuyTimKiemSanPhamNhap() => HuyTruongCts(ref _phieuNhapProductSearchCts);
 
     public bool HasPhieuNhapSupplierSuggestions =>
         !IsPhieuNhapSupplierSuggestionsClosed && PhieuNhapSupplierSuggestions.Count > 0;
@@ -6616,9 +6583,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task ThucHienTimKiemSanPhamNhapAsync(string? keyword, int debounceMs)
     {
-        var seq = ++_phieuNhapProductSearchSeq;
+        var seq = Interlocked.Increment(ref _phieuNhapProductSearchSeq);
 
-        // Hủy an toàn lượt tìm kiếm trước đó nếu còn đang chạy dở
+        // Mỗi từ khóa mới (kể cả xóa ô tìm kiếm) hủy an toàn lượt tìm trước đó.
         HuyTimKiemSanPhamNhap();
 
         var search = (keyword ?? EffectiveImportProductSearchKeyword ?? "").Trim();
@@ -6635,16 +6602,7 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        var cts = new CancellationTokenSource();
-        lock (_phieuNhapProductSearchCtsLock)
-        {
-            if (seq != _phieuNhapProductSearchSeq)
-            {
-                cts.Dispose();
-                return;
-            }
-            _phieuNhapProductSearchCts = cts;
-        }
+        var cts = ThayTheVaHuyCts(ref _phieuNhapProductSearchCts);
         var token = cts.Token;
 
         try
@@ -6652,7 +6610,9 @@ public partial class MainWindowViewModel : ObservableObject
             if (debounceMs > 0)
             {
                 await Task.Delay(debounceMs, token);
-                if (token.IsCancellationRequested || seq != _phieuNhapProductSearchSeq || IsPhieuNhapSuggestionsClosed)
+                if (token.IsCancellationRequested
+                    || seq != Volatile.Read(ref _phieuNhapProductSearchSeq)
+                    || IsPhieuNhapSuggestionsClosed)
                     return;
             }
 
@@ -6663,7 +6623,7 @@ public partial class MainWindowViewModel : ObservableObject
             var nhomId = SelectedPhieuNhapNhom?.Id > 0 ? (uint?)SelectedPhieuNhapNhom.Id : null;
             var products = await _db.TimKiemSanPhamBanHangAsync(search, nhomId, limit: 100, cancellationToken: token);
 
-            if (token.IsCancellationRequested || seq != _phieuNhapProductSearchSeq)
+            if (token.IsCancellationRequested || seq != Volatile.Read(ref _phieuNhapProductSearchSeq))
                 return;
 
             if (nhomId.HasValue)
@@ -6702,29 +6662,22 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            // Bị hủy an toàn khi người dùng gõ tiếp
+            // Lượt tìm cũ bị hủy do người dùng gõ tiếp từ khóa mới.
         }
         catch (Exception ex)
         {
-            if (seq == _phieuNhapProductSearchSeq)
-                StatusMessage = "Không thể tìm hàng hóa: " + ex.Message;
+            if (seq == Volatile.Read(ref _phieuNhapProductSearchSeq))
+                SafeLog.WriteError("Loi tim kiem san pham nhap hang", ex);
         }
         finally
         {
-            if (seq == _phieuNhapProductSearchSeq)
+            if (seq == Volatile.Read(ref _phieuNhapProductSearchSeq))
             {
                 IsSearchingPhieuNhapProducts = false;
                 OnPropertyChanged(nameof(HienThiThongBaoKhongTimThayNhapHang));
             }
 
-            lock (_phieuNhapProductSearchCtsLock)
-            {
-                if (ReferenceEquals(_phieuNhapProductSearchCts, cts))
-                {
-                    _phieuNhapProductSearchCts = null;
-                }
-            }
-            cts.Dispose();
+            ThuHoiVaDisposeCts(ref _phieuNhapProductSearchCts, cts);
         }
     }
 

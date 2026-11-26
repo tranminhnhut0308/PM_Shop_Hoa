@@ -462,15 +462,13 @@ public sealed partial class MainWindowViewModel
     {
         OnPropertyChanged(nameof(CoSoQuyBoLoc));
 
-        var cts = new CancellationTokenSource();
-        _soQuyLocCts?.Cancel();
-        _soQuyLocCts = cts;
-
-        _ = DebounceBaoLocSoQuyAsync(cts.Token);
+        var cts = ThayTheVaHuyCts(ref _soQuyLocCts);
+        _ = DebounceBaoLocSoQuyAsync(cts);
     }
 
-    private async Task DebounceBaoLocSoQuyAsync(CancellationToken token)
+    private async Task DebounceBaoLocSoQuyAsync(CancellationTokenSource cts)
     {
+        var token = cts.Token;
         try
         {
             await Task.Delay(SoQuyLocDebounceMs, token);
@@ -487,13 +485,17 @@ public sealed partial class MainWindowViewModel
         {
             StatusMessage = "Không thể áp dụng bộ lọc sổ quỹ: " + ex.Message;
         }
+        finally
+        {
+            ThuHoiVaDisposeCts(ref _soQuyLocCts, cts);
+        }
     }
 
     /// <summary>Xóa sạch bộ lọc, trở về toàn thời gian và xem toàn bộ phiếu.</summary>
     [RelayCommand]
     private void XoaBoLocSoQuy()
     {
-        _soQuyLocCts?.Cancel();
+        HuyTruongCts(ref _soQuyLocCts);
 
         SoQuySearchText = "";
         SoQuyLocQuy = SoQuyQuyOptions.FirstOrDefault();

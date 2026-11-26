@@ -122,7 +122,7 @@ public sealed partial class MainWindowViewModel
     [RelayCommand]
     private void XoaTimKiemSoQuy()
     {
-        _soQuyLocCts?.Cancel();
+        HuyAnToan(_soQuyLocCts);
         SoQuySearchText = "";
         SoQuyPage = 1;
         _ = TaiLaiSoQuyAsync();

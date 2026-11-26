@@ -26,8 +26,7 @@ public sealed partial class BaoCaoCuoiNgayViewModel : ObservableObject
 {
     private readonly BaoCaoCuoiNgayService _service;
 
-    // Khởi tạo sẵn CTS để lần tải đầu tiên không gặp null khi hủy lượt cũ.
-    private CancellationTokenSource _cts = new();
+    private CancellationTokenSource? _cts;
     private int _loadVersion;
 
     // DatNgay() tắt cờ này để đổi ngày bằng lệnh không tải lại hai lần.
@@ -198,11 +197,8 @@ public sealed partial class BaoCaoCuoiNgayViewModel : ObservableObject
     /// </summary>
     public async Task TaiDuLieuAsync()
     {
-        var ctsCu = Interlocked.Exchange(ref _cts, new CancellationTokenSource());
-        ctsCu.Cancel();
-        ctsCu.Dispose();
-
-        var token = _cts.Token;
+        var cts = MainWindowViewModel.ThayTheVaHuyCts(ref _cts);
+        var token = cts.Token;
         var version = ++_loadVersion;
 
         var ngay = (NgayChon?.DateTime ?? DateTime.Today).Date;
@@ -236,6 +232,8 @@ public sealed partial class BaoCaoCuoiNgayViewModel : ObservableObject
         {
             if (version == _loadVersion)
                 DangTai = false;
+
+            MainWindowViewModel.ThuHoiVaDisposeCts(ref _cts, cts);
         }
     }
 

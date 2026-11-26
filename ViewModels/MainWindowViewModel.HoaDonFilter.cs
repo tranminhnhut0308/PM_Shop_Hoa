@@ -750,8 +750,27 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(InvoiceAdvancedFiltersToggleText));
     }
 
+    public string EffectiveInvoiceSearchKeyword =>
+        !string.IsNullOrEmpty(_invoiceSearchCompositionText)
+            ? _invoiceSearchCompositionText
+            : InvoiceSearch;
+
     partial void OnInvoiceSearchChanged(string value)
     {
+        _invoiceSearchCompositionText = string.Empty;
+        OnPropertyChanged(nameof(EffectiveInvoiceSearchKeyword));
+        OnPropertyChanged(nameof(InvoiceActiveFiltersText));
+        DatLichTimHoaDon();
+    }
+
+    public void XuLyThayDoiTuKhoaTimKiemHoaDon(string text)
+    {
+        var current = text ?? string.Empty;
+        if (string.Equals(EffectiveInvoiceSearchKeyword, current, StringComparison.Ordinal))
+            return;
+
+        _invoiceSearchCompositionText = current;
+        OnPropertyChanged(nameof(EffectiveInvoiceSearchKeyword));
         OnPropertyChanged(nameof(InvoiceActiveFiltersText));
         DatLichTimHoaDon();
     }
@@ -770,9 +789,7 @@ public sealed partial class MainWindowViewModel
 
     private void DatLichTimHoaDon()
     {
-        var next = new CancellationTokenSource();
-        var previous = Interlocked.Exchange(ref _invoiceSearchDebounce, next);
-        previous?.Cancel();
+        var next = ThayTheVaHuyCts(ref _invoiceSearchDebounce);
         _ = TimHoaDonSauDebounceAsync(next);
     }
 
@@ -796,8 +813,7 @@ public sealed partial class MainWindowViewModel
         }
         finally
         {
-            Interlocked.CompareExchange(ref _invoiceSearchDebounce, null, source);
-            source.Dispose();
+            ThuHoiVaDisposeCts(ref _invoiceSearchDebounce, source);
         }
     }
 
@@ -1146,7 +1162,7 @@ public sealed partial class MainWindowViewModel
 
     private void HuyTimHoaDonDebounce()
     {
-        Interlocked.Exchange(ref _invoiceSearchDebounce, null)?.Cancel();
+        HuyTruongCts(ref _invoiceSearchDebounce);
     }
 
     public async Task SearchInvoicesAsync(bool giuTrang)
@@ -1246,8 +1262,10 @@ public sealed partial class MainWindowViewModel
             var khachLe = SelectedInvoiceCustomer?.IsWalkIn == true;
             var nhanVienId = SelectedInvoiceEmployee?.Id;
 
+            var searchKeyword = EffectiveInvoiceSearchKeyword;
+
             var result = await _db.GetHoaDonPagedAsync(
-                search: InvoiceSearch,
+                search: searchKeyword,
                 tuNgay: tuNgay,
                 denNgay: denNgay,
                 trangThaiThanhToan: ttThanhToan,
@@ -1270,7 +1288,7 @@ public sealed partial class MainWindowViewModel
             {
                 InvoicePage = 1;
                 result = await _db.GetHoaDonPagedAsync(
-                    search: InvoiceSearch,
+                    search: searchKeyword,
                     tuNgay: tuNgay,
                     denNgay: denNgay,
                     trangThaiThanhToan: ttThanhToan,

@@ -324,13 +324,36 @@ public sealed partial class MainWindowViewModel
         }
     }
 
+    public string EffectiveSupplierSearchKeyword =>
+        !string.IsNullOrEmpty(_supplierSearchCompositionText)
+            ? _supplierSearchCompositionText
+            : SupplierSearch;
+
+    partial void OnSupplierSearchChanged(string value)
+    {
+        _supplierSearchCompositionText = string.Empty;
+        OnPropertyChanged(nameof(EffectiveSupplierSearchKeyword));
+    }
+
+    public void XuLyThayDoiTuKhoaTimKiemNhaCungCap(string text)
+    {
+        var current = text ?? string.Empty;
+        if (string.Equals(EffectiveSupplierSearchKeyword, current, StringComparison.Ordinal))
+            return;
+
+        _supplierSearchCompositionText = current;
+        OnPropertyChanged(nameof(EffectiveSupplierSearchKeyword));
+
+        TimKiemNhaCungCapTuDong();
+    }
+
     /// <summary>
     /// Gom điều kiện trên giao diện thành đối tượng bộ lọc cho database.
     /// Panel lọc chỉ còn "Tình trạng công nợ"; từ khóa tìm kiếm lấy từ thanh tìm kiếm.
     /// </summary>
     private BoLocNhaCungCap TaoBoLocNhaCungCap() => new()
     {
-        TimKiem = SupplierSearch?.Trim() ?? "",
+        TimKiem = EffectiveSupplierSearchKeyword?.Trim() ?? "",
         CongNoMode = ChuyenCongNoFilterSangSo(SupplierCongNoFilter),
         TrangThaiMode = SupplierTrangThaiFilter switch
         {
@@ -371,17 +394,13 @@ public sealed partial class MainWindowViewModel
     /// </summary>
     public void TimKiemNhaCungCapTuDong()
     {
-        _supplierSearchCts?.Cancel();
-        _supplierSearchCts?.Dispose();
-
-        var cts = new CancellationTokenSource();
-        _supplierSearchCts = cts;
-
-        _ = TimKiemNhaCungCapSauDebounceAsync(cts.Token);
+        var cts = ThayTheVaHuyCts(ref _supplierSearchCts);
+        _ = TimKiemNhaCungCapSauDebounceAsync(cts);
     }
 
-    private async Task TimKiemNhaCungCapSauDebounceAsync(CancellationToken token)
+    private async Task TimKiemNhaCungCapSauDebounceAsync(CancellationTokenSource cts)
     {
+        var token = cts.Token;
         try
         {
             await Task.Delay(350, token);
@@ -394,6 +413,10 @@ public sealed partial class MainWindowViewModel
         catch (OperationCanceledException)
         {
             // Người dùng gõ tiếp: huỷ lần tìm kiếm trước, không cần báo lỗi.
+        }
+        finally
+        {
+            ThuHoiVaDisposeCts(ref _supplierSearchCts, cts);
         }
     }
 
