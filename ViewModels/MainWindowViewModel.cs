@@ -2466,7 +2466,7 @@ public partial class MainWindowViewModel : ObservableObject
                 return;
             }
 
-            DongBoGiaBan(product.Id, giaBan);
+            DongBoGiaBan(product.Id, giaBan, product);
 
             product.DongGiaBanNhanh();
             StatusMessage = "Cập nhật giá bán thành công";
@@ -2506,38 +2506,53 @@ public partial class MainWindowViewModel : ObservableObject
     /// (danh sách hàng hóa, tìm kiếm bán hàng, giỏ hàng) để không màn hình nào
     /// còn giữ giá cũ. Chỉ cập nhật vài đối tượng, không SELECT lại toàn bảng.
     /// </summary>
-    private void DongBoGiaBan(uint productId, decimal giaBan)
+    private void DongBoGiaBan(uint productId, decimal giaBan, SanPham? product = null)
+        => CapNhatGiaBanTrongBoNho(productId, giaBan, product, SanPhams, ProductSearchResults, SaleCart, SaleCartTabs);
+
+    internal static void CapNhatGiaBanTrongBoNho(
+        uint productId,
+        decimal giaBan,
+        SanPham? product,
+        IEnumerable<SanPham> sanPhams,
+        IEnumerable<SanPham> ketQuaTimKiem,
+        IEnumerable<SaleCartItem> gioHang,
+        IEnumerable<SaleCartTab> cacTab)
     {
-        foreach (var item in SanPhams)
+        if (product is not null && product.Id == productId)
+            product.GiaBan = giaBan;
+
+        foreach (var item in sanPhams)
         {
             if (item.Id == productId)
                 item.GiaBan = giaBan;
         }
 
-        foreach (var item in ProductSearchResults)
+        foreach (var item in ketQuaTimKiem)
         {
             if (item.Id == productId)
                 item.GiaBan = giaBan;
         }
 
-        // Cập nhật giá niêm yết trong giỏ hàng hiện tại (giữ nguyên đơn giá đã chốt trên dòng hàng theo yêu cầu Issue #50)
-        foreach (var item in SaleCart)
+        foreach (var item in gioHang)
         {
             if (item.SanPham.Id == productId)
             {
                 item.SanPham.GiaBan = giaBan;
+                if (item.DonGia <= 0m)
+                    item.DonGia = giaBan;
                 item.CapNhatThanhTien();
             }
         }
 
-        // Cập nhật giá niêm yết cho các tab giỏ hàng khác
-        foreach (var tab in SaleCartTabs)
+        foreach (var tab in cacTab)
         {
             foreach (var line in tab.State.Lines)
             {
                 if (line.SanPhamId == productId)
                 {
                     line.GiaBan = giaBan;
+                    if (line.DonGia <= 0m)
+                        line.DonGia = giaBan;
                 }
             }
         }
@@ -2683,7 +2698,7 @@ public partial class MainWindowViewModel : ObservableObject
             await _db.CapNhatSanPhamAsync(product);
 
             // Đồng bộ giá bán mới sang bán hàng / tìm kiếm / giỏ hàng
-            DongBoGiaBan(product.Id, product.GiaBan);
+            DongBoGiaBan(product.Id, product.GiaBan, product);
 
             product.DongGiaBanNhanh();
 
@@ -4305,7 +4320,7 @@ public partial class MainWindowViewModel : ObservableObject
                     return false;
                 }
 
-                DongBoGiaBan(product.Id, giaBan.Value);
+                DongBoGiaBan(product.Id, giaBan.Value, product);
             }
             catch (Exception ex)
             {

@@ -739,7 +739,7 @@ public sealed partial class MainWindowViewModel
             await _db.CapNhatSanPhamAsync(sanPham);
 
             var moi = await _db.GetSanPhamByIdAsync(sanPham.Id) ?? sanPham;
-            DongBoGiaBan(moi.Id, moi.GiaBan);
+            DongBoGiaBan(moi.Id, moi.GiaBan, sanPham);
             CapNhatHangHoaTrongPhieuNhap(moi);
 
             // Cập nhật luôn dòng trong trang Hàng hóa nếu đang có

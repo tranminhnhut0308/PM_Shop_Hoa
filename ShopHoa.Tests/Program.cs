@@ -307,6 +307,9 @@ internal class Program
         if (args.Contains("--verify-issue-139", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue139_SuaLoiKhongNhapDuocSoLuongBanHang();
 
+        if (args.Contains("--verify-issue-135", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue135_NhapGiaBanVaDongBoGia();
+
         if (args.Contains("--verify-issue-143", StringComparer.OrdinalIgnoreCase))
         {
             var configService = new DatabaseConfigService();
@@ -8158,6 +8161,115 @@ internal class Program
             Console.WriteLine("\n==========================================================================================");
             Console.WriteLine(">>> TOÀN BỘ 7 KỊCH BẢN KIỂM THỬ ISSUE #139 (& #135) ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
             Console.WriteLine("==========================================================================================");
+            return 0;
+        });
+    }
+
+    private static int KiemTraIssue135_NhapGiaBanVaDongBoGia()
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  KIỂM THỬ ISSUE #135: NHẬP GIÁ BÁN BẰNG BÀN PHÍM VÀ ĐỒNG BỘ GIÁ MỚI");
+        Console.WriteLine("==========================================================================================");
+
+        return ChayTrenStaThread(() =>
+        {
+            if (global::Avalonia.Application.Current is null)
+                global::ShopHoa.Program.BuildAvaloniaApp().SetupWithoutStarting();
+
+            static void FlushUi()
+                => global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            var window = new global::ShopHoa.Views.NhapGiaBanWindow();
+            window.Show();
+            FlushUi();
+
+            var moneyBox = global::Avalonia.Controls.NameScopeExtensions.Find<MoneyTextBox>(window, "GiaBanTextBox");
+            KiemTra(moneyBox is not null, "Không tìm thấy GiaBanTextBox");
+            var input = global::Avalonia.Controls.NameScopeExtensions.Find<global::Avalonia.Controls.TextBox>(moneyBox!, "Input");
+            KiemTra(input is not null, "Không tìm thấy TextBox#Input bên trong MoneyTextBox");
+            FlushUi();
+
+            var focused = global::Avalonia.Controls.TopLevel.GetTopLevel(window)?.FocusManager?.GetFocusedElement();
+            KiemTra(ReferenceEquals(focused, input), "Ô nhập giá bán phải tự nhận focus sau khi cửa sổ hiển thị");
+            KiemTra(!string.IsNullOrEmpty(input!.Text) && input.SelectedText == input.Text,
+                $"Giá mặc định phải được chọn sẵn, thực tế Text='{input.Text}' Selected='{input.SelectedText}'");
+
+            input.SetCurrentValue(global::Avalonia.Controls.TextBox.TextProperty, "50000");
+            input.Focus();
+            FlushUi();
+            KiemTra(moneyBox!.Value == 50000m, "Gõ 50000 phải cập nhật Value của MoneyTextBox");
+
+            var enterArgs = new global::Avalonia.Input.KeyEventArgs
+            {
+                RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent,
+                Key = global::Avalonia.Input.Key.Enter,
+                Source = input
+            };
+            input.RaiseEvent(enterArgs);
+            FlushUi();
+
+            KiemTra(window.GiaBan == 50000m, $"Enter phải lưu giá 50.000, thực tế: {window.GiaBan}");
+            KiemTra(enterArgs.Handled, "Enter trên ô giá phải được xử lý tránh double-trigger");
+
+            var cancelWindow = new global::ShopHoa.Views.NhapGiaBanWindow();
+            cancelWindow.Show();
+            FlushUi();
+
+            var cancelMoneyBox = global::Avalonia.Controls.NameScopeExtensions.Find<MoneyTextBox>(cancelWindow, "GiaBanTextBox");
+            var cancelInput = global::Avalonia.Controls.NameScopeExtensions.Find<global::Avalonia.Controls.TextBox>(cancelMoneyBox!, "Input");
+            cancelInput!.Focus();
+            FlushUi();
+
+            var escapeArgs = new global::Avalonia.Input.KeyEventArgs
+            {
+                RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent,
+                Key = global::Avalonia.Input.Key.Escape,
+                Source = cancelInput
+            };
+            cancelInput.RaiseEvent(escapeArgs);
+            FlushUi();
+
+            KiemTra(cancelWindow.GiaBan is null, "Escape/Hủy không được lưu giá");
+            KiemTra(escapeArgs.Handled, "Escape phải được xử lý để đóng cửa sổ");
+
+            var goc = new SanPham { Id = 1, TenSanPham = "Hoa cưới", GiaBan = 0m, TonKho = 10m };
+            var danhSach = new SanPham { Id = 1, GiaBan = 0m };
+            var timKiem = new SanPham { Id = 1, GiaBan = 0m };
+            var gioHangSanPham = new SanPham { Id = 1, GiaBan = 0m };
+            var khac = new SanPham { Id = 2, GiaBan = 77777m };
+            var dongGoc = new SaleCartItem { SanPham = gioHangSanPham, SoLuong = 5m };
+            var dongDaChot = new SaleCartItem { SanPham = new SanPham { Id = 1, GiaBan = 0m }, SoLuong = 2m };
+            dongDaChot.DonGia = 45000m;
+            var tab = new SaleCartTab
+            {
+                State = new SaleCartDraftState
+                {
+                    Lines =
+                    {
+                        new SaleCartDraftLine { SanPhamId = 1, GiaBan = 0m, DonGia = 0m, SoLuong = 3m }
+                    }
+                }
+            };
+
+            MainWindowViewModel.CapNhatGiaBanTrongBoNho(
+                1,
+                50000m,
+                goc,
+                new[] { danhSach, khac },
+                new[] { timKiem },
+                new[] { dongGoc, dongDaChot },
+                new[] { tab });
+
+            KiemTra(goc.GiaBan == 50000m, "Đối tượng sản phẩm truyền vào dialog phải lấy giá mới");
+            KiemTra(danhSach.GiaBan == 50000m && timKiem.GiaBan == 50000m, "Danh sách/tìm kiếm phải lấy giá mới");
+            KiemTra(gioHangSanPham.GiaBan == 50000m && dongGoc.DonGia == 50000m && dongGoc.ThanhTien == 250000m,
+                $"Dòng giỏ hàng phải dùng giá mới: DonGia={dongGoc.DonGia}, ThanhTien={dongGoc.ThanhTien}");
+            KiemTra(dongDaChot.DonGia == 45000m && dongDaChot.ThanhTien == 90000m, "Không được ghi đè đơn giá đã chốt trên dòng hàng");
+            KiemTra(tab.State.Lines[0].GiaBan == 50000m && tab.State.Lines[0].DonGia == 50000m && tab.State.Lines[0].ThanhTien == 150000m,
+                "Dòng giỏ hàng nháp của tab khác phải lấy giá mới");
+            KiemTra(khac.GiaBan == 77777m, "Không được đổi giá sản phẩm khác");
+
+            Console.WriteLine("\n>>> KIỂM THỬ ISSUE #135 ĐÃ ĐẠT 100% THÀNH CÔNG! <<<");
             return 0;
         });
     }
