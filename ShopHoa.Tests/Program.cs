@@ -313,6 +313,9 @@ internal class Program
         if (args.Contains("--verify-issue-132", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue132_BoLocChinhHoaDon();
 
+        if (args.Contains("--verify-issue-130", StringComparer.OrdinalIgnoreCase))
+            return KiemTraIssue130_LoaiBoThongTinCongNoTrungLap();
+
         if (args.Contains("--verify-issue-135", StringComparer.OrdinalIgnoreCase))
             return KiemTraIssue135_NhapGiaBanVaDongBoGia();
 
@@ -6286,6 +6289,44 @@ internal class Program
         KiemTra(propertyNames.Contains("SelectedInvoiceDatePreset") && propertyNames.Contains("SelectedInvoiceStatus"), "Phải giữ lại bộ lọc thời gian và trạng thái.");
 
         Console.WriteLine("\n>>> ISSUE #132: ĐÃ LOẠI BỎ BỘ LỘC NÂNG CAO, GIỮ LẠI BỘ LỌC CHÍNH: ĐẠT <<<");
+        return 0;
+    }
+
+    private static int KiemTraIssue130_LoaiBoThongTinCongNoTrungLap()
+    {
+        Console.WriteLine("\n==========================================================================================");
+        Console.WriteLine("  KIỂM THỬ ISSUE #130: LOẠI BỎ THÔNG TIN CÔNG NỢ TRÙNG LẶP TRONG CHI TIẾT NHÀ CUNG CẤP      ");
+        Console.WriteLine("==========================================================================================");
+
+        var root = TimThuMucGocRepo();
+        var xaml = File.ReadAllText(Path.Combine(root, "Views", "MainWindow.axaml"));
+
+        var batDau = xaml.IndexOf("Detail.TenNhaCungCap", StringComparison.Ordinal);
+        var ketThuc = xaml.IndexOf("<!-- PHÂN TRANG -->", batDau, StringComparison.Ordinal);
+        KiemTra(batDau >= 0 && ketThuc > batDau, "Phải tìm thấy khu vực chi tiết nhà cung cấp trong MainWindow.axaml.");
+
+        var chiTietNcc = xaml[batDau..ketThuc];
+        var viTriTabCongNo = chiTietNcc.LastIndexOf("TAB 3: CÔNG NỢ", StringComparison.Ordinal);
+        KiemTra(viTriTabCongNo >= 0, "Phải tìm thấy tab Công nợ của chi tiết nhà cung cấp.");
+
+        var tongQuan = chiTietNcc[..viTriTabCongNo];
+        var tabCongNo = chiTietNcc[viTriTabCongNo..];
+
+        KiemTra(tongQuan.Contains("{Binding Detail.TongMuaText}"), "Tổng tiền đã mua phải nằm trong phần tổng quan.");
+        KiemTra(tongQuan.Contains("{Binding Detail.TongDaThanhToanText}"), "Đã thanh toán phải nằm trong phần tổng quan.");
+        KiemTra(tongQuan.Contains("{Binding Detail.TongCongNoText}"), "Công nợ hiện tại phải nằm trong phần tổng quan.");
+
+        KiemTra(!tabCongNo.Contains("{Binding Detail.TongMuaText}"), "Tab Công nợ không được lặp lại Tổng tiền đã mua.");
+        KiemTra(!tabCongNo.Contains("{Binding Detail.TongDaThanhToanText}"), "Tab Công nợ không được lặp lại Đã thanh toán.");
+        KiemTra(!tabCongNo.Contains("{Binding Detail.TongCongNoText}"), "Tab Công nợ không được lặp lại Công nợ hiện tại.");
+        KiemTra(tabCongNo.Contains("{Binding Detail.SoDuTraTruocText}"), "Tab Công nợ phải giữ lại Số dư trả trước.");
+
+        var propertyNames = typeof(NhaCungCapDetailViewModel).GetProperties().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        KiemTra(propertyNames.Contains("TongMuaText") && propertyNames.Contains("TongDaThanhToanText")
+            && propertyNames.Contains("TongCongNoText") && propertyNames.Contains("SoDuTraTruocText"),
+            "Phải giữ nguyên các property công nợ của NhaCungCapDetailViewModel.");
+
+        Console.WriteLine("\n>>> ISSUE #130: ĐÃ LOẠI BỎ THÔNG TIN TRÙNG LẶP, GIỮ LẠI SỐ DƯ TRẢ TRƯỚC: ĐẠT <<<");
         return 0;
     }
 
